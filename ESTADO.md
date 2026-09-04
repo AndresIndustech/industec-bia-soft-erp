@@ -5,7 +5,7 @@
 
 **Última actualización:** 2026-09-04
 **Fase en curso:** 1 · Cimientos (septiembre) — sustancialmente cerrada
-**Repositorio de código:** `D:\INDUSTECH IA\desarrollo\agentes` (git)
+**Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
 
 ---
 

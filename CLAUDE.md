@@ -36,7 +36,7 @@ cd "D:\INDUSTECH IA\desarrollo\agentes"
 - **Corpus canónico:** `D:\RESPALDOS\ORDENES DE TRABAJO\{año}\{módulo}\{zona}\{cadena}\`
 - **Espejo intacto del origen:** `D:\RESPALDOS\_ORIGEN_DRIVE\` — nunca se modifica; es la red de seguridad.
 - **Salidas para la administración:** `D:\INDUSTECH IA\SALIDAS IA\`
-- El repositorio git es `desarrollo/agentes/`, no la raíz del proyecto.
+- **El repositorio git es la raíz del proyecto**, así que estos documentos y las skills también quedan versionados. `ENTRADAS IA`, `SALIDAS IA`, el venv y `config/.env` están fuera por `.gitignore`.
 
 ## Skills disponibles
 
