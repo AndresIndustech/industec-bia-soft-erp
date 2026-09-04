@@ -16,7 +16,7 @@ from pathlib import Path
 import mysql.connector
 import pdfplumber
 
-BASE = Path(r"D:\INDUSTECH IA\agentes")
+BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
 
 
 def conectar():

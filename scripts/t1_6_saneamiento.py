@@ -23,7 +23,7 @@ from pathlib import Path
 from collections import defaultdict
 import mysql.connector
 
-ENV_PATH = Path(r"D:\INDUSTECH IA\agentes\config\.env")
+ENV_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
 env = {}
 for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
     line = line.strip()

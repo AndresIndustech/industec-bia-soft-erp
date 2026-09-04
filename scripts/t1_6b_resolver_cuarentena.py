@@ -43,7 +43,7 @@ import mysql.connector
 sys.path.insert(0, str(Path(__file__).parent))
 from t1_7_extractor_pdf import extraer_pdf
 
-BASE = Path(r"D:\INDUSTECH IA\agentes")
+BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
 CALIDAD = Path(r"D:\INDUSTECH IA\SALIDAS IA\CALIDAD")
 MANIFIESTO = CALIDAD / "MANIFIESTO_SANEAMIENTO.csv"
 INDICE_PLANES = CALIDAD / "INDICE_PLANES_ADMIN.csv"

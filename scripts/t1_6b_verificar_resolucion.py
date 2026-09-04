@@ -25,7 +25,7 @@ from pathlib import Path
 import mysql.connector
 import pdfplumber
 
-BASE = Path(r"D:\INDUSTECH IA\agentes")
+BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
 CALIDAD = Path(r"D:\INDUSTECH IA\SALIDAS IA\CALIDAD")
 CUARENTENA = Path(r"D:\RESPALDOS\_CUARENTENA")
 RESOLUCION = CALIDAD / "RESOLUCION_CUARENTENA.csv"

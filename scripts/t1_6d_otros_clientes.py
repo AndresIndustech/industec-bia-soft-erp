@@ -18,7 +18,7 @@ import shutil
 import unicodedata
 from pathlib import Path
 
-BASE = Path(r"D:\INDUSTECH IA\agentes")
+BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
 CALIDAD = Path(r"D:\INDUSTECH IA\SALIDAS IA\CALIDAD")
 RESOLUCION = CALIDAD / "RESOLUCION_CUARENTENA.csv"
 CUARENTENA = Path(r"D:\RESPALDOS\_CUARENTENA")

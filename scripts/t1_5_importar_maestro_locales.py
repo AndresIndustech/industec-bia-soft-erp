@@ -23,7 +23,7 @@ import mysql.connector
 from pathlib import Path
 
 # Cargar .env manualmente (sin dependencia de dotenv en el PATH del sistema)
-ENV_PATH = Path(r"D:\INDUSTECH IA\agentes\config\.env")
+ENV_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
 env = {}
 for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
     line = line.strip()

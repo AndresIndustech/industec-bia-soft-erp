@@ -32,7 +32,7 @@ import mysql.connector
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 
-BASE = Path(r"D:\INDUSTECH IA\agentes")
+BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
 PROPUESTA = Path(r"D:\INDUSTECH IA\SALIDAS IA\CALIDAD\PROPUESTA_ALTAS_MAESTRO_LOCALES.xlsx")
 
 ALTAS = [

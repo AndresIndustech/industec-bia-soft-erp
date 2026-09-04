@@ -31,7 +31,7 @@ import mysql.connector
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 
-BASE = Path(r"D:\INDUSTECH IA\agentes")
+BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
 CALIDAD = Path(r"D:\INDUSTECH IA\SALIDAS IA\CALIDAD")
 CUARENTENA = Path(r"D:\RESPALDOS\_CUARENTENA")
 RESUELTOS = CUARENTENA / "_RESUELTOS"

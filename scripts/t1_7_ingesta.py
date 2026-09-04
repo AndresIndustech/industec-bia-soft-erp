@@ -21,7 +21,7 @@ import mysql.connector
 sys.path.insert(0, str(Path(__file__).parent))
 from t1_7_extractor_pdf import extraer_pdf
 
-ENV_PATH = Path(r"D:\INDUSTECH IA\agentes\config\.env")
+ENV_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
 env = {}
 for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
     line = line.strip()
