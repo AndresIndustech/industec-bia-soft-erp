@@ -233,7 +233,10 @@ def main():
     correos = {}
     for row in ws_correos.iter_rows(min_row=3, max_row=ws_correos.max_row):
         codigo = row[1].value  # B
-        correo_raw = row[4].value  # F
+        # row[] es 0-based: la columna F ('CORREOS DESTINATARIOS') es row[5], no row[4].
+        # row[4] es la columna E, que contiene la etiqueta fija 'Equipos' y por eso
+        # los 95 locales quedaron con ese texto en vez de una direccion de correo.
+        correo_raw = row[5].value  # F
         if codigo is None:
             continue
         codigo = str(codigo).strip().upper()
@@ -264,8 +267,14 @@ def main():
     # y totalmente reconstruible desde el Excel en cada corrida. Un upsert por
     # clave dejaria filas huerfanas si la clave canonica de un codigo cambia
     # entre corridas (como paso con BS17EC->BR17EC al corregir este script).
+    # locales_alias se reconstruye entero (no lo referencia nadie).
     cur.execute("DELETE FROM locales_alias")
-    cur.execute("DELETE FROM locales")
+    # locales NO se borra: desde T1.7 la tabla ots lo referencia por clave foranea.
+    # La carga es upsert sobre local_codigo (ON DUPLICATE KEY UPDATE mas abajo), y al
+    # final se reporta cualquier local que exista en la base y ya no este en el maestro,
+    # para decidirlo a mano en vez de borrarlo en silencio.
+    cur.execute("SELECT local_codigo FROM locales")
+    locales_previos = {r[0] for r in cur.fetchall()}
     insertados = 0
     for codigo, datos in sorted(maestro.items()):
         lista_correos = buscar_correo(codigo)
@@ -299,6 +308,13 @@ def main():
         )
         alias_insertados += 1
     cnx.commit()
+
+    sobrantes = sorted(locales_previos - set(maestro))
+    if sobrantes:
+        print(f"\nAVISO: {len(sobrantes)} locales estaban en la base y ya no figuran "
+              f"en el maestro: {sobrantes}")
+        print("   No se borran automaticamente (pueden tener ordenes asociadas). "
+              "Requieren decision de la administracion.")
 
     cur.execute("SELECT COUNT(*) FROM locales")
     total_bd = cur.fetchone()[0]

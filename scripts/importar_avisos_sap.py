@@ -45,7 +45,15 @@ def main():
     filas = []
     vistos = set()
     duplicados_aviso = 0
-    for i, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=13)):
+    # max_col debe cubrir hasta 'Local' (indice 23) y 'zona' (24). Estuvo en 13 y eso
+    # dejaba centro_coste, ubicacion_tecnica y responsable en NULL de forma silenciosa:
+    # los guards 'if len(vals) > N' nunca se cumplian. Se lee el ancho real y se valida.
+    COL_MINIMA = 25
+    if ws.max_column < COL_MINIMA:
+        raise SystemExit(f"ABORTADO: la hoja FILTRO trae {ws.max_column} columnas, "
+                         f"se esperaban al menos {COL_MINIMA} (hasta 'Local'). "
+                         f"Cambio de formato del export de SAP: revisar antes de importar.")
+    for i, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=ws.max_column)):
         vals = [c.value for c in row]
         aviso_raw = vals[0]
         if aviso_raw is None:
