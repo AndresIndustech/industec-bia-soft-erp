@@ -161,10 +161,11 @@ CREATE TABLE IF NOT EXISTS observaciones_calidad (
     veredicto_admin VARCHAR(200) NULL COMMENT 'Columna editable por la administracion en el Excel espejo',
     creado_en       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resuelto_en     DATETIME     NULL,
+    UNIQUE KEY uq_obs_ot_regla (id_industec, regla),
     INDEX idx_obs_ot (id_industec),
     INDEX idx_obs_estado (estado)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='Espejo de OBSERVACIONES_OTS.xlsx generado por el Agente 1';
+  COMMENT='Espejo de OBSERVACIONES_OTS.xlsx generado por el Agente 1. La clave unica (id_industec, regla) es obligatoria para que el auditor sea idempotente -- bug real encontrado: sin ella, cada corrida duplicaba todas las filas en vez de actualizarlas.';
 
 CREATE TABLE IF NOT EXISTS plan_snapshots (
     snapshot_id     INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
