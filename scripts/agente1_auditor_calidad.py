@@ -40,7 +40,7 @@ SEVERIDAD = {
     "AVISO_INEXISTENTE_O_MAL_FORMADO": "ALTA", "SIN_FOTOS": "MEDIA",
     "HORA_FIN_ANTERIOR_A_INICIO": "MEDIA", "CORRELATIVO_DUPLICADO": "CRITICA",
     "CAMPO_CLAVE_VACIO": "MEDIA", "ABIERTA_MAS_DE_3_DIAS": "ALTA",
-    "CORRECTIVO_SIN_AVISO_SAP": "ALTA",
+    "CORRECTIVO_SIN_AVISO_SAP": "ALTA", "DOCUMENTO_SIN_REGISTRO_EN_BASE": "CRITICA",
 }
 DIMENSION = {
     "LOCAL_FUERA_MAESTRO": "VALIDEZ", "ZONA_CRUZADA": "CONSISTENCIA",
@@ -48,6 +48,7 @@ DIMENSION = {
     "HORA_FIN_ANTERIOR_A_INICIO": "VALIDEZ", "CORRELATIVO_DUPLICADO": "UNICIDAD",
     "CAMPO_CLAVE_VACIO": "COMPLETITUD", "ABIERTA_MAS_DE_3_DIAS": "OPORTUNIDAD",
     "CORRECTIVO_SIN_AVISO_SAP": "COMPLETITUD",
+    "DOCUMENTO_SIN_REGISTRO_EN_BASE": "COMPLETITUD",
 }
 
 
@@ -201,6 +202,29 @@ def main():
     cur.close()
 
     print(f"Hallazgos brutos (antes de excluir los ya resueltos por la administracion): {len(hallazgos)}")
+
+    # 9. Documento archivado que no llego a la base (completitud).
+    # Un PDF que esta en el arbol canonico pero sin fila en 'ots' es invisible para
+    # todo reporte. Suele pasar cuando la clave de negocio choca con otra orden
+    # (mismo correlativo, zona, modulo y dia): la clave unica rechaza la fila -- y hace
+    # bien, porque inventar una seria peor -- pero el documento queda sin registrar.
+    # Sin esta regla la perdida es silenciosa.
+    cur_docs = cnx.cursor(dictionary=True)
+    cur_docs.execute("SELECT ruta_pdf FROM ots WHERE en_cuarentena = 0 AND ruta_pdf IS NOT NULL")
+    registradas = {str(Path(r["ruta_pdf"])) for r in cur_docs.fetchall()}
+    cur_docs.close()
+    for pdf in Path(r"D:\RESPALDOS\ORDENES DE TRABAJO").rglob("*.pdf"):
+        if str(pdf) in registradas:
+            continue
+        partes = pdf.stem.split("-")
+        zona_doc = partes[-1] if partes else None
+        hallazgos.append((pdf.stem, zona_doc if zona_doc in ("UIO", "LARB", "CNLJ", "OTRA") else None,
+                           None, "DOCUMENTO_SIN_REGISTRO_EN_BASE",
+                           f"El documento esta archivado en {pdf} pero no tiene fila en la tabla "
+                           f"de ordenes, asi que no aparece en ningun reporte. Causa habitual: su "
+                           f"correlativo ya esta ocupado por otra orden de la misma zona, modulo y "
+                           f"dia. Requiere que la administracion asigne un correlativo distinto."))
+
 
     # Filtrar los que la administracion ya marco DESCARTADA/CORREGIDA (I-4)
     nuevos = [h for h in hallazgos if (h[0], h[3]) not in previos]

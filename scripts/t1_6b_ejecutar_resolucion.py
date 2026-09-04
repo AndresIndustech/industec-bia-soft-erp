@@ -36,6 +36,7 @@ CALIDAD = Path(r"D:\INDUSTECH IA\SALIDAS IA\CALIDAD")
 CUARENTENA = Path(r"D:\RESPALDOS\_CUARENTENA")
 RESUELTOS = CUARENTENA / "_RESUELTOS"
 ARBOL = Path(r"D:\RESPALDOS\ORDENES DE TRABAJO")
+INFORMES = Path(r"D:\RESPALDOS\INFORMES TECNICOS")
 OTROS_CLIENTES = Path(r"D:\RESPALDOS\OTROS CLIENTES")
 RESOLUCION = CALIDAD / "RESOLUCION_CUARENTENA.csv"
 MANIFIESTO_SALIDA = CALIDAD / "MANIFIESTO_CUARENTENA_RESUELTA.xlsx"
@@ -201,8 +202,14 @@ def main():
         local = f["local_resuelto"]
         cadena = maestro[local]["cadena"]
         zona = maestro[local]["zona"]
-        destino_dir = ARBOL / anio_de(f) / modulo / zona / cadena
         nombre_nuevo = nombre_canonico({**f, "zona_resuelta": zona}, modulo)
+        # Un documento sin correlativo no es una orden de trabajo: son los informes
+        # tecnicos sueltos ('INFORME TECNICO K124 MAQUINA DE HIELO.pdf'). Se archivan
+        # por local, pero en su propia rama y fuera de la tabla ots.
+        if not correlativo_de(f):
+            destino_dir = INFORMES / anio_de(f) / zona / cadena
+        else:
+            destino_dir = ARBOL / anio_de(f) / modulo / zona / cadena
         destino = destino_dir / nombre_nuevo
 
         if destino.exists():
@@ -240,24 +247,43 @@ def main():
 
     # ---------- actualizacion de la base ----------
     print("\nActualizando la base de datos...")
-    actualizados = no_encontrados = 0
+    actualizados = no_encontrados = supersedidas = 0
     for r in registro:
         if r["resultado"] not in ("COPIADO_Y_VERIFICADO", "YA_ESTABA_EN_DESTINO"):
             continue
-        base_id = Path(r["nombre_original"]).stem
+        # El id_industec se deriva del NOMBRE, asi que al renombrar el documento nace
+        # un id nuevo y el viejo queda como fila duplicada del mismo PDF. Se activa la
+        # fila canonica y, en la misma pasada, se marca la vieja como supersedida. Antes
+        # esto dependia de correr despues otro script, y volver a ejecutar aqui resucitaba
+        # las 338 filas viejas.
+        id_viejo = Path(r["nombre_original"]).stem
+        id_canonico = Path(r["nombre_canonico"]).stem if r["nombre_canonico"] else id_viejo
+
         cur.execute(
             """UPDATE ots
                SET local_codigo=%s, zona=%s, en_cuarentena=0, ruta_pdf=%s,
                    motivo_cuarentena=CONCAT('RESUELTO_T1.6b:', %s)
                WHERE id_industec=%s""",
             (r["local_resuelto"], r["zona_resuelta"] or r["zona_nombre"],
-             r["ruta_canonica"], r["via_resolucion"][:60], base_id))
-        if cur.rowcount:
-            actualizados += cur.rowcount
+             r["ruta_canonica"], r["via_resolucion"][:60], id_canonico))
+        toco_canonica = cur.rowcount
+
+        if id_viejo != id_canonico:
+            cur.execute(
+                """UPDATE ots SET en_cuarentena=1,
+                       motivo_cuarentena=CONCAT('SUPERSEDIDO_POR_NOMBRE_CANONICO:', %s)
+                   WHERE id_industec=%s""",
+                (id_canonico, id_viejo))
+            supersedidas += cur.rowcount
+
+        if toco_canonica:
+            actualizados += toco_canonica
         else:
+            # la fila canonica aun no existe: la creara la ingesta al leer el arbol
             no_encontrados += 1
     print(f"  filas de 'ots' actualizadas: {actualizados}")
-    print(f"  documentos sin fila en 'ots' (no llegaron a ingestarse): {no_encontrados}")
+    print(f"  filas viejas marcadas como supersedidas: {supersedidas}")
+    print(f"  documentos sin fila canonica todavia (los creara la ingesta): {no_encontrados}")
 
     cur.execute("SELECT COUNT(*) c FROM ots WHERE en_cuarentena=1")
     quedan = cur.fetchone()["c"]
