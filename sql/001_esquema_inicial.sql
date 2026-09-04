@@ -8,7 +8,7 @@ SET NAMES utf8mb4;
 
 CREATE TABLE IF NOT EXISTS locales (
     local_codigo    VARCHAR(10)  NOT NULL PRIMARY KEY COMMENT 'Codigo canonico [A-Z]{1,2}[0-9]{3}EC',
-    zona            ENUM('UIO','LARB','CNLJ') NOT NULL,
+    zona            ENUM('UIO','LARB','CNLJ','OTRA') NOT NULL,
     cadena          VARCHAR(40)  NOT NULL COMMENT 'KFC, GUS, CASA RES, etc, ver vocabulario seccion 6.3',
     nombre          VARCHAR(120) NULL COMMENT 'Nombre/ubicacion descriptiva del local',
     correo_local    VARCHAR(160) NULL,
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS tecnicos (
     fecha_ingreso   DATE         NULL,
     tipo_tecnico    VARCHAR(40)  NULL COMMENT 'TECNICO B, MANT. PREVENTIVO, SECRETARIA, etc.',
     afiliado        TINYINT(1)   NULL,
-    zona_asignada   ENUM('UIO','LARB','CNLJ') NULL,
+    zona_asignada   ENUM('UIO','LARB','CNLJ','OTRA') NULL,
     activo          TINYINT(1)   NOT NULL DEFAULT 1,
     creado_en       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_tecnico_cedula (cedula)
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS avisos_sap (
 CREATE TABLE IF NOT EXISTS ots (
     id_industec     VARCHAR(60)  NOT NULL PRIMARY KEY COMMENT 'Clave natural, p.ej. OT-2422-K146EC-10352088-CNLJ',
     modulo          ENUM('CORRECTIVO','PREVENTIVO','OTROS') NOT NULL,
-    zona            ENUM('UIO','LARB','CNLJ') NOT NULL,
+    zona            ENUM('UIO','LARB','CNLJ','OTRA') NOT NULL,
     correlativo     INT UNSIGNED NOT NULL,
     dia_intervencion TINYINT UNSIGNED NULL COMMENT 'Solo preventivo: 1-5',
     aviso           BIGINT UNSIGNED NULL COMMENT 'FK logica a avisos_sap.aviso (idorden del formulario)',
@@ -152,13 +152,13 @@ CREATE TABLE IF NOT EXISTS ot_fotos (
 CREATE TABLE IF NOT EXISTS observaciones_calidad (
     observacion_id  INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     id_industec     VARCHAR(60)  NULL,
-    zona            ENUM('UIO','LARB','CNLJ') NULL,
+    zona            ENUM('UIO','LARB','CNLJ','OTRA') NULL,
     tecnico_nombre  VARCHAR(120) NULL,
     regla           VARCHAR(60)  NOT NULL COMMENT 'p.ej. LOCAL_FUERA_MAESTRO, ZONA_CRUZADA, SIN_FOTOS',
     dimension_dama  ENUM('VALIDEZ','CONSISTENCIA','EXACTITUD','COMPLETITUD','UNICIDAD','OPORTUNIDAD') NOT NULL,
     severidad       ENUM('CRITICA','ALTA','MEDIA','BAJA') NOT NULL,
     evidencia       TEXT         NULL,
-    estado          ENUM('ABIERTA','DESCARTADA','CORREGIDA') NOT NULL DEFAULT 'ABIERTA',
+    estado          ENUM('ABIERTA','DESCARTADA','CORREGIDA','RESUELTA_AUTOMATICA') NOT NULL DEFAULT 'ABIERTA',
     veredicto_admin VARCHAR(200) NULL COMMENT 'Columna editable por la administracion en el Excel espejo',
     creado_en       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resuelto_en     DATETIME     NULL,
@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS observaciones_calidad (
 
 CREATE TABLE IF NOT EXISTS plan_snapshots (
     snapshot_id     INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    zona            ENUM('UIO','LARB','CNLJ') NOT NULL,
+    zona            ENUM('UIO','LARB','CNLJ','OTRA') NOT NULL,
     generado_en     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ruta_archivo    VARCHAR(500) NOT NULL,
     filas_json      LONGTEXT     NULL COMMENT 'Snapshot del contenido para comparar contra la version corregida',
@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS plan_snapshots (
 CREATE TABLE IF NOT EXISTS correcciones (
     correccion_id   INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     snapshot_id     INT UNSIGNED NULL,
-    zona            ENUM('UIO','LARB','CNLJ') NOT NULL,
+    zona            ENUM('UIO','LARB','CNLJ','OTRA') NOT NULL,
     fila_ref        VARCHAR(60)  NULL COMMENT 'id_industec u otra referencia de fila',
     columna         VARCHAR(60)  NOT NULL,
     valor_agente    TEXT         NULL,
@@ -232,3 +232,21 @@ CREATE TABLE IF NOT EXISTS manifiesto_saneamiento (
     INDEX idx_manifiesto_hash (hash_sha256)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='Espejo en BD de MANIFIESTO_SANEAMIENTO.xlsx, trazabilidad invariante I-5, reversible';
+
+-- ---------------------------------------------------------------------------
+-- Notas de evolucion del esquema
+--
+-- 2026-09-04  zona: se agrega 'OTRA' al final del ENUM (locales atendidos fuera
+--             de las tres zonas del contrato con KFC; p. ej. el proyecto de
+--             hornos de Pollo Gus). Va al final para no alterar el orden ni el
+--             significado de los valores existentes.
+-- 2026-09-04  observaciones_calidad.estado: se agrega 'RESUELTA_AUTOMATICA'.
+--             La pone el auditor cuando un hallazgo deja de reproducirse; es
+--             distinta de DESCARTADA/CORREGIDA, que son veredicto de la
+--             administracion. Sin ese valor, el cierre automatico falla con
+--             "Data truncated for column 'estado'".
+--
+-- Regla: todo ALTER que se aplique en caliente desde un script debe reflejarse
+-- aqui en la misma sesion. Si no, la base deja de poder reconstruirse desde
+-- cero y el fallo solo aparece meses despues, en el peor momento.
+-- ---------------------------------------------------------------------------
