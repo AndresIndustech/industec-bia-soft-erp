@@ -58,11 +58,15 @@ def main():
             continue
         vistos.add(aviso)
 
+        estatus_a = limpio(vals[7]) if len(vals) > 7 else None  # H ESTATUS A: CERRADO/TRATAMIENTO/ABIERTO real
+        if estatus_a not in ("CERRADO", "TRATAMIENTO", "ABIERTO"):
+            estatus_a = None
         filas.append((
             aviso,
             a_fecha(vals[1]),                 # B fecha_notificacion
             limpio(vals[5]),                  # F descripcion
             None,                              # clase_aviso: no viene en este export
+            estatus_a,                         # H ESTATUS A -> estatus_general (criterio principal de cierre)
             limpio(vals[23]) if len(vals) > 23 else None,  # X centro_coste (Local)
             limpio(vals[20]) if len(vals) > 20 else None,  # U ubicacion_tecnica
             int(vals[10]) if len(vals) > 10 and str(vals[10]).strip().isdigit() else None,  # K orden_sap
@@ -84,9 +88,9 @@ def main():
     cur.executemany(
         """
         INSERT INTO avisos_sap (aviso, fecha_notificacion, descripcion, clase_aviso,
-            centro_coste, ubicacion_tecnica, orden_sap, fecha_creacion_orden,
+            estatus_general, centro_coste, ubicacion_tecnica, orden_sap, fecha_creacion_orden,
             fecha_cierre_tecnico, estatus_aviso, modificado_por)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
         filas,
     )
