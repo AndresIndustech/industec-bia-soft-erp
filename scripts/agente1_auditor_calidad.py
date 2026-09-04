@@ -40,12 +40,14 @@ SEVERIDAD = {
     "AVISO_INEXISTENTE_O_MAL_FORMADO": "ALTA", "SIN_FOTOS": "MEDIA",
     "HORA_FIN_ANTERIOR_A_INICIO": "MEDIA", "CORRELATIVO_DUPLICADO": "CRITICA",
     "CAMPO_CLAVE_VACIO": "MEDIA", "ABIERTA_MAS_DE_3_DIAS": "ALTA",
+    "CORRECTIVO_SIN_AVISO_SAP": "ALTA",
 }
 DIMENSION = {
     "LOCAL_FUERA_MAESTRO": "VALIDEZ", "ZONA_CRUZADA": "CONSISTENCIA",
     "AVISO_INEXISTENTE_O_MAL_FORMADO": "EXACTITUD", "SIN_FOTOS": "COMPLETITUD",
     "HORA_FIN_ANTERIOR_A_INICIO": "VALIDEZ", "CORRELATIVO_DUPLICADO": "UNICIDAD",
     "CAMPO_CLAVE_VACIO": "COMPLETITUD", "ABIERTA_MAS_DE_3_DIAS": "OPORTUNIDAD",
+    "CORRECTIVO_SIN_AVISO_SAP": "COMPLETITUD",
 }
 
 
@@ -63,8 +65,12 @@ def cargar_veredictos_previos(cnx):
     para (id_industec, regla), esa fila NO se vuelve a reportar como nueva
     -- se conserva su estado y veredicto tal como estaban."""
     cur = cnx.cursor(dictionary=True)
+    # RESUELTA_AUTOMATICA no cuenta como veredicto: la puso el propio auditor al ver
+    # que el hallazgo dejaba de reproducirse. Si el defecto vuelve, debe reportarse
+    # otra vez. Solo DESCARTADA y CORREGIDA son decisiones de la administracion.
     cur.execute("""SELECT id_industec, regla, estado, veredicto_admin
-                   FROM observaciones_calidad WHERE estado != 'ABIERTA'""")
+                   FROM observaciones_calidad
+                   WHERE estado IN ('DESCARTADA','CORREGIDA')""")
     previos = {(r["id_industec"], r["regla"]): r for r in cur.fetchall()}
     cur.close()
     return previos
@@ -80,7 +86,7 @@ def main():
 
     # 1. Local fuera del maestro (validez): la fila quedo con local_codigo NULL
     cur.execute("""SELECT id_industec, zona, tecnico_nombre, ruta_pdf
-                   FROM ots WHERE local_codigo IS NULL""")
+                   FROM ots WHERE local_codigo IS NULL AND en_cuarentena = 0""")
     for r in cur.fetchall():
         hallazgos.append((r["id_industec"], r["zona"], r["tecnico_nombre"],
                            "LOCAL_FUERA_MAESTRO",
@@ -115,6 +121,31 @@ def main():
         hallazgos.append((r["id_industec"], r["zona"], r["tecnico_nombre"],
                            "AVISO_INEXISTENTE_O_MAL_FORMADO",
                            f"El aviso SAP {r['aviso']} tiene formato de 8 digitos pero no aparece en el catalogo de avisos conocidos (KPI'S INDUSTEC.xlsx), pese a que la fecha de la orden SI cae dentro del rango cubierto por ese catalogo ({cobertura['ini']} a {cobertura['fin']})."))
+
+    # 3b. Correctivo sin aviso SAP: NO es un error del tecnico, es un caso de
+    # negocio que la administracion tiene que regularizar.
+    #
+    # Ocurre cuando un local tiene una emergencia mientras el tecnico ya esta en
+    # sitio por otro caso: la atiende y emite la orden sin numero de aviso, porque
+    # ese aviso todavia no existe. Despues la administracion regulariza -- pide a
+    # KFC que cree el caso justificandolo con el informe ya emitido, o lo crea ella
+    # misma en SAP. Esa decision es SIEMPRE suya: el sistema no puede inventar un
+    # aviso ni dar la orden por cerrada sin el.
+    #
+    # Los PREVENTIVOS quedan fuera de esta regla a proposito: no nacen de un aviso
+    # y exigirselo fue el error de diseño que mando 185 documentos a cuarentena.
+    cur.execute("""SELECT id_industec, zona, tecnico_nombre, local_codigo, fecha_atencion
+                   FROM ots
+                   WHERE en_cuarentena = 0 AND modulo = 'CORRECTIVO'
+                     AND (aviso IS NULL OR aviso = 0)""")
+    for r in cur.fetchall():
+        hallazgos.append((r["id_industec"], r["zona"], r["tecnico_nombre"],
+                           "CORRECTIVO_SIN_AVISO_SAP",
+                           f"Correctivo emitido sin numero de aviso SAP en {r['local_codigo']} "
+                           f"el {r['fecha_atencion']}. Tipico de una emergencia atendida con el "
+                           f"tecnico ya en sitio. Requiere que la administracion lo regularice: "
+                           f"pedir a KFC la creacion del caso adjuntando este informe, o crearlo "
+                           f"ella en SAP. Anotar el aviso resultante en la columna VEREDICTO ADMIN."))
 
     # 4. Orden sin fotos (completitud)
     cur.execute("""SELECT id_industec, zona, tecnico_nombre
@@ -188,10 +219,32 @@ def main():
         )
     cnx.commit()
 
+    # --- Cerrar los hallazgos que ya dejaron de ser ciertos ---------------------
+    # Sin este paso el auditor solo acumula: una observacion levantada en una corrida
+    # anterior seguia ABIERTA aunque el defecto ya se hubiera corregido, y la
+    # administracion terminaba revisando fantasmas. Paso real: tras T1.6b quedaron
+    # 347 'LOCAL_FUERA_MAESTRO' de ordenes que ya tenian su local resuelto.
+    #
+    # Solo se cierran las que siguen ABIERTAS: si la administracion ya emitio un
+    # veredicto, ese veredicto manda y no se toca (I-4).
+    vigentes = {(h[0], h[3]) for h in hallazgos}
+    cur.execute("""SELECT observacion_id, id_industec, regla FROM observaciones_calidad
+                   WHERE estado = 'ABIERTA'""")
+    a_cerrar = [r[0] for r in cur.fetchall() if (r[1], r[2]) not in vigentes]
+    for obs_id in a_cerrar:
+        cur.execute("""UPDATE observaciones_calidad
+                       SET estado='RESUELTA_AUTOMATICA', veredicto_admin=CONCAT(
+                           COALESCE(veredicto_admin,''),
+                           'Cerrada automaticamente: el hallazgo ya no se reproduce.')
+                       WHERE observacion_id=%s""", (obs_id,))
+    cnx.commit()
+    print(f"Observaciones cerradas por dejar de reproducirse: {len(a_cerrar)}")
+
     # --- Excel espejo para la administracion, con VEREDICTO ADMIN editable
     cur.execute("""SELECT observacion_id, id_industec, zona, tecnico_nombre, regla,
                           dimension_dama, severidad, evidencia, estado, veredicto_admin, creado_en
-                   FROM observaciones_calidad ORDER BY severidad DESC, creado_en DESC""")
+                   FROM observaciones_calidad
+                   ORDER BY (estado='ABIERTA') DESC, severidad DESC, creado_en DESC""")
     filas = cur.fetchall()
     cur.close()
     cnx.close()
@@ -218,10 +271,16 @@ def main():
 
     print(f"\n=== RESUMEN AUDITOR DE CALIDAD ===")
     from collections import Counter
-    por_regla = Counter(f[4] for f in filas)
-    for regla, n in por_regla.most_common():
+    # Solo lo ABIERTO es lo que la administracion tiene que mirar. Contar la tabla
+    # entera mezclaba lo ya resuelto y daba una cifra que solo podia crecer.
+    abiertas = [f for f in filas if f[8] == "ABIERTA"]
+    for regla, n in Counter(f[4] for f in abiertas).most_common():
         print(f"  {regla}: {n}")
-    print(f"Total de observaciones activas: {len(filas)}")
+    print(f"Observaciones ABIERTAS (lo que requiere revision): {len(abiertas)}")
+    cerradas = Counter(f[8] for f in filas if f[8] != "ABIERTA")
+    if cerradas:
+        print("Cerradas: " + ", ".join(f"{k}={v}" for k, v in cerradas.items()))
+    print(f"Total historico en la tabla: {len(filas)}")
     print(f"Excel: {OUT_XLSX}")
 
 
