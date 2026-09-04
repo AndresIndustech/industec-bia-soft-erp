@@ -1,7 +1,32 @@
-.venv/
-config/.env
+# El repositorio cubre TODO el proyecto, no solo el código: así quedan versionados
+# también CLAUDE.md, ESTADO.md, PLAN_INDUSTEC.md y las skills, que son los documentos
+# desde los que cualquier conversación retoma el trabajo.
+
+# --- Carpetas sincronizadas con Google Drive: NO se versionan --------------
+# Drive ya las respalda, pesan más de 1,5 GB y su contenido lo pone la
+# administración, no nosotros. Versionarlas duplicaría el respaldo y llenaría
+# el historial de binarios.
+# Se ignora el CONTENIDO (con /*), no la carpeta, para poder rescatar su LEEME:
+# git no puede reincluir un archivo si su carpeta entera esta excluida.
+ENTRADAS IA/*
+!ENTRADAS IA/LEEME.md
+SALIDAS IA/*
+!SALIDAS IA/LEEME.md
+
+# --- Entorno y credenciales -----------------------------------------------
+desarrollo/agentes/.venv/
+desarrollo/agentes/config/.env
+desarrollo/datos/
+
+# --- Basura de ejecución ---------------------------------------------------
 __pycache__/
 *.pyc
 *.log
-*.pdf
 node_modules/
+
+# --- Documentos del corpus -------------------------------------------------
+# El corpus vive en D:\RESPALDOS, fuera del proyecto. Esta regla es una red de
+# seguridad por si algún script deja un PDF suelto dentro del repositorio.
+*.pdf
+*.xlsx
+*.csv
