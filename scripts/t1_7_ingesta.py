@@ -32,7 +32,11 @@ for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
 
 RAIZ = Path(r"D:\RESPALDOS\ORDENES DE TRABAJO")
 
-RE_NOMBRE = re.compile(r"^OT-(\d+)-([A-Z0-9]+)-(\d+)(?:-D(\d+))?-([A-Z]+)\.pdf$")
+# El segmento del AVISO es opcional: los preventivos no nacen de un aviso SAP, y
+# algunos correctivos antiguos se emitieron sin el. Exigirlo mandaba a error
+# documentos perfectamente validos (T1.6b).
+RE_NOMBRE = re.compile(
+    r"^OT-(\d+)-([A-Z0-9]+)(?:-(\d+))?(?:-D(\d+))?-([A-Z]+)\.pdf$")
 
 
 def _trunc(v, n):
@@ -79,7 +83,13 @@ def main():
             con_error += 1
             continue
         correlativo, local_codigo, aviso, dia, zona = m.groups()
-        modulo = "PREVENTIVO" if dia else "CORRECTIVO"
+        # El modulo lo manda la CARPETA, que es donde el saneamiento ya decidio:
+        # el arbol es {anio}/{CORRECTIVO|PREVENTIVO}/{zona}/{cadena}. Deducirlo del
+        # sufijo -D{n} fallaba en los preventivos que no llevan numero de dia.
+        # el aviso es opcional en el nombre canonico: se guarda NULL cuando no lo hay
+        aviso_num = int(aviso) if aviso else None
+        partes = p.relative_to(RAIZ).parts
+        modulo = partes[1] if len(partes) > 1 and partes[1] in ("CORRECTIVO", "PREVENTIVO", "OTROS")             else ("PREVENTIVO" if dia else "CORRECTIVO")
         id_industec = p.stem
         cadena_carpeta = p.parent.name  # .../{zona}/{cadena}/archivo.pdf
 
@@ -99,7 +109,7 @@ def main():
                    ON DUPLICATE KEY UPDATE ruta_pdf=VALUES(ruta_pdf), hash_pdf=VALUES(hash_pdf),
                         en_cuarentena=1, motivo_cuarentena=VALUES(motivo_cuarentena)""",
                 (id_industec, modulo, zona, int(correlativo), int(dia) if dia else None,
-                 int(aviso), local_codigo, str(p), hash_pdf, extraido["error"][:200]),
+                 aviso_num, local_codigo, str(p), hash_pdf, extraido["error"][:200]),
             )
             continue
 
@@ -128,7 +138,7 @@ def main():
                         fotos_cantidad=VALUES(fotos_cantidad), ruta_pdf=VALUES(ruta_pdf),
                         hash_pdf=VALUES(hash_pdf), en_cuarentena=0, motivo_cuarentena=NULL""",
                 (id_industec, modulo, zona, int(correlativo), int(dia) if dia else None,
-                 int(aviso), local_codigo, _trunc(extraido.get("cliente"), 80),
+                 aviso_num, local_codigo, _trunc(extraido.get("cliente"), 80),
                  _trunc(extraido.get("tecnico_nombre"), 120), _trunc(extraido.get("admin_nombre"), 120),
                  _trunc(extraido.get("correo_local"), 160), _trunc(extraido.get("correo_jefe_op"), 160),
                  extraido.get("fecha_atencion"),
@@ -178,7 +188,7 @@ def main():
                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NULL,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'DRIVE_HISTORICO',1,%s)
                            ON DUPLICATE KEY UPDATE fecha_atencion=NULL, en_cuarentena=1, motivo_cuarentena=VALUES(motivo_cuarentena)""",
                         (id_industec, modulo, zona, int(correlativo), int(dia) if dia else None,
-                         int(aviso), local_codigo, _trunc(extraido.get("cliente"), 80),
+                         aviso_num, local_codigo, _trunc(extraido.get("cliente"), 80),
                          _trunc(extraido.get("tecnico_nombre"), 120), _trunc(extraido.get("admin_nombre"), 120),
                          _trunc(extraido.get("correo_local"), 160), _trunc(extraido.get("correo_jefe_op"), 160),
                          extraido.get("hora_inicio"), extraido.get("hora_fin"),
