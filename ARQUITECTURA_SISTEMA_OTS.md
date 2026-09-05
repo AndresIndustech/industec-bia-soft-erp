@@ -71,6 +71,31 @@ Auditoría de los 12 archivos de código propio del sistema en producción y de 
 | **El sistema "de producción" vive bajo `/ot/pruebas/`** | Rutas en `error_normal.log` | El staging nuevo permite dejar de trabajar sobre producción |
 | **`cleanup.php` borra `uploads` y los logs sin filtro ni verificación** | `glob()` + `unlink()`, sin mtime ni hash | No se usa. Ver §5 |
 
+### La clave `(zona, módulo, correlativo)` no es única, y eso cambia T2.1.5
+
+Al preparar la migración se verificó contra los datos, no contra el diseño. La
+clave compuesta **no se puede forzar**:
+
+- **9 pares de órdenes distintas** comparten `(zona, módulo, correlativo)` —
+  `OT-0023-K170EC-10279789-UIO` y `OT-0023-T050EC-UIO`, entre otras. Son
+  documentos legítimos: es la huella de la condición de carrera del contador.
+- **El correlativo se solapa entre años.** CNLJ 2025 llega a 1225 y CNLJ 2026
+  arranca en 622.
+- **El contador de UIO está en 1820, pero la base ya tiene 4 órdenes UIO entre
+  1821 y 2064.** Cuando el contador vuelva a pasar por ahí, colisionan.
+
+La clave de negocio real ya está declarada y ya es única: `id_industec`, la
+PRIMARY KEY, exactamente como dice `PLAN_INDUSTEC.md` §6.4. El invariante I-9 se
+cumple por ahí. La compuesta pasa a índice normal, y detectar colisiones queda
+como trabajo del auditor de calidad — porque una colisión es información
+operativa real: significa que el contador se reinició o hubo una carrera.
+
+**Y la semilla de `correlativos` no puede salir de `MAX(correlativo)`:** 347
+filas llevan correlativos sintéticos en el rango 90000+, puestos por el
+saneamiento a documentos cuyo número no se pudo leer. Sembrar con `MAX` daría
+90056 y la próxima orden saldría como `OT-90057`. La única fuente válida es el
+contador del servidor.
+
 ### Un hallazgo que no es un error
 
 `K073EC`/`H015EC`, `K099EC`/`H032EC`, `K146EC`/`H052EC`, `K069EC`/`H014EC`
@@ -250,4 +275,6 @@ encima.** Lo que ya está decidido:
 | [`scripts/t2_4_normalizar_nuevas.py`](desarrollo/agentes/scripts/t2_4_normalizar_nuevas.py) | Del espejo crudo al árbol canónico. 98,4% automático |
 | [`parches/uploads.htaccess`](desarrollo/sistema_ots/parches/uploads.htaccess) | Cierra el acceso web a los PDFs |
 | [`parches/guardas.php`](desarrollo/sistema_ots/parches/guardas.php) | Rechaza GET, POST vacío y zona inválida |
+| [`scripts/t2_4_publicar_ots.py`](desarrollo/agentes/scripts/t2_4_publicar_ots.py) | Catálogo para INDUSTEC. **Ya corrido: 7.069 órdenes publicadas** |
+| [`sql/003_persistencia_formulario.sql`](desarrollo/agentes/sql/003_persistencia_formulario.sql) | Prepara la base para T2.1.1. **Escrita, no aplicada** |
 | [`LEEME_ACCESO_HOSTINGER.md`](desarrollo/sistema_ots/LEEME_ACCESO_HOSTINGER.md) | Guía paso a paso, cada uno con su verificación |

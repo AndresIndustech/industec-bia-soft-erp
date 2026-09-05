@@ -88,6 +88,7 @@ se contrasta contra ellos y se corrige lo que haga falta.
 |---|---|---|---|
 | **T1.11-b** | Llevar el consolidador vivo (`agente2_consolidador.py`) al modelo del histórico: agrupar por (aviso, zona), arrastrar por evidencia y leer los campos SAP nuevos. Hoy sigue con la lógica vieja del 87,3% | nada | Sí |
 | **T2.4.0–T2.4.4** | Continuidad de datos del sistema en producción: parches de seguridad, espejo verificado, purga con compuerta de hash, normalización y publicación. Ver [`ARQUITECTURA_SISTEMA_OTS.md`](ARQUITECTURA_SISTEMA_OTS.md) | SSH habilitado | Sí, salvo la purga |
+| **Migración `003`** | Prepara la base para que el formulario escriba directo: `FORMULARIO_WEB` en `fuente`, tabla `correlativos` con reserva atómica, `email_queue`. **Escrita, no aplicada**: cambia el esquema y requiere aprobación | nada | No: va antes de T2.1.1 |
 | **T2.1.1–T2.1.6** | Intervención al sistema de OTs en producción (PHP/Hostinger), subtarea por subtarea | nada | Sí, entre sí no chocan si se despliegan de a una |
 | **T2.2.1–T2.2.3** | Agente 3 · reportes diario, mensual y KFC | nada | Sí |
 | **T2.3.1–T2.3.4** | Cola de correo `email_queue` con reintentos y detección de rebotes | nada | Sí |
