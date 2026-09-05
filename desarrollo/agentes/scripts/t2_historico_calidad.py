@@ -28,6 +28,7 @@ Se mide otra cosa:
 Uso:
     .venv/Scripts/python.exe scripts/t2_historico_calidad.py
 """
+import re
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -110,6 +111,36 @@ def cobertura_llenado():
     return total, con_dato
 
 
+def cierres_inferidos():
+    """Filas cuyo cierre no consta en ningun registro y se dio por cerrado.
+
+    Todo el historico queda CERRADO, pero no todo cierre pesa lo mismo: uno con
+    visita de cierre firmada es un hecho, y uno deducido es una decision. Estas
+    son las deducidas, para que la administracion las revise una por una.
+    """
+    filas, conteo = [], {}
+    for zona, carpeta in CARPETA_ZONA.items():
+        for f in sorted((SALIDA / carpeta / "PLANES MENSUALES").glob("*.xlsx")):
+            ws = openpyxl.load_workbook(f, data_only=True).worksheets[0]
+            mes = f.stem[:7]
+            for r in range(2, ws.max_row + 1):
+                obs = str(ws.cell(r, 14).value or "")
+                if "CIERRE INFERIDO" not in obs:
+                    conteo["cierre registrado"] = conteo.get("cierre registrado", 0) + 1
+                    continue
+                nota = obs.split("CIERRE INFERIDO:", 1)[1].split(" · ")[0].strip()
+                # La fecha concreta va en la celda, pero para contar hace falta
+                # el motivo sin ella, o cada dia de cierre seria una categoria
+                clave = re.sub(r"\s*el \d{2}/\d{2}/\d{4}", "", nota.split(";")[0]).strip()
+                conteo[clave] = conteo.get(clave, 0) + 1
+                # Solo se listan los cierres que son una decision, no los que
+                # tienen fecha de cierre tecnico detras
+                if "falta de atencion" in nota:
+                    filas.append([zona, mes, ws.cell(r, 2).value, ws.cell(r, 5).value,
+                                  ws.cell(r, 6).value, nota])
+    return filas, conteo
+
+
 def discrepancias():
     hallazgos = []
     for zona, carpeta_real in CARPETA_REAL.items():
@@ -144,6 +175,12 @@ def main():
         marca = " (NINGUNO)" if get_column_letter(j) in COLS_NINGUNO else ""
         print(f"{nombre + marca:<32}{con_dato[nombre]:>10}{con_dato[nombre]/total*100:>7.1f}%")
 
+    asumidos, conteo_cierres = cierres_inferidos()
+    print("\n=== Con que se sostiene el cierre de cada fila ===")
+    for motivo, cuantas in sorted(conteo_cierres.items(), key=lambda x: -x[1]):
+        print(f"  {cuantas:>6}  {motivo}")
+    print(f"  Cierres que son una decision y no un registro: {len(asumidos)}")
+
     hallazgos = discrepancias()
     print(f"\n=== Discrepancias contra los planes llevados a mano ===")
     print(f"Filas contrastadas contra los 24 archivos reales de ene-ago 2026")
@@ -169,6 +206,14 @@ def main():
     for col, ancho in zip("ABCDEFGH", (8, 12, 12, 26, 34, 34, 42, 46)):
         ws.column_dimensions[col].width = ancho
     ws.freeze_panes = "A2"
+
+    ws2 = wb.create_sheet("CIERRES ASUMIDOS")
+    ws2.append(["ZONA", "MES", "AVISO", "LOCAL", "FECHA DE INICIO", "EN QUE SE APOYA EL CIERRE"])
+    for fila in asumidos:
+        ws2.append(fila)
+    for col, ancho in zip("ABCDEF", (8, 10, 12, 10, 16, 76)):
+        ws2.column_dimensions[col].width = ancho
+    ws2.freeze_panes = "A2"
     REPORTE.parent.mkdir(parents=True, exist_ok=True)
     wb.save(REPORTE)
     print(f"\nReporte para la administracion: {REPORTE}")

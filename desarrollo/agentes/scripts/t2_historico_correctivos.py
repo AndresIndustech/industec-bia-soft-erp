@@ -29,19 +29,35 @@ De donde sale cada columna
 | #OT INDUSTEC EVAL/CIERRE       | OT                                         |
 | FECHA EVALUACION / CIERRE      | OT                                         |
 | REQUERIMIENTO A TIEMPO / CALIF | OT                                         |
-| ESTADO                         | SAP al cierre del mes; sin catalogo, la OT;|
-|                                | en ultimo termino el seguimiento de ella   |
+| ESTADO                         | siempre CERRADA; el motivo va en OBSERVAC. |
+
+Todo caso queda CERRADO, porque asi funciona la operacion: el local que sigue
+necesitando algo levanta un requerimiento nuevo, no revive el viejo. Lo que
+cambia de caso a caso es CON QUE se sostiene ese cierre, y eso es lo que se
+anota: una visita de cierre registrada, el cierre tecnico de SAP, un aviso
+cerrado sin orden de trabajo, una intervencion que no hizo falta, el
+seguimiento de la administracion, o -- cuando no queda ninguna otra evidencia --
+falta de atencion. Los cierres deducidos van rotulados "CIERRE INFERIDO" en la
+celda, para que nadie confunda un cierre registrado con uno derivado (I-7).
+
+Lo que la evidencia NO sostiene, y por eso no se implemento: el autocierre de
+Grupo KFC a los 7 dias no deja ninguna huella en los datos (el dia 7 tiene 193
+cierres contra 187,8 de media de sus vecinos, ratio 1,03x: esta sobre la
+tendencia, no sobre un escalon), el 23,1% de los casos tarda mas de una semana
+y hay cola hasta 114 dias. Y la hipotesis de que un caso se cierre bajo otro
+numero tampoco se separa del ruido: un grupo de control de 613 casos ya
+cerrados tiene la misma tasa de "orden posterior en el mismo local" que los
+casos sin cierre (exceso entre -3,8 y +1,4 puntos), porque eso mide el trafico
+del local y no la migracion del caso.
 
 Cada archivo mensual refleja lo que se sabia al cerrar ese mes: ninguna orden
-posterior al fin de mes entra, y el estado del caso se evalua a esa fecha. Un
-caso se arrastra al mes siguiente solo mientras haya evidencia POSITIVA de que
-seguia abierto -- que no conste su cierre no alcanza, o los 840 avisos que SAP
-da por cerrados sin fecha fabricarian un backlog que nunca existio.
+posterior al fin de mes entra.
 
 Uso:
     .venv/Scripts/python.exe scripts/t2_historico_correctivos.py [--zona UIO] [--desde 2025-09] [--hasta 2026-09]
 """
 import argparse
+import re
 import sys
 from collections import defaultdict
 from copy import copy
@@ -135,8 +151,105 @@ def cargar_todo(cnx):
                    LEFT JOIN locales l ON l.local_codigo = COALESCE(al.local_codigo,
                                                                     CONCAT(a.centro_coste,'EC'))""")
     avisos = {r["aviso"]: r for r in cur.fetchall()}
+    cur.execute("""SELECT MIN(fecha_notificacion) AS ini, MAX(fecha_notificacion) AS fin
+                   FROM avisos_sap""")
+    global COBERTURA_SAP
+    rango = cur.fetchone()          # cursor de diccionario: desempaquetar por clave
+    COBERTURA_SAP = (rango["ini"], rango["fin"])
     cur.close()
     return ots, avisos
+
+
+def _sin_tildes(texto):
+    tabla = str.maketrans("ÁÉÍÓÚÜÑ", "AEIOUUN")
+    return str(texto or "").upper().translate(tabla)
+
+
+# Formulas con las que el tecnico deja constancia de que no hubo que intervenir.
+# Deliberadamente estrechas: "SIN NOVEDAD" y "EQUIPO OPERATIVO" quedan FUERA
+# porque aparecen en 2.171 ordenes y casi siempre cierran un trabajo que si se
+# hizo ("el equipo queda operativo luego de la intervencion"). Tomarlas como
+# "no se requirio atencion" habria etiquetado mal un tercio del corpus.
+SIN_INTERVENCION = re.compile(
+    r"NO (SE )?(REQUIRIO|REQUIERE|FUE NECESARI|AMERITA|ES NECESARI)"
+    r"|FALSA ALARMA"
+    r"|NO SE ENCONTRO (NINGUNA )?(NOVEDAD|FALLA)"
+    r"|SOPORTE (VIA )?(TELEFONIC|LLAMADA)|VIA TELEFONIC")
+
+# Como la administracion redacta ella misma un cierre sin trabajo, en sus planes
+SEGUIMIENTO_EXPLICA_CIERRE = re.compile(
+    r"FALTA DE OK|NO AUTORIZAD|SIN AUTORIZACION"
+    r"|NO SE CONSIGUE EL REPUESTO|SE CIERRA POR|CERRADO POR")
+
+# Motivos posibles, del mas sostenido por evidencia al menos sostenido
+MOTIVO_VISITA_CIERRE = "visita de cierre registrada"
+MOTIVO_CIERRE_SAP = "cierre tecnico en SAP"
+MOTIVO_SAP_SIN_ORDEN = "cerrado en SAP sin orden de trabajo"
+MOTIVO_SIN_INTERVENCION = "no se requirio intervencion tecnica"
+MOTIVO_SEGUIMIENTO = "cierre explicado en el seguimiento de la administracion"
+MOTIVO_SIN_COBERTURA = "sin constancia de cierre: el catalogo SAP no cubre esa fecha"
+MOTIVO_SAP_LO_DA_ABIERTO = "falta de atencion (SAP lo reportaba abierto al corte)"
+MOTIVO_FALTA_ATENCION = "cerrado por falta de atencion"
+
+# Rango real que cubre el catalogo de avisos; lo fija cargar_todo() al leer la
+# base. Sin declararlo, los 609 casos de 2025 que el catalogo no alcanza se
+# etiquetarian como "falta de atencion", afirmando sobre la operacion algo que
+# en realidad solo dice que no hay catalogo para esa fecha (I-12).
+COBERTURA_SAP = (None, None)
+
+
+def motivo_cierre(aviso_row, ordenes, seguimiento_admin):
+    """Por que se dio por cerrado este caso, y con que evidencia.
+
+    Todo caso del historico queda CERRADO -- es la realidad operativa: el local
+    que sigue necesitando algo levanta un requerimiento nuevo, no revive el
+    viejo. Lo que cambia de caso a caso es CON QUE se sostiene ese cierre, y eso
+    es lo que se anota. Devuelve (motivo, texto_para_observaciones); el texto es
+    None cuando el cierre consta por si solo y no hace falta explicarlo.
+
+    Las dos primeras ramas son constancia documental. Las demas son inferencia y
+    van rotuladas como tal en la celda: quien lea el archivo tiene que poder
+    distinguir un cierre registrado de uno deducido (I-7).
+    """
+    if any(o["estado_ot"] == "CERRADA" for o in ordenes):
+        return MOTIVO_VISITA_CIERRE, None
+
+    cierre_sap = (aviso_row or {}).get("fecha_cierre_tecnico")
+    if cierre_sap:
+        return MOTIVO_CIERRE_SAP, f"CIERRE INFERIDO: cierre tecnico en SAP el {cierre_sap:%d/%m/%Y}"
+
+    if aviso_row and aviso_row.get("estatus_general") == "CERRADO":
+        # 729 avisos cerraron sin haber generado nunca orden SAP: es el cierre
+        # administrativo, el caso que se resolvio o se descarto sin trabajo.
+        if not aviso_row.get("orden_sap"):
+            return MOTIVO_SAP_SIN_ORDEN, "CIERRE INFERIDO: cerrado en SAP sin orden de trabajo"
+        return MOTIVO_CIERRE_SAP, "CIERRE INFERIDO: aviso cerrado en SAP, sin fecha de cierre tecnico"
+
+    texto = _sin_tildes(" ".join(str(o.get("actividades") or "") + " " + str(o.get("observaciones") or "")
+                                for o in ordenes))
+    if SIN_INTERVENCION.search(texto):
+        return MOTIVO_SIN_INTERVENCION, "CIERRE INFERIDO: no se requirio intervencion tecnica"
+
+    anotado = _sin_tildes((seguimiento_admin or {}).get("observaciones"))
+    if anotado and SEGUIMIENTO_EXPLICA_CIERRE.search(anotado):
+        return MOTIVO_SEGUIMIENTO, None       # su propio texto ya explica el cierre
+
+    if aviso_row and aviso_row.get("estatus_general") in ("ABIERTO", "TRATAMIENTO"):
+        corte = COBERTURA_SAP[1]
+        return MOTIVO_SAP_LO_DA_ABIERTO, (
+            "CIERRE INFERIDO: cerrado por falta de atencion; SAP lo reportaba abierto"
+            + (f" al {corte:%d/%m/%Y}" if corte else ""))
+
+    # Fuera de la ventana del catalogo no hay con que ver el cierre: decirlo es
+    # distinto -- y mas honesto -- que atribuirlo a falta de atencion.
+    inicio, fin = COBERTURA_SAP
+    fecha = ordenes[0]["fecha_atencion"] if ordenes else None
+    if aviso_row is None and inicio and fecha and not (inicio <= fecha <= fin):
+        return MOTIVO_SIN_COBERTURA, (
+            f"CIERRE INFERIDO: sin constancia de cierre; el catalogo SAP solo cubre "
+            f"{inicio:%d/%m/%Y} a {fin:%d/%m/%Y}")
+
+    return MOTIVO_FALTA_ATENCION, "CIERRE INFERIDO: cerrado por falta de atencion"
 
 
 def resuelto_al(aviso_row, ordenes, corte):
@@ -167,22 +280,45 @@ def seguia_abierto(aviso_row, ordenes, corte):
     return any(o["estado_ot"] == "ABIERTA" and o["fecha_atencion"] < corte for o in ordenes)
 
 
-def armar_fila(aviso_row, ordenes, seguimiento_admin, mes_fin):
+def repartir_visitas(ordenes):
+    """Reparte las visitas del caso en las dos ranuras del formato.
+
+    `estado_ot` NO dice si el caso sigue abierto: dice como quedo ESA visita.
+    Medido sobre el corpus, 'ABIERTA' es la visita de evaluacion que diagnostico
+    y pidio repuestos -- el 95,9% de ellas declara repuestos, contra el 51,8% de
+    las 'CERRADA' -- y el patron evaluacion->cierre cubre 1.084 de los 1.334
+    casos de dos visitas. Usarla como estado del caso daba 98,1% de falsos
+    positivos: de 1.964 ordenes 'ABIERTA', 1.648 quedan desmentidas por un
+    cierre posterior o por SAP, y el backlog real son 38.
+
+    De ahi el reparto: con dos o mas visitas, la primera evalua y la ULTIMA
+    cierra, sin mirar su estado. Con una sola, decide su estado; y si ese campo
+    no existia todavia (536 ordenes de sep-oct 2025, antes de que el formulario
+    lo trajera) decide si pidio repuestos, que es el rasgo de la evaluacion.
+    """
+    if not ordenes:
+        return None, None, []
+    if len(ordenes) >= 2:
+        return ordenes[0], ordenes[-1], ordenes[1:-1]
+
+    unica = ordenes[0]
+    if unica["estado_ot"] == "CERRADA":
+        return None, unica, []
+    if unica["estado_ot"] == "ABIERTA":
+        return unica, None, []
+    return (unica, None, []) if limpiar(unica.get("repuestos")) else (None, unica, [])
+
+
+def armar_fila(aviso_row, ordenes, seguimiento_admin):
     """Un caso = una fila, con dos ranuras: evaluacion y cierre.
 
-    El reparto es por fecha. La regla anterior ("evaluacion = la primera orden
-    que no este cerrada") se quedaba sin ranura cuando las dos visitas del caso
-    terminaban cerradas y descartaba una en silencio. Las visitas que no caben
-    en las dos ranuras se nombran en OBSERVACIONES: ninguna orden se pierde.
+    Las visitas que no caben en las dos ranuras se nombran en OBSERVACIONES:
+    ninguna orden se pierde.
     """
     fila = {c: None for c in COLS}
     fila["# OT"] = (aviso_row or {}).get("aviso") or (ordenes[0]["aviso"] if ordenes else None)
 
-    cerradas = [o for o in ordenes if o["estado_ot"] == "CERRADA"]
-    cierre = cerradas[-1] if cerradas else None
-    restantes = [o for o in ordenes if o is not cierre]
-    evaluacion = restantes[0] if restantes else None
-    sobrantes = restantes[1:]
+    evaluacion, cierre, sobrantes = repartir_visitas(ordenes)
 
     fila["LOCAL"] = (aviso_row or {}).get("local_maestro") or \
         next((o["local_codigo"] for o in ordenes if o["local_codigo"]), None)
@@ -226,15 +362,20 @@ def armar_fila(aviso_row, ordenes, seguimiento_admin, mes_fin):
     tokens = sorted(set(estatus.upper().split()))
     fila["ESTATUS SAP"] = " ".join(tokens) if tokens else None
 
+    # Todo caso del historico queda CERRADO. Un caso no se queda abierto para
+    # siempre: el local que sigue necesitando algo levanta un requerimiento
+    # nuevo. Lo que cambia es con que se sostiene el cierre, y eso se anota.
+    motivo, nota = motivo_cierre(aviso_row, ordenes, seguimiento_admin)
+    fila["ESTADO"] = "CERRADA"
+    fila["_motivo_cierre"] = motivo
+
     # Lo unico que se toma de los archivos de la administracion: su seguimiento.
     fila["PRESUPUESTO"] = (seguimiento_admin or {}).get("presupuesto")
-    observaciones = (seguimiento_admin or {}).get("observaciones")
+    partes = [(seguimiento_admin or {}).get("observaciones"), nota]
     if sobrantes:
-        extra = "OTRAS VISITAS DEL CASO: " + ", ".join(
-            id_industec_original(o["id_industec"], o["local_codigo"]) for o in sobrantes)
-        observaciones = f"{observaciones} · {extra}" if observaciones else extra
-    fila["OBSERVACIONES"] = observaciones
-    fila["ESTADO"] = estado_del_mes(aviso_row, ordenes, mes_fin, seguimiento_admin)
+        partes.append("OTRAS VISITAS DEL CASO: " + ", ".join(
+            id_industec_original(o["id_industec"], o["local_codigo"]) for o in sobrantes))
+    fila["OBSERVACIONES"] = " · ".join(p for p in partes if p) or None
     return fila
 
 
@@ -266,7 +407,7 @@ def construir_filas(zona, anio, mes, ots, avisos, seguimiento):
         abierto = seguia_abierto(aviso_row, ordenes, mes_fin)
         if not (visita_en_el_mes or notificado_en_el_mes or abierto):
             continue
-        filas.append(armar_fila(aviso_row, ordenes, seguimiento.buscar(aviso, anio, mes), mes_fin))
+        filas.append(armar_fila(aviso_row, ordenes, seguimiento.buscar(aviso, anio, mes)))
 
     # Avisos que aun no tienen ninguna visita de INDUSTEC: son casos reales del
     # mes, pendientes de atender. Solo entran los del alcance del contrato.
@@ -280,35 +421,17 @@ def construir_filas(zona, anio, mes, ots, avisos, seguimiento):
             continue
         if f_notif < mes_ini and not seguia_abierto(aviso_row, [], mes_fin):
             continue
-        filas.append(armar_fila(aviso_row, [], seguimiento.buscar(aviso, anio, mes), mes_fin))
+        filas.append(armar_fila(aviso_row, [], seguimiento.buscar(aviso, anio, mes)))
 
     # Ordenes sin aviso: 37 correctivos reales que no pueden desaparecer (I-7)
     for o in sin_aviso:
         if o["zona"] == zona and mes_ini <= o["fecha_atencion"] < mes_fin:
-            fila = armar_fila(None, [o], None, mes_fin)
+            fila = armar_fila(None, [o], None)
             fila["# OT"] = "NINGUNO"
             filas.append(fila)
 
     filas.sort(key=lambda f: (f.get("FECHA DE INICIO") or date.min, str(f.get("# OT"))))
     return filas
-
-
-def estado_del_mes(aviso_row, ordenes, mes_fin, seguimiento_admin):
-    """CERRADA/ABIERTA al cierre del mes.
-
-    Primero la evidencia fechada (cierre tecnico SAP u orden de cierre). Si no
-    la hay pero SAP da el caso por CERRADO, se respeta ese veredicto -- es el
-    criterio canonico del proyecto-- aunque no se pueda ubicar el dia. Solo
-    cuando no hay ni catalogo ni ordenes se usa lo que anoto la administracion.
-    """
-    if resuelto_al(aviso_row, ordenes, mes_fin):
-        return "CERRADA"
-    if aviso_row and aviso_row.get("estatus_general"):
-        return "CERRADA" if aviso_row["estatus_general"] == "CERRADO" else "ABIERTA"
-    if ordenes:
-        return "ABIERTA"
-    anotado = (seguimiento_admin or {}).get("estado")
-    return anotado if anotado in ("CERRADA", "ABIERTA") else "ABIERTA"
 
 
 def escribir_plan(zona, anio, mes, filas):
@@ -403,6 +526,7 @@ def main():
           f"({len(meses)}) x {zonas}\n")
 
     resumen, huerfanas = [], 0
+    motivos = defaultdict(int)
     for zona in zonas:
         for anio, mes in meses:
             filas = construir_filas(zona, anio, mes, ots, avisos, seguimiento)
@@ -411,6 +535,8 @@ def main():
                 huerfanas += len(faltan)
                 print(f"  !! {zona} {anio}-{mes:02d}: {len(faltan)} ordenes sin fila: "
                       f"{sorted(faltan)[:5]}")
+            for f in filas:
+                motivos[f.get("_motivo_cierre") or "(sin clasificar)"] += 1
             ruta = escribir_plan(zona, anio, mes, filas)
             resumen.append((zona, anio, mes, len(filas), len(esperadas)))
             print(f"  {zona} {anio}-{mes:02d}: {len(filas):4d} filas · {len(esperadas):4d} "
@@ -420,6 +546,9 @@ def main():
     print(f"Archivos generados: {len(resumen)}")
     print(f"Filas totales: {sum(r[3] for r in resumen)}")
     print(f"Ordenes correctivas cubiertas: {sum(r[4] for r in resumen)} de {len(ots)}")
+    print("\nCon que se sostiene el cierre de cada fila:")
+    for motivo, cuantas in sorted(motivos.items(), key=lambda x: -x[1]):
+        print(f"  {cuantas:>6}  {motivo}")
     if huerfanas:
         sys.exit(f"ABORTA (I-10): {huerfanas} ordenes del mes sin fila en su archivo")
     print("Verificacion I-10: toda orden correctiva del mes aparece en el archivo de su mes")
