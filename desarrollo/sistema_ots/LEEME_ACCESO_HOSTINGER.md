@@ -8,6 +8,20 @@ no "revisar que esté bien", sino una comprobación con respuesta objetiva.
 
 ---
 
+## Paso 0 · Comprobar que el pipeline está sano (30 segundos, sin tocar nada)
+
+```bash
+cd "D:\INDUSTECH IA\desarrollogentes"
+.venv/Scripts/python.exe scripts/t2_4_pruebas.py
+```
+
+Trece comprobaciones sobre los puntos donde esto se rompería en silencio: nombres
+con espacios, archivos sin hash, líneas de error coladas como archivos, y la
+compuerta que impide borrar algo sin copia local. **No toca Hostinger ni escribe
+en la base.** Si alguna falla, no sigas.
+
+---
+
 ## Paso 1 · Habilitar SSH (5 minutos, en hPanel)
 
 SSH viene **desactivado por defecto**. Sin él no hay descarga automática ni purga verificada.
