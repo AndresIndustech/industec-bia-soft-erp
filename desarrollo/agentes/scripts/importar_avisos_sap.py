@@ -48,7 +48,7 @@ def main():
     # max_col debe cubrir hasta 'Local' (indice 23) y 'zona' (24). Estuvo en 13 y eso
     # dejaba centro_coste, ubicacion_tecnica y responsable en NULL de forma silenciosa:
     # los guards 'if len(vals) > N' nunca se cumplian. Se lee el ancho real y se valida.
-    COL_MINIMA = 25
+    COL_MINIMA = 25  # hasta 'Local'; los campos de orden viven antes (indices 8-19)
     if ws.max_column < COL_MINIMA:
         raise SystemExit(f"ABORTADO: la hoja FILTRO trae {ws.max_column} columnas, "
                          f"se esperaban al menos {COL_MINIMA} (hasta 'Local'). "
@@ -82,6 +82,16 @@ def main():
             a_fecha(vals[12]) if len(vals) > 12 else None,  # M cierre_tecnico
             limpio(vals[6]) if len(vals) > 6 else None,     # G estatus_aviso
             limpio(vals[16]) if len(vals) > 16 else None,   # Q modificado_por/responsable
+            # Campos de la ORDEN, agregados en 002: sin ellos las columnas
+            # ESTATUS SAP y EQUIPO del plan de seguimiento no se pueden llenar
+            # con dato real. El vocabulario de ESTATUS SAP (REDE, MEDE, APRO,
+            # MSOL...) vive SOLO en "Estatus 2 de la Orden": el que ya estaba
+            # importado, estatus_aviso, es otro campo ("MECE ORAS").
+            limpio(vals[8]) if len(vals) > 8 else None,     # I  Estatus 2 del Aviso
+            limpio(vals[13]) if len(vals) > 13 else None,   # N  Estatus de la Orden
+            limpio(vals[15]) if len(vals) > 15 else None,   # P  Estatus 2 de la Orden
+            limpio(vals[18]) if len(vals) > 18 else None,   # S  Equipo (numero de activo)
+            limpio(vals[19]) if len(vals) > 19 else None,   # T  Denominacion objeto
         ))
 
     print(f"Filas leidas con AVISO valido: {len(filas)} (esperado ~6451)")
@@ -97,12 +107,28 @@ def main():
         """
         INSERT INTO avisos_sap (aviso, fecha_notificacion, descripcion, clase_aviso,
             estatus_general, centro_coste, ubicacion_tecnica, orden_sap, fecha_creacion_orden,
-            fecha_cierre_tecnico, estatus_aviso, modificado_por)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            fecha_cierre_tecnico, estatus_aviso, modificado_por,
+            estatus_aviso_2, estatus_orden, estatus_orden_2, equipo_sap, equipo_denominacion)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """,
         filas,
     )
     cnx.commit()
+    # Checkpoint I-10: los campos nuevos se cuentan contra el propio export
+    # antes de dar la carga por buena. Si no cuadra exactamente, aborta.
+    esperado = {
+        "estatus_orden_2": sum(1 for f in filas if f[14]),
+        "equipo_denominacion": sum(1 for f in filas if f[16]),
+    }
+    for columna, cuantos in esperado.items():
+        cur.execute(f"SELECT COUNT(*) FROM avisos_sap WHERE {columna} IS NOT NULL")
+        en_base = cur.fetchone()[0]
+        if en_base != cuantos:
+            cnx.rollback()
+            raise SystemExit(f"ABORTADO: {columna} tiene {en_base} valores en la base y "
+                             f"{cuantos} en el export. No se continua con la carga.")
+        print(f"  {columna}: {en_base} valores, igual que el export")
+
     cur.execute("SELECT COUNT(*) FROM avisos_sap")
     total = cur.fetchone()[0]
     cur.close()

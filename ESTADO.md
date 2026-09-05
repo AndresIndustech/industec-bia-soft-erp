@@ -17,7 +17,7 @@
 | Base de datos poblada | ✅ | **7.069 órdenes activas** · 9.071 equipos · 100 locales · 145 alias · 6.450 avisos SAP · 19 técnicos |
 | Auditor de calidad (Agente 1) | ✅ | 2.644 observaciones abiertas, con veredicto editable por la administración |
 | Consolidador de plan de zona (Agente 2) | ⚠️ v1 | 87,3% de coincidencia celda a celda en el piloto UIO |
-| **Histórico en formato de planificación** | ✅ | **39 planes mensuales** de correctivo (3 zonas × 13 meses) + **seguimiento de preventivos** de 96 locales. 72,0% de fidelidad contra los 24 archivos reales |
+| **Histórico en formato de planificación** | ✅ | **39 planes mensuales** de correctivo (7.863 filas, 3 zonas × 13 meses) + **seguimiento de preventivos** de 96 locales, reconstruidos desde las OTs y SAP. LOCAL, FECHA DE INICIO y ESTADO al 100%; EQUIPO al 99,5% |
 | Respaldo TrueNAS | 🔒 | Bloqueado: falta acceso físico al equipo |
 | Capacitación de cierre | 🔒 | Bloqueada: falta agendar con el personal |
 
@@ -44,7 +44,9 @@
 | T1.8 | ❌ **Cancelada** por directiva del cliente. El Drive queda intocable de forma indefinida |
 | T1.10 | Agente 1 · auditor de calidad, con 10 reglas |
 | T1.11 | Agente 2 · consolidador, primera versión |
-| **Histórico base** | Las 7.065 órdenes de las tres zonas (6.345 correctivas + 720 preventivas) volcadas al formato con que se planifica, listo como punto de partida para los planes diarios de Fase 2. Destapó cuatro defectos del consolidador de T1.11 (ver abajo) |
+| **Histórico base** | Las 7.065 órdenes (6.345 correctivas + 720 preventivas) reconstruidas en el formato con que se planifica, tomando de los archivos de la administración solo el formato y su seguimiento. Punto de partida para los planes diarios de Fase 2 |
+| **Campos SAP faltantes** | Migración `002`: `Estatus 2 de la Orden` y `Denominación objeto` importados a `avisos_sap`. Era el techo de calidad: subió EQUIPO de la mitad a 99,5% y habilitó la columna ESTATUS SAP |
+| **Discrepancias de los planes manuales** | 1.519 diferencias detectadas contra la evidencia de las OTs y SAP, 1.081 de ellas contradiciendo evidencia estable, entregadas en Excel para revisión de la administración |
 
 ---
 
@@ -64,7 +66,7 @@
 
 | # | Tarea | Depende de | ¿Paralelizable? |
 |---|---|---|---|
-| **T1.11-b** | Subir la fidelidad al ≥95%. Ya está medido dónde se pierde: importar *Estatus 2 de la Orden* (≈2.248 celdas) y *Denominación objeto* (columna EQUIPO) del export SAP, que hoy no están en `avisos_sap` | cambio de esquema en `avisos_sap` | Sí |
+| **T1.11-b** | Llevar el consolidador vivo (`agente2_consolidador.py`) al modelo del histórico: agrupar por (aviso, zona), arrastrar por evidencia y leer los campos SAP nuevos. Hoy sigue con la lógica vieja del 87,3% | nada | Sí |
 | **T2.1.1–T2.1.6** | Intervención al sistema de OTs en producción (PHP/Hostinger), subtarea por subtarea | nada | Sí, entre sí no chocan si se despliegan de a una |
 | **T2.2.1–T2.2.3** | Agente 3 · reportes diario, mensual y KFC | nada | Sí |
 | **T2.3.1–T2.3.4** | Cola de correo `email_queue` con reintentos y detección de rebotes | nada | Sí |
@@ -90,7 +92,7 @@ Cada subtarea está especificada con su criterio de aceptación y su tabla *aut�
 | Trabajos de otros clientes | `D:\RESPALDOS\OTROS CLIENTES\{año}\{cliente}\` |
 | Espejo intacto del origen | `D:\RESPALDOS\_ORIGEN_DRIVE\` — **nunca se modifica** |
 | Salidas para la administración | `D:\INDUSTECH IA\SALIDAS IA\CALIDAD\` |
-| Histórico en formato de planificación | `SALIDAS IA\MANTENIMIENTO\` — correctivos por zona y mes, preventivos por local y año, con `LEEME_HISTORICO.md` |
+| Histórico en formato de planificación | `SALIDAS IA\MANTENIMIENTO\` — correctivos por zona y mes, preventivos por local y año, discrepancias de los planes manuales, con `LEEME_HISTORICO.md` |
 | Drive de la empresa | `G:\Mi unidad` — **solo lectura, indefinidamente** |
 
 **Base de datos:** MariaDB local, esquema `industec_ots`. Tablas: `ots`, `ot_equipos`, `ot_fotos`, `locales`, `locales_alias`, `avisos_sap`, `tecnicos`, `observaciones_calidad`, `manifiesto_saneamiento`, `plan_snapshots`, `correcciones`, `consultas_gerente`, `bitacora`.
