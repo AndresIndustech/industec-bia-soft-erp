@@ -277,4 +277,5 @@ encima.** Lo que ya está decidido:
 | [`parches/guardas.php`](desarrollo/sistema_ots/parches/guardas.php) | Rechaza GET, POST vacío y zona inválida |
 | [`scripts/t2_4_publicar_ots.py`](desarrollo/agentes/scripts/t2_4_publicar_ots.py) | Catálogo para INDUSTEC. **Ya corrido: 7.069 órdenes publicadas** |
 | [`sql/003_persistencia_formulario.sql`](desarrollo/agentes/sql/003_persistencia_formulario.sql) | Prepara la base para T2.1.1. **Escrita, no aplicada** |
+| [`local/app.py`](desarrollo/sistema_ots/local/app.py) | **Consola local de revisión. Corriendo**: buscar, ver, imprimir, exportar |
 | [`LEEME_ACCESO_HOSTINGER.md`](desarrollo/sistema_ots/LEEME_ACCESO_HOSTINGER.md) | Guía paso a paso, cada uno con su verificación |

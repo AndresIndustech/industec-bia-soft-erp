@@ -117,6 +117,8 @@ Cada subtarea está especificada con su criterio de aceptación y su tabla *aut�
 | Decisión de arquitectura y hallazgos de la auditoría | `D:\INDUSTECH IA\ARQUITECTURA_SISTEMA_OTS.md` |
 | Cómo acceder a Hostinger y desplegar los parches | `desarrollo\sistema_ots\LEEME_ACCESO_HOSTINGER.md` |
 | Salidas para la administración | `D:\INDUSTECH IA\SALIDAS IA\CALIDAD\` |
+| Catálogo de OTs para INDUSTEC | `SALIDAS IA\OTS\` — 7.069 órdenes con la ruta de su PDF |
+| Consola local de revisión | `desarrollo\sistema_ots\localpp.py` → http://127.0.0.1:8010 |
 | Histórico en formato de planificación | `SALIDAS IA\MANTENIMIENTO\` — correctivos por zona y mes, preventivos por local y año, discrepancias de los planes manuales, con `LEEME_HISTORICO.md` |
 | Drive de la empresa | `G:\Mi unidad` — **solo lectura, indefinidamente** |
 

@@ -16,3 +16,10 @@ SQLAlchemy==2.0.36
 python-telegram-bot==21.7
 # Variables de entorno / configuracion
 python-dotenv==1.0.1
+
+# Consola local de OTs (desarrollo/sistema_ots/local/app.py).
+# Van aqui y no en un requirements aparte porque comparten el mismo venv
+# que los agentes: un solo entorno que mantener.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+jinja2==3.1.6
