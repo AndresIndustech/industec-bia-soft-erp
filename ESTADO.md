@@ -63,7 +63,8 @@
 | Confirmar la zona real de los 4 locales Pollo Gus dados de alta con zona `OTRA` | Reportes por zona de esos locales |
 | Decidir sobre las altas propuestas en `SALIDAS IA\CALIDAD\PROPUESTA_ALTAS_MAESTRO_LOCALES.xlsx` | Nada; el sistema ya opera con ellas cargadas en la base |
 | **Reportes históricos de SAP** (más allá del export actual, que solo cubre ene–ago 2026) | Cerrar las inquietudes del histórico — ver abajo |
-| **Descarga del sistema de OTs en Hostinger** | Actualizar los casos de septiembre 2026, hoy provisionales |
+| **Habilitar SSH en Hostinger** (hPanel → Avanzado → Acceso SSH) | Toda la sincronización T2.4: sin eso no hay descarga ni purga |
+| **Revisar si `cleanup.php` está en algún cron** | Nada, pero es lo más urgente: borra `uploads` y los logs sin verificar copia |
 
 ### Etapa del histórico: cerrada, con estas inquietudes anotadas
 
@@ -86,6 +87,7 @@ se contrasta contra ellos y se corrige lo que haga falta.
 | # | Tarea | Depende de | ¿Paralelizable? |
 |---|---|---|---|
 | **T1.11-b** | Llevar el consolidador vivo (`agente2_consolidador.py`) al modelo del histórico: agrupar por (aviso, zona), arrastrar por evidencia y leer los campos SAP nuevos. Hoy sigue con la lógica vieja del 87,3% | nada | Sí |
+| **T2.4.0–T2.4.4** | Continuidad de datos del sistema en producción: parches de seguridad, espejo verificado, purga con compuerta de hash, normalización y publicación. Ver [`ARQUITECTURA_SISTEMA_OTS.md`](ARQUITECTURA_SISTEMA_OTS.md) | SSH habilitado | Sí, salvo la purga |
 | **T2.1.1–T2.1.6** | Intervención al sistema de OTs en producción (PHP/Hostinger), subtarea por subtarea | nada | Sí, entre sí no chocan si se despliegan de a una |
 | **T2.2.1–T2.2.3** | Agente 3 · reportes diario, mensual y KFC | nada | Sí |
 | **T2.3.1–T2.3.4** | Cola de correo `email_queue` con reintentos y detección de rebotes | nada | Sí |
@@ -109,7 +111,10 @@ Cada subtarea está especificada con su criterio de aceptación y su tabla *aut�
 | Corpus canónico de órdenes | `D:\RESPALDOS\ORDENES DE TRABAJO\{año}\{módulo}\{zona}\{cadena}\` |
 | Informes técnicos sueltos | `D:\RESPALDOS\INFORMES TECNICOS\` |
 | Trabajos de otros clientes | `D:\RESPALDOS\OTROS CLIENTES\{año}\{cliente}\` |
-| Espejo intacto del origen | `D:\RESPALDOS\_ORIGEN_DRIVE\` — **nunca se modifica** |
+| Espejo intacto del origen (Drive) | `D:\RESPALDOS\_ORIGEN_DRIVE\` — **nunca se modifica** |
+| Espejo intacto del origen (sistema en producción) | `D:\RESPALDOS\_ORIGEN_SISTEMA\` — lo que baja de Hostinger, con sus nombres crudos. **Nunca se modifica** |
+| Decisión de arquitectura y hallazgos de la auditoría | `D:\INDUSTECH IA\ARQUITECTURA_SISTEMA_OTS.md` |
+| Cómo acceder a Hostinger y desplegar los parches | `desarrollo\sistema_ots\LEEME_ACCESO_HOSTINGER.md` |
 | Salidas para la administración | `D:\INDUSTECH IA\SALIDAS IA\CALIDAD\` |
 | Histórico en formato de planificación | `SALIDAS IA\MANTENIMIENTO\` — correctivos por zona y mes, preventivos por local y año, discrepancias de los planes manuales, con `LEEME_HISTORICO.md` |
 | Drive de la empresa | `G:\Mi unidad` — **solo lectura, indefinidamente** |
@@ -139,6 +144,9 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 | Correr `agente1_auditor_calidad.py` | tabla `observaciones_calidad` | otra corrida del auditor |
 | Correr `agente2_consolidador.py` | solo lee `ots`; escribe en `SALIDAS IA` | nada |
 | Trabajar en T2.1 (sistema en producción) | Hostinger y su MySQL | otro despliegue a producción |
+| Correr `t2_4_sync_hostinger.py` | espejo `_ORIGEN_SISTEMA` | otra sincronización |
+| Correr `t2_4_purga_hostinger.py --ejecutar` | uploads de Hostinger | la sincronización, y cualquier despliegue |
+| Correr `t2_4_normalizar_nuevas.py --ejecutar` | árbol canónico | la ingesta y los scripts de T1.6b |
 | Trabajar en T2.2 / T3.1 / T3.2 | solo lectura de la base | nada |
 | Escribir documentación o investigar | nada | nada |
 

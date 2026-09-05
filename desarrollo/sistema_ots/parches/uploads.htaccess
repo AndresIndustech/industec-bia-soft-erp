@@ -1,0 +1,50 @@
+# Bloqueo de acceso web a uploads/ y registros/
+#
+# POR QUE: los PDFs de uploads/ son hoy publicos y su nombre es adivinable
+# (OT-{4 digitos}-{local}-{aviso 8 digitos}-{zona}.pdf; los locales y los avisos
+# son enumerables). Cada uno contiene, verificado con pdftotext sobre
+# OT-1427-G025-10334255-UIO.pdf: nombre y apellido del administrador del local,
+# su correo, el del jefe de operaciones, y su FIRMA MANUSCRITA. Son datos
+# personales de empleados de Grupo KFC expuestos bajo la cuenta de INDUSTEC.
+#
+# POR QUE ES SEGURO PONERLO: se verifico que ningun HTML ni JS del sistema
+# enlaza a uploads/ (grep sobre los 7 formularios: cero coincidencias). El PDF
+# viaja solo como adjunto del correo, y submit.php lo escribe por ruta de
+# sistema de archivos, no por HTTP. Bloquear el acceso web no cambia
+# absolutamente nada de lo que ve o hace el tecnico.
+#
+# DONDE VA: una copia en cada uno de estos directorios del servidor, con el
+# nombre .htaccess (sin el prefijo "uploads."):
+#   ot/pruebas/ot_normal_v3/uio/uploads/     y  .../uio/registros/
+#   ot/pruebas/ot_normal_v3/larb/uploads/    y  .../larb/registros/
+#   ot/pruebas/ot_normal_v3/cnlj/uploads/    y  .../cnlj/registros/
+#   ot/produccion/ot_mantenimiento/uploads/  y  .../ot_mantenimiento/registros/
+#   ot/pruebas/ot_normal_otros/uploads/      y  .../ot_normal_otros/registros/
+#   ot/pruebas/ot_normal_v3/*/contadores/    y  ot/produccion/*/contadores/
+
+# LiteSpeed (Hostinger) entiende ambas sintaxis. Se declaran las dos para que el
+# bloqueo no dependa de que version de mod_authz este activa.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
+
+# Sin listado de directorio aunque el bloqueo de arriba fallara.
+Options -Indexes
+
+# Cinturon y tirantes: aunque alguien reactivara el acceso, ningun archivo de
+# estos directorios debe ejecutarse como PHP. Un .pdf no se ejecuta, pero si
+# alguna vez se lograra escribir un .php aqui (el campo `zona` sin sanear lo
+# permite hoy por path traversal), esto lo deja inerte.
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|php8|phps|cgi|pl|py|sh)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

@@ -30,3 +30,13 @@ node_modules/
 *.pdf
 *.xlsx
 *.csv
+
+# Claves SSH y secretos del hosting. La privada de Hostinger vive en
+# %USERPROFILE%\.ssh y no tiene por que acercarse al repositorio, pero si
+# alguien la copia aqui por comodidad, que git no la deje entrar.
+*.pem
+*.key
+id_ed25519*
+id_rsa*
+industec_hostinger*
+secretos.ini
