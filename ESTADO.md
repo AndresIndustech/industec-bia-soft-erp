@@ -62,6 +62,24 @@
 | Anexo de niveles de servicio del contrato con KFC | Metas reales de SLA en T2.2 |
 | Confirmar la zona real de los 4 locales Pollo Gus dados de alta con zona `OTRA` | Reportes por zona de esos locales |
 | Decidir sobre las altas propuestas en `SALIDAS IA\CALIDAD\PROPUESTA_ALTAS_MAESTRO_LOCALES.xlsx` | Nada; el sistema ya opera con ellas cargadas en la base |
+| **Reportes históricos de SAP** (más allá del export actual, que solo cubre ene–ago 2026) | Cerrar las inquietudes del histórico — ver abajo |
+| **Descarga del sistema de OTs en Hostinger** | Actualizar los casos de septiembre 2026, hoy provisionales |
+
+### Etapa del histórico: cerrada, con estas inquietudes anotadas
+
+La reconstrucción del histórico se dio por cerrada el **2026-09-05**. Lo que sigue abierto no se
+resuelve con más código: necesita datos del cliente. Cuando lleguen los reportes históricos de SAP,
+se contrasta contra ellos y se corrige lo que haga falta.
+
+| Inquietud | Cifra | Con qué se resuelve |
+|---|---|---|
+| Cierres asumidos sin ningún registro detrás | 191 filas | Reporte histórico de SAP: ver si registran cierre y cuándo |
+| Avisos que SAP daba por abiertos al corte del 31-ago, cerrados igual en el histórico | 296 | Un export posterior dice si cerraron y con qué fecha |
+| Filas de 2025 sin cobertura del catálogo SAP | 2.726 | Export de SAP que alcance sep–dic 2025 |
+| Casos dentro de la cobertura y aun así ausentes del catálogo | 31 | Revisión individual contra SAP |
+| Discrepancias de los planes manuales contra evidencia estable | 1.114 | Revisión de la administración sobre el Excel entregado |
+| `ESTATUS SAP` llenado al 21,3% | 1.659 de 6.450 avisos | Es el dato real: solo esos tuvieron trámite de repuesto. Se confirma con el histórico de SAP |
+| El autocierre de KFC a los 7 días, afirmado pero sin huella en los datos | — | Confirmarlo con el cliente o con un export que registre el motivo de cierre |
 
 ### Disponible para trabajar ya
 
