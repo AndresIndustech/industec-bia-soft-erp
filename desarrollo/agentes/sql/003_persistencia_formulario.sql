@@ -177,3 +177,33 @@ CREATE TABLE IF NOT EXISTS email_queue (
 --   SHOW CREATE TABLE email_queue;
 --     -> UNIQUE KEY sobre (id_industec, destinatario)
 -- ============================================================================
+
+
+-- ----------------------------------------------------------------------------
+-- 6. Vigencia de los tecnicos (agregado el 2026-09-06)
+--
+-- `tecnicos` es hoy una FOTO, no un historial: 19 filas, todas con activo = 1,
+-- con fecha_ingreso y sin fecha de salida. INDUSTEC tiene alta rotacion, asi que
+-- sin fecha de salida es imposible responder la unica pregunta que importa para
+-- validar una orden: quien estaba vigente EN LA FECHA de esa orden.
+--
+-- Sin esto, o se rechazan 2.389 ordenes historicas correctas -firmadas por gente
+-- que ya no esta, lo cual es normal-, o se acepta en el formulario de hoy a
+-- alguien que ya se fue. Las dos son errores.
+--
+-- La fecha de salida se llena desde PADRON TECNICOS (generado agente).xlsx, una
+-- vez que INDUSTEC marque quien sigue. Hasta entonces queda NULL, que aqui
+-- significa "no consta", no "sigue trabajando" (I-6).
+-- ----------------------------------------------------------------------------
+ALTER TABLE tecnicos
+  ADD COLUMN fecha_salida DATE NULL
+    COMMENT 'NULL = no consta. No significa que siga vigente'
+    AFTER fecha_ingreso,
+  ADD COLUMN confirmado_por_industec DATE NULL
+    COMMENT 'Cuando INDUSTEC confirmo la vigencia de esta persona'
+    AFTER fecha_salida;
+
+-- Consulta que habilita: quien estaba vigente en la fecha de una orden.
+--   SELECT * FROM tecnicos
+--    WHERE fecha_ingreso <= :fecha_orden
+--      AND (fecha_salida IS NULL OR fecha_salida >= :fecha_orden);

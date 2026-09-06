@@ -118,13 +118,38 @@ cálculo de carga, productividad o costo por técnico.
 **El formato único lleva una lista de técnicos, no un campo**, con uno marcado
 como responsable. Un solo técnico es el caso de N=1, igual que con los equipos.
 
-> **Y la nómina está incompleta.** Comparando por tokens de nombre —la nómina
-> guarda `ANTHONY MEDARDO JUMBO ROJANO` y el técnico se firma `Anthony Jumbo`—
-> quedan **2.389 órdenes** cuyo técnico no coincide con ninguno de los 19
-> activos: Anthony Morales, Luis Erazo, Pablo Ortiz, Fernando Navarro, Diego
-> Sisalema, Rubén Tonato. O ya no trabajan ahí, o la importación de la nómina
-> quedó a medias. **Hay que resolverlo antes de que el `<select>` de técnicos
-> los deje fuera.**
+#### La rotación no es un defecto de los datos
+
+**Regla del cliente, 2026-09-06.** INDUSTEC tiene **alta rotación**, así que una
+parte de las órdenes está firmada por gente que ya no trabaja ahí. Eso es
+**historia correcta**, no dato sucio: quien firmó esa orden sí era técnico de la
+empresa el día que la firmó.
+
+Tratarlo como error sería inventarle a INDUSTEC un defecto que no tiene. Por eso
+el mismo hecho —un técnico que no está en la nómina vigente— significa dos cosas
+distintas según cuándo se mire, y las reglas lo modelan explícitamente:
+
+| Contexto | Qué es | Qué hace el sistema |
+|---|---|---|
+| **Captura** — una orden que se envía hoy | El desplegable solo ofrece vigentes, así que un nombre fuera de la lista es un error | **Bloquea** |
+| **Histórico** — una orden ya emitida | Rotación normal de la empresa | **Informa**, no marca defecto |
+
+Medido así, son **2.389 órdenes** firmadas por alguien fuera de la nómina actual
+—Pablo Ortiz, Anthony Morales, Luis Erazo, Fernando Navarro, Diego Sisalema,
+Rubén Tonato—. Ninguna se cuenta como problema.
+
+Lo que sí hace falta: **`tecnicos` no tiene fecha de salida**, solo `fecha_ingreso`
+y una bandera `activo` con las 19 filas en `1`. Es una foto, no un historial, y
+sin fecha de salida no se puede saber quién estaba vigente en una fecha dada.
+La migración lo corrige.
+
+Mientras llega de INDUSTEC la lista de técnicos vigentes, **el padrón se
+reconstruyó desde las propias órdenes**: cada una lleva fecha y firma, así que la
+primera y la última orden de cada persona dibujan su ventana de actividad.
+`SALIDAS IA\OTS\PADRON TECNICOS (generado agente).xlsx` trae **164 personas** con
+sus fechas, su volumen y sus zonas, y una columna *¿sigue en la empresa?* con
+lista desplegable para que INDUSTEC la marque. **No se decide por umbral**: el
+script ordena por días sin firmar y la vigencia la declara la empresa.
 
 ### Repuestos — el hallazgo que cambia el diseño
 

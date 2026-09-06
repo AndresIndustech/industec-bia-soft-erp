@@ -101,12 +101,23 @@ def cargar_catalogos():
 # Las reglas
 # ---------------------------------------------------------------------------
 
-def validar(orden, cat):
+def validar(orden, cat, contexto="CAPTURA"):
     """Devuelve la lista de hallazgos de UNA orden. Lista vacia = todo bien.
 
     `orden` es un dict con las claves del formulario unico. Se aceptan ausentes:
     validar tiene que poder correr sobre el historico, que no tiene todos los
     campos que el formulario nuevo va a pedir.
+
+    `contexto` cambia lo que significa un mismo hecho segun cuando se mira:
+
+      CAPTURA    una orden que se esta enviando ahora. El desplegable solo
+                 ofrece tecnicos vigentes, asi que un tecnico desconocido es un
+                 error que se corta.
+      HISTORICO  una orden ya emitida. INDUSTEC tiene ALTA ROTACION, y una orden
+                 de 2025 firmada por alguien que ya se fue es historia correcta,
+                 no un dato sucio. Marcarla como problema seria inventarle a la
+                 empresa un defecto que no tiene, y de paso ensuciaria el
+                 conteo con el que se mide todo lo demas.
     """
     h = []
     tipo = (orden.get("tipo") or "").upper()
@@ -200,6 +211,14 @@ def validar(orden, cat):
         h.append(Hallazgo("repuestos", "REPUESTO_CONTRADICTORIO", ADVIERTE,
                           f"marca que no hubo repuesto pero anota '{str(detalle)[:40]}'"))
 
+    # --- FECHA. Una orden no se atiende en el futuro. --------------------
+    fecha = orden.get("fecha_atencion")
+    if fecha and hasattr(fecha, "year"):
+        hoy = orden.get("_hoy") or datetime.now().date()
+        if fecha > hoy:
+            h.append(Hallazgo("fecha_atencion", "FECHA_FUTURA", BLOQUEA,
+                              f"{fecha} es posterior a hoy"))
+
     # --- TIEMPOS. --------------------------------------------------------
     ini, fin = orden.get("inicio"), orden.get("fin")
     if ini and fin:
@@ -248,9 +267,13 @@ def validar(orden, cat):
         for parte in partes:
             t = _tokens_nombre(parte)
             if t and not any(t <= n for n in cat["tecnicos"]):
-                h.append(Hallazgo("tecnico", "TECNICO_FUERA_DE_NOMINA", ADVIERTE,
-                                  f"'{parte}' no coincide con ninguno de los "
-                                  f"{len(cat['tecnicos'])} tecnicos activos"))
+                if contexto == "CAPTURA":
+                    h.append(Hallazgo("tecnico", "TECNICO_NO_VIGENTE", BLOQUEA,
+                                      f"'{parte}' no esta entre los tecnicos vigentes"))
+                else:
+                    h.append(Hallazgo("tecnico", "TECNICO_YA_NO_VIGENTE", INFORMA,
+                                      f"'{parte}' no esta en la nomina actual; "
+                                      "esperable por la rotacion de la empresa"))
         if len(partes) > 1:
             h.append(Hallazgo("tecnico", "VARIOS_TECNICOS_EN_UN_CAMPO", INFORMA,
                               f"{len(partes)} tecnicos en un campo de texto; el formato "
@@ -323,6 +346,22 @@ def pruebas(cat):
     caso("sin firma bloquea", {**buena, "firma_presente": False}, ["SIN_FIRMA"])
     caso("sin fotos solo advierte", {**buena, "fotos_cantidad": 0}, ["SIN_FOTOS"])
 
+    # La rotacion no es un defecto de datos. El MISMO hecho -- un tecnico que no
+    # esta en la nomina vigente -- bloquea una captura de hoy y es normal en una
+    # orden de hace un ano.
+    desconocido = {**buena, "tecnico": "Fulano De Tal Inexistente"}
+    caso("en CAPTURA, un tecnico no vigente bloquea",
+         desconocido, ["TECNICO_NO_VIGENTE"])
+    got = {x.regla for x in validar(desconocido, cat, contexto="HISTORICO")}
+    ok = got == {"TECNICO_YA_NO_VIGENTE"}
+    print(f"  {'OK   ' if ok else 'FALLA'} en HISTORICO, el mismo caso solo informa")
+    if not ok:
+        fallos.append(f"historico: {got}")
+
+    from datetime import date as _d
+    caso("una orden fechada en el futuro bloquea",
+         {**buena, "fecha_atencion": _d(2099, 1, 1)}, ["FECHA_FUTURA"])
+
     return fallos
 
 
@@ -382,7 +421,8 @@ def medir_historico(cat):
             "actividades": f["actividades"], "firma_presente": f["firma_presente"],
             "fotos_cantidad": f["fotos_cantidad"], "tecnico": f["tecnico_nombre"],
         }
-        hs = validar(orden, cat)
+        orden["fecha_atencion"] = f["fecha_atencion"]
+        hs = validar(orden, cat, contexto="HISTORICO")
         if not hs:
             limpias += 1
         for x in hs:
@@ -482,7 +522,8 @@ def _mapear_severidades():
         ("DURACION_INVEROSIMIL", ADVIERTE), ("TIEMPOS_INCOMPLETOS", ADVIERTE),
         ("SIN_TRABAJO_REALIZADO", BLOQUEA), ("TRABAJO_DEMASIADO_ESCUETO", ADVIERTE),
         ("SIN_FIRMA", BLOQUEA), ("SIN_FOTOS", ADVIERTE),
-        ("SIN_TECNICO", BLOQUEA), ("TECNICO_FUERA_DE_NOMINA", ADVIERTE),
+        ("SIN_TECNICO", BLOQUEA), ("TECNICO_NO_VIGENTE", BLOQUEA),
+        ("TECNICO_YA_NO_VIGENTE", INFORMA), ("FECHA_FUTURA", BLOQUEA),
         ("VARIOS_TECNICOS_EN_UN_CAMPO", INFORMA),
     ]:
         _SEVERIDADES[nombre] = sev
