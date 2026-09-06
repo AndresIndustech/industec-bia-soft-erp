@@ -88,6 +88,7 @@ se contrasta contra ellos y se corrige lo que haga falta.
 |---|---|---|---|
 | **T1.11-b** | Llevar el consolidador vivo (`agente2_consolidador.py`) al modelo del histórico: agrupar por (aviso, zona), arrastrar por evidencia y leer los campos SAP nuevos. Hoy sigue con la lógica vieja del 87,3% | nada | Sí |
 | **T2.4.0–T2.4.4** | Continuidad de datos del sistema en producción: parches de seguridad, espejo verificado, purga con compuerta de hash, normalización y publicación. Ver [`ARQUITECTURA_SISTEMA_OTS.md`](ARQUITECTURA_SISTEMA_OTS.md) | SSH habilitado | Sí, salvo la purga |
+| **T2.5.1** | Catálogos del formulario único: 100 locales, 1.173 activos en 94 locales, 222 tipos, 19 técnicos. **Hecho**; quedan 3 decisiones en `catalogos\COBERTURA.md` | nada | Sí |
 | **Migración `003`** | Prepara la base para que el formulario escriba directo: `FORMULARIO_WEB` en `fuente`, tabla `correlativos` con reserva atómica, `email_queue`. **Escrita, no aplicada**: cambia el esquema y requiere aprobación | nada | No: va antes de T2.1.1 |
 | **T2.1.1–T2.1.6** | Intervención al sistema de OTs en producción (PHP/Hostinger), subtarea por subtarea | nada | Sí, entre sí no chocan si se despliegan de a una |
 | **T2.2.1–T2.2.3** | Agente 3 · reportes diario, mensual y KFC | nada | Sí |
@@ -115,6 +116,8 @@ Cada subtarea está especificada con su criterio de aceptación y su tabla *aut�
 | Espejo intacto del origen (Drive) | `D:\RESPALDOS\_ORIGEN_DRIVE\` — **nunca se modifica** |
 | Espejo intacto del origen (sistema en producción) | `D:\RESPALDOS\_ORIGEN_SISTEMA\` — lo que baja de Hostinger, con sus nombres crudos. **Nunca se modifica** |
 | Decisión de arquitectura y hallazgos de la auditoría | `D:\INDUSTECH IA\ARQUITECTURA_SISTEMA_OTS.md` |
+| **Formato único de OT** y sus controles | `D:\INDUSTECH IA\ESPECIFICACION_OT_UNICA.md` |
+| Catálogos del formulario único | `SALIDAS IA\OTS\catalogos\` — 100 locales, 1.173 activos, 222 tipos |
 | Cómo acceder a Hostinger y desplegar los parches | `desarrollo\sistema_ots\LEEME_ACCESO_HOSTINGER.md` |
 | Salidas para la administración | `D:\INDUSTECH IA\SALIDAS IA\CALIDAD\` |
 | Catálogo de OTs para INDUSTEC | `SALIDAS IA\OTS\` — 7.069 órdenes con la ruta de su PDF |

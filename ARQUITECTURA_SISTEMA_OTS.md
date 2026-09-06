@@ -253,9 +253,13 @@ Honestamente: esto todavía no está probado, y el diseño no se cierra hasta qu
 
 ### T2.5 · Sistema nuevo de gestión de OTs
 
-Se especifica cuando T2.4 esté corriendo y el staging esté limpio. El orden es
-deliberado: **primero se deja de perder información, después se construye
-encima.** Lo que ya está decidido:
+**Un solo formato de orden.** Especificado en
+[`ESPECIFICACION_OT_UNICA.md`](ESPECIFICACION_OT_UNICA.md): los tres formularios
+de hoy pasan a ser un campo `tipo`, y la única diferencia estructural real —que
+el preventivo repite el bloque de equipo— se resuelve haciéndolo siempre
+repetible con mínimo 1.
+
+Lo que ya está decidido:
 
 - Captura en PHP 8.3 sobre `darkorchid-crane-387868`, sin WordPress.
 - Catálogos servidos desde la base, no texto libre: locales, equipos, repuestos,
@@ -278,4 +282,6 @@ encima.** Lo que ya está decidido:
 | [`scripts/t2_4_publicar_ots.py`](desarrollo/agentes/scripts/t2_4_publicar_ots.py) | Catálogo para INDUSTEC. **Ya corrido: 7.069 órdenes publicadas** |
 | [`sql/003_persistencia_formulario.sql`](desarrollo/agentes/sql/003_persistencia_formulario.sql) | Prepara la base para T2.1.1. **Escrita, no aplicada** |
 | [`local/app.py`](desarrollo/sistema_ots/local/app.py) | **Consola local de revisión. Corriendo**: buscar, ver, imprimir, exportar |
+| [`scripts/t2_5_catalogos.py`](desarrollo/agentes/scripts/t2_5_catalogos.py) | **Corrido.** Catálogos del formulario único, con informe de cobertura honesto |
+| [`ESPECIFICACION_OT_UNICA.md`](ESPECIFICACION_OT_UNICA.md) | El formato único, control por control |
 | [`LEEME_ACCESO_HOSTINGER.md`](desarrollo/sistema_ots/LEEME_ACCESO_HOSTINGER.md) | Guía paso a paso, cada uno con su verificación |
