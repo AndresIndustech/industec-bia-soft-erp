@@ -117,7 +117,9 @@ Cada subtarea está especificada con su criterio de aceptación y su tabla *aut�
 | Espejo intacto del origen (Drive) | `D:\RESPALDOS\_ORIGEN_DRIVE\` — **nunca se modifica** |
 | Espejo intacto del origen (sistema en producción) | `D:\RESPALDOS\_ORIGEN_SISTEMA\` — lo que baja de Hostinger, con sus nombres crudos. **Nunca se modifica** |
 | Decisión de arquitectura y hallazgos de la auditoría | `D:\INDUSTECH IA\ARQUITECTURA_SISTEMA_OTS.md` |
+| **El sistema completo, de punta a punta** | `D:\INDUSTECH IA\SISTEMA_COMPLETO.md` — documento rector |
 | **Formato único de OT** y sus controles | `D:\INDUSTECH IA\ESPECIFICACION_OT_UNICA.md` |
+| Diseño de la app y el orden de construcción | `D:\INDUSTECH IA\DISENO_APP_OTS.md` |
 | Catálogos del formulario único | `SALIDAS IA\OTS\catalogos\` — 100 locales, 1.173 activos, 222 tipos |
 | Cómo acceder a Hostinger y desplegar los parches | `desarrollo\sistema_ots\LEEME_ACCESO_HOSTINGER.md` |
 | Salidas para la administración | `D:\INDUSTECH IA\SALIDAS IA\CALIDAD\` |
