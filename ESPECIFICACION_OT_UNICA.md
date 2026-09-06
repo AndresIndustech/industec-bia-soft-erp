@@ -89,7 +89,7 @@ probable. Las cifras del desorden actual están medidas sobre los datos reales.
 | **Aviso SAP** | Texto libre. Llegan `0`, `1031`, `102832q6` | 8 dígitos, validado contra `avisos_sap`. Si no está: casilla **"esta orden nace sin aviso"** con motivo | Un aviso inventado o a medias que rompe el cruce |
 | **Correlativo** | `.txt` sin bloqueo. **9 pares** de órdenes distintas lo comparten | `INSERT … ON DUPLICATE KEY UPDATE valor = LAST_INSERT_ID(valor+1)`, atómico | Dos técnicos con el mismo número |
 | **Correos** | Los teclea el técnico | Del maestro, no editables | Rebotes por dirección mal escrita |
-| **Técnico** | Texto libre | `<select>` de los 19 activos, o la sesión iniciada | "Alexis y Mario" como si fuera una persona |
+| **Técnicos** | Un campo de texto. **406 grafías para 19 técnicos** | **Lista** de técnicos, elegidos del catálogo — ver abajo | "Alexis y Mario" guardado como si fuera una persona |
 
 ### Equipo — el catálogo ya está construido y medido
 
@@ -103,6 +103,28 @@ Los **6 locales sin activos catalogados** en SAP (`G044EC`, `G045EC`, `G047EC`,
 `G054EC`, `K197EC`, `T050EC`) eligen del catálogo de 222 tipos. No se les
 inventa un catálogo: quedan listados en `catalogos/COBERTURA.md` para pedirle a
 Grupo KFC el registro de activos de esos locales.
+
+### Técnicos — un trabajo puede tener más de uno
+
+Al medir los controles contra el histórico apareció un requisito que ningún
+formulario actual contempla: **1.113 órdenes, el 16%, llevan más de un técnico**
+en el mismo campo de texto — `Kevin Chimbo, Diego Meléndrez` (70 veces),
+`Sergio Torres, Alfredo Ibarra`, `Vinicio Campos, Sergio Torres`.
+
+No es un error de digitación: es que dos personas hicieron el trabajo. El campo
+único no lo puede expresar, así que hoy esa información se pierde para cualquier
+cálculo de carga, productividad o costo por técnico.
+
+**El formato único lleva una lista de técnicos, no un campo**, con uno marcado
+como responsable. Un solo técnico es el caso de N=1, igual que con los equipos.
+
+> **Y la nómina está incompleta.** Comparando por tokens de nombre —la nómina
+> guarda `ANTHONY MEDARDO JUMBO ROJANO` y el técnico se firma `Anthony Jumbo`—
+> quedan **2.389 órdenes** cuyo técnico no coincide con ninguno de los 19
+> activos: Anthony Morales, Luis Erazo, Pablo Ortiz, Fernando Navarro, Diego
+> Sisalema, Rubén Tonato. O ya no trabajan ahí, o la importación de la nómina
+> quedó a medias. **Hay que resolverlo antes de que el `<select>` de técnicos
+> los deje fuera.**
 
 ### Repuestos — el hallazgo que cambia el diseño
 
@@ -186,6 +208,7 @@ El orden importa. Cada paso deja algo funcionando.
 
 | # | Paso | Verificación | Depende de |
 |---|---|---|---|
+| 0 | Reglas escritas y medidas contra el histórico | `t2_5_validacion.py`: 14 pruebas en verde, y `SALIDAS IA\OTS\CONTROLES_MEDIDOS.md` con el conteo por regla | ✅ **hecho** |
 | 1 | Catálogos generados y revisados | `catalogos/COBERTURA.md` sin sorpresas; los 6 locales sin activos, aceptados o resueltos | ✅ **hecho** |
 | 2 | Migración `003` aplicada | `correlativos` sembrada desde el contador vivo del servidor, nunca desde `MAX()` | Aprobación |
 | 3 | Formulario único en el staging | Enviar una orden de cada tipo; las 3 producen el mismo formato de nombre y la misma estructura | Staging sin WordPress |
@@ -209,3 +232,4 @@ guardada en el celular.
 | Los **6 locales sin activos** en SAP — ¿se pide el registro a KFC? | Definen si esos locales tienen catálogo real o lista genérica | INDUSTEC / KFC |
 | El local sin correo en el maestro | Impide autocompletar su destinatario | INDUSTEC |
 | ¿El técnico se autentica con usuario propio o con un código de zona? | Cambia el diseño de la sesión | Andrés |
+| Los **2.389 casos** de técnico fuera de la nómina de 19 — ¿se fueron, o falta importarlos? | El `<select>` de técnicos los dejaría fuera | INDUSTEC |
