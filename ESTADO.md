@@ -3,8 +3,8 @@
 > **Empieza por aquí.** Este archivo dice dónde vamos; [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) dice qué hay que construir y con qué criterios.
 > Si vas a trabajar, **anótate primero en §5 (Trabajo en paralelo)** antes de tocar nada.
 
-**Última actualización:** 2026-09-05
-**Fase en curso:** 1 · Cimientos (septiembre) — sustancialmente cerrada
+**Última actualización:** 2026-09-06
+**Fase en curso:** 2 · Automatización — arrancada. La Fase 1 quedó sustancialmente cerrada
 **Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
 
 ---
@@ -25,6 +25,40 @@
 `7.070 (órdenes) + 5 (informes técnicos) + 25 (otros clientes) + 233 (duplicados descartados) = 7.333`
 
 **Reparto de las órdenes activas:** CNLJ 2.589 · LARB 2.498 · UIO 1.978 · OTRA 4 — · Correctivo 6.349 · Preventivo 720
+
+---
+
+## 1b. Lo construido el 2026-09-06 — continuidad de datos y sistema nuevo
+
+Todo lo de esta tabla está **entregado y con sus pruebas en verde**. Lo que no
+corre todavía dice por qué.
+
+| Pieza | Estado | Verificación |
+|---|---|---|
+| Espejo verificado de Hostinger (`t2_4_sync_hostinger.py`) | ⏸ escrito, **falta SSH** | 13 pruebas de parseo en verde. Rutas corregidas a `ot/produccion/` |
+| Purga con cuatro compuertas (`t2_4_purga_hostinger.py`) | ⏸ escrito, **falta SSH** | Simula por defecto; sin copia local verificada no borra ni con `--ejecutar` |
+| Normalización al árbol canónico (`t2_4_normalizar_nuevas.py`) | ✅ probado en seco | **98,4%** sobre los 1.952 nombres reales |
+| Catálogo para INDUSTEC (`t2_4_publicar_ots.py`) | ✅ **corrido** | 7.069 órdenes publicadas, 0 sin PDF localizable |
+| Catálogos del formulario (`t2_5_catalogos.py`) | ✅ **corrido** | 100 locales · 1.173 activos en 94 locales · 222 tipos · 19 técnicos |
+| Reglas del formato único (`t2_5_validacion.py` + `Validacion.php`) | ✅ | **32 casos del fixture pasan en Python y en PHP** |
+| Padrón de técnicos (`t2_5_padron_tecnicos.py`) | ✅ **corrido** | 164 personas reconstruidas desde las órdenes, listas para que INDUSTEC marque |
+| Consola local de revisión (`sistema_ots/local/app.py`) | ✅ **corriendo** | 7 rutas en 200; cifras iguales al estado |
+| Parches de seguridad (`.htaccess`, `guardas.php`) | 🔴 **listos, sin desplegar** | Requieren aprobación para tocar producción |
+| Migración `003` | 🔴 **escrita, sin aplicar** | Cambia el esquema: requiere aprobación |
+
+**Documentos rectores nuevos:**
+[`SISTEMA_COMPLETO.md`](SISTEMA_COMPLETO.md) (el sistema de punta a punta) ·
+[`ESPECIFICACION_OT_UNICA.md`](ESPECIFICACION_OT_UNICA.md) (el formato único) ·
+[`ARQUITECTURA_SISTEMA_OTS.md`](ARQUITECTURA_SISTEMA_OTS.md) ·
+[`DISENO_APP_OTS.md`](DISENO_APP_OTS.md)
+
+### Lo urgente que NO depende de nadie más
+
+| # | Qué | Por qué ahora |
+|---|---|---|
+| 1 | **Cerrar la exposición pública de los PDFs** | Verificado el 2026-09-06: un PDF con firma manuscrita de un empleado de KFC responde **HTTP 200** sin autenticación, y el nombre es enumerable. El `.htaccess` **sube por el gestor de archivos de hPanel, sin SSH** |
+| 2 | **Sacar el proyecto del único disco** | `git remote -v` no devuelve nada. Los 40 commits, las 7.069 órdenes y el árbol canónico están en un solo disco. La regla de las dos copias no se cumple para nada de lo que produjimos |
+| 3 | **Revisar el cron y borrar `cleanup.php`** | Es una **URL pública** que borra `uploads` y `registros` sin verificar copia. Cualquiera la dispara desde el navegador |
 
 ---
 
@@ -63,7 +97,10 @@
 | Confirmar la zona real de los 4 locales Pollo Gus dados de alta con zona `OTRA` | Reportes por zona de esos locales |
 | Decidir sobre las altas propuestas en `SALIDAS IA\CALIDAD\PROPUESTA_ALTAS_MAESTRO_LOCALES.xlsx` | Nada; el sistema ya opera con ellas cargadas en la base |
 | **Reportes históricos de SAP** (más allá del export actual, que solo cubre ene–ago 2026) | Cerrar las inquietudes del histórico — ver abajo |
-| **Habilitar SSH en Hostinger** (hPanel → Avanzado → Acceso SSH) | Toda la sincronización T2.4: sin eso no hay descarga ni purga |
+| **Habilitar SSH en Hostinger** (hPanel → Avanzado → Acceso SSH) | Toda la sincronización T2.4. **No bloquea** el parche de seguridad, que sube por el gestor de archivos |
+| **Lista de técnicos vigentes** | El desplegable del formulario nuevo. El padrón ya está listo para marcar |
+| **Decisión: ¿usuario por técnico o código de zona?** | La etapa de login del sistema nuevo |
+| **Encuadre LOPDP: quién es responsable y quién encargado** | Nada técnico, pero define quién debe actuar ante la exposición verificada |
 | **Revisar si `cleanup.php` está en algún cron** | Nada, pero es lo más urgente: borra `uploads` y los logs sin verificar copia |
 
 ### Etapa del histórico: cerrada, con estas inquietudes anotadas
