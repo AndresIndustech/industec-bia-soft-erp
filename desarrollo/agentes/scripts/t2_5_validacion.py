@@ -42,6 +42,9 @@ import mysql.connector
 CATALOGOS = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS\catalogos")
 ENV_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
 INFORME = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS")
+# Fixture compartido con la implementacion PHP del servidor. Es el arbitro: si
+# los dos lados no dan lo mismo sobre estos casos, las reglas se separaron.
+FIXTURE = Path(r"D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas\fixture_validacion.json")
 
 BLOQUEA, ADVIERTE, INFORMA = "BLOQUEA", "ADVIERTE", "INFORMA"
 
@@ -213,9 +216,15 @@ def validar(orden, cat, contexto="CAPTURA"):
 
     # --- FECHA. Una orden no se atiende en el futuro. --------------------
     fecha = orden.get("fecha_atencion")
-    if fecha and hasattr(fecha, "year"):
+    if fecha:
+        # La fecha llega como `date` desde la base y como texto ISO desde el
+        # fixture y desde el JSON del formulario. Se compara en ISO, que ordena
+        # igual que la fecha. La primera version exigia un objeto con .year y
+        # saltaba la regla en silencio para el texto -- el fixture compartido con
+        # PHP lo detecto en la primera corrida, que es exactamente para lo que
+        # existe ese fixture.
         hoy = orden.get("_hoy") or datetime.now().date()
-        if fecha > hoy:
+        if str(fecha)[:10] > str(hoy)[:10]:
             h.append(Hallazgo("fecha_atencion", "FECHA_FUTURA", BLOQUEA,
                               f"{fecha} es posterior a hoy"))
 
@@ -431,18 +440,71 @@ def medir_historico(cat):
     return filas, reglas, severidad, limpias
 
 
+def pruebas_fixture():
+    """Corre el fixture compartido con PHP. Mismo archivo, mismos casos.
+
+    El catalogo del fixture es fijo y de juguete a proposito: con el catalogo
+    real los resultados cambiarian cada vez que se ingesta un aviso nuevo, y
+    dejaria de ser una prueba.
+    """
+    if not FIXTURE.exists():
+        sys.exit(f"Falta el fixture compartido: {FIXTURE}")
+    fx = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    cat = {
+        "locales": {l["codigo"]: l for l in fx["catalogo"]["locales"]},
+        "equipos": fx["catalogo"]["equipos"],
+        "tipos": {t.upper() for t in fx["catalogo"]["tipos"]},
+        "tecnicos": [_tokens_nombre(t["nombre"]) for t in fx["catalogo"]["tecnicos"]],
+    }
+    base = fx["orden_base"]
+    fallos = []
+    for caso in fx["casos"]:
+        orden = dict(base)
+        orden.update(caso["cambios"])
+        # Las fechas del fixture son texto ISO; validar() compara datetimes.
+        for k in ("inicio", "fin"):
+            if isinstance(orden.get(k), str):
+                orden[k] = datetime.fromisoformat(orden[k])
+        got = sorted({x.regla for x in validar(orden, cat, caso.get("contexto", "CAPTURA"))})
+        esp = sorted(caso["espera"])
+        ok = got == esp
+        print(f"  {'OK   ' if ok else 'FALLA'} {caso['nombre']}")
+        if not ok:
+            fallos.append(f"{caso['nombre']}\n"
+                          f"       esperaba: {esp}\n"
+                          f"       dio     : {got}")
+    return fallos, len(fx["casos"])
+
+
 def main():
     ap = argparse.ArgumentParser(description="Controles del formulario unico")
     ap.add_argument("--pruebas", action="store_true", help="solo corre las pruebas")
+    ap.add_argument("--fixture", action="store_true",
+                    help="corre el fixture compartido con PHP y nada mas")
     args = ap.parse_args()
+
+    if args.fixture:
+        print("[fixture compartido con PHP]")
+        fallos, n = pruebas_fixture()
+        print("\n" + "=" * 62)
+        if fallos:
+            print(f"{len(fallos)} de {n} casos FALLAN:\n")
+            for f in fallos:
+                print(f"  - {f}\n")
+            sys.exit(1)
+        print(f"Los {n} casos del fixture pasan en Python.")
+        return
 
     cat = cargar_catalogos()
     print(f"Catalogos: {len(cat['locales'])} locales | "
           f"{sum(len(v) for v in cat['equipos'].values())} activos | "
           f"{len(cat['tipos'])} tipos | {len(cat['tecnicos'])} tecnicos\n")
 
-    print("[pruebas de las reglas]")
-    fallos = pruebas(cat)
+    print("[fixture compartido con PHP]")
+    f_fix, n_fix = pruebas_fixture()
+
+    print("\n[pruebas contra el catalogo real]")
+    fallos = pruebas(cat) + f_fix
     if fallos:
         print("\nFALLAN:")
         for f in fallos:

@@ -51,26 +51,30 @@ DESTINO = Path(r"D:\RESPALDOS\_ORIGEN_SISTEMA")
 MANIFIESTOS = DESTINO / "_manifiestos"
 CUARENTENA = DESTINO / "_cuarentena_hash"
 
-# Los 5 modulos del sistema en produccion, con su ruta remota relativa al
-# docroot. Verificado contra las rutas absolutas que aparecen en
-# registros/error_normal.log de la copia del 2026-09-03.
+# Los 5 modulos del sistema, con su ruta remota relativa al docroot.
+#
+# OJO CON ESTAS RUTAS: el error_normal.log de la copia del 2026-09-03 las situaba
+# bajo ot/pruebas/, y ahi ya no estan. Comprobado por HTTP el 2026-09-06: todo se
+# movio a ot/produccion/ (ot/pruebas/ da 404, ot/produccion/ot_normal_v3/uio/
+# ot_uio.html da 200). Si un modulo empieza a fallar con "exit 7", lo primero que
+# hay que sospechar es que volvieron a moverlo.
 MODULOS = {
-    "uio":   "ot/pruebas/ot_normal_v3/uio/uploads",
-    "larb":  "ot/pruebas/ot_normal_v3/larb/uploads",
-    "cnlj":  "ot/pruebas/ot_normal_v3/cnlj/uploads",
+    "uio":   "ot/produccion/ot_normal_v3/uio/uploads",
+    "larb":  "ot/produccion/ot_normal_v3/larb/uploads",
+    "cnlj":  "ot/produccion/ot_normal_v3/cnlj/uploads",
     "mant":  "ot/produccion/ot_mantenimiento/uploads",
-    "otros": "ot/pruebas/ot_normal_otros/uploads",
+    "otros": "ot/produccion/ot_normal_otros/uploads",
 }
 
 # Se bajan tambien los contadores y los logs: el contador es la unica prueba de
 # cuantas OTs se emitieron de verdad (incluidas las que ya no estan en disco), y
 # error_normal.log es el unico rastro temporal de los envios fallidos.
 AUXILIARES = {
-    "uio":   ["ot/pruebas/ot_normal_v3/uio/contadores",  "ot/pruebas/ot_normal_v3/uio/registros"],
-    "larb":  ["ot/pruebas/ot_normal_v3/larb/contadores", "ot/pruebas/ot_normal_v3/larb/registros"],
-    "cnlj":  ["ot/pruebas/ot_normal_v3/cnlj/contadores", "ot/pruebas/ot_normal_v3/cnlj/registros"],
+    "uio":   ["ot/produccion/ot_normal_v3/uio/contadores",  "ot/produccion/ot_normal_v3/uio/registros"],
+    "larb":  ["ot/produccion/ot_normal_v3/larb/contadores", "ot/produccion/ot_normal_v3/larb/registros"],
+    "cnlj":  ["ot/produccion/ot_normal_v3/cnlj/contadores", "ot/produccion/ot_normal_v3/cnlj/registros"],
     "mant":  ["ot/produccion/ot_mantenimiento/contadores", "ot/produccion/ot_mantenimiento/registros"],
-    "otros": ["ot/pruebas/ot_normal_otros/contadores", "ot/pruebas/ot_normal_otros/registros"],
+    "otros": ["ot/produccion/ot_normal_otros/contadores", "ot/produccion/ot_normal_otros/registros"],
 }
 
 

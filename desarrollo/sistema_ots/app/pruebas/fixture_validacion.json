@@ -1,0 +1,180 @@
+{
+  "_leeme": [
+    "Fixture COMPARTIDO de las reglas de validacion del formato unico.",
+    "",
+    "Lo ejecutan dos lados: el modulo Python (scripts/t2_5_validacion.py, que valida",
+    "la ingesta y el historico) y el modulo PHP (nucleo/Validacion.php, que valida la",
+    "captura en el servidor). Las reglas tienen que dar EXACTAMENTE lo mismo en los",
+    "dos, y la unica forma de que no se separen con el tiempo es que los dos corran",
+    "estos mismos casos.",
+    "",
+    "Si agregas una regla, agrega su caso aqui. Si un lado falla y el otro no, el",
+    "fixture es el arbitro.",
+    "",
+    "El catalogo de prueba es FIJO a proposito: si los tests usaran el catalogo real,",
+    "cambiarian de resultado cada vez que se ingesta un aviso nuevo y dejarian de",
+    "ser una prueba."
+  ],
+
+  "catalogo": {
+    "locales": [
+      {"codigo": "K146EC", "nombre": "BATAN SHOPPING CUENCA", "cadena": "KFC", "zona": "CNLJ",
+       "correo_local": "kfc146@kfc.com.ec", "correo_jefe_op": "jefe.cnlj@kfc.com.ec"},
+      {"codigo": "G025EC", "nombre": "AMERICA QUITO", "cadena": "GUS", "zona": "UIO",
+       "correo_local": "gusg25@gus.com.ec", "correo_jefe_op": "jefe.uio@kfc.com.ec"},
+      {"codigo": "T050EC", "nombre": "TROPI BURGER PORTAL SHOPPING", "cadena": "TROPI BURGER",
+       "zona": "UIO", "correo_local": null, "correo_jefe_op": null}
+    ],
+    "equipos": {
+      "K146EC": [
+        {"equipo_sap": "30009664", "codigo_activo": "007762", "tipo": "FREIDORA ABIERTA",
+         "area": "Cocina caliente"},
+        {"equipo_sap": "30006679", "codigo_activo": "007761", "tipo": "MAQUINA DE HIELO",
+         "area": "Conservacion y refrigeracion"}
+      ],
+      "G025EC": [
+        {"equipo_sap": "30011791", "codigo_activo": "000033", "tipo": "MESA MIXTA",
+         "area": "Otros"}
+      ]
+    },
+    "tipos": ["FREIDORA ABIERTA", "MAQUINA DE HIELO", "MESA MIXTA", "HORNO", "LICUADORA"],
+    "tecnicos": [
+      {"id": 1, "nombre": "ANTHONY MEDARDO JUMBO ROJANO", "zona": "UIO"},
+      {"id": 2, "nombre": "DIEGO ESTALY AGILA MASACHE", "zona": "CNLJ"}
+    ]
+  },
+
+  "orden_base": {
+    "tipo": "CORRECTIVO",
+    "local": "K146EC",
+    "aviso": "10334255",
+    "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA"}],
+    "uso_repuesto": false,
+    "repuestos": "Ninguno",
+    "inicio": "2026-09-01T09:00:00",
+    "fin": "2026-09-01T11:30:00",
+    "fecha_atencion": "2026-09-01",
+    "actividades": "Se cambio el termostato y se probo el ciclo completo",
+    "firma_presente": true,
+    "fotos_cantidad": 4,
+    "tecnico": "Anthony Jumbo",
+    "_hoy": "2026-09-06"
+  },
+
+  "casos": [
+    {"nombre": "una orden correcta no genera ningun hallazgo",
+     "cambios": {}, "espera": []},
+
+    {"nombre": "el tecnico se firma como se le conoce, no con el nombre legal",
+     "cambios": {"tecnico": "Anthony Jumbo"}, "espera": [],
+     "nota": "La nomina guarda ANTHONY MEDARDO JUMBO ROJANO. Comparar cadenas enteras marcaba como desconocido al 92% de los tecnicos."},
+
+    {"nombre": "local fuera del maestro bloquea, y no especula sobre el equipo",
+     "cambios": {"local": "ZZ999EC"}, "espera": ["LOCAL_FUERA_DE_CATALOGO"],
+     "nota": "Un solo hallazgo: sin catalogo de activos para un local desconocido, afirmar que el equipo es de otro sitio seria especular."},
+
+    {"nombre": "local vacio bloquea",
+     "cambios": {"local": null}, "espera": ["LOCAL_REQUERIDO"]},
+
+    {"nombre": "aviso de 7 digitos bloquea",
+     "cambios": {"aviso": "1033425"}, "espera": ["AVISO_MAL_FORMADO"]},
+
+    {"nombre": "aviso vacio sin declararlo bloquea",
+     "cambios": {"aviso": null}, "espera": ["AVISO_VACIO_SIN_DECLARAR"]},
+
+    {"nombre": "aviso vacio DECLARADO es valido",
+     "cambios": {"aviso": null, "sin_aviso": true}, "espera": [],
+     "nota": "Una orden nace sin aviso cuando el tecnico ya estaba en sitio. Regla del cliente, 2026-09-04."},
+
+    {"nombre": "equipo de otro local bloquea",
+     "cambios": {"equipos": [{"equipo_sap": "30011791", "tipo": "MESA MIXTA"}]},
+     "espera": ["EQUIPO_DE_OTRO_LOCAL"],
+     "nota": "30011791 es de G025EC, no de K146EC."},
+
+    {"nombre": "sin equipo bloquea",
+     "cambios": {"equipos": []}, "espera": ["SIN_EQUIPO"]},
+
+    {"nombre": "equipo sin identificar bloquea",
+     "cambios": {"equipos": [{}]}, "espera": ["EQUIPO_SIN_IDENTIFICAR"]},
+
+    {"nombre": "tipo de equipo desconocido solo advierte",
+     "cambios": {"equipos": [{"tipo": "APARATO RARO"}]},
+     "espera": ["TIPO_FUERA_DE_CATALOGO"],
+     "nota": "No bloquea: los 6 locales sin activos catalogados son un caso real. El catalogo tiene que poder crecer."},
+
+    {"nombre": "preventivo sin dia bloquea",
+     "cambios": {"tipo": "PREVENTIVO"}, "espera": ["DIA_REQUERIDO_EN_PREVENTIVO"]},
+
+    {"nombre": "preventivo con dia 3 es valido",
+     "cambios": {"tipo": "PREVENTIVO", "dia_intervencion": 3}, "espera": []},
+
+    {"nombre": "dia fuera de rango bloquea",
+     "cambios": {"tipo": "PREVENTIVO", "dia_intervencion": 9},
+     "espera": ["DIA_FUERA_DE_RANGO"]},
+
+    {"nombre": "dia en un correctivo advierte",
+     "cambios": {"dia_intervencion": 2}, "espera": ["DIA_EN_CORRECTIVO"]},
+
+    {"nombre": "no declarar si hubo repuesto bloquea",
+     "cambios": {"uso_repuesto": null}, "espera": ["REPUESTO_NO_DECLARADO"]},
+
+    {"nombre": "marcar repuesto sin decir cual bloquea",
+     "cambios": {"uso_repuesto": true, "repuestos": "S/N"},
+     "espera": ["REPUESTO_MARCADO_SIN_DETALLE"],
+     "nota": "La mitad del campo repuestos del historico solo dice ninguno en ocho ortografias."},
+
+    {"nombre": "decir que no hubo repuesto y anotar uno advierte",
+     "cambios": {"uso_repuesto": false, "repuestos": "Retenedor 3/4"},
+     "espera": ["REPUESTO_CONTRADICTORIO"]},
+
+    {"nombre": "fin anterior al inicio bloquea",
+     "cambios": {"fin": "2026-09-01T08:00:00"},
+     "espera": ["FIN_NO_POSTERIOR_A_INICIO"],
+     "nota": "364 ordenes del historico. Con hora sin fecha es indistinguible de cruzar medianoche; por eso el formato unico captura fecha+hora."},
+
+    {"nombre": "una atencion de 14 horas advierte",
+     "cambios": {"fin": "2026-09-01T23:30:00"}, "espera": ["DURACION_INVEROSIMIL"]},
+
+    {"nombre": "sin horas advierte",
+     "cambios": {"inicio": null, "fin": null}, "espera": ["TIEMPOS_INCOMPLETOS"]},
+
+    {"nombre": "una orden fechada en el futuro bloquea",
+     "cambios": {"fecha_atencion": "2099-01-01"}, "espera": ["FECHA_FUTURA"],
+     "nota": "Aparecieron 2 en el historico, fechadas 11 dias adelante."},
+
+    {"nombre": "sin trabajo realizado bloquea",
+     "cambios": {"actividades": ""}, "espera": ["SIN_TRABAJO_REALIZADO"]},
+
+    {"nombre": "trabajo demasiado escueto advierte",
+     "cambios": {"actividades": "se reviso"}, "espera": ["TRABAJO_DEMASIADO_ESCUETO"]},
+
+    {"nombre": "sin firma bloquea",
+     "cambios": {"firma_presente": false}, "espera": ["SIN_FIRMA"]},
+
+    {"nombre": "sin fotos solo advierte",
+     "cambios": {"fotos_cantidad": 0}, "espera": ["SIN_FOTOS"]},
+
+    {"nombre": "sin tecnico bloquea",
+     "cambios": {"tecnico": ""}, "espera": ["SIN_TECNICO"]},
+
+    {"nombre": "en CAPTURA, un tecnico no vigente bloquea",
+     "cambios": {"tecnico": "Fulano De Tal"}, "espera": ["TECNICO_NO_VIGENTE"]},
+
+    {"nombre": "en HISTORICO, el mismo tecnico solo informa",
+     "contexto": "HISTORICO",
+     "cambios": {"tecnico": "Fulano De Tal"}, "espera": ["TECNICO_YA_NO_VIGENTE"],
+     "nota": "INDUSTEC tiene alta rotacion. Una orden de 2025 firmada por alguien que ya se fue es historia correcta, no dato sucio. Regla del cliente, 2026-09-06."},
+
+    {"nombre": "dos tecnicos en un campo se informa, no se castiga",
+     "cambios": {"tecnico": "Anthony Jumbo, Diego Agila"},
+     "espera": ["VARIOS_TECNICOS_EN_UN_CAMPO"],
+     "nota": "1.113 ordenes del historico, el 16%. Dos personas hicieron el trabajo."},
+
+    {"nombre": "zona distinta a la del maestro se informa",
+     "cambios": {"zona": "UIO"}, "espera": ["ZONA_CRUZADA"],
+     "nota": "K146EC es de CNLJ. La zona la manda el maestro; en el formato unico ni se envia."},
+
+    {"nombre": "tipo que no es correctivo ni preventivo bloquea",
+     "cambios": {"tipo": "LO QUE SEA"}, "espera": ["TIPO_INVALIDO"]}
+  ]
+}
