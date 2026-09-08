@@ -343,35 +343,141 @@ conveniencia, no el respaldo.
 
 ## 5b. Seguridad y datos personales — lo que este sistema maneja de verdad
 
+> **Esto no es asesoría legal.** Lo que sigue viene de leer el texto oficial de
+> la ley y del reglamento, y de una investigación con cuatro agentes que
+> verificaron cada cita cruzando dos dominios `.gob.ec` independientes. **No
+> pasó por el segundo filtro adversarial** que estaba planeado —cayó dos veces
+> por límite de sesión—, así que trátese como *investigación seria, no como
+> hecho cerrado*. Antes de actuar, un abogado ecuatoriano especializado en
+> protección de datos tiene que confirmarlo. Fuente base: LOPDP, Quinto
+> Suplemento del Registro Oficial 459, 26-may-2021
+> ([texto](https://www.sot.gob.ec/wp-content/uploads/2024/11/21.-Ley-Organica-de-Proteccion-de-datos.pdf)),
+> y su Reglamento General, Decreto Ejecutivo 904, publicado en el Registro
+> Oficial Suplemento 435 el **13-nov-2023** (no el 06-nov, que es solo la fecha
+> de suscripción).
+
 Cada orden lleva **nombre, correo y firma manuscrita de un empleado de Grupo
-KFC**. Eso son datos personales de terceros, tratados por INDUSTEC, alojados en
-una cuenta de hosting de INDUSTECH. La **LOPDP** ecuatoriana (Registro Oficial
-Suplemento 459, 26-may-2021; sanciones vigentes desde el 26-may-2023, de hasta el
-**1% de la facturación anual**; reglamento por Decreto Ejecutivo 904) aplica, y
-ninguno de los documentos del proyecto la nombraba.
+KFC**. Eso son datos personales de terceros. La cadena real es
+KFC (los titulares) → INDUSTEC (probable **responsable**) → INDUSTECH (probable
+**encargado**) → Hostinger, en Lituania (subencargado).
 
-No es un trámite: hay **exposición verificada hoy**. El 2026-09-06 comprobé que
-`OT-1451-G025-10336167-UIO.pdf` responde HTTP 200 sin autenticación, y el nombre
-es enumerable — correlativo de 4 dígitos, local del maestro, aviso de 8 dígitos.
+**Hay exposición verificada hoy.** El 2026-09-06 comprobé que
+`OT-1451-G025-10336167-UIO.pdf` responde HTTP 200 sin autenticación, y el
+nombre es enumerable — correlativo de 4 dígitos, local del maestro, aviso de 8
+dígitos.
 
-### Lo que el sistema nuevo tiene que resolver, y la primera versión no decía
+### Corrijo lo que dije antes: el 1% no es el techo, es la mitad de la historia
+
+Dije *"hasta el 1% de la facturación"* como si fuera un tope lejano. Verificado
+contra el texto de la ley, es más serio:
+
+| | Multa | A quién aplica |
+|---|---|---|
+| Infracción **leve** | **0,1%–0,7%** del *volumen de negocio* | Solo entidades privadas y empresas públicas (Art. 71.2 LOPDP) |
+| Infracción **grave** | **0,7%–1%** del *volumen de negocio* | Ídem (Art. 72.1 LOPDP) |
+| Multas en SBU (1–10 leve, 10–20 grave) | — | **Solo servidores públicos.** No aplican a INDUSTEC ni a INDUSTECH: son privadas |
+
+*Volumen de negocio* (Art. 73 LOPDP): ventas y servicios del ejercicio
+anterior, menos IVA — la SPDP lo obtiene directamente del SRI, no lo estima.
+**No tengo el volumen de negocio de INDUSTEC ni de INDUSTECH**, así que no se
+puede cifrar en dólares; no debe estimarse, hay que tomarlo de la contabilidad
+real cuando haga falta.
+
+### La autoridad existe, funciona, y ya sancionó — con el mismo patrón de este caso
+
+La Superintendencia de Protección de Datos Personales (SPDP) tiene superintendente
+desde el 28-mar-2024 ([designación, CPCCS](https://www.cpccs.gob.ec/2024/03/fabrizio-peralta-superintendente/))
+y **ya dictó cuatro resoluciones sancionatorias**, todas entre nov-2025 y
+ene-2026, contra LigaPro y la Federación Ecuatoriana de Fútbol, por un total
+verificado de **al menos USD 194.856,16** (la resolución de la FEF, leída
+completa del PDF oficial) más otras tres reportadas en prensa y en el propio
+sitio de la SPDP que suman a un total aproximado de USD 744.472.
+
+**El precedente calza con este caso exactamente.** A LigaPro la sancionaron por
+infracción **grave** del Art. 68.1 (no implementar medidas técnicas suficientes)
+y después por infracción **leve** del Art. 67.2 (no proteger los datos desde el
+diseño y por defecto) en su app *FAN ID* — la misma figura que los ~1.950 PDFs
+públicos con nombre enumerable de este proyecto. No hay sanciones publicadas
+contra una PYME fuera del fútbol todavía, pero tampoco hace falta serlo: la
+conducta tipificada es la misma.
+
+### Un hallazgo nuevo y urgente: INDUSTECH puede estar obligada a tener un delegado, y el plazo ya venció
+
+La Resolución SPDP-SPD-2025-0028-R
+([texto](https://spdp.gob.ec/wp-content/uploads/2025/07/028-R.pdf)), Art. 10
+numeral 10.13, obliga a designar **delegado de protección de datos** a
+*"las personas jurídicas de derecho privado que ofertaren o prestaren servicios
+de (...) tecnologías de la información, inclusive las dedicadas al desarrollo,
+implementación o despliegue de inteligencia artificial"* — **sin importar el
+tamaño de la empresa**. INDUSTECH SOLUTIONS, que presta automatización con IA,
+encaja de lleno.
+
+El plazo de inscripción del sector privado corrió del **1 de noviembre al 31 de
+diciembre de 2025**. Hoy ya pasó, hace más de ocho meses. Y la propia
+resolución dice que no inscribir a tiempo *"será considerado como una falta de
+cumplimiento de medidas de seguridad de carácter jurídico"* — que es la puerta
+al Art. 68.1, **el mismo tipo grave con el que se multó a LigaPro**.
+
+Para INDUSTEC (soporte técnico HORECA, no TI) el encaje en el 10.13 es
+discutible, pero puede quedar alcanzada de todos modos por el Art. 48.2 LOPDP y
+el Art. 53 del Reglamento si su tratamiento es *"continuado, preestablecido y
+metódico"* — que es exactamente cómo funciona el flujo de OTs.
+
+### El hallazgo que cambia el encuadre de INDUSTECH: puede dejar de ser "solo el proveedor"
+
+El Art. 43 del Reglamento dice que un encargado que *"por cualquier causa,
+determine los fines y los medios del tratamiento"* pasa a ser considerado
+**responsable** respecto de esa parte. **Elegir dónde alojar los datos —una
+cuenta de hosting personal— es determinar un medio.** Eso expone a INDUSTECH a
+que la traten como responsable, no como simple proveedor técnico, con su propio
+catálogo de infracciones y su propia multa sobre su propio volumen de negocio.
+
+Y el Art. 34 LOPDP prohíbe expresamente al encargado comunicar los datos a
+otras personas **"ni siquiera para su conservación"** sin contrato escrito —
+que es exactamente lo que ocurre al alojarlos en Hostinger sin ese contrato.
+
+### Lo que hay que resolver
 
 | Hueco | Qué hace falta |
 |---|---|
-| **Los PDFs siguen sin protección declarada** | En el sistema nuevo **no** se sirven por URL adivinable: se entregan tras autenticación y por identificador no enumerable |
-| **La firma es un PNG que manda el cliente** | Atarla al contenido de la orden y a un `sha256`. Y decidir con INDUSTEC si tiene valor probatorio o es solo evidencia |
-| **No existe la baja del técnico** | En una empresa de alta rotación, cada renuncia deja el catálogo completo de KFC —con correos— y órdenes firmadas en un teléfono **personal**. Hace falta: sesión con caducidad, revocación desde el servidor, y borrado del almacén local al cerrar sesión |
-| **El catálogo lleva correos que el técnico no necesita** | El teléfono baja locales y equipos; los correos de KFC se quedan en el servidor |
+| **No existe el contrato de encargo entre INDUSTEC e INDUSTECH** | Obligatorio y escrito (Art. 34 LOPDP + Art. 41 del Reglamento, 7 contenidos mínimos). No tenerlo es infracción **grave** del responsable (Art. 68.9) |
+| **INDUSTECH probablemente debía inscribir delegado desde dic-2025** | Verificar si aplica y regularizar ya. Tarde es mejor que nunca, pero no borra el período de incumplimiento |
+| **Los PDFs siguen sin protección declarada** | En el sistema nuevo no se sirven por URL adivinable: autenticación e identificador no enumerable |
+| **La firma es un PNG que manda el cliente, sin atar a nada** | Atarla al contenido y a un `sha256`. Y su naturaleza legal —¿dato biométrico?— **quedó sin resolver**: el Art. 4 LOPDP incluye "conductas" en la definición, pero ninguna resolución de la SPDP lo confirma para una firma manuscrita. Si lo fuera, sube a categoría especial (Art. 26) |
+| **No existe la baja del técnico** | Alta rotación + catálogo completo de KFC + órdenes firmadas en un teléfono **personal**. Hace falta sesión con caducidad, revocación desde el servidor, borrado local al cerrar sesión |
+| **Notificar a los titulares implica pasar por el cliente** | Los titulares son empleados de KFC, no de INDUSTEC. El precedente de LigaPro muestra que la SPDP sí ordena notificación masiva cuando corresponde |
 | **Nadie registra quién leyó o descargó qué** | Traza de acceso en las tres superficies |
-| **Reenviar el PDF a destinatario libre** | Solo a direcciones del maestro, y con traza |
 
-### Lo que hay que decidir con INDUSTEC, no escribiendo código
+### Lo que se descarta, y por qué
 
-Quién es **responsable** y quién **encargado** del tratamiento, si hace falta
-contrato de encargo entre INDUSTECH e INDUSTEC, y qué se hace con la exposición
-ya verificada. **No soy abogado y esto no es asesoría legal**: es señalar que hay
-una obligación con sanción asociada que nadie ha mirado, y que conviene que la
-mire quien corresponda.
+**No es transferencia internacional.** Alojar en Hostinger (Lituania) **no**
+se analiza bajo el régimen de transferencias — lo resuelve la Resolución
+SPDP-SPD-2026-0004-R, Arts. 23–24: el encargo de tratamiento no constituye
+transferencia. El régimen que aplica es el de **encargo** (Art. 34 LOPDP), no
+el de países con nivel adecuado. No vale la pena gastar esfuerzo legal en esa
+vía.
+
+### Los plazos si hubiera que notificar una brecha — con una salvedad importante
+
+| Notificación | Término | Artículo |
+|---|---|---|
+| Responsable → Autoridad (SPDP) + ARCOTEL | **5 días** | Art. 43 LOPDP |
+| Encargado → Responsable | **2 días** | Art. 43 LOPDP |
+| Responsable → el titular (la persona) | **3 días**, si hay riesgo a sus derechos | Art. 46 LOPDP |
+
+**"Término" en derecho ecuatoriano suele excluir sábados, domingos y
+feriados** (Código Orgánico Administrativo, Arts. 158–159) — pero esto **no se
+verificó leyendo el COA directamente**, es una inferencia de la técnica
+jurídica general. Ante la duda, hay que asumir el escenario más exigente (días
+corridos), porque el error de calcular de más juega en contra.
+
+### Lo que quedó sin confirmar, y no debe darse por hecho
+
+- Si una firma manuscrita en pantalla es legalmente **dato biométrico** (sube mucho la gravedad si lo es).
+- El volumen de negocio real de INDUSTEC e INDUSTECH — sin él no se puede cifrar nada en dólares.
+- El monto exacto de 3 de las 4 sanciones a LigaPro/FEF (solo la de la FEF se leyó del PDF oficial completo).
+- Si "término" son días hábiles o corridos (se investigó, no se confirmó en el articulado mismo del COA).
+- El Anexo I de la metodología de cálculo de multas de la SPDP (existe la resolución, no el anexo con la fórmula).
 
 ---
 
@@ -575,7 +681,8 @@ saber si el técnico entra con usuario propio o con código de zona.
 | Pregunta | Quién | Bloquea |
 |---|---|---|
 | ¿Qué se hace con la exposición de PDFs ya verificada? | Andrés / César | Nada técnico: el parche está listo. Pero hay una obligación legal que mirar |
-| ¿Quién es responsable y quién encargado bajo la LOPDP? | INDUSTEC, con asesoría | El encuadre legal de todo el tratamiento |
+| ¿Quién es responsable y quién encargado bajo la LOPDP, y hace falta el contrato de encargo? | INDUSTEC + INDUSTECH, con abogado | El encuadre legal de todo el tratamiento — ver §5b |
+| **¿INDUSTECH debe inscribir delegado de protección de datos?** El plazo (dic-2025) ya venció | Andrés, con abogado | No inscribir a tiempo ya cuenta como incumplimiento, según la propia SPDP — ver §5b |
 | ¿El PDF puede cambiar, o hay que conservar la maqueta exacta? | KFC, vía INDUSTEC | La etapa 11, y el alcance real de la unificación |
 | ¿Usuario por técnico o código de zona? | Andrés | Etapa 8 |
 | Lista de técnicos vigentes | INDUSTEC | El desplegable de técnicos. El padrón está listo para marcar |

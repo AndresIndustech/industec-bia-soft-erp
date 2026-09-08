@@ -3,9 +3,16 @@
 > **Empieza por aquí.** Este archivo dice dónde vamos; [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) dice qué hay que construir y con qué criterios.
 > Si vas a trabajar, **anótate primero en §5 (Trabajo en paralelo)** antes de tocar nada.
 
-**Última actualización:** 2026-09-06
+**Última actualización:** 2026-09-08
 **Fase en curso:** 2 · Automatización — arrancada. La Fase 1 quedó sustancialmente cerrada
 **Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
+
+> **Si esta es una conversación nueva: empieza leyendo esto, en orden.**
+> 1. Esta sección y la §1b completas.
+> 2. [`SISTEMA_COMPLETO.md`](SISTEMA_COMPLETO.md) — el sistema de punta a punta, incluida la §5b de LOPDP (recién ampliada, ver abajo).
+> 3. §3 de aquí abajo, para lo que sigue.
+> No hace falta releer el resto del repositorio: estos tres documentos son la
+> foto completa al 2026-09-08.
 
 ---
 
@@ -59,6 +66,31 @@ corre todavía dice por qué.
 | 1 | **Cerrar la exposición pública de los PDFs** | Verificado el 2026-09-06: un PDF con firma manuscrita de un empleado de KFC responde **HTTP 200** sin autenticación, y el nombre es enumerable. El `.htaccess` **sube por el gestor de archivos de hPanel, sin SSH** |
 | 2 | **Sacar el proyecto del único disco** | `git remote -v` no devuelve nada. Los 40 commits, las 7.069 órdenes y el árbol canónico están en un solo disco. La regla de las dos copias no se cumple para nada de lo que produjimos |
 | 3 | **Revisar el cron y borrar `cleanup.php`** | Es una **URL pública** que borra `uploads` y `registros` sin verificar copia. Cualquiera la dispara desde el navegador |
+| 4 | **Verificar si INDUSTECH debía inscribir delegado de protección de datos ante la SPDP** | El plazo del sector privado (Resolución SPDP-SPD-2025-0028-R, Art. 10.13, servicios de TI/IA) corrió del 1-nov al 31-dic-2025 y **ya venció hace más de 8 meses**. No inscribir a tiempo ya cuenta, según la propia SPDP, como incumplimiento — ver `SISTEMA_COMPLETO.md` §5b |
+
+### Investigación LOPDP — hallazgo importante del 2026-09-08
+
+Se investigó a fondo el régimen sancionatorio de la LOPDP en fuente primaria
+(cuatro ángulos, cada cita verificada cruzando dos dominios `.gob.ec`
+independientes). **La conclusión anterior — "hasta el 1% de la facturación" —
+era demasiado suave.** Lo verificado y corregido, con todo el detalle, fuentes
+y lo que quedó sin confirmar, está en
+[`SISTEMA_COMPLETO.md` §5b](SISTEMA_COMPLETO.md#5b-seguridad-y-datos-personales--lo-que-este-sistema-maneja-de-verdad).
+Los tres titulares:
+
+- La **Superintendencia de Protección de Datos ya sanciona**: 4 resoluciones
+  contra LigaPro/FEF por ~USD 744.472, con un precedente (app con IDs
+  enumerables) que calza exactamente con la exposición de este proyecto.
+- **INDUSTECH puede estar obligada a tener delegado de protección de datos**
+  desde diciembre de 2025 (punto 4 de la tabla de arriba).
+- El **Art. 43 del Reglamento** puede reclasificar a INDUSTECH de "encargado" a
+  "responsable" por haber elegido dónde alojar los datos — con su propio
+  catálogo de infracciones y su propia multa.
+
+**No pasó por verificación adversarial** (el workflow murió dos veces por
+límite de sesión): es investigación seria en fuente primaria, no un hecho
+cerrado. Antes de actuar sobre esto, un abogado ecuatoriano de la materia tiene
+que confirmarlo.
 
 ---
 
@@ -100,7 +132,7 @@ corre todavía dice por qué.
 | **Habilitar SSH en Hostinger** (hPanel → Avanzado → Acceso SSH) | Toda la sincronización T2.4. **No bloquea** el parche de seguridad, que sube por el gestor de archivos |
 | **Lista de técnicos vigentes** | El desplegable del formulario nuevo. El padrón ya está listo para marcar |
 | **Decisión: ¿usuario por técnico o código de zona?** | La etapa de login del sistema nuevo |
-| **Encuadre LOPDP: quién es responsable y quién encargado** | Nada técnico, pero define quién debe actuar ante la exposición verificada |
+| **Encuadre LOPDP: quién es responsable y quién encargado, y contrato de encargo INDUSTEC↔INDUSTECH** | Nada técnico, pero define quién debe actuar ante la exposición verificada. Ver `SISTEMA_COMPLETO.md` §5b |
 | **Revisar si `cleanup.php` está en algún cron** | Nada, pero es lo más urgente: borra `uploads` y los logs sin verificar copia |
 
 ### Etapa del histórico: cerrada, con estas inquietudes anotadas
