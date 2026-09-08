@@ -66,7 +66,7 @@ corre todavía dice por qué.
 | 1 | **Cerrar la exposición pública de los PDFs** | Verificado el 2026-09-06: un PDF con firma manuscrita de un empleado de KFC responde **HTTP 200** sin autenticación, y el nombre es enumerable. El `.htaccess` **sube por el gestor de archivos de hPanel, sin SSH** |
 | 2 | **Sacar el proyecto del único disco** | `git remote -v` no devuelve nada. Los 40 commits, las 7.069 órdenes y el árbol canónico están en un solo disco. La regla de las dos copias no se cumple para nada de lo que produjimos |
 | 3 | **Revisar el cron y borrar `cleanup.php`** | Es una **URL pública** que borra `uploads` y `registros` sin verificar copia. Cualquiera la dispara desde el navegador |
-| 4 | **Verificar si INDUSTECH debía inscribir delegado de protección de datos ante la SPDP** | El plazo del sector privado (Resolución SPDP-SPD-2025-0028-R, Art. 10.13, servicios de TI/IA) corrió del 1-nov al 31-dic-2025 y **ya venció hace más de 8 meses**. No inscribir a tiempo ya cuenta, según la propia SPDP, como incumplimiento — ver `SISTEMA_COMPLETO.md` §5b |
+| 4 | **Inscribir el delegado de protección de datos de INDUSTECH ante la SPDP** | El plazo del sector privado (Resolución SPDP-SPD-2025-0028-R, Art. 10.13, servicios de TI/IA) corrió del 1-nov al 31-dic-2025 y **ya venció hace más de 8 meses**. No inscribir a tiempo ya cuenta, según la propia SPDP, como incumplimiento. **Guía paso a paso, ya escrita:** [`TRAMITE_DELEGADO_DATOS.md`](TRAMITE_DELEGADO_DATOS.md) — es gratis, en línea, y no exige certificación (esa obligación no rige hasta 2029) |
 
 ### Investigación LOPDP — hallazgo importante del 2026-09-08
 
@@ -211,7 +211,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| _(libre)_ | | | |
+| T2.5 · Captura — formulario único, v1 para revisión | Conversación "app captura v1" | 2026-09-08 | Solo `desarrollo/sistema_ots/app/publico/` (código nuevo). No toca base ni árbol canónico |
 
 ### 5.2 Qué choca con qué
 

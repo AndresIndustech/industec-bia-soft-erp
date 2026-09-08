@@ -403,6 +403,10 @@ conducta tipificada es la misma.
 
 ### Un hallazgo nuevo y urgente: INDUSTECH puede estar obligada a tener un delegado, y el plazo ya venció
 
+> **Guía paso a paso ya escrita:** [`TRAMITE_DELEGADO_DATOS.md`](TRAMITE_DELEGADO_DATOS.md).
+> Es gratuito, se hace en línea, y **no exige certificación todavía** — esa
+> obligación (Art. 11) no entra en vigencia hasta el 1-ene-2029.
+
 La Resolución SPDP-SPD-2025-0028-R
 ([texto](https://spdp.gob.ec/wp-content/uploads/2025/07/028-R.pdf)), Art. 10
 numeral 10.13, obliga a designar **delegado de protección de datos** a
