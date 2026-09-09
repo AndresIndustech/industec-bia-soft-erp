@@ -1,2 +1,14 @@
 server.log
 *.log
+
+# Los catalogos son DATOS del cliente, no codigo.
+#
+# casos_sap.json trae 918 casos con la descripcion que escribio KFC y el usuario
+# de KFC que abrio cada uno -- 206 personas identificables. locales.json trae la
+# cartera completa y tecnicos.json el padron con nombre y apellido.
+#
+# Se generan en la estacion y se suben a mano al servidor. En el repositorio no
+# pintan nada: se coló uno al probar el buzon el 2026-09-09 y se saco del stage
+# antes de confirmar. El .htaccess de esa carpeta SI se versiona: es lo que
+# impide que el servidor los entregue por URL.
+catalogos/*.json
