@@ -1,0 +1,14 @@
+# nucleo/ NO se sirve por web. Nunca.
+#
+# Aqui vive config.php con las credenciales de la base. El sistema viejo guardaba
+# la clave del SMTP en texto plano en cinco copias dentro del docroot; esto es lo
+# contrario. PHP incluye estos archivos por ruta de sistema de archivos, asi que
+# bloquear el acceso web no le afecta en nada.
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
+Options -Indexes

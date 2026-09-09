@@ -1,3 +1,18 @@
+# ⚠️ SUPERADO POR produccion.htaccess -- NO USAR ESTE
+#
+# Las rutas que lista mas abajo estan bajo ot/pruebas/, y el 2026-09-08 se
+# comprobo por HTTP que ESAS RUTAS YA NO EXISTEN (dan 404). El sistema se movio
+# a ot/produccion/. Subir este archivo a las rutas de abajo lo dejaria en
+# carpetas vacias y la exposicion seguiria abierta.
+#
+# USA:  produccion.htaccess  -- un solo archivo en /ot/produccion/, que cubre
+#       los 5 modulos. Instrucciones en LEEME_DESPLIEGUE_HTACCESS.md
+#
+# Este se conserva solo como respaldo por si mod_rewrite no estuviera activo en
+# LiteSpeed y hubiera que caer al metodo de un .htaccess por carpeta -- en ese
+# caso, corrigiendo "pruebas" por "produccion" en las 15 rutas.
+#
+# ---------------------------------------------------------------------------
 # Bloqueo de acceso web a uploads/ y registros/
 #
 # POR QUE: los PDFs de uploads/ son hoy publicos y su nombre es adivinable

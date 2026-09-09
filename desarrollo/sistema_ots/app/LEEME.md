@@ -44,3 +44,20 @@ discrepa, y no se despliega nada hasta que coincidan.
 PHP **8.3.33** en `D:\SOFTWARE\PHP83` — la misma versión que corre en Hostinger,
 descargada de windows.php.net y verificada por SHA-256. Extensiones activadas:
 `pdo_mysql`, `mysqli`, `mbstring`, `gd`, `openssl`, `zip`, `curl`, `intl`.
+
+## Al actualizar en Hostinger: borra antes de extraer
+
+El extractor del gestor de archivos de Hostinger **crea los archivos nuevos y
+salta los que ya existen**, aunque «Overwrite existing files» esté marcado. Se
+comprobó dos veces el 2026-09-08:
+
+- Subida 1: se creó `usuarios.php` (nuevo) pero `nucleo/Auth.php` quedó viejo.
+  `usuarios.php` llamaba a métodos que el `Auth.php` viejo no tenía → HTTP 500.
+- Subida 2: mismo patrón con `panel.php`, que seguía mostrando el módulo apagado.
+
+**Regla:** antes de extraer una actualización, BORRA del servidor los archivos
+que cambiaron. Nunca `nucleo/config.php`, que tiene las credenciales y no viaja
+en los paquetes.
+
+Síntoma típico de este problema: una página nueva da 500 mientras el resto
+funciona, o una pantalla sigue mostrando la versión anterior tras recargar.

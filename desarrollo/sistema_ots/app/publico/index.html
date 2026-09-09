@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Orden de Trabajo · INDUSTEC</title>
+<link rel="stylesheet" href="estilo.css" />
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0ea5e9">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="OT INDUSTEC">
+<link rel="apple-touch-icon" href="iconos/icono-192.png">
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="logo-top">
+      <img src="assets/logo-industec.png" alt="INDUSTEC" onerror="this.style.display='none'">
+      <h1>Orden de Trabajo</h1>
+      <p class="sub" id="subcabecera">Un solo formato — correctivo y preventivo</p>
+    </div>
+
+    <form id="otForm" novalidate>
+
+      <!-- ============ LA ORDEN ============
+           El técnico NO teclea números. El correlativo INDUSTEC lo reserva el
+           servidor con el secuencial de su zona, y el aviso SAP sale de la orden
+           que se le asignó. Solo el caso de emergencia nace sin aviso, y ese
+           queda marcado como tarea de la administración. -->
+      <h2>La orden</h2>
+      <div class="grid g2">
+        <div>
+          <label for="tecSesion">Técnico</label>
+          <select id="tecSesion" name="tecnico_sesion" required>
+            <option value="">Elige tu nombre…</option>
+          </select>
+          <span class="derivado">Cuando exista el ingreso por usuario, esto lo pone la sesión y no se elige.</span>
+        </div>
+        <div>
+          <label>Número de orden INDUSTEC</label>
+          <input type="text" value="Lo asigna el servidor" disabled>
+          <span class="derivado">Siguiente del secuencial de tu zona, reservado en el momento del envío.</span>
+        </div>
+      </div>
+
+      <div class="seg" id="segOrigen" style="margin-top:12px" role="group" aria-label="Origen de la orden">
+        <button type="button" data-v="ASIGNADA" class="on">De mis órdenes</button>
+        <button type="button" data-v="SIN_ASIGNAR">Sin orden asignada</button>
+      </div>
+      <input type="hidden" name="origen" id="origen" value="ASIGNADA">
+
+      <div id="wrapAsignada" style="margin-top:10px">
+        <label for="avisoBusca">Orden asignada</label>
+        <div class="combo" id="avisoCombo">
+          <input type="hidden" name="aviso" id="aviso">
+          <input type="text" id="avisoBusca" class="combo-input" role="combobox"
+                 aria-expanded="false" aria-controls="avisoLista" aria-autocomplete="list"
+                 autocomplete="off" spellcheck="false"
+                 placeholder="Busca por aviso, local o tipo de trabajo…">
+          <button type="button" class="combo-clear" id="avisoClear" hidden aria-label="Borrar orden">&times;</button>
+          <ul class="combo-lista" id="avisoLista" role="listbox" hidden></ul>
+        </div>
+        <div class="ficha" id="fichaAviso" hidden></div>
+        <span class="derivado" id="avisoCobertura"></span>
+      </div>
+
+      <div id="wrapSinAsignar" hidden style="margin-top:10px">
+        <div class="nota-regular">
+          <b>Esta orden nace sin aviso SAP.</b> Se registra completa y queda como
+          <b>tarea pendiente de la administración</b>: hay que regularizarla —pedirle
+          el caso a Grupo KFC o crearlo en SAP— <b>antes</b> de solicitar repuestos o
+          darla por cerrada. El trabajo igual se contabiliza.
+        </div>
+        <label style="margin-top:10px">Por qué no había orden asignada</label>
+        <input type="text" name="motivo_sin_aviso" id="motivo_sin_aviso"
+               placeholder="p. ej. emergencia durante la visita: la freidora 2 dejó de calentar">
+      </div>
+
+      <!-- ============ TIPO DE ORDEN ============ -->
+      <h2>Tipo de orden</h2>
+      <div class="seg" id="segTipo" role="group" aria-label="Tipo de orden">
+        <button type="button" data-v="CORRECTIVO" class="on">Correctivo</button>
+        <button type="button" data-v="PREVENTIVO">Preventivo</button>
+      </div>
+      <input type="hidden" name="tipo" id="tipo" value="CORRECTIVO">
+      <span class="derivado" id="tipoDerivado" hidden></span>
+      <div id="wrapDia" hidden style="margin-top:10px">
+        <label>Día de intervención (del ingreso preventivo)</label>
+        <select name="dia_intervencion" id="dia_intervencion">
+          <option value="">Elige el día (1–5)</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+        </select>
+      </div>
+
+      <!-- ============ DATOS GENERALES ============ -->
+      <h2>Datos generales</h2>
+      <div class="grid g2">
+        <div>
+          <label>Fecha de atención</label>
+          <input type="date" name="fecha_atencion" id="fecha_atencion" required>
+        </div>
+
+        <div style="grid-column:1/-1">
+          <label for="localBusca">Local</label>
+          <div class="combo" id="localCombo">
+            <input type="hidden" name="local" id="local" required>
+            <input type="text" id="localBusca" class="combo-input" role="combobox"
+                   aria-expanded="false" aria-controls="localLista" aria-autocomplete="list"
+                   autocomplete="off" autocapitalize="characters" spellcheck="false"
+                   placeholder="Escribe el código o el nombre del local…">
+            <button type="button" class="combo-clear" id="localClear" hidden aria-label="Borrar local">&times;</button>
+            <ul class="combo-lista" id="localLista" role="listbox" hidden></ul>
+          </div>
+          <div class="chips" id="chipsLocal" hidden>
+            <span class="chip">Zona <b id="chipZona">—</b></span>
+            <span class="chip">Cadena <b id="chipCadena">—</b></span>
+            <span class="chip" id="chipClienteWrap" hidden>Cliente <b id="chipCliente">—</b></span>
+          </div>
+          <span class="derivado" id="localNota">La zona y la cadena las pone el maestro, no se escriben. Antes se cruzaban 4 locales de Quito a Cuenca.</span>
+        </div>
+
+        <div>
+          <label>Administrador del local (nombre y apellido)</label>
+          <input type="text" name="admin" id="admin" required>
+        </div>
+        <div>
+          <label>Correo del local</label>
+          <input type="email" name="correolocal" id="correolocal" readonly>
+          <span class="derivado" id="msgCorreoLocal">Se toma del maestro.</span>
+        </div>
+        <div>
+          <label>Correo del jefe de operaciones</label>
+          <input type="email" name="correojefeop" id="correojefeop" readonly>
+          <span class="derivado">Buzón de zona de INDUSTEC — el mismo que recibe en copia los avisos de SAP.</span>
+        </div>
+      </div>
+
+      <!-- ============ TÉCNICOS ============ -->
+      <h2>¿Intervino alguien más?</h2>
+      <p class="sub">El responsable es quien llena la orden. Agrega aquí a los demás, si los hubo:
+        en el histórico 1 de cada 6 órdenes llevó más de un técnico y eso no se podía medir.</p>
+      <div id="tecnicos"></div>
+      <div class="row" style="margin-top:6px">
+        <button type="button" class="btn secondary" id="addTecnico">+ Añadir otro técnico</button>
+      </div>
+
+      <!-- ============ EQUIPOS ============ -->
+      <h2>Equipos intervenidos</h2>
+      <p class="sub">Mínimo uno. El correctivo suele llevar uno; el preventivo, varios (hasta 7).</p>
+      <div id="equipos"></div>
+      <div class="row" style="margin-top:6px">
+        <button type="button" class="btn secondary" id="addEquipo">+ Añadir equipo</button>
+      </div>
+
+      <!-- ============ INTERVENCIÓN ============ -->
+      <h2>Detalle de la intervención</h2>
+      <div class="grid g2">
+        <div>
+          <label>Inicio (fecha y hora)</label>
+          <input type="datetime-local" name="inicio" id="inicio" required>
+        </div>
+        <div>
+          <label>Fin (fecha y hora)</label>
+          <input type="datetime-local" name="fin" id="fin" required>
+          <span class="derivado">Con fecha, una intervención que cruza medianoche ya no queda en blanco.</span>
+        </div>
+      </div>
+
+      <label style="margin-top:10px">Actividades realizadas</label>
+      <textarea name="actividades" id="actividades" placeholder="Qué se hizo, con qué resultado…" required></textarea>
+
+      <label>¿Se usó repuesto?</label>
+      <div class="seg" id="segRepuesto" role="group" aria-label="¿Se usó repuesto?">
+        <button type="button" data-v="no" class="on">No</button>
+        <button type="button" data-v="si">Sí</button>
+      </div>
+      <input type="hidden" name="uso_repuesto" id="uso_repuesto" value="0">
+      <div id="wrapRepuestos" hidden style="margin-top:8px">
+        <label>Detalle de los repuestos</label>
+        <textarea name="repuestos" id="repuestos" placeholder="Descripción y número de parte…"></textarea>
+      </div>
+
+      <label style="margin-top:10px">Observaciones generales</label>
+      <textarea name="observaciones" id="observaciones" placeholder="Opcional"></textarea>
+
+      <!-- ============ ESTADO OT (complementario) ============ -->
+      <h2>Estado de la orden</h2>
+      <p class="sub">Referencial. El cierre real lo define el estatus del aviso en SAP, nunca esta casilla.</p>
+      <div class="seg" id="segEstado" role="group" aria-label="Estado de la orden">
+        <button type="button" data-v="Abierta" class="on">Abierta</button>
+        <button type="button" data-v="Cerrada">Cerrada</button>
+      </div>
+      <input type="hidden" name="estado_ot" id="estado_ot" value="Abierta">
+
+      <!-- ============ EVIDENCIA ============ -->
+      <h2>Evidencia fotográfica</h2>
+      <div class="picker">
+        <div class="row">
+          <label class="btn ghost">Tomar foto
+            <input type="file" id="fileCamera" accept="image/*" capture="environment" multiple hidden>
+          </label>
+          <label class="btn ghost">Galería
+            <input type="file" id="fileGallery" accept="image/*" multiple hidden>
+          </label>
+        </div>
+        <div class="slot-list" id="fileList"><div class="small">Sin fotos</div></div>
+        <div class="small">En el sistema de hoy las fotos viajan dentro del envío y superan el límite: PDFs en blanco. Aquí van aparte.</div>
+      </div>
+
+      <!-- ============ SATISFACCIÓN ============
+           Ojo: de aquí para abajo el texto le habla al ADMINISTRADOR DEL LOCAL,
+           no al técnico. Por eso va en "usted" y no en "tú", y por eso la
+           redacción es la misma del formulario actual: es lo que el cliente de
+           Grupo KFC ya está acostumbrado a leer y firmar (I-8). -->
+      <h2>Satisfacción del cliente</h2>
+      <p class="sub" id="txtAtiempo">Su requerimiento fue atendido a tiempo:</p>
+      <div class="seg" id="segAtiempo" role="group" aria-label="Atendido a tiempo">
+        <button type="button" data-v="Si">Sí</button>
+        <button type="button" data-v="No">No</button>
+      </div>
+      <input type="hidden" name="atiempo" id="atiempo" value="">
+      <p class="sub" style="margin-top:10px">Califique la atención (1 muy insatisfecho — 10 excelente):</p>
+      <div id="rating"></div>
+      <input type="hidden" name="satisfaccion" id="satisfaccion" value="">
+
+      <!-- ============ FIRMA ============ -->
+      <h2>Firma del administrador</h2>
+      <div class="sig-wrap">
+        <canvas id="signature" class="sig-canvas"></canvas>
+        <div class="row" style="margin-top:6px">
+          <button type="button" class="btn" id="undo">Deshacer</button>
+          <button type="button" class="btn" id="clear">Limpiar</button>
+        </div>
+      </div>
+      <input type="hidden" name="firma_png" id="firma_png">
+
+      <!-- ============ VALIDACIÓN + ENVÍO ============ -->
+      <div class="validacion" id="panelValidacion"></div>
+
+      <div class="footer">
+        <button class="btn primary" id="submitBtn" type="submit" style="width:100%;padding:12px">Revisar y enviar</button>
+        <p class="pendientes" id="pendientes"></p>
+      </div>
+
+    </form>
+
+    <!-- Resultado del envío (v1: resumen, sin PDF ni correo todavía) -->
+    <section id="resultado" hidden>
+      <div class="validacion ok" style="display:block">
+        <b>El paso de fondo:</b> primero se escribe la fila en la base y se reserva
+        el correlativo en una transacción atómica; recién entonces se genera el PDF
+        y se encolan los correos. Un fallo del correo ya no borra la orden.
+      </div>
+      <div class="nota-regular" id="rTarea" hidden>
+        <b>Queda una tarea para la administración.</b> Esta orden nació sin aviso SAP:
+        hay que regularizarla —pedirle el caso a Grupo KFC o crearlo en SAP— antes de
+        solicitar repuestos o darla por cerrada. El trabajo ya está registrado y se contabiliza.
+      </div>
+      <h2>Nombre canónico que saldría</h2>
+      <p id="rNombre" style="font-family:ui-monospace,monospace;font-size:15px;color:#0b1220;word-break:break-all"></p>
+      <p class="sub">El <code>NNNN</code> lo reemplaza el correlativo que reserva el servidor.</p>
+      <h2>Resumen del envío</h2>
+      <pre id="rResumen" style="white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px;font-size:12px;overflow:auto"></pre>
+      <div class="footer">
+        <button type="button" class="btn primary" id="rNueva">Nueva orden</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- En producción esto valida también en el servidor (nucleo/Validacion.php);
+     el navegador valida para que el técnico se entere en el momento. -->
+<script src="offline.js"></script>
+<script src="reglas.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -40,3 +40,15 @@ id_ed25519*
 id_rsa*
 industec_hostinger*
 secretos.ini
+
+# Credenciales de la app de gestion.
+# La regla apuntaba a app/nucleo/config.php, que NO existe: el archivo vive en
+# app/publico/nucleo/. `git check-ignore` decia OK porque la ruta calzaba con el
+# patron, no porque protegiera al archivo real. Se salvo de que nadie hubiera
+# hecho `git add` de esa carpeta todavia. Se cubre el nombre en cualquier nivel.
+**/nucleo/config.php
+
+# Padron de personal: nombres de los 19 empleados vigentes. Lo genera
+# t2_8_padron_tecnicos.py y se sube a mano a nucleo/ en el servidor. No viaja
+# en el repositorio ni en un paquete.
+desarrollo/sistema_ots/app/publico/nucleo/padron.json

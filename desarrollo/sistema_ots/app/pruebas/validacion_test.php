@@ -11,7 +11,7 @@ declare(strict_types=1);
  *   D:\SOFTWARE\PHP83\php.exe pruebas/validacion_test.php
  */
 
-require_once __DIR__ . '/../nucleo/Validacion.php';
+require_once __DIR__ . '/../publico/nucleo/Validacion.php';
 
 $fixture = json_decode(
     file_get_contents(__DIR__ . '/fixture_validacion.json'),

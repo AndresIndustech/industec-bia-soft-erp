@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Cronograma de preventivos · INDUSTEC</title>
+<link rel="stylesheet" href="estilo.css" />
+<link rel="stylesheet" href="cronograma.css" />
+</head>
+<body>
+
+<!-- La franja de alertas. Fija arriba, delgada, sin botón de cerrar:
+     desaparece sola cuando la condición se resuelve, no cuando alguien la
+     descarta. Es lo que pidió el cliente: visible siempre, sin estorbar. -->
+<div class="alertas" id="alertas" hidden></div>
+
+<div class="wrap">
+  <div class="card">
+    <div class="cab">
+      <div>
+        <h1>Cronograma de preventivos</h1>
+        <p class="sub" id="subcab">4 ingresos al año por local, acordados con Grupo KFC</p>
+      </div>
+      <div class="cab-controles">
+        <select id="usuario" aria-label="Quién entra">
+          <option value="ADMIN">Administración — las 3 zonas</option>
+          <option value="UIO">Jefe de zona — UIO</option>
+          <option value="LARB">Jefe de zona — LARB</option>
+          <option value="CNLJ">Jefe de zona — CNLJ</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Resumen de cumplimiento. Va arriba porque es lo que se mira primero. -->
+    <div class="tiles" id="tiles"></div>
+
+    <div class="barra-mes">
+      <button type="button" class="btn" id="mesAnt" aria-label="Mes anterior">‹</button>
+      <strong id="mesTitulo"></strong>
+      <button type="button" class="btn" id="mesSig" aria-label="Mes siguiente">›</button>
+      <span class="sep"></span>
+      <button type="button" class="btn primary" id="btnAgendar">+ Agendar un local</button>
+    </div>
+
+    <div class="leyenda">
+      <span><i class="pt vencido"></i>Vencido</span>
+      <span><i class="pt poriniciar"></i>Inicia en ≤3 días</span>
+      <span><i class="pt encurso"></i>En curso</span>
+      <span><i class="pt planificado"></i>Planificado</span>
+      <span><i class="pt sinkit"></i>Sin kit</span>
+    </div>
+
+    <div class="calendario" id="calendario"></div>
+
+    <h2>Ingresos del mes</h2>
+    <div id="listaMes"></div>
+  </div>
+</div>
+
+<!-- Panel de detalle de un ingreso -->
+<div class="panel-fondo" id="panelFondo" hidden></div>
+<aside class="panel" id="panel" hidden aria-label="Detalle del ingreso">
+  <div class="panel-cab">
+    <strong id="panelTitulo">Ingreso</strong>
+    <button type="button" class="btn" id="panelCerrar" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="panel-cuerpo" id="panelCuerpo"></div>
+</aside>
+
+<!-- Agendar / reagendar -->
+<div class="panel-fondo" id="modalFondo" hidden></div>
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitulo">
+  <div class="panel-cab">
+    <strong id="modalTitulo">Agendar ingreso</strong>
+    <button type="button" class="btn" id="modalCerrar" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="panel-cuerpo" id="modalCuerpo"></div>
+</div>
+
+<script src="reglas.js"></script>
+<script src="cronograma.js"></script>
+</body>
+</html>

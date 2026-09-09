@@ -1,0 +1,188 @@
+/* =========================================================================
+   estilo.css — Captura de OT, formato único.
+
+   Hereda el lenguaje visual EXACTO de los tres formularios que los técnicos
+   usan hoy (ot_uio.html, ot_mant_uio.html, ot_correctivo.html): mismas
+   variables de color, secciones con borde-acento a la izquierda, inputs de
+   44 px, tipografía de 16 px para que iOS no haga zoom al enfocar.
+
+   El invariante I-8 dice que el técnico no cambia su forma de trabajar. Por
+   eso esto se ve como lo de hoy; lo que cambia es que los campos que se
+   escribían a mano ahora son listas cerradas.
+   ========================================================================= */
+
+:root{
+  --bg:#f5f7fb; --card:#fff; --muted:#6b7280; --border:#e5e7eb;
+  --ink:#111827; --accent:#0ea5e9; --text:#0b1220; --input:#fff;
+  --ok:#16a34a; --danger:#ef4444; --warn:#b45309; --warn-bg:#fffbeb;
+}
+
+html{ -webkit-text-size-adjust:100%; }
+*{ box-sizing:border-box; }
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  font-size:14px; line-height:1.35; -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+.wrap{ max-width:980px; margin:12px auto; padding:12px; }
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:12px;
+  padding:14px 14px 18px; box-shadow:0 2px 6px rgba(0,0,0,.04);
+}
+
+.logo-top{ display:flex; flex-direction:column; align-items:flex-start; gap:6px; margin-bottom:8px; }
+.logo-top img{ height:32px; }
+h1{ font-size:18px; line-height:1.2; margin:0; font-weight:700; }
+h2{
+  font-size:15px; line-height:1.25; margin:16px 0 8px; font-weight:700;
+  border-left:3px solid var(--accent); padding-left:8px;
+}
+.sub{ font-size:12px; color:var(--muted); margin:2px 0 0; }
+
+/* minmax(0,1fr), no "1fr": los input[type=datetime-local] tienen un ancho
+   mínimo intrínseco y con "1fr" (=minmax(auto,1fr)) empujaban la página
+   más ancha que el celular y aparecía scroll horizontal. */
+.grid{ display:grid; gap:10px; }
+.g2{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+.g3{ grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); }
+@media (max-width:720px){ .g2,.g3{ grid-template-columns:minmax(0,1fr); } }
+
+label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+input[type="text"],input[type="email"],input[type="password"],input[type="date"],
+input[type="time"],input[type="datetime-local"],input[type="number"],textarea,select{
+  width:100%; min-width:0; max-width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px;
+  background:var(--input); font-size:16px; box-sizing:border-box; color:var(--text);
+  -webkit-appearance:none; appearance:none; height:44px; font-family:inherit;
+}
+select{
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'><path d='M6 9l6 6 6-6' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat:no-repeat; background-position:right 10px center; padding-right:34px;
+}
+textarea{ min-height:90px; height:auto; resize:vertical; }
+input:disabled,select:disabled,textarea:disabled{ background:#f3f4f6; color:#4b5563; }
+input.invalido,select.invalido,textarea.invalido{ border-color:var(--danger); background:#fef2f2; }
+
+.row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+
+.btn{
+  appearance:none; border:1px solid var(--border); background:#fff; border-radius:999px;
+  padding:8px 12px; cursor:pointer; font-weight:600; font-size:13px; color:#334155;
+}
+.btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn.secondary{ background:var(--ok); color:#fff; border:0; }
+.btn.ghost{ background:#fff; border:1px dashed #d1d5db; color:#334155; }
+.btn.danger{ background:var(--danger); color:#fff; border:0; }
+.btn.sel{ background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn[disabled]{ background:#9ca3af !important; color:#fff !important; cursor:not-allowed !important; opacity:.9; }
+
+/* Control segmentado (tipo de orden, sí/no) */
+.seg{ display:inline-flex; border:1px solid var(--border); border-radius:999px; overflow:hidden; background:#fff; }
+.seg button{ border:0; background:#fff; padding:9px 18px; font-size:14px; font-weight:600; color:#475569; cursor:pointer; }
+.seg button.on{ background:var(--accent); color:#fff; }
+
+/* Combobox con búsqueda (local: 100 opciones, no caben en un <select> de celular) */
+.combo{ position:relative; }
+.combo-input{ padding-right:34px; }
+.combo-clear{
+  position:absolute; top:6px; right:6px; width:32px; height:32px; border:0; border-radius:8px;
+  background:#f3f4f6; color:#475569; font-size:20px; line-height:1; cursor:pointer;
+}
+.combo-lista{
+  position:absolute; z-index:30; left:0; right:0; top:calc(100% + 4px);
+  max-height:min(56vh,340px); overflow-y:auto; -webkit-overflow-scrolling:touch;
+  margin:0; padding:4px; list-style:none;
+  background:var(--card); border:1px solid var(--border); border-radius:10px;
+  box-shadow:0 12px 32px rgba(15,23,42,.16);
+}
+.combo-grupo{
+  font-size:11px; font-weight:700; color:var(--muted);
+  text-transform:uppercase; letter-spacing:.05em; padding:8px 10px 4px;
+}
+.combo-opt{ padding:10px; border-radius:8px; cursor:pointer; font-size:14px; color:var(--ink); }
+.combo-opt.activa,.combo-opt:hover{ background:#e0f2fe; }
+.combo-opt .cod{ font-weight:700; }
+.combo-opt .cad{ color:var(--muted); }
+.combo-vacio{ padding:10px; color:var(--muted); font-size:13px; }
+
+/* Ficha de la orden asignada — lo que vino de SAP, sin que nadie lo teclee */
+.ficha{
+  margin-top:10px; border:1px solid #bae6fd; background:#f0f9ff; border-radius:10px; padding:10px 12px;
+}
+.ficha .ficha-tit{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+.ficha .ficha-aviso{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:700; font-size:15px; color:#075985; }
+.ficha dl{ display:grid; grid-template-columns:auto minmax(0,1fr); gap:4px 12px; margin:0; font-size:13px; }
+.ficha dt{ color:var(--muted); }
+.ficha dd{ margin:0; color:var(--ink); }
+.ficha .cita{ margin-top:8px; padding:8px 10px; background:#fff; border-radius:8px;
+  border-left:3px solid var(--accent); font-size:13px; color:#334155; }
+.prio{ font-size:11px; font-weight:700; letter-spacing:.04em; border-radius:999px; padding:3px 9px; }
+.prio-alta{ background:#fee2e2; color:#991b1b; }
+.prio-media{ background:#fef3c7; color:#92400e; }
+.prio-baja{ background:#e0f2fe; color:#075985; }
+.prio-sd{ background:#f1f5f9; color:#475569; }
+
+/* Aviso de que la orden nace sin aviso SAP y entra a la cola de regularización */
+.nota-regular{
+  border:1px solid #fde68a; background:var(--warn-bg); border-radius:10px;
+  padding:10px 12px; font-size:13px; color:#78350f; line-height:1.45;
+}
+
+/* Chips de datos derivados (zona, cadena) */
+.chips{ display:flex; gap:6px; flex-wrap:wrap; margin-top:2px; }
+.chip{ font-size:12px; color:#475569; background:#f1f5f9; border-radius:999px; padding:4px 9px; }
+.chip b{ color:#0b1220; }
+
+/* Aviso de campo derivado / solo lectura */
+.derivado{ font-size:11px; color:var(--muted); margin-top:3px; display:block; }
+
+/* Bloques repetibles (equipos, técnicos) */
+.bloque{ border:1px solid #eef4fb; background:#fff; border-radius:10px; padding:10px; margin:10px 0; }
+.bloque-tit{ display:flex; justify-content:space-between; align-items:center; gap:6px 8px; flex-wrap:wrap; margin-bottom:8px; font-size:14px; font-weight:700; }
+.bloque-tit .btn{ padding:5px 10px; }
+
+/* Evidencia fotográfica */
+.picker{ border:1px dashed var(--border); border-radius:10px; padding:10px; background:#fff; }
+.slot-list{ display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+.slot{ display:flex; align-items:center; justify-content:space-between; background:#fff; border:1px solid #eef2f6; border-radius:6px; padding:6px 8px; }
+.slot .name{ font-size:13px; color:#0b1220; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:62%; }
+.slot .actions{ display:flex; gap:6px; }
+.slot .actions button{ padding:6px 8px; border-radius:6px; border:0; background:#f3f4f6; cursor:pointer; }
+.small{ font-size:12px; color:var(--muted); }
+
+/* Firma */
+.sig-wrap{ border:1px dashed #94a3b8; border-radius:10px; background:#fff; padding:8px; }
+.sig-canvas{ width:100%; height:180px; display:block; background:#fff; border-radius:8px; border:1px solid #e6eef3; touch-action:none; }
+
+/* Satisfacción */
+#rating{ display:flex; gap:8px; flex-wrap:wrap; justify-content:space-between; }
+#rating .star{ display:flex; flex-direction:column; align-items:center; cursor:pointer; }
+#rating .star span:first-child{ font-size:12px; color:#333; margin-bottom:2px; }
+#rating .star span:last-child{ font-size:24px; color:#fbbf24; line-height:1; }
+
+/* Panel de validación (lo que hoy es un alert() gigante) */
+.validacion{ margin-top:12px; border-radius:10px; padding:10px 12px; font-size:13px; display:none; }
+.validacion.bloquea{ display:block; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+.validacion.advierte{ display:block; background:var(--warn-bg); border:1px solid #fde68a; color:var(--warn); }
+.validacion.ok{ display:block; background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
+.validacion ul{ margin:6px 0 0; padding-left:18px; }
+.validacion li{ margin:2px 0; }
+
+.footer{ margin-top:14px; }
+.pendientes{ font-size:12px; color:var(--muted); margin-top:6px; }
+
+@media (max-width:420px){
+  input,textarea,select{ font-size:16px; height:46px; }
+}
+
+/* --- Franja de estado de la conexión -------------------------------------
+   Fija arriba, delgada, sin botón de cerrar. Con señal desaparece sola; sin
+   señal se queda, porque el técnico tiene que saber que lo que ve puede ser
+   de ayer y que todavía no puede enviar. */
+.estado-red{
+  position:sticky; top:0; z-index:60; padding:9px 14px; font-size:13px; line-height:1.4;
+  border-bottom:1px solid transparent;
+}
+.estado-red.sin{ background:var(--warn-bg); color:#78350f; border-bottom-color:#fde68a; }
+.estado-red.con{ background:#f0fdf4; color:#166534; border-bottom-color:#bbf7d0; }

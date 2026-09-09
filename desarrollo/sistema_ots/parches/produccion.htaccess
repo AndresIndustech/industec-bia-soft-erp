@@ -1,0 +1,72 @@
+# Bloqueo de acceso web a uploads/, registros/ y contadores/
+#
+# UN SOLO ARCHIVO, en la raiz de /ot/produccion/, que cubre los 5 modulos.
+#
+# DONDE VA, con este nombre exacto:
+#   <docroot>/ot/produccion/.htaccess
+#
+# ---------------------------------------------------------------------------
+# POR QUE
+#
+# Verificado por HTTP el 2026-09-08, sin autenticacion de ningun tipo:
+#
+#   200  /ot/produccion/ot_normal_v3/uio/uploads/OT-1427-G025-10334255-UIO.pdf
+#   200  /ot/produccion/ot_normal_v3/larb/uploads/OT-1629-K080-10332528-LARB.pdf
+#   200  /ot/produccion/ot_normal_v3/cnlj/uploads/OT-1688-K069-10330081-CNLJ.pdf
+#   200  /ot/produccion/ot_normal_v3/uio/registros/error_normal.log
+#   200  /ot/produccion/ot_mantenimiento/registros/mail_normal.log
+#   200  /ot/produccion/ot_normal_v3/uio/contadores/counter_UIO.txt
+#
+# Cada PDF contiene nombre y apellido del administrador del local, su correo, el
+# del jefe de operaciones y su FIRMA MANUSCRITA -- datos personales de empleados
+# de Grupo KFC. El nombre del archivo es enumerable: correlativo de 4 digitos,
+# local del maestro y aviso de 8 digitos. Es el mismo patron por el que la
+# Superintendencia sanciono a LigaPro (Art. 67.2 y 68.1 LOPDP).
+#
+# El log de correos expone ademas direcciones de correo, y el contador expone el
+# correlativo siguiente.
+#
+# ---------------------------------------------------------------------------
+# POR QUE ES SEGURO PONERLO -- verificado, no supuesto (2026-09-08)
+#
+#   1. Ningun HTML ni JS del sistema enlaza a uploads/. Cero coincidencias sobre
+#      los 7 formularios.
+#   2. Los 5 submit.php mandan el PDF como ADJUNTO del correo
+#      ($mail->addAttachment). Ninguno pone un enlace.
+#   3. submit.php escribe el PDF con file_put_contents(), por ruta de sistema de
+#      archivos, no por HTTP. Bloquear el acceso web no le afecta.
+#   4. gracias.html no enlaza nada.
+#   5. Ningun script del proyecto lee los PDFs por HTTP; la sincronizacion es por
+#      SFTP.
+#
+# El tecnico no nota ningun cambio y el local sigue recibiendo su PDF adjunto.
+#
+# LO UNICO QUE DEJA DE FUNCIONAR: recuperar un PDF a mano pegando la URL en el
+# navegador. Preguntar a la administracion antes de subirlo. Como alternativa ya
+# tiene el catalogo de las 7.069 ordenes con la ruta de cada PDF en
+# SALIDAS IA\OTS\, y la etapa 6 del plan repone ese acceso con autenticacion y
+# registro de quien descarga que.
+# ---------------------------------------------------------------------------
+
+# Bloquea cualquier ruta que pase por uploads/, registros/ o contadores/,
+# en cualquiera de los 5 modulos, con o sin barra final.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (^|/)(uploads|registros|contadores)(/|$) - [F,L]
+</IfModule>
+
+# Red de seguridad por extension, por si mod_rewrite no estuviera activo.
+# NO incluye .php: los formularios y submit.php viven bajo esta misma carpeta y
+# tienen que seguir ejecutandose.
+<FilesMatch "\.(pdf|log|txt|json|csv|bak|sql)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Sin listado de directorio.
+Options -Indexes

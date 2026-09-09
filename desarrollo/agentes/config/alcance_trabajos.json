@@ -1,0 +1,76 @@
+{
+  "_leeme": [
+    "QUE ES ESTE ARCHIVO",
+    "",
+    "El alcance del servicio de INDUSTEC, escrito como dato y no como codigo,",
+    "para que la administracion pueda corregirlo sin tocar un script.",
+    "",
+    "Regla del cliente, 2026-09-08: INDUSTEC hace SOPORTE TECNICO DE EQUIPOS.",
+    "No hace mantenimiento constructivo ni interviene la infraestructura del",
+    "local. Grupo KFC a veces asigna casos que no le competen, y la",
+    "administradora los cierra en SAP indicando que no son nuestros.",
+    "",
+    "ESTO NO DECIDE NADA. Estas listas solo levantan ALERTAS para que la",
+    "administradora encuentre rapido los casos sospechosos entre cientos. El",
+    "veredicto sobre cada caso es suyo: el sistema no cierra, no rechaza y no",
+    "da ningun caso por ajeno. Un caso marcado puede terminar siendo nuestro,",
+    "y uno sin marcar puede no serlo.",
+    "",
+    "POR QUE IMPORTA, MEDIDO SOBRE 2026 (8 meses de avisos):",
+    "Lo que INDUSTEC si hace se cierra: Mant. Correctivo queda 1,5% abierto.",
+    "Lo que no hace se atasca: Mant. Reproceso 75%, Audio y Video 39%, Aire",
+    "acondicionado 38%, Mant. Constructivo 9,1%. El porcentaje que queda",
+    "abierto es, en la practica, un detector de 'esto no era nuestro'.",
+    "",
+    "COMO SE USA",
+    "La comparacion es por nombre normalizado (mayusculas, sin tildes, sin",
+    "puntuacion). Un tipo que no este en ninguna lista NO se adivina: cae en",
+    "'por_confirmar' y se le pide criterio a la administracion (I-7)."
+  ],
+
+  "version": "2026-09-08",
+  "decidido_por": "Andres Basantes, 2026-09-08",
+
+  "dentro": {
+    "_que_es": "Soporte tecnico de equipos. Es el servicio contratado.",
+    "tipos": [
+      "Mant. Correctivo",
+      "Mant. Preventivo",
+      "Solicitud Baja de Equipo",
+      "Repuestos (Consumibles)"
+    ],
+    "_nota_repuestos": "Repuestos (Consumibles) queda DENTRO: son repuestos de equipo, no menaje."
+  },
+
+  "fuera": {
+    "_que_es": "No le compete a INDUSTEC. La administradora cierra el caso en SAP indicando que el trabajo no es nuestro.",
+    "grupos": [
+      {
+        "motivo": "INDUSTEC no hace mantenimiento constructivo",
+        "tipos": ["Mant. Constructivo"]
+      },
+      {
+        "motivo": "Es infraestructura del local, no un equipo",
+        "tipos": ["Sumideros", "Ductos", "Trampas de grasa",
+                  "Dano en el sistema de extraccion"]
+      },
+      {
+        "motivo": "Equipo del edificio, no de la operacion de cocina",
+        "tipos": ["Aire acondicionado", "Generadores"]
+      },
+      {
+        "motivo": "No es soporte tecnico de equipos de cocina",
+        "tipos": ["Audio y Video"]
+      },
+      {
+        "motivo": "Es reposicion de consumibles, no soporte tecnico",
+        "tipos": ["Menaje (Consumibles)", "Combustible"]
+      }
+    ]
+  },
+
+  "por_confirmar": {
+    "_que_es": "Sin criterio definido. El sistema NO decide: se lo muestra a la administracion para que resuelva, y recien entonces pasa a 'dentro' o a 'fuera'.",
+    "tipos": ["Mant. Reproceso"]
+  }
+}

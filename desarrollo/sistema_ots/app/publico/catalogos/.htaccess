@@ -1,0 +1,24 @@
+# Los catalogos NO se sirven como archivos. Nunca.
+#
+# POR QUE: locales.json trae los 100 locales de Grupo KFC, tecnicos.json los 19
+# tecnicos con nombre completo, y casos_sap.json 918 casos con la descripcion
+# que escribio KFC y el USUARIO de KFC que creo cada uno. Todo eso es dato
+# personal y de negocio del cliente.
+#
+# Sin este archivo, cualquiera que adivine la ruta se lleva el padron de
+# personal y la cartera de locales -- exactamente el mismo error que se cerro en
+# produccion el 2026-09-08 con los PDFs.
+#
+# El unico camino a estos datos es catalogos.php, que en cuanto exista la etapa 1
+# comprobara la sesion y el permiso antes de responder, y dejara traza de quien
+# consulto que.
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
+
+Options -Indexes

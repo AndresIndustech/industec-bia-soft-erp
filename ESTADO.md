@@ -47,10 +47,51 @@ corre todavía dice por qué.
 | Normalización al árbol canónico (`t2_4_normalizar_nuevas.py`) | ✅ probado en seco | **98,4%** sobre los 1.952 nombres reales |
 | Catálogo para INDUSTEC (`t2_4_publicar_ots.py`) | ✅ **corrido** | 7.069 órdenes publicadas, 0 sin PDF localizable |
 | Catálogos del formulario (`t2_5_catalogos.py`) | ✅ **corrido** | 100 locales · 1.173 activos en 94 locales · 222 tipos · 19 técnicos |
-| Reglas del formato único (`t2_5_validacion.py` + `Validacion.php`) | ✅ | **32 casos del fixture pasan en Python y en PHP** |
+| Reglas del formato único (`t2_5_validacion.py` + `Validacion.php` + `publico/reglas.js`) | ✅ | **32 casos del fixture pasan en Python, PHP y JS** |
+| **Modo sin conexión (PWA)** | ✅ **probado 2026-09-08** | `sw.js` + `manifest.json` + `offline.js`. Con el servidor **apagado de verdad**: abre, carga 100 locales y 918 órdenes desde la copia local, firma y valida, y avisa de cuándo son los datos. **Todavía NO encola envíos**: enviar necesita señal. Prueba: `app/pruebas/prueba_offline.mjs` |
+| **Etapa 1 — usuarios, roles, permisos, sesión única** | ✅ **INSTALADA Y EN USO** en el sitio de pruebas | Base `industec_app` (separada del archivo histórico). 4 roles: SUPERADMIN 17 permisos · ADMIN 16 · JEFE_ZONA 10 · TECNICO 4. El alcance por zona filtra **en el servidor**, no escondiendo botones. Base `u671729428_ots`. **Verificado el 2026-09-08:** `nucleo/` da 403 (las credenciales no son alcanzables), `panel.php` sin sesión redirige al login, `instalar.php` borrado (404). Los 2 superadministradores creados con claves generadas que **nunca pasaron por un archivo ni por el chat**. Pasos en `SALIDAS IA\OTS\PASOS_INSTALAR_ETAPA1.md`. **Módulo de usuarios en uso**: la administradora ya existe y se comprobó que no ve ni gestiona superadministradores. Escalada de privilegios cerrada: un POST directo pidiendo crear un SUPERADMIN se rechaza en el servidor |
+| **App desplegada en el sitio de pruebas** | ✅ **2026-09-08** | `darkviolet-armadillo-872352.hostingersite.com/ot/` — sitio **nuevo, sin WordPress** (se descartó `darkorchid`, que traía WP 7.1 con `wp-login` abierto y la REST API exponiendo el usuario admin). Formulario y cronograma cargando con los datos reales. **Los JSON de catálogos dan 403**: solo salen por `catalogos.php` |
+| **Captura — formulario único, v1 para revisión** (`sistema_ots/app/publico/`) | ✅ **corre en local** | Unifica los 3 formularios de hoy. El técnico **no teclea ningún número**: elige de sus órdenes. Local por buscador, listas cerradas, repuesto por casilla. **No persiste, no genera PDF, no envía correo todavía.** Reseña en `SALIDAS IA\OTS\REVISION_CAPTURA_v1.md` |
+| **Lector del buzón SAP** (`t2_6_imap_avisos.py`) | ✅ **corrido** | IMAP **de solo lectura** (EXAMINE + BODY.PEEK, no marca leído). 918 casos vivos de 90 días, 7 órdenes eliminadas excluidas, 99,8% resuelve local. Credencial en `config/.env` |
+| **Filtro de alcance** (`config/alcance_trabajos.json`) | ✅ | El alcance como dato editable, no como código. **Levanta alertas, no decide**: el veredicto es de la administradora. 11 alertas sobre 918 casos |
+| **Cronograma de preventivos** (`t2_7_cronograma_preventivo.py` + `cronograma.html`) | ✅ **corre en local** | Convierte el Excel de la administración (fechas como frases) a fechas reales: **352 de 368 ingresos, 95,7%**. Calendario con alertas de 3 días. **68 vencidos, 316 sin kit** |
+| **Padrón de técnicos al día** (`t2_8_padron_tecnicos.py` + `sql/004`, `sql/005`) | ✅ **cargado y verificado 2026-09-09** | 40 personas: **19 vigentes** (CNLJ 7 · LARB 6 · UIO 6, con 3 jefes de zona) + 21 que salieron. Distingue las tres situaciones: sigue trabajando / salió tal día / salió sin fecha registrada. **Corrige un hallazgo del proyecto**: el catálogo viejo tenía 19 filas todas activas, y por eso 1.362 órdenes figuraban «fuera de nómina» cuando su autor trabaja hoy. El nombre de usuario se **calcula** del padrón y se compara contra los 19 aprobados: si el Excel cambia un apellido, aborta. Idempotente en 3 corridas |
+| **Alta masiva de los 19 usuarios** (`alta_padron.php`) | ✅ **probada en local, lista para subir** | Lee `nucleo/padron.json` (fuera de git: son nombres de personal). Revalida rol, rango y zona fila por fila. **Probada con un padrón alterado** que pedía SUPERADMIN y ADMIN: rechazados, 0 creados; el jefe de zona ni siquiera abre la pantalla (403). Muestra las 19 contraseñas una sola vez y obliga a cambiarlas. Paquete en `SALIDAS IA\OTS\paquete_alta_padron` |
+| ⚠️ **El buzón solo trae el 37% de los casos de SAP** | 🔴 **por confirmar la causa** | El 0% de `Mant. Preventivo` **está explicado**: no se pide por correo, sigue cronograma. Lo que sigue sin causa es el **36% del correctivo**. Ver [`SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md`](SALIDAS%20IA/OTS/HALLAZGO_BUZON_VS_SAP.md) |
+
+**Arquitectura decidida el 2026-09-08:** la **base operativa vive en Hostinger**
+(usuarios, casos abiertos, asignaciones, cronograma vigente) y la **memoria
+completa y el análisis en la estación** (7.069 órdenes, cruces con SAP, KPIs,
+PDFs). La app de administración es **web**, servida por Hostinger: no se instala
+nada y entran desde cualquier computador. Los jefes técnicos están en Ambato y
+Cuenca, así que la base en la estación habría exigido VPN y que este equipo
+estuviera siempre encendido.
+
+**La decisión completa, cruzada con la LOPDP, está en
+[`DECISION_ARQUITECTURA_Y_DATOS.md`](DECISION_ARQUITECTURA_Y_DATOS.md)** — manda
+sobre las demás. Sus tres puntos que no dependen de programar nada y son los que
+más bajan el riesgo: **cerrar la exposición de los PDFs** (verificado el
+2026-09-08: no afecta en nada al sistema actual — los 5 `submit.php` mandan el
+PDF como adjunto y ningún HTML enlaza a `uploads/`), **inscribir el delegado de
+protección de datos de INDUSTECH** (plazo vencido hace 8 meses; encargado a otra
+IA con [`BRIEF_DPD_INDUSTECH.md`](BRIEF_DPD_INDUSTECH.md)) y **firmar el
+contrato de encargo con INDUSTEC**.
+
+**El hosting se queda en INDUSTECH** (decisión del 2026-09-08: INDUSTEC no
+asume responsabilidades adicionales). Eso deja vigente el riesgo del Art. 43 del
+Reglamento —INDUSTECH puede ser tratada como *responsable* por elegir dónde se
+alojan los datos—, y se compensa haciendo constar en el contrato que **INDUSTEC
+aprueba el uso de ese hosting**, más el delegado y el registro de actividades de
+tratamiento de INDUSTECH.
+
+Roles, módulos, tableros, seguridad y el orden de las etapas:
+[`PLAN_APP_GESTION.md`](PLAN_APP_GESTION.md).
 | Padrón de técnicos (`t2_5_padron_tecnicos.py`) | ✅ **corrido** | 164 personas reconstruidas desde las órdenes, listas para que INDUSTEC marque |
 | Consola local de revisión (`sistema_ots/local/app.py`) | ✅ **corriendo** | 7 rutas en 200; cifras iguales al estado |
-| Parches de seguridad (`.htaccess`, `guardas.php`) | 🔴 **listos, sin desplegar** | Requieren aprobación para tocar producción |
+| **Exposición pública de los PDFs** | ✅ **CERRADA el 2026-09-08** | `.htaccess` en `ot/produccion/`, subido por Andrés. **403 en origen y en CDN** en los 8 recursos; los 2 formularios siguen en 200. Se corrigieron las rutas del parche viejo: el sistema se había movido de `ot/pruebas/` a `ot/produccion/` |
+| **`cleanup.php` borrado** | ✅ **2026-09-08** | La URL pública que borraba `uploads` y `registros` sin verificar copia → 404. **Falta revisar si algún cron lo llamaba** |
+| Verificador de exposición (`verificar_exposicion.py`) | ✅ | Solo HEAD, nunca descarga. Mide **CDN y origen por separado**: el 08-sep el origen ya bloqueaba y el CDN seguía sirviendo PDFs cacheados con `Age: 974`. Medir solo con cache-buster habría dado un "cerrado" falso |
+| `guardas.php` | 🔴 **listo, sin desplegar** | Requiere aprobación para tocar producción |
 | Migración `003` | 🔴 **escrita, sin aplicar** | Cambia el esquema: requiere aprobación |
 
 **Documentos rectores nuevos:**
@@ -63,7 +104,8 @@ corre todavía dice por qué.
 
 | # | Qué | Por qué ahora |
 |---|---|---|
-| 1 | **Cerrar la exposición pública de los PDFs** | Verificado el 2026-09-06: un PDF con firma manuscrita de un empleado de KFC responde **HTTP 200** sin autenticación, y el nombre es enumerable. El `.htaccess` **sube por el gestor de archivos de hPanel, sin SSH** |
+| ~~1~~ | ~~Cerrar la exposición pública de los PDFs~~ | ✅ **Hecho el 2026-09-08.** Ver §1b |
+| **1b** | **15 vulnerabilidades en el WordPress que está encima del sistema de OTs** | Detectadas por el propio hPanel el 2026-09-08, con WordPress 6.8.8, tema Astra y **19 plugins** sin actualizar. **El `.htaccess` no protege contra esto**: código ejecutándose en el servidor lee `ot/` igual, incluidos los PDFs y el `config.php` con la clave SMTP en texto plano |
 | 2 | **Sacar el proyecto del único disco** | `git remote -v` no devuelve nada. Los 40 commits, las 7.069 órdenes y el árbol canónico están en un solo disco. La regla de las dos copias no se cumple para nada de lo que produjimos |
 | 3 | **Revisar el cron y borrar `cleanup.php`** | Es una **URL pública** que borra `uploads` y `registros` sin verificar copia. Cualquiera la dispara desde el navegador |
 | 4 | **Inscribir el delegado de protección de datos de INDUSTECH ante la SPDP** | El plazo del sector privado (Resolución SPDP-SPD-2025-0028-R, Art. 10.13, servicios de TI/IA) corrió del 1-nov al 31-dic-2025 y **ya venció hace más de 8 meses**. No inscribir a tiempo ya cuenta, según la propia SPDP, como incumplimiento. **Guía paso a paso, ya escrita:** [`TRAMITE_DELEGADO_DATOS.md`](TRAMITE_DELEGADO_DATOS.md) — es gratis, en línea, y no exige certificación (esa obligación no rige hasta 2029) |
