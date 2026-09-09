@@ -52,3 +52,7 @@ secretos.ini
 # t2_8_padron_tecnicos.py y se sube a mano a nucleo/ en el servidor. No viaja
 # en el repositorio ni en un paquete.
 desarrollo/sistema_ots/app/publico/nucleo/padron.json
+
+# Llave SSH de despliegue a Hostinger. La privada no sale de esta estacion.
+desarrollo/agentes/config/clave_hostinger
+desarrollo/agentes/config/clave_hostinger.pub

@@ -22,6 +22,7 @@ Automatización de la gestión de órdenes de trabajo (OTs) para **INDUSTEC**, e
 6. **Si no hay dato, se dice.** Ningún agente inventa ni completa por verosimilitud: lo que responda va a Grupo KFC.
 7. **Software libre o gratuito**, el mejor de su categoría. Lo de pago se propone con justificación y costo antes de adquirir nada.
 8. Se puede instalar sin pedir permiso, si es de fuente verificada y necesario. Se informa después.
+9. **En Hostinger solo se tocan los archivos del sitio de pruebas** (`darkviolet-armadillo-872352`, `public_html/ot/`). Los demás sitios del panel —incluido el sistema en producción— no se modifican. **Ningún trámite que genere un cobro** (subir de plan, contratar un servicio, activar un extra de pago) lo hace un agente: se propone con el costo y lo ejecuta Andrés.
 
 Los invariantes completos (I-1 a I-13), con su justificación, están en §1 de `PLAN_INDUSTEC.md`.
 

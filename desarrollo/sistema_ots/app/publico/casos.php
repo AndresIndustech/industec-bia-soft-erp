@@ -492,5 +492,67 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
     <?php endif; ?>
   </div>
 </div>
+
+<?php /* La barra de novedades. Aparece cuando el buzon cambio en el servidor y
+         NO recarga sola: la administradora puede estar leyendo un caso o a
+         medio filtrar, y recargarle la pagina debajo seria peor que no avisar.
+         Es la misma regla que se fijo para las alertas del cronograma: visible
+         siempre, sin estorbar, hasta que la persona decida. */ ?>
+<div id="novedades" hidden>
+  <span id="nov-txt">El buzón se actualizó</span>
+  <button class="btn primary" type="button" id="nov-ver">Ver lo nuevo</button>
+  <button class="btn" type="button" id="nov-no" title="Se vuelve a avisar en el próximo cambio">Ahora no</button>
+</div>
+<style>
+  #novedades{ position:fixed; left:50%; transform:translateX(-50%); bottom:18px;
+              z-index:60; display:flex; align-items:center; gap:10px;
+              background:#0b1220; color:#fff; border-radius:999px;
+              padding:9px 10px 9px 18px; font-size:13.5px;
+              box-shadow:0 8px 26px rgba(0,0,0,.28); max-width:calc(100vw - 24px); }
+  #novedades[hidden]{ display:none !important; }
+  #novedades .btn{ padding:6px 13px; font-size:12.5px; }
+  #nov-no{ background:transparent; color:#cbd5e1; border-color:#334155; }
+  @media (max-width:520px){ #novedades{ padding-left:14px; font-size:12.5px; } }
+</style>
+<script>
+(function () {
+  var caja = document.getElementById("novedades");
+  var txt  = document.getElementById("nov-txt");
+  var base = null;          // la version con la que se dibujo esta pagina
+  var visto = null;         // la version que ya se descarto con "Ahora no"
+
+  function mirar() {
+    fetch("novedades.php", { cache: "no-store", credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.hay) { return; }
+        if (base === null) { base = d.version; return; }   // primera lectura
+        if (d.version === base || d.version === visto) { caja.hidden = true; return; }
+        var n = (typeof d.total === "number") ? d.total : null;
+        txt.textContent = n === null
+          ? "El buzón se actualizó"
+          : "El buzón se actualizó — ahora hay " + n + (n === 1 ? " caso" : " casos");
+        caja.dataset.version = d.version;
+        caja.hidden = false;
+      })
+      .catch(function () { /* sin señal: se reintenta al rato, sin molestar */ });
+  }
+
+  document.getElementById("nov-ver").addEventListener("click", function () {
+    location.reload();
+  });
+  document.getElementById("nov-no").addEventListener("click", function () {
+    visto = Number(caja.dataset.version) || null;
+    caja.hidden = true;
+  });
+
+  mirar();
+  setInterval(mirar, 30000);
+  // Al volver a la pestaña se mira enseguida, en vez de esperar los 30 s.
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) { mirar(); }
+  });
+})();
+</script>
 </body>
 </html>

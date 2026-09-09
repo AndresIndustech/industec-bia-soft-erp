@@ -19,4 +19,12 @@ return [
     //    pueda correr instalar.php. Se usa asi:  instalar.php?clave=lo-que-pongas
     //    Se borra de aqui en cuanto termines de instalar.
     'clave_instalacion' => 'INVENTA-ALGO-AQUI',
+
+    /* Secreto compartido con la estacion, para sync_casos.php.
+     * Tiene que ser EXACTAMENTE el mismo que SYNC_SECRETO en el .env de la
+     * estacion. Se genera una vez con:
+     *     php -r "echo bin2hex(random_bytes(32));"
+     * Si falta o tiene menos de 32 caracteres, el endpoint devuelve 500 y no
+     * recibe nada: preferimos que no funcione a que funcione sin proteccion. */
+    'sync_secreto' => 'PEGA_AQUI_EL_SECRETO_DE_64_CARACTERES',
 ];
