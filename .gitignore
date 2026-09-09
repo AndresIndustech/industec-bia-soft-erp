@@ -56,3 +56,6 @@ desarrollo/sistema_ots/app/publico/nucleo/padron.json
 # Llave SSH de despliegue a Hostinger. La privada no sale de esta estacion.
 desarrollo/agentes/config/clave_hostinger
 desarrollo/agentes/config/clave_hostinger.pub
+
+# Logs del vigilante del buzon: se rotan solos por fecha, no van al repositorio.
+desarrollo/agentes/logs/

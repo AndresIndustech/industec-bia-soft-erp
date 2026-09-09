@@ -11,9 +11,8 @@ apagado. Por SSH el archivo se reemplaza y punto.
 
 COMO SE LLEGO AQUI
 El dominio del sitio está detrás de un proxy que solo expone el 443, así que
-parecía que no había más vía que el navegador. El servidor real sí acepta SSH:
-`srv2020.hstgr.io` (212.85.3.19) tiene abierto el 65002. Comprobado el
-2026-09-09.
+parecía que no había más vía que el navegador. El servidor real sí acepta SSH,
+en el puerto 65002. Comprobado el 2026-09-09 y en uso desde entonces.
 
 LA COMPUERTA DE DESTINO NO ES UN VALOR POR OMISION: ABORTA
 La cuenta de Hostinger es de INDUSTECH y sostiene además el sistema con el que
@@ -48,7 +47,10 @@ ENV_PATH = BASE / "config" / ".env"
 # --- La compuerta. Cambiar esto a mano es cambiar de sitio de destino. -------
 SITIO_PERMITIDO = "darkviolet-armadillo-872352"
 RUTA_DESTINO = "domains/darkviolet-armadillo-872352.hostingersite.com/public_html/ot"
-SSH_HOST, SSH_PUERTO = "srv2020.hstgr.io", 65002
+# La IP la da hPanel > Avanzado > Acceso SSH, y manda sobre cualquier hostname:
+# `srv2020.hstgr.io` resuelve a 212.85.3.19, que tambien acepta SSH pero NO es
+# el servidor de esta cuenta. Si algun dia deja de conectar, se relee del panel.
+SSH_HOST, SSH_PUERTO = "82.25.73.181", 65002
 
 # Lo que se despliega con --todo. Es una lista blanca a propósito: así un
 # archivo suelto de pruebas no se sube por descuido.
@@ -62,10 +64,16 @@ ARCHIVOS = [
     "iconos/icono-512.png",
 ]
 
-# Nunca se suben, ni con --todo ni nombrándolos: llevan credenciales o datos
-# personales que no tienen por qué salir de la estación por esta vía.
-PROHIBIDOS = {"nucleo/config.php", "nucleo/padron.json", "catalogos/casos_sap.json",
-              "catalogos/casos_resumen.json", "instalar.php", "diagnostico.php"}
+# Lo unico que NO se toca del sitio de pruebas.
+#
+# `nucleo/config.php` lleva las credenciales de la base de Hostinger y el
+# secreto de sincronizacion. Se configuro una vez a mano; pisarlo obligaria a
+# volver a cargarlo cada vez y dejaria el sitio caido mientras tanto. Regla de
+# Andres del 2026-09-09: en el sitio de pruebas, todo lo demas es manipulable.
+#
+# Los otros dos nunca deberian existir en el servidor: son de instalacion y
+# diagnostico, y ya se borraron una vez. Si vuelven, es por descuido.
+PROHIBIDOS = {"nucleo/config.php", "instalar.php", "diagnostico.php"}
 
 
 def compuerta() -> None:
