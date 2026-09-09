@@ -377,6 +377,25 @@ def tecnico_del_pdf(M, id_imap, ot=None):
     return None, "sin PDF adjunto"
 
 
+def abrir_log(nombre):
+    """Manda la salida a `logs/<nombre>-<fecha>.log`.
+
+    Lo hace el script y no el .bat a proposito. Nombrar el archivo desde cmd
+    obliga a sacar la fecha de `%DATE:~n,m%` -- que depende del formato regional
+    y aqui producia "vigilante-2026 0mi.log" -- o de un `for /f` contra
+    PowerShell, que funcionaba a mano y fallaba dentro de la Tarea programada,
+    dejandola salir con codigo 1 sin escribir una sola linea. Aqui la fecha es
+    un `strftime` y no hay nada que se rompa segun quien lo lance.
+    """
+    d = BASE / "logs"
+    d.mkdir(parents=True, exist_ok=True)
+    ruta = d / f"{nombre}-{datetime.now():%Y-%m-%d}.log"
+    f = open(ruta, "a", encoding="utf-8", buffering=1)
+    sys.stdout = f
+    sys.stderr = f
+    return ruta
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dias", type=int, default=90, help="ventana hacia atras")
@@ -384,7 +403,11 @@ def main():
                     help="no baja PDFs; queda sin el nombre del tecnico")
     ap.add_argument("--empujar", action="store_true",
                     help="manda el resultado al sitio, firmado")
+    ap.add_argument("--log", action="store_true",
+                    help="escribe en logs/ en vez de por pantalla")
     args = ap.parse_args()
+    if args.log:
+        abrir_log("informes")
 
     if not CASOS.is_file():
         sys.exit(f"Falta {CASOS}. Corre antes t2_6_imap_avisos.py")

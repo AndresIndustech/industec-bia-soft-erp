@@ -1,9 +1,12 @@
 @echo off
-REM Arranca el vigilante del buzon. Lo lanza la Tarea programada
-REM "INDUSTEC - Vigilante del buzon" al iniciar sesion en la estacion.
+REM Lanzador de la Tarea programada "INDUSTEC - Vigilante del buzon".
 REM
-REM El log se guarda con la fecha del dia: si algo dejo de sincronizar, ahi
-REM esta la hora del ultimo intento, aunque haya fallado.
+REM No calcula la fecha ni redirige: el propio script nombra su registro con
+REM --log. Antes el nombre salia de %DATE:~n,m%, que depende del formato
+REM regional y aqui producia "vigilante-2026 0mi.log"; despues de un for /f
+REM contra PowerShell, que funcionaba a mano pero fallaba en el contexto de la
+REM Tarea programada y la dejaba saliendo con codigo 1 sin escribir una linea.
+REM Cuantas menos piezas tenga el lanzador, menos formas hay de que se rompa
+REM en silencio.
 cd /d "D:\INDUSTECH IA\desarrollo\agentes"
-if not exist "logs" mkdir "logs"
-".venv\Scripts\python.exe" "scripts\t2_9_buzon_vigilante.py" --dias 90 >> "logs\vigilante-%DATE:~-4%%DATE:~3,2%%DATE:~0,2%.log" 2>&1
+".venv\Scripts\python.exe" "scripts\t2_9_buzon_vigilante.py" --dias 90 --log

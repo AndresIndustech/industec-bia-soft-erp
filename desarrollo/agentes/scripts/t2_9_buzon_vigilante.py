@@ -57,6 +57,7 @@ import hashlib
 import hmac
 import imaplib
 import json
+import select
 import socket
 import ssl
 import subprocess
@@ -200,23 +201,86 @@ def esperar_novedad(M: imaplib.IMAP4_SSL, segundos: int) -> bool:
     tag = M._new_tag().decode()
     M.send(f"{tag} IDLE\r\n".encode())
     M.sock.settimeout(20)
+
+    # El servidor NO siempre contesta `+ Idling` en la primera línea.
+    #
+    # Si entra un correo justo en ese instante, lo primero que manda es la
+    # notificación -- `* 8068 EXISTS` -- y la continuación viene detrás. La
+    # primera versión leía una sola línea y, al no ver el `+`, daba la conexión
+    # por rota: se reconectaba cada vez que llegaba un correo en el peor
+    # momento. Salió en el log del 2026-09-09 a las 17:11.
+    #
+    # Peor que el churn: esa notificación ES la novedad que se estaba
+    # esperando, y se perdía. Aquí se lee hasta la continuación y lo que venga
+    # antes se toma por lo que es.
+    novedad = False
     try:
-        r = M.readline().decode(errors="replace")
-        if not r.startswith("+"):
-            raise RuntimeError(f"el servidor no aceptó IDLE: {r.strip()!r}")
+        for _ in range(20):
+            r = M.readline().decode(errors="replace")
+            if not r:
+                raise RuntimeError("el servidor cerró la conexión al pedir IDLE")
+            if r.startswith("+"):
+                break
+            if " EXISTS" in r or " EXPUNGE" in r:
+                log(f"aviso del servidor (antes del IDLE): {r.strip()}")
+                novedad = True
+            # Cualquier otra línea sin etiquetar se ignora: son avisos de estado
+            # del buzón que no cambian lo que hay que hacer.
+        else:
+            raise RuntimeError("el servidor no aceptó IDLE tras 20 líneas")
     except Exception:
         M.sock.settimeout(None)
         raise
 
-    novedad = False
+    if novedad:
+        # Ya hay algo que barrer: se cierra el IDLE y se sale, en vez de
+        # quedarse esperando una segunda notificación que quizá no llegue.
+        try:
+            M.send(b"DONE\r\n")
+            M.sock.settimeout(20)
+            for _ in range(12):
+                if M.readline().decode(errors="replace").startswith(tag):
+                    break
+        except Exception:
+            pass
+        try:
+            M.sock.settimeout(None)
+        except Exception:
+            pass
+        return True
+
+    # El socket vuelve a bloqueante: quien mide el tiempo ahora es select(),
+    # y un timeout puesto aqui es justo lo que rompe el buffer de readline().
+    M.sock.settimeout(None)
+
     limite = time.monotonic() + segundos
     try:
         while time.monotonic() < limite:
-            M.sock.settimeout(max(1, min(60, limite - time.monotonic())))
+            # select() ANTES de leer, en vez de leer con un timeout corto.
+            #
+            # `imaplib.readline()` lee de un fichero con buffer montado sobre el
+            # socket. Si el socket vence a mitad de una lectura, ese fichero
+            # queda inservible y todo lo que se lea despues revienta con
+            # «cannot read from timed out object». La primera version ponia
+            # timeout de 60 s y leia: cada minuto saltaba esa excepcion, se daba
+            # la conexion por perdida y se volvia a entrar al buzon. Son 1.440
+            # conexiones al correo por dia para no hacer nada -- lo contrario de
+            # lo que el IDLE viene a resolver, y una buena forma de que el
+            # proveedor acabe limitando la cuenta.
+            #
+            # Con select() se espera sobre el descriptor sin tocar el socket, y
+            # solo se lee cuando de verdad hay algo. Se vio en el log del
+            # 2026-09-09: «escuchando» a las 17:51:24 y «conexion perdida» a las
+            # 17:52:24, exactamente los 60 segundos del timeout.
+            espera = max(1.0, min(60.0, limite - time.monotonic()))
             try:
-                linea = M.readline().decode(errors="replace").strip()
-            except (socket.timeout, TimeoutError):
-                continue
+                listos, _, _ = select.select([M.sock], [], [], espera)
+            except (OSError, ValueError):
+                raise RuntimeError("el socket dejo de ser valido")
+            if not listos:
+                continue                       # nada que leer todavia
+
+            linea = M.readline().decode(errors="replace").strip()
             if not linea:
                 raise RuntimeError("el servidor cerró la conexión")
             # EXISTS = llegó correo. EXPUNGE = KFC eliminó una orden, que
@@ -241,12 +305,35 @@ def esperar_novedad(M: imaplib.IMAP4_SSL, segundos: int) -> bool:
     return novedad
 
 
+def abrir_log(nombre):
+    """Manda la salida a `logs/<nombre>-<fecha>.log`.
+
+    Lo hace el script y no el .bat a proposito. Nombrar el archivo desde cmd
+    obliga a sacar la fecha de `%DATE:~n,m%` -- que depende del formato regional
+    y aqui producia "vigilante-2026 0mi.log" -- o de un `for /f` contra
+    PowerShell, que funcionaba a mano y fallaba dentro de la Tarea programada,
+    dejandola salir con codigo 1 sin escribir una sola linea. Aqui la fecha es
+    un `strftime` y no hay nada que se rompa segun quien lo lance.
+    """
+    d = BASE / "logs"
+    d.mkdir(parents=True, exist_ok=True)
+    ruta = d / f"{nombre}-{datetime.now():%Y-%m-%d}.log"
+    f = open(ruta, "a", encoding="utf-8", buffering=1)
+    sys.stdout = f
+    sys.stderr = f
+    return ruta
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dias", type=int, default=90, help="ventana del barrido")
     ap.add_argument("--una-vez", action="store_true",
                     help="barre y empuja una sola vez; no se queda vigilando")
+    ap.add_argument("--log", action="store_true",
+                    help="escribe en logs/ en vez de por pantalla")
     args = ap.parse_args()
+    if args.log:
+        abrir_log("vigilante")
     env = cargar_env()
 
     if args.una_vez:
