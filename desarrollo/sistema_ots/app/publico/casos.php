@@ -82,7 +82,34 @@ function casosEnAlcance(array $casos, ?string $zonaAlcance, string $rol): array
     return array_values(array_filter($casos, fn($c) => ($c['zona'] ?? null) === $zonaAlcance));
 }
 
+/**
+ * Lo que YA se atendio, segun los informes de OT que llegan al mismo buzon.
+ *
+ * OJO CON LO QUE ESTO SIGNIFICA: que exista una OT quiere decir que INDUSTEC
+ * atendio el caso, NO que KFC lo haya cerrado en SAP. El correo no avisa los
+ * cierres de SAP. Por eso la pantalla dice "atendida" y nunca "cerrada".
+ *
+ * Es una medida temporal, mientras las ordenes se emitan en el sistema viejo.
+ * Cuando la emision pase aqui, el estado se sabe sin leer correos.
+ */
+function cargarAtenciones(): array
+{
+    $candidatos = [
+        __DIR__ . '/catalogos/atenciones.json',
+        __DIR__ . '/../../../../SALIDAS IA/OTS/catalogos/atenciones.json',
+    ];
+    foreach ($candidatos as $c) {
+        if (is_file($c)) {
+            $j = json_decode((string) file_get_contents($c), true);
+            if (is_array($j) && isset($j['atenciones'])) { return $j; }
+        }
+    }
+    return [];
+}
+
 $fuente = cargarCasos();
+$aten = cargarAtenciones();
+$porAviso = $aten['atenciones'] ?? [];
 $zonaAlc = Auth::zonaAlcance();
 $todos = casosEnAlcance($fuente['datos'] ?? [], $zonaAlc, (string) $u['rol']);
 
@@ -98,9 +125,16 @@ $fPrio  = (string) ($_GET['prio'] ?? '');
 $fTexto = trim((string) ($_GET['q'] ?? ''));
 $fDias  = (string) ($_GET['dias'] ?? '');              // '' = toda la ventana
 $fVence = isset($_GET['vencidos']);
+$fAtn   = (string) ($_GET['atn'] ?? '');            // '' | sin | curso | cerrada
 $desdeF = $fDias !== '' ? date('Y-m-d', strtotime('-' . (int) $fDias . ' days')) : null;
 
-$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF) {
+$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $porAviso) {
+    if ($fAtn !== '') {
+        $e = $porAviso[$c['aviso'] ?? '']['estado_industec'] ?? null;
+        if ($fAtn === 'sin' && $e !== null) { return false; }
+        if ($fAtn === 'curso' && $e !== 'EN_CURSO') { return false; }
+        if ($fAtn === 'cerrada' && $e !== 'CERRADA') { return false; }
+    }
     if ($desdeF !== null && ($c['fecha_creacion'] ?? '') < $desdeF) { return false; }
     if ($fZona !== '' && ($c['zona'] ?? '') !== $fZona) { return false; }
     if ($fAlert !== '' && ($c['estado_alerta'] ?? '') !== $fAlert) { return false; }
@@ -122,9 +156,12 @@ $vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, 
    separa nada. Lo que hay que repartir es lo que acaba de llegar. */
 $ordenAlerta = ['CON_ALERTA' => 0, 'POR_CONFIRMAR' => 1, 'SIN_ALERTA' => 2];
 $ordenPrio   = ['ALTA' => 0, 'MEDIA' => 1, 'BAJA' => 2];
-usort($vistos, function ($a, $b) use ($ordenAlerta, $ordenPrio) {
-    $ka = [$ordenAlerta[$a['estado_alerta'] ?? ''] ?? 3, $ordenPrio[$a['prioridad'] ?? ''] ?? 3];
-    $kb = [$ordenAlerta[$b['estado_alerta'] ?? ''] ?? 3, $ordenPrio[$b['prioridad'] ?? ''] ?? 3];
+usort($vistos, function ($a, $b) use ($ordenAlerta, $ordenPrio, $porAviso) {
+    // Lo que nadie ha atendido va primero: es lo unico que hay que repartir.
+    $sa = isset($porAviso[$a['aviso'] ?? '']) ? 1 : 0;
+    $sb = isset($porAviso[$b['aviso'] ?? '']) ? 1 : 0;
+    $ka = [$ordenAlerta[$a['estado_alerta'] ?? ''] ?? 3, $sa, $ordenPrio[$a['prioridad'] ?? ''] ?? 3];
+    $kb = [$ordenAlerta[$b['estado_alerta'] ?? ''] ?? 3, $sb, $ordenPrio[$b['prioridad'] ?? ''] ?? 3];
     if ($ka !== $kb) { return $ka <=> $kb; }
     return ($b['fecha_creacion'] ?? '') <=> ($a['fecha_creacion'] ?? '');   // mas nuevo arriba
 });
@@ -143,6 +180,9 @@ $desde1 = date('Y-m-d', strtotime('-1 day'));
 $nSemana = count(array_filter($todos, fn($c) => ($c['fecha_creacion'] ?? '') >= $desde7));
 $nAyer   = count(array_filter($todos, fn($c) => ($c['fecha_creacion'] ?? '') >= $desde1));
 $nSinZona = count(array_filter($todos, fn($c) => empty($c['zona'])));
+$nAtend   = count(array_filter($todos, fn($c) => isset($porAviso[$c['aviso'] ?? ''])));
+$nCerrIn  = count(array_filter($todos, fn($c) =>
+    ($porAviso[$c['aviso'] ?? '']['estado_industec'] ?? '') === 'CERRADA'));
 $porZona  = [];
 foreach ($todos as $c) { $z = $c['zona'] ?? '(sin zona)'; $porZona[$z] = ($porZona[$z] ?? 0) + 1; }
 ksort($porZona);
@@ -210,6 +250,9 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
   .proximo{ border:1px dashed var(--border); border-radius:10px; padding:14px; background:#fff; }
   .proximo li{ margin-bottom:8px; }
   .vacio{ padding:28px 14px; text-align:center; color:var(--muted); }
+  .tile.atend{ border-color:#bbf7d0; background:#f0fdf4; } .tile.atend .n{ color:#166534; }
+  .chip.cerrada{ background:#dcfce7; color:#166534; }
+  .chip.curso{ background:#e0f2fe; color:#075985; }
 </style>
 </head>
 <body>
@@ -277,6 +320,8 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
         <div class="tile <?= $nAlerta ? 'alerta' : '' ?>">
           <div class="n"><?= $nAlerta ?></div><div class="t">Con alerta de alcance</div></div>
         <div class="tile"><div class="n"><?= $nHoy ?></div><div class="t">Comprometidos hoy</div></div>
+        <div class="tile atend"><div class="n"><?= $nAtend ?></div>
+          <div class="t">Ya atendidos<?= $nCerrIn ? ' &middot; ' . $nCerrIn . ' cerrados' : '' ?></div></div>
         <div class="tile"><div class="n"><?= count($todos) ?></div><div class="t">En la ventana de 90 días</div></div>
         <?php if ($nSinZona): ?>
           <div class="tile"><div class="n"><?= $nSinZona ?></div><div class="t">Sin zona resuelta</div></div>
@@ -285,6 +330,20 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
 
       <?php /* La cifra de vencidos va aqui abajo y con su explicacion, no como
                numero grande: 911 de 918 no es un atraso, es como funciona SAP. */ ?>
+      <?php if ($nAtend): ?>
+        <div class="nota-regular" style="margin-bottom:14px">
+          <b><?= $nAtend ?> de estos casos ya se atendieron</b><?php if ($nCerrIn): ?>,
+          y <b><?= $nCerrIn ?></b> tienen ya su orden de cierre<?php endif; ?>.
+          Se sabe porque el informe de cada orden llega a este mismo buzón.
+          <p style="margin:6px 0 0">
+            <b>Atendido no es lo mismo que cerrado en SAP.</b> Significa que
+            INDUSTEC hizo el trabajo y emitió la orden; KFC cierra el caso por su
+            lado y de eso el correo no avisa. Sirve para no volver a asignar algo
+            que ya se hizo.
+          </p>
+        </div>
+      <?php endif; ?>
+
       <p class="sub" style="margin:-6px 0 16px">
         <b><?= $nVencido ?></b> tienen la fecha comprometida pasada, pero
         <b>eso no es un atraso</b>: SAP casi siempre compromete para el día
@@ -344,6 +403,15 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
                  placeholder="aviso, local, equipo o texto del pedido">
         </div>
         <div class="campo">
+          <label for="f-atn">Atención</label>
+          <select id="f-atn" name="atn">
+            <option value="">Todos</option>
+            <option value="sin"     <?= $fAtn === 'sin' ? 'selected' : '' ?>>Sin atender</option>
+            <option value="curso"   <?= $fAtn === 'curso' ? 'selected' : '' ?>>Atendidos, en curso</option>
+            <option value="cerrada" <?= $fAtn === 'cerrada' ? 'selected' : '' ?>>Con orden de cierre</option>
+          </select>
+        </div>
+        <div class="campo">
           <label for="f-dias">Llegados en</label>
           <select id="f-dias" name="dias">
             <option value="">Los 90 días</option>
@@ -357,7 +425,7 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
           <label>&nbsp;</label>
           <button class="btn primary" type="submit" style="height:38px">Filtrar</button>
         </div>
-        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== ''): ?>
+        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn): ?>
           <div class="campo">
             <label>&nbsp;</label>
             <a class="btn" href="casos.php" style="height:38px;display:flex;align-items:center">Limpiar</a>
@@ -375,7 +443,7 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
         <table>
           <thead><tr>
             <th>Aviso</th><th>Local</th><th>Zona</th><th>Caso</th>
-            <th>Prioridad</th><th>Creado</th><th>Comprometido</th><th>Acciones</th>
+            <th>Prioridad</th><th>Atención</th><th>Comprometido</th><th>Acciones</th>
           </tr></thead>
           <tbody>
           <?php if (!$vistos): ?>
@@ -421,7 +489,26 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
                 <?php endforeach; ?>
               </td>
               <td><span class="prio prio-<?= e($prio ?: 'sd') ?>"><?= e($c['prioridad'] ?? 'S/D') ?></span></td>
-              <td class="mono"><?= e($c['fecha_creacion'] ?? '—') ?></td>
+              <td>
+                <?php $a = $porAviso[$c['aviso'] ?? ''] ?? null; ?>
+                <?php if ($a === null): ?>
+                  <span class="sub">sin atender</span>
+                  <span class="desc mono">creado <?= e($c['fecha_creacion'] ?? '—') ?></span>
+                <?php else: ?>
+                  <span class="chip <?= $a['estado_industec'] === 'CERRADA' ? 'cerrada' : 'curso' ?>">
+                    <?= $a['estado_industec'] === 'CERRADA' ? 'con orden de cierre' : 'atendido, en curso' ?>
+                  </span>
+                  <?php foreach ($a['ots'] as $o): ?>
+                    <span class="desc mono"><?= e($o['ot']) ?> · <?= e(substr((string) $o['fecha'], 0, 10)) ?></span>
+                  <?php endforeach; ?>
+                  <?php if ($a['tecnicos']): ?>
+                    <span class="desc"><?= e(implode(' · ', $a['tecnicos'])) ?></span>
+                  <?php endif; ?>
+                  <?php foreach ($a['sin_identificar'] as $s): ?>
+                    <span class="desc" style="color:#92400e">firma sin identificar: <?= e($s) ?></span>
+                  <?php endforeach; ?>
+                <?php endif; ?>
+              </td>
               <td class="mono <?= $vencido ? 'vencido' : '' ?>">
                 <?= e($c['fecha_estimada'] ?? '—') ?>
                 <?php if ($vencido): ?><span class="desc vencido">pasada</span><?php endif; ?>

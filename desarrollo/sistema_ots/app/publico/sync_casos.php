@@ -40,8 +40,27 @@ declare(strict_types=1);
 
 const MAX_BYTES   = 12 * 1024 * 1024;   // el catálogo pesa ~1 MB; 12 sobra
 const TOLERANCIA  = 300;                // ±5 min de diferencia de reloj
-const DESTINO     = __DIR__ . '/catalogos/casos_sap.json';
 const REGISTRO    = __DIR__ . '/catalogos/sync.log';
+
+/* Que puede recibir este endpoint, y con que forma.
+ *
+ * La lista es CERRADA y el nombre del archivo sale de aqui, nunca de la
+ * peticion: esto no es una subida de archivos. Quien manda elige entre estas
+ * dos etiquetas, y cada una tiene su destino fijo y sus campos obligatorios.
+ * Sin la lista, agregar un segundo catalogo tentaba a aceptar el nombre por
+ * cabecera, que es exactamente como se escribe un PHP en la raiz web. */
+const ACEPTADOS = [
+    'casos' => [
+        'archivo' => 'casos_sap.json',
+        'lista'   => 'datos',
+        'campos'  => ['aviso', 'zona', 'estado_alerta'],
+    ],
+    'atenciones' => [
+        'archivo' => 'atenciones.json',
+        'lista'   => 'atenciones',
+        'campos'  => [],          // es un mapa aviso => datos, no una lista
+    ],
+];
 
 header('Content-Type: text/plain; charset=utf-8');
 header('Cache-Control: no-store');
@@ -95,18 +114,30 @@ if (!hash_equals($esperada, $firma)) {
 }
 
 /* --- A partir de aquí el envío es auténtico. Falta que tenga sentido. ----- */
+// El tipo por omisión es `casos`: cuando este endpoint solo recibía eso, la
+// estación no mandaba la cabecera. Sin este valor, actualizar el vigilante y el
+// servidor tendría que ser simultáneo o el buzón se queda sin datos.
+$tipo = strtolower(trim((string) ($_SERVER['HTTP_X_INDUSTEC_TIPO'] ?? 'casos')));
+if (!isset(ACEPTADOS[$tipo])) {
+    fin(422, 'tipo desconocido', "tipo=$tipo");
+}
+$reglas = ACEPTADOS[$tipo];
+$destino = __DIR__ . '/catalogos/' . $reglas['archivo'];
+
 $j = json_decode($cuerpo, true);
 if (!is_array($j)) {
     fin(400, 'no es JSON válido');
 }
-if (!isset($j['datos']) || !is_array($j['datos'])) {
-    fin(422, 'no trae la lista de casos');
+if (!isset($j[$reglas['lista']]) || !is_array($j[$reglas['lista']])) {
+    fin(422, "no trae {$reglas['lista']}");
 }
 if (!isset($j['generado'])) {
     fin(422, 'no trae la fecha de generación');
 }
-foreach (['aviso', 'zona', 'estado_alerta'] as $campo) {
-    if ($j['datos'] !== [] && !array_key_exists($campo, $j['datos'][0])) {
+$lista = $j[$reglas['lista']];
+foreach ($reglas['campos'] as $campo) {
+    $primero = $lista === [] ? null : reset($lista);
+    if ($primero !== null && !array_key_exists($campo, $primero)) {
         fin(422, "el catálogo cambió de forma: falta $campo");
     }
 }
@@ -114,50 +145,54 @@ foreach (['aviso', 'zona', 'estado_alerta'] as $campo) {
 /* Un catálogo que llega vacío casi siempre es un fallo del barrido, no que KFC
    cerrara los 918 casos de golpe. Se rechaza para no vaciar el buzón: si de
    verdad hay que dejarlo en cero, se sube a mano. */
-$antes = is_file(DESTINO) ? json_decode((string) file_get_contents(DESTINO), true) : null;
-$nAntes = is_array($antes) ? count($antes['datos'] ?? []) : 0;
-$nAhora = count($j['datos']);
+$antes = is_file($destino) ? json_decode((string) file_get_contents($destino), true) : null;
+$nAntes = is_array($antes) ? count($antes[$reglas['lista']] ?? []) : 0;
+$nAhora = count($lista);
 if ($nAhora === 0 && $nAntes > 0) {
     fin(409, 'llegó vacío y había ' . $nAntes . ': no se reemplaza');
 }
 
-if (!is_dir(dirname(DESTINO)) && !@mkdir(dirname(DESTINO), 0755, true)) {
+if (!is_dir(dirname($destino)) && !@mkdir(dirname($destino), 0755, true)) {
     fin(500, 'no se pudo crear la carpeta de catálogos');
 }
 
 // Atómico: se escribe al lado y se renombra. `rename` en el mismo sistema de
 // archivos es una sola operación; nadie llega a ver un JSON a medio escribir.
-$tmp = DESTINO . '.tmp' . bin2hex(random_bytes(4));
-if (@file_put_contents($tmp, $cuerpo) !== strlen($cuerpo) || !@rename($tmp, DESTINO)) {
+$tmp = $destino . '.tmp' . bin2hex(random_bytes(4));
+if (@file_put_contents($tmp, $cuerpo) !== strlen($cuerpo) || !@rename($tmp, $destino)) {
     @unlink($tmp);
     fin(500, 'no se pudo guardar');
 }
 
-/* Resumen diminuto al lado del catálogo.
+/* Resumen diminuto al lado del catálogo. Solo para `casos`: es lo que la
+   pantalla consulta cada 30 s para saber si cambió algo.
    La pantalla del buzón pregunta cada 30 segundos si hay novedades. Si para
    contestar hubiera que abrir y parsear el JSON de 1 MB, serían decenas de
    lecturas completas por minuto en un hosting compartido, para responder casi
    siempre "no cambió nada". Con esto la respuesta cuesta leer 200 bytes. */
 $porZona = [];
-foreach ($j['datos'] as $c) {
+foreach ($tipo === 'casos' ? $j['datos'] : [] as $c) {
     $z = $c['zona'] ?: 'SIN_ZONA';
     $porZona[$z] = ($porZona[$z] ?? 0) + 1;
 }
 $desde7 = date('Y-m-d', strtotime('-7 days'));
+$datosCasos = $tipo === 'casos' ? $j['datos'] : [];
 $resumen = [
     'generado'  => $j['generado'],
     'recibido'  => date('c'),
     'total'     => $nAhora,
     'anterior'  => $nAntes,
     'por_zona'  => $porZona,
-    'con_alerta'=> count(array_filter($j['datos'], fn($c) => ($c['estado_alerta'] ?? '') === 'CON_ALERTA')),
-    'semana'    => count(array_filter($j['datos'], fn($c) => ($c['fecha_creacion'] ?? '') >= $desde7)),
+    'con_alerta'=> count(array_filter($datosCasos, fn($c) => ($c['estado_alerta'] ?? '') === 'CON_ALERTA')),
+    'semana'    => count(array_filter($datosCasos, fn($c) => ($c['fecha_creacion'] ?? '') >= $desde7)),
 ];
-$tmp2 = dirname(DESTINO) . '/casos_resumen.json.tmp' . bin2hex(random_bytes(4));
-if (@file_put_contents($tmp2, json_encode($resumen, JSON_UNESCAPED_UNICODE)) !== false) {
-    @rename($tmp2, dirname(DESTINO) . '/casos_resumen.json');
-} else {
-    @unlink($tmp2);   // que falle el resumen no invalida el catálogo, que ya está
+if ($tipo === 'casos') {
+    $tmp2 = dirname($destino) . '/casos_resumen.json.tmp' . bin2hex(random_bytes(4));
+    if (@file_put_contents($tmp2, json_encode($resumen, JSON_UNESCAPED_UNICODE)) !== false) {
+        @rename($tmp2, dirname($destino) . '/casos_resumen.json');
+    } else {
+        @unlink($tmp2);   // que falle el resumen no invalida el catálogo, que ya está
+    }
 }
 
-fin(200, "ok casos=$nAhora antes=$nAntes generado=" . substr((string) $j['generado'], 0, 10));
+fin(200, "ok tipo=$tipo n=$nAhora antes=$nAntes generado=" . substr((string) $j['generado'], 0, 10));
