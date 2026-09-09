@@ -252,7 +252,15 @@ final class Auth
             exit;
         }
         if ($permiso !== null && !self::puede($permiso)) {
-            self::bitacora('DENEGADO', 'permiso', $permiso);
+            /* `exito = false`. Se detecto al correr las propias consultas de
+               deteccion: esta denegacion se guardaba como exitosa, asi que
+               «cuantos intentos se rechazaron» no contaba ninguno de los que
+               ocurren al ABRIR una pantalla -- que son la mayoria, porque es
+               donde primero choca alguien que no deberia estar ahi. */
+            self::bitacora('DENEGADO', 'permiso', $permiso, null, null, null,
+                           ['permiso' => $permiso,
+                            'pagina' => basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''))],
+                           false);
             http_response_code(403);
             if ($json) {
                 header('Content-Type: application/json; charset=utf-8');
@@ -349,16 +357,51 @@ final class Auth
 
     // ---------------------------------------------------------------- registro
 
+    /**
+     * Deja constancia de una acción.
+     *
+     * NO ES SOLO PARA AUDITAR. El registro se va a minar para encontrar
+     * comportamientos anómalos, y de ahí los cuatro parámetros extra:
+     *
+     *   $antes / $despues  convierten la fila en una TRANSICION. Sin el estado
+     *                      anterior no se puede detectar un salto imposible --
+     *                      un caso que llega a RESUELTO sin haber pasado nunca
+     *                      por ATENDIDO es alguien cerrando trabajo que no
+     *                      consta que se hiciera.
+     *   $datos             los campos de la acción, consultables. `$detalle` es
+     *                      para que una persona lo lea; esto es para preguntar.
+     *   $exito = false     la acción se INTENTO y se rechazó. Es la señal más
+     *                      útil de todas: nadie tropieza tres veces con el mismo
+     *                      permiso por casualidad.
+     *
+     * Se guarda también el equipo por acción, no solo al entrar: el mismo
+     * usuario operando desde dos equipos muy distintos en minutos es una señal
+     * de credencial compartida.
+     *
+     * Nunca lanza. Que falle el registro no puede tumbar la operación que se
+     * estaba registrando -- pero se anota en el log de PHP para que no
+     * desaparezca en silencio.
+     */
     public static function bitacora(string $accion, ?string $entidad = null,
-                                    ?string $referencia = null, ?string $detalle = null): void
+                                    ?string $referencia = null, ?string $detalle = null,
+                                    ?string $antes = null, ?string $despues = null,
+                                    ?array $datos = null, bool $exito = true): void
     {
         $u = self::$usuario;
-        Db::ejecutar(
-            'INSERT INTO bitacora (usuario_id, usuario, accion, entidad, referencia, detalle, ip)
-             VALUES (?,?,?,?,?,?,?)',
-            [$u['usuario_id'] ?? null, $u['usuario'] ?? null, $accion, $entidad,
-             $referencia, $detalle, self::ip()]
-        );
+        try {
+            Db::ejecutar(
+                'INSERT INTO bitacora (usuario_id, usuario, accion, entidad, referencia,
+                                       estado_antes, estado_despues, exito, detalle, datos,
+                                       ip, equipo)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                [$u['usuario_id'] ?? null, $u['usuario'] ?? null, $accion, $entidad,
+                 $referencia, $antes, $despues, $exito ? 1 : 0, $detalle,
+                 $datos === null ? null : json_encode($datos, JSON_UNESCAPED_UNICODE),
+                 self::ip(), self::equipo()]
+            );
+        } catch (Throwable $e) {
+            error_log('bitacora: ' . $e->getMessage());
+        }
     }
 
     private static function registrar(?int $id, string $usuario, string $evento, ?string $motivo): void

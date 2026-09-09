@@ -195,4 +195,26 @@ if ($tipo === 'casos') {
     }
 }
 
-fin(200, "ok tipo=$tipo n=$nAhora antes=$nAntes generado=" . substr((string) $j['generado'], 0, 10));
+/* Reconciliar EN CUANTO llegan las atenciones, no cuando alguien se acuerde.
+ *
+ * Sin esto, un caso que se atendio ayer sigue apareciendo sin asignar hasta que
+ * una persona corra el script a mano -- y ese es justo el rato en que la
+ * administradora lo reparte otra vez a alguien que no hace falta.
+ *
+ * Va DESPUES de guardar el archivo y en su propio try: si la reconciliacion
+ * falla, el catalogo ya esta en disco y el buzon funciona. Al reves se perderia
+ * el empuje entero por un fallo en la parte deducida.
+ */
+$extra = '';
+if ($tipo === 'atenciones') {
+    try {
+        require_once __DIR__ . '/nucleo/Reconciliar.php';
+        $r = Reconciliar::atenciones($lista);
+        $extra = " atendidos={$r['atendidos']} sin_tecnico={$r['sin_tecnico']}";
+    } catch (Throwable $e) {
+        $extra = ' reconciliacion FALLO: ' . substr($e->getMessage(), 0, 90);
+    }
+}
+
+fin(200, "ok tipo=$tipo n=$nAhora antes=$nAntes generado="
+       . substr((string) $j['generado'], 0, 10) . $extra);

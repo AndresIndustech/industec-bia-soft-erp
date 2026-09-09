@@ -49,7 +49,8 @@ $AREAS = [
 ];
 
 // Lo que ya existe. El resto se muestra apagado en vez de dar 404.
-$LISTOS = ['cronograma.html', 'index.html', 'usuarios.php', 'casos.php'];
+$LISTOS = ['cronograma.html', 'index.html', 'usuarios.php', 'casos.php',
+           'asignacion.php', 'ordenes.php'];
 
 function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
 

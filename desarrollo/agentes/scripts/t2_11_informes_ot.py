@@ -61,13 +61,13 @@ import sys
 import hashlib
 import hmac
 import ssl
-import tempfile
 import time
 import unicodedata
 import urllib.error
 import urllib.request
 from difflib import SequenceMatcher
 from datetime import date, datetime, timedelta
+import pathlib
 from pathlib import Path
 
 import mysql.connector
@@ -85,6 +85,12 @@ EMISOR = "reclutamiento@industec.me"
 # cambia nunca. Sin esta cache, cada corrida vuelve a bajar los mismos ~60 MB
 # para llegar al mismo resultado, y programarla cada pocas horas seria absurdo.
 CACHE = BASE / "config" / "cache_tecnicos.json"
+
+# Donde se guardan los PDFs que se bajan. Van a `D:\RESPALDOS`, que es el
+# almacenamiento definitivo del proyecto, no a una carpeta temporal: son los
+# informes originales de ordenes que el sistema tiene que poder mostrar, y
+# volver a bajarlos del correo cada vez seria absurdo.
+DIR_PDF = pathlib.Path(r"D:\RESPALDOS\ORDENES DE TRABAJO\_DEL_BUZON")
 
 # El cuerpo del informe, campo por campo. Si el sistema actual cambia el
 # formato, lo que falla es el parseo y se reporta -- no se rellena por parecido.
@@ -333,8 +339,14 @@ def empujar(env, contenido, tipo):
     return False
 
 
-def tecnico_del_pdf(M, id_imap):
-    """Baja el PDF de ese correo y saca el «Técnico Asignado». None si no se puede."""
+def tecnico_del_pdf(M, id_imap, ot=None):
+    """Baja el PDF, lo GUARDA y saca el «Técnico Asignado».
+
+    Guardarlo no es un extra: el sistema tiene que poder mostrarle al técnico el
+    informe de su orden, y bajarlo del correo cada vez que alguien lo abra seria
+    una conexion IMAP por clic. Se guarda con el nombre canonico de la orden,
+    que es como lo pide `pdf.php`.
+    """
     ok, dd = M.fetch(id_imap.encode(), "(BODY.PEEK[])")
     if ok != "OK":
         return None, "no se pudo traer el correo"
@@ -346,16 +358,22 @@ def tecnico_del_pdf(M, id_imap):
         datos = p.get_payload(decode=True) or b""
         if not datos:
             return None, "adjunto vacio"
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
-            f.write(datos)
-            tmp = Path(f.name)
+
+        # El nombre sale del adjunto, no del asunto: es el que genero el sistema
+        # que emitio la orden. Se limpia por si trae rutas.
+        limpio = re.sub(r"[^A-Za-z0-9._-]", "_", nombre.rsplit("/", 1)[-1])
+        DIR_PDF.mkdir(parents=True, exist_ok=True)
+        destino = DIR_PDF / limpio
+        if not destino.is_file():
+            destino.write_bytes(datos)
+
         try:
-            r = extraer_pdf(str(tmp))
+            r = extraer_pdf(str(destino))
             if r.get("error"):
                 return None, r["error"]
             return (r.get("tecnico_nombre") or None), None
-        finally:
-            tmp.unlink(missing_ok=True)
+        except Exception as e:
+            return None, f"NO_LEGIBLE:{e}"
     return None, "sin PDF adjunto"
 
 
@@ -408,7 +426,7 @@ def main():
             # numeros de secuencia cambian cuando alguien borra un correo, y
             # entonces la cache apuntaria a otra orden.
             for n, inf in enumerate(faltan, 1):
-                tec, err = tecnico_del_pdf(M, inf["id_imap"])
+                tec, err = tecnico_del_pdf(M, inf["id_imap"], inf["ot"])
                 cache[inf["ot"]] = {"tecnico": tec, "error": err}
                 bajados += 1
                 if n % 25 == 0 or n == len(faltan):
