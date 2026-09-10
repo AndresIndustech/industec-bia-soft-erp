@@ -71,6 +71,7 @@ from pathlib import Path
 BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
 ENV_PATH = BASE / "config" / ".env"
 LECTOR = BASE / "scripts" / "t2_6_imap_avisos.py"
+INFORMES = BASE / "scripts" / "t2_11_informes_ot.py"
 PYTHON = BASE / ".venv" / "Scripts" / "python.exe"
 SALIDA = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS\catalogos\casos_sap.json")
 ESTADO = BASE / "config" / "vigilante_estado.json"
@@ -145,6 +146,35 @@ def empujar(env: dict, contenido: bytes) -> bool:
     except Exception as e:
         log(f"ERROR al empujar: {type(e).__name__}: {e}")
     return False
+
+
+def procesar_informes(dias: int) -> bool:
+    """Actualiza qué casos ya se atendieron, leyendo los informes de OT.
+
+    AL BUZON LLEGAN DOS COSAS DISTINTAS, y hasta ahora solo se atendía una:
+
+      de sgerente@kfc.com.ec        KFC pide algo -> caso nuevo
+      de reclutamiento@industec.me  un técnico cerró una orden -> caso atendido
+
+    Con solo lo primero, un técnico terminaba un trabajo y el sistema seguía
+    mostrando el caso sin atender hasta la corrida de las 3 horas. La
+    administradora lo veía pendiente y podía volver a repartirlo.
+
+    Es barato repetirlo: `t2_11` guarda en caché el técnico de cada orden, así
+    que solo baja el PDF de las que no ha visto.
+    """
+    log("revisando los informes de OT...")
+    r = subprocess.run([str(PYTHON), str(INFORMES), "--empujar", "--dias", str(dias)],
+                       cwd=str(BASE), capture_output=True, text=True, timeout=900)
+    if r.returncode != 0:
+        log(f"ERROR: los informes salieron con {r.returncode}")
+        for linea in (r.stderr or "").strip().splitlines()[-4:]:
+            log(f"   {linea}")
+        return False
+    for linea in (r.stdout or "").splitlines():
+        if linea.strip().startswith(("casos pendientes con atencion", "empujado")):
+            log(f"   {linea.strip()}")
+    return True
 
 
 def barrer_y_empujar(env: dict, dias: int) -> bool:
@@ -341,8 +371,10 @@ def main() -> None:
 
     log("vigilante en marcha. Ctrl+C para parar.")
     log(f"buzón {env['IMAP_USER']} en {env['IMAP_HOST']} — SOLO LECTURA")
-    # Un barrido al arrancar: si el vigilante estuvo caído, se pone al día.
+    # Al arrancar se ponen al día las dos cosas: si el vigilante estuvo caído,
+    # ahí dentro hay casos nuevos Y órdenes cerradas que nadie ha procesado.
     barrer_y_empujar(env, args.dias)
+    procesar_informes(args.dias)
 
     espera = REINTENTO_INICIAL
     ultimo = 0.0
@@ -358,7 +390,12 @@ def main() -> None:
                     if falta > 0:
                         log(f"esperando {falta:.0f}s para agrupar correos seguidos")
                         time.sleep(falta)
+                    # Los dos, en orden: primero el catálogo de casos, que es
+                    # lo que la pantalla lee, y después los informes, que se
+                    # cruzan CONTRA ese catálogo. Al revés, el informe de un
+                    # caso recién llegado no encontraría el caso.
                     barrer_y_empujar(env, args.dias)
+                    procesar_informes(args.dias)
                     ultimo = time.monotonic()
         except KeyboardInterrupt:
             log("detenido a mano")
