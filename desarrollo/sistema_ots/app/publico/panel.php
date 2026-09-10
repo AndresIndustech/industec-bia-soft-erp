@@ -327,6 +327,36 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
   <?php endif; /* $fuente */ ?>
 
   <?php
+  /* =====================================================================
+     QUE TODAVIA NO EXISTE.
+     El panel viejo dibujaba los modulos no construidos como tarjetas
+     apagadas. Ese tablero se reemplazo por la lista de acciones, y con el se
+     perdio algo que si valia: saber que falta. Una persona que no encuentra
+     la bitacora no sabe si la esta buscando mal o si no existe, y acaba
+     preguntando. Se dice en una linea, al pie, sin ocupar el sitio de lo que
+     hay que hacer.
+     ===================================================================== */
+  $porConstruir = [];
+  if (Auth::puede('reportes.generar')) {
+      $porConstruir[] = 'los reportes mensual y de Grupo KFC sobre sus plantillas reales';
+  }
+  if (Auth::puede('maestros.editar')) {
+      $porConstruir[] = 'la edición de maestros (locales, técnicos y equipos)';
+  }
+  if (Auth::puede('bitacora.ver')) {
+      $porConstruir[] = 'la pantalla de bitácora — el registro ya se está guardando, '
+                      . 'lo que falta es cómo mirarlo';
+  }
+  ?>
+  <?php if ($porConstruir): ?>
+    <p class="sub" style="margin-top:22px">
+      <b>Todavía no está construido:</b>
+      <?= $e(implode('; ', $porConstruir)) ?>.
+      No es que no lo encuentres: no existe aún. Está en el plan.
+    </p>
+  <?php endif; ?>
+
+  <?php
   /* La fecha del último barrido va al pie y no de titular: es contexto sobre
      la frescura del dato, no una tarea. Pero tiene que estar, porque el correo
      avisa cuando KFC crea o elimina un caso y NUNCA cuando lo cierra. */
