@@ -54,15 +54,76 @@ SSH_HOST, SSH_PUERTO = "82.25.73.181", 65002
 
 # Lo que se despliega con --todo. Es una lista blanca a propósito: así un
 # archivo suelto de pruebas no se sube por descuido.
+#
+# OJO: MANTENERLA AL DIA ES PARTE DE AGREGAR UN ARCHIVO.
+# El 2026-09-10 se descubrió que estaba **20 archivos atrás**. `--todo` habría
+# subido el sitio de antes del rediseño —sin `mis.php`, sin `pendientes.php`,
+# sin `reportes.php`, sin `ui.js`, sin `cola.js`, sin ninguna clase nueva de
+# `nucleo/`— y eso no da un error: da un sitio a medias, con la navegación
+# apuntando a 404 y el formulario sin su cola de envíos. Cinco de esos veinte
+# llevaban semanas en uso: se habían subido nombrándolos a mano.
+#
+# Comprobación, antes de dar por buena una entrega:
+#   python - <<'PY'
+#   import io,re,os
+#   s=io.open('scripts/t2_10_desplegar.py',encoding='utf-8').read()
+#   b=set(re.findall(r'"([^"]+)"', re.search(r'ARCHIVOS = \[(.*?)\]',s,re.S).group(1)))
+#   os.chdir(r'..\sistema_ots\app\publico')
+#   r={os.path.relpath(os.path.join(d,f),'.').replace(os.sep,'/')
+#      for d,_,fs in os.walk('.') for f in fs if f.endswith(('.php','.js','.html','.css','.json'))}
+#   print(sorted(r-b))     # lo que existe y --todo no subiria
+#   PY
 ARCHIVOS = [
-    "index.html", "app.js", "reglas.js", "estilo.css", "offline.js", "sw.js",
-    "manifest.json", "login.php", "panel.php", "salir.php", "clave.php",
-    "usuarios.php", "casos.php", "novedades.php", "sync_casos.php",
-    "catalogos.php", "cronograma.html", "cronograma.css", "cronograma.js",
-    "cronograma.php", "nucleo/Auth.php", "nucleo/Db.php", "nucleo/Validacion.php",
-    "nucleo/.htaccess", "catalogos/.htaccess", "iconos/icono-192.png",
-    "iconos/icono-512.png",
+    # --- Armazón compartido: de aquí sale la barra y los avisos de todas -----
+    "estilo.css", "ui.js", "graficos.js",
+    "nucleo/Auth.php", "nucleo/Db.php", "nucleo/Validacion.php",
+    "nucleo/Ui.php", "nucleo/Casos.php", "nucleo/Pendientes.php",
+    "nucleo/Novedades.php", "nucleo/Reconciliar.php",
+
+    # --- La app del técnico. `cola.js` es lo que evita perder una orden
+    #     llenada sin señal: si falta, el botón de enviar no guarda nada. -----
+    "index.html", "app.js", "reglas.js", "offline.js", "cola.js", "guia.js",
+    "sw.js", "manifest.json", "mis.php", "envio.php", "yo.php",
+
+    # --- La mesa de servicio -------------------------------------------------
+    "login.php", "salir.php", "clave.php", "panel.php", "usuarios.php",
+    "casos.php", "asignacion.php", "pendientes.php", "novedades_visita.php",
+    "ordenes.php", "pdf.php", "reportes.php",
+
+    # --- Extremos que consultan las pantallas --------------------------------
+    # `novedades.php` es el que el buzón consulta cada 30 s para saber si
+    # llegaron casos nuevos. NO confundir con `novedades_visita.php`, que es la
+    # pantalla: el 2026-09-10 una escribió sobre el otro y la barra de «el buzón
+    # se actualizó» dejó de aparecer sin ningún error visible.
+    "novedades.php", "sync_casos.php", "catalogos.php", "cronograma.php",
+
+    # --- Cronograma de preventivos -------------------------------------------
+    "cronograma.html", "cronograma.css", "cronograma.js",
+
+    # --- Lo que cierra el acceso directo a los datos -------------------------
+    "nucleo/.htaccess", "catalogos/.htaccess",
+    "iconos/icono-192.png", "iconos/icono-512.png",
 ]
+
+# Lo que existe en `publico/` y NO entra en --todo, con su motivo. Está escrito
+# para que la próxima comprobación de la lista no lo reporte como olvido.
+#
+#   alta_padron.php      se corrió una vez, dio de alta a los 19 y ya no hace
+#                        falta en el servidor. Se sube a mano si se repite.
+#   nucleo/padron.json   son NOMBRES DEL PERSONAL. Está fuera de git a propósito
+#                        y no debería quedarse en el servidor una vez hecha el
+#                        alta: subirlo en cada despliegue sería dejarlo ahí para
+#                        siempre. Es dato personal (LOPDP).
+#   instalar.php         de instalación. Ya se borró del servidor una vez.
+#   diagnostico.php      de diagnóstico. Igual.
+#   nucleo/config.php    ver PROHIBIDOS, abajo.
+#   nucleo/config.ejemplo.php, nucleo/config.hostinger.php
+#                        plantillas de configuración; no son código que corra.
+#   nucleo/crear_usuario.php, aplicar_sql.php, verificar_esquema.php,
+#   minar.php, reconciliar_cli.php, alta_padron_cli.php
+#                        herramientas de línea de órdenes. Las que ya están en
+#                        el servidor cortan con 404 por web; el resto no tienen
+#                        por qué llegar.
 
 # Lo unico que NO se toca del sitio de pruebas.
 #

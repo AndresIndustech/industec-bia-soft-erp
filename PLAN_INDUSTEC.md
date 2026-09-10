@@ -795,23 +795,94 @@ está escrito, probado en local y sin desplegar.**
 
 ### La siguiente acción, concreta
 
-**T2.12.1 — aplicar `sql/007_pendientes_y_captura.sql`**, que requiere
-aprobación de Andrés porque cambia el esquema. Sin esa migración, el control de
-48 horas, las novedades y la recepción de órdenes no tienen tablas: las
-pantallas existen y dicen que el módulo no está instalado.
+**T2.12.1 — aplicar la migración 007.** Requiere aprobación de Andrés porque
+cambia el esquema: pídesela antes de correr nada.
 
-Mientras eso se aprueba, lo que **sí** se puede hacer sin pedir permiso:
+El archivo y el comando exactos, que es lo que faltaba escribir:
+
+```
+Archivo:  D:\INDUSTECH IA\desarrollo\sistema_ots\app\sql\007_pendientes_y_captura.sql
+```
+
+Se aplica **en el servidor de Hostinger, por SSH y desde la línea de órdenes** —
+`aplicar_sql.php` devuelve 404 por web a propósito: es una herramienta de
+mantenimiento, no un endpoint que ejecute SQL:
+
+```bash
+# 0. La carpeta de destino puede no existir todavía: con scp eso falla con un
+#    'No such file or directory' que no dice cuál de las dos rutas es la mala.
+ssh -p 65002 -i "D:\INDUSTECH IA\desarrollo\agentes\config\clave_hostinger" \
+    u671729428@82.25.73.181 \
+    "mkdir -p domains/darkviolet-armadillo-872352.hostingersite.com/public_html/ot/sql"
+
+# 1. Subir el .sql. NO sirve `t2_10_desplegar.py`: toma rutas posicionales (no
+#    `--archivo`) y su ORIGEN está fijado a `app/publico/`, así que un archivo
+#    que vive en `app/sql/` no puede subirse con él de ninguna forma. Va por
+#    scp, con la misma llave del despliegue.
+cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\sql"
+scp -P 65002 -i "D:\INDUSTECH IA\desarrollo\agentes\config\clave_hostinger" \
+    007_pendientes_y_captura.sql \
+    u671729428@82.25.73.181:domains/darkviolet-armadillo-872352.hostingersite.com/public_html/ot/sql/
+
+# 2. Correrlo por SSH, desde la línea de órdenes. `aplicar_sql.php` devuelve 404
+#    por web a propósito: es mantenimiento, no un endpoint que ejecute SQL.
+#    Y NO se parte el archivo por ';' a mano: el script quita primero los
+#    comentarios y comprueba cada sentencia — un punto y coma dentro de un
+#    comentario partiría el archivo y dejaría el esquema a medias.
+ssh -p 65002 -i "D:\INDUSTECH IA\desarrollo\agentes\config\clave_hostinger" \
+    u671729428@82.25.73.181
+cd domains/darkviolet-armadillo-872352.hostingersite.com/public_html/ot
+php aplicar_sql.php sql/007_pendientes_y_captura.sql
+
+# 3. Verificar. Los DOS bloques del pie del .sql, y pegar la salida literal.
+php verificar_esquema.php
+```
+
+**Y antes de T2.12.3, comprobar la lista blanca del desplegador.** El 2026-09-10
+estaba **20 archivos atrás**, y `--todo` habría subido el sitio de antes del
+rediseño: sin `mis.php`, sin `pendientes.php`, sin `reportes.php`, sin `ui.js`,
+sin `cola.js` y sin ninguna clase nueva de `nucleo/`. Eso no da un error — da un
+sitio a medias, con la navegación apuntando a 404 y el formulario sin su cola de
+envíos. Se corrigió a 45 archivos, y el comentario de `ARCHIVOS` en
+`t2_10_desplegar.py` trae el comando que vuelve a comprobarlo.
+**Mantenerla al día es parte de agregar un archivo.**
+
+Mientras la aprobación llega, lo que **sí** se puede hacer sin pedir permiso:
 
 ```bash
 # 1. Que nada se haya movido: 206 comprobaciones, 0 fallos
 cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas"
-D:/SOFTWARE/PHP83/php.exe prueba_48h.php
-node prueba_graficos.mjs
-node prueba_contratos.mjs
+D:/SOFTWARE/PHP83/php.exe prueba_48h.php     # 96 · 0
+node prueba_graficos.mjs                      # 62 · 0
+node prueba_contratos.mjs                     # 48 · 0
 
-# 2. Escribir las tres hojas de capacitación (T2.12.12)
-# 3. Preparar el paquete de despliegue de T2.12.3
+# 2. Escribir las tres hojas de capacitación (T2.12.12) en SALIDAS IA\OTS\
+# 3. Armar el paquete de despliegue de T2.12.3. La convención del proyecto es
+#    una carpeta por entrega en SALIDAS IA\OTS\ — mira `paquete_buzon` y
+#    `paquete_alta_padron`, que son los dos precedentes.
 ```
+
+### Vocabulario operativo — las ocho palabras que hay que entender antes
+
+§6.3 define el vocabulario de **datos** (zonas, cadenas, códigos de local). Esto
+es otra cosa: son las palabras con que se habla del **trabajo**, y aparecen en
+cada pantalla y en cada tarea. Sin ellas, T2.12 no se entiende.
+
+| Palabra | Qué es |
+|---|---|
+| **Aviso** | El número de 8 dígitos con que Grupo KFC abre un caso en **su** SAP. Es la clave con que se cruza todo. INDUSTEC no lo crea: llega por correo. Un preventivo puede no tener aviso, y eso **no** es un error (§6.4b) |
+| **Caso** | El pedido de KFC, identificado por su aviso. Vive en `casos_gestion` y tiene ocho estados |
+| **Orden (OT)** | El documento que INDUSTEC emite al atender. Un caso puede tener varias; el correlativo lo reserva el servidor, el técnico no lo teclea |
+| **Alcance** | Sobre qué filas puede actuar una persona. **No** es lo mismo que el permiso: el permiso dice «puede asignar», el alcance dice «sobre qué casos». Técnico → los suyos. Jefe de zona → su zona. Administración → las tres. **Se filtra en la cláusula `WHERE`, en el servidor**, nunca escondiendo filas al dibujar |
+| **Cierre de dos manos** | Un caso se cierra con dos hechos distintos: el sistema lo marca **ATENDIDO** al ver el informe de la orden, y la administración confirma aparte que **además lo cerró en SAP**. El correo de SAP avisa cuando KFC crea o elimina un caso, y **nunca cuando lo cierra** — de ahí la segunda mano |
+| **Regularizar** | Lo que hace la administración con un caso que se cerró por falta de atención: explicárselo a KFC. Deja de contar como pendiente suyo, pero **el caso sigue constando como no atendido**: eso no se borra por haberlo explicado |
+| **Veredicto** | Dos cosas distintas según el contexto. En un **caso**: si nos compete o no. En un **equipo deshabilitado**: por cuál de las cuatro vías va (repuesto, reparación, garantía, baja), y es lo que el plazo de 48 horas mide |
+| **Pendiente** | Un equipo que quedó sin concluir. Vive en la tabla `pendientes` y es lo que enciende el reloj de 48 horas si el equipo quedó fuera de servicio |
+| **Novedad** | Lo que el técnico ve en la visita y **no era su orden**: un correctivo que se viene, o algo de otra área (eléctrico, ventilación, desagüe) que hace fallar los equipos. Ojo: `novedades.php` es otra cosa —el extremo que consulta el buzón cada 30 s—; la pantalla es `novedades_visita.php` |
+
+Y la regla que manda sobre todas: **`avisos_sap.estatus_general` es el único
+criterio de «cerrado»**, nunca una señal interna del sistema. Confundirlos
+sobre-contó el backlog 8× en T1.11.
 
 ### Lo que está bloqueado, y por quién
 
