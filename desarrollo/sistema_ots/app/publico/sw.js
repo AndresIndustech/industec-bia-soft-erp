@@ -24,7 +24,12 @@
    duplicado a Grupo KFC.
    ========================================================================= */
 
-const VERSION = 'ot-industec-v2';
+/* La version se sube A MANO cada vez que cambia la lista de abajo. Si no se
+   sube, el navegador se queda con el armazon viejo y los archivos nuevos no
+   se precargan nunca — que es como decir que sin senal no existen.
+     v2 -> v3 (2026-09-10): entraron la bandeja del tecnico, la cola de envios,
+     el guiado por pasos, el sistema de interfaz compartido y los graficos. */
+const VERSION = 'ot-industec-v3';
 const ARMAZON = `${VERSION}-armazon`;
 const DATOS   = `${VERSION}-datos`;
 
@@ -42,6 +47,18 @@ const PRECARGA = [
   'reglas.js',
   'offline.js',
   'app.js',
+  // `cola.js` es lo que hace que una orden llenada sin senal sobreviva. Si
+  // faltara aqui, el tecnico abriria la app sin cobertura, llenaria la orden y
+  // al enviar no habria nada que la guardara: veinte minutos de trabajo
+  // perdidos, en silencio y sin error visible.
+  'cola.js',
+  // `ui.js` trae los avisos efimeros y el dialogo de confirmacion; sin el, el
+  // envio cae al `confirm()` del navegador y los avisos no aparecen.
+  'ui.js',
+  // `guia.js` es el guiado por pasos. Es mejora progresiva —sin el, el
+  // formulario sale entero— pero cachearlo evita que el tecnico vea una cosa
+  // con senal y otra sin ella.
+  'guia.js',
   'manifest.json',
   'iconos/icono-192.png',
   'iconos/icono-512.png',
@@ -55,7 +72,14 @@ const PRECARGA = [
    hace app.js a catalogos.php no pasa por aquí y no se guarda solo. Medido el
    2026-09-08: el técnico instalaba la app, se quedaba sin señal, y encontraba
    los desplegables vacíos con «catalogos.php respondió 503». */
-const PRECARGA_DATOS = ['catalogos.php', 'cronograma.php'];
+/* Los datos se precargan tambien. NO es un extra: en la primera visita el
+   trabajador de servicio todavia no controla la pagina, asi que el fetch que
+   hace app.js no pasa por aqui y no se guarda solo.
+
+   `yo.php` entro en la v3. Sin el, la app abre sin senal y no sabe quien es el
+   tecnico, asi que no puede firmar la orden — y el formulario tendria que
+   volver a preguntarle su nombre, que es justo lo que se elimino. */
+const PRECARGA_DATOS = ['catalogos.php', 'cronograma.php', 'yo.php'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
@@ -111,8 +135,18 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
+  /* `envio.php` NO se toca: es POST y ya quedo fuera arriba, pero se deja
+     dicho porque es el error mas caro posible en este archivo. Una respuesta
+     de envio servida desde cache seria una orden que el tecnico cree enviada y
+     que nunca salio. */
   const esDatos = url.pathname.endsWith('catalogos.php') ||
-                  url.pathname.endsWith('cronograma.php');
+                  url.pathname.endsWith('cronograma.php') ||
+                  url.pathname.endsWith('yo.php') ||
+                  // El buzon del tecnico y sus pendientes: con senal, lo
+                  // fresco; sin senal, lo ultimo que se vio. Una bandeja de
+                  // ayer es util; una pantalla de error, no.
+                  url.pathname.endsWith('mis.php') ||
+                  url.pathname.endsWith('pendientes.php');
 
   e.respondWith(esDatos ? redPrimero(req) : cachePrimero(req));
 });

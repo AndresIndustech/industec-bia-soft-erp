@@ -1,188 +1,1192 @@
 /* =========================================================================
-   estilo.css — Captura de OT, formato único.
+   estilo.css — Sistema de diseño del Sistema de OTs de INDUSTEC.
 
-   Hereda el lenguaje visual EXACTO de los tres formularios que los técnicos
-   usan hoy (ot_uio.html, ot_mant_uio.html, ot_correctivo.html): mismas
-   variables de color, secciones con borde-acento a la izquierda, inputs de
-   44 px, tipografía de 16 px para que iOS no haga zoom al enfocar.
+   QUE ES ESTE ARCHIVO
+   Una sola hoja para TODAS las pantallas: el formulario del técnico, su
+   bandeja, el buzón de casos, la asignación, las órdenes, el cronograma, los
+   usuarios y el ingreso. Antes cada página redefinía en su propio <style> la
+   barra, las tarjetas de cifras, la tabla y los avisos — seis copias del mismo
+   bloque. Cuando se corregía una, las otras cinco se quedaban atrás, y la
+   aplicación se veía como seis productos distintos.
 
-   El invariante I-8 dice que el técnico no cambia su forma de trabajar. Por
-   eso esto se ve como lo de hoy; lo que cambia es que los campos que se
-   escribían a mano ahora son listas cerradas.
+   DE DONDE SALE EL LENGUAJE VISUAL
+   Del propio trabajo: esto es una mesa de servicio. Se tomaron los patrones ya
+   probados en los sistemas de gestión de servicio —la bandeja con antigüedad y
+   prioridad, la línea de estados visible, la carga por técnico, el aviso
+   contextual frente al efímero— y se ajustaron a la lógica de INDUSTEC, que NO
+   es la de una mesa de ayuda genérica: aquí el caso lo abre y lo cierra SAP, el
+   cierre es de dos manos, y una alerta jamás decide por la persona.
+
+   DOS PRODUCTOS, UNA SOLA HOJA
+   La administración y los jefes trabajan sentados, en pantalla ancha, con
+   tablas. El técnico trabaja de pie, en un local, con una mano y sin señal. Son
+   dos interfaces distintas sobre los mismos datos; lo que comparten son los
+   colores, los estados y los avisos, para que cuando hablen por teléfono estén
+   viendo lo mismo con el mismo nombre.
+
+   TRES REGLAS QUE NO SE ROMPEN
+
+   1. El color nunca es la única señal. Todo estado lleva su palabra; el color
+      acompaña. Un jefe de zona daltónico tiene que poder repartir el trabajo.
+   2. Los campos de escritura van a 16 px. Con menos, iOS hace zoom al enfocar
+      y el técnico pierde de vista el formulario en pleno local.
+   3. Toda animación se apaga con `prefers-reduced-motion`. Se anima para
+      explicar de dónde salió algo, nunca para adornar.
+
+   El invariante I-8 sigue vigente: el técnico no cambia su forma de trabajar.
+   El formulario conserva su estructura; lo que cambia es que ahora se ve como
+   el resto del sistema y que los avisos siguen todos el mismo patrón.
    ========================================================================= */
 
+/* =========================================================================
+   1. FICHAS DE DISEÑO
+   ========================================================================= */
 :root{
-  --bg:#f5f7fb; --card:#fff; --muted:#6b7280; --border:#e5e7eb;
-  --ink:#111827; --accent:#0ea5e9; --text:#0b1220; --input:#fff;
-  --ok:#16a34a; --danger:#ef4444; --warn:#b45309; --warn-bg:#fffbeb;
+  /* --- Marca ------------------------------------------------------------
+     El azul profundo es la barra; el celeste es la acción. Se separan a
+     propósito: si la barra fuera del mismo tono que el botón principal, el
+     botón deja de leerse como «esto es lo que hay que pulsar». */
+  --marca:#0b4f8f;
+  --marca-osc:#083a6b;
+  --marca-cla:#e9f2fb;
+  --accent:#0ea5e9;          /* nombre histórico: lo usan reglas ya escritas */
+  --accent-osc:#0284c7;
+  --accent-cla:#e0f2fe;
+
+  /* --- Superficies ------------------------------------------------------ */
+  --bg:#eef2f8;
+  --bg-alt:#f8fafc;
+  --card:#fff;
+  --input:#fff;
+  --border:#e2e8f0;
+  --border-fuerte:#cbd5e1;
+
+  /* --- Tinta ------------------------------------------------------------ */
+  --ink:#0f172a;
+  --text:#0b1220;
+  --muted:#64748b;
+  --muted-cla:#94a3b8;
+
+  /* --- Semántica --------------------------------------------------------
+     Cada familia trae tinta, fondo y borde, para que un aviso, un distintivo y
+     una fila resaltada usen exactamente los mismos tres tonos. */
+  --ok:#15803d;      --ok-bg:#f0fdf4;      --ok-bd:#bbf7d0;
+  --info:#1d4ed8;    --info-bg:#eff6ff;    --info-bd:#bfdbfe;
+  --warn:#b45309;    --warn-bg:#fffbeb;    --warn-bd:#fde68a;
+  --danger:#b91c1c;  --danger-bg:#fef2f2;  --danger-bd:#fecaca;
+  --viol:#6d28d9;    --viol-bg:#f5f3ff;    --viol-bd:#ddd6fe;
+  --teal:#0f766e;    --teal-bg:#f0fdfa;    --teal-bd:#99f6e4;
+
+  /* --- Zonas ------------------------------------------------------------
+     Tres zonas, tres colores que se distinguen también en escala de grises:
+     violeta oscuro, verde azulado medio, naranja claro. */
+  --z-uio:#7c3aed;   --z-larb:#0d9488;   --z-cnlj:#ea580c;   --z-otra:#64748b;
+
+  /* --- Formas ----------------------------------------------------------- */
+  --r-sm:7px; --r:10px; --r-md:13px; --r-lg:16px; --r-full:999px;
+  --sombra-1:0 1px 2px rgba(15,23,42,.05), 0 1px 3px rgba(15,23,42,.04);
+  --sombra-2:0 2px 4px rgba(15,23,42,.05), 0 4px 12px rgba(15,23,42,.06);
+  --sombra-3:0 8px 20px rgba(15,23,42,.10), 0 2px 6px rgba(15,23,42,.05);
+  --sombra-4:0 18px 45px rgba(15,23,42,.20);
+
+  /* --- Movimiento -------------------------------------------------------
+     Tres tiempos y una sola curva. Más variantes que estas no aportan nada y
+     hacen que dos pantallas se sientan de productos distintos. */
+  --t1:110ms; --t2:200ms; --t3:380ms;
+  --curva:cubic-bezier(.22,.8,.28,1);
+
+  /* Alto de la barra inferior del técnico. Se usa para reservar sitio al final
+     del contenido: sin esto, la última orden de la lista queda tapada. */
+  --nav-abajo:60px;
 }
 
+/* =========================================================================
+   2. BASE
+   ========================================================================= */
 html{ -webkit-text-size-adjust:100%; }
 *{ box-sizing:border-box; }
+
 body{
-  margin:0; background:var(--bg); color:var(--ink);
+  margin:0; color:var(--ink);
+  background:var(--bg);
+  /* El velo de color arriba evita la página enteramente blanca sin meter
+     ruido: es un solo degradado, fijo, detrás de todo. */
+  background-image:
+    radial-gradient(1100px 380px at 12% -12%, rgba(14,165,233,.13), transparent 62%),
+    radial-gradient(900px 320px at 92% -6%, rgba(109,40,217,.09), transparent 60%);
+  background-attachment:fixed;
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
-  font-size:14px; line-height:1.35; -webkit-font-smoothing:antialiased;
+  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
   overflow-x:hidden;
 }
 
-.wrap{ max-width:980px; margin:12px auto; padding:12px; }
-.card{
-  background:var(--card); border:1px solid var(--border); border-radius:12px;
-  padding:14px 14px 18px; box-shadow:0 2px 6px rgba(0,0,0,.04);
+::selection{ background:var(--accent-cla); color:var(--marca-osc); }
+
+/* El foco visible es requisito de accesibilidad, no un detalle: hay quien
+   recorre el formulario con Tab desde un teclado conectado al celular. */
+:where(a,button,input,select,textarea,[tabindex]):focus-visible{
+  outline:2px solid var(--accent); outline-offset:2px; border-radius:var(--r-sm);
 }
 
-.logo-top{ display:flex; flex-direction:column; align-items:flex-start; gap:6px; margin-bottom:8px; }
-.logo-top img{ height:32px; }
-h1{ font-size:18px; line-height:1.2; margin:0; font-weight:700; }
-h2{
-  font-size:15px; line-height:1.25; margin:16px 0 8px; font-weight:700;
-  border-left:3px solid var(--accent); padding-left:8px;
+a{ color:var(--accent-osc); text-decoration-thickness:1px; text-underline-offset:2px; }
+a:hover{ color:var(--marca); }
+
+/* =========================================================================
+   3. ESTRUCTURA
+   ========================================================================= */
+.wrap{ max-width:980px; margin:16px auto; padding:12px; }
+.wrap.ancho{ max-width:1320px; }     /* las tablas de la mesa de servicio */
+
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:var(--r-md);
+  padding:16px 16px 20px; box-shadow:var(--sombra-1);
 }
-.sub{ font-size:12px; color:var(--muted); margin:2px 0 0; }
+.card + .card{ margin-top:14px; }
 
 /* minmax(0,1fr), no "1fr": los input[type=datetime-local] tienen un ancho
-   mínimo intrínseco y con "1fr" (=minmax(auto,1fr)) empujaban la página
-   más ancha que el celular y aparecía scroll horizontal. */
+   mínimo intrínseco y con "1fr" (=minmax(auto,1fr)) empujaban la página más
+   ancha que el celular y aparecía scroll horizontal. */
 .grid{ display:grid; gap:10px; }
 .g2{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
 .g3{ grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); }
 @media (max-width:720px){ .g2,.g3{ grid-template-columns:minmax(0,1fr); } }
 
-label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+/* =========================================================================
+   4. TIPOGRAFIA
+   ========================================================================= */
+.logo-top{ display:flex; flex-direction:column; align-items:flex-start; gap:6px; margin-bottom:10px; }
+.logo-top img{ height:34px; }
+
+h1{ font-size:20px; line-height:1.2; margin:0; font-weight:700; letter-spacing:-.01em; }
+h2{
+  font-size:15px; line-height:1.25; margin:22px 0 10px; font-weight:700;
+  border-left:3px solid var(--accent); padding-left:9px; letter-spacing:-.005em;
+}
+h3{ font-size:14px; margin:0 0 6px; font-weight:700; }
+.sub{ font-size:12.5px; color:var(--muted); margin:2px 0 0; line-height:1.5; }
+.small{ font-size:12px; color:var(--muted); }
+.mono{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12.5px;
+       font-variant-numeric:tabular-nums; }
+.num{ font-variant-numeric:tabular-nums; }
+
+/* El encabezado que abre cada pantalla, con su explicación de una línea. Se
+   repetía a mano en seis archivos con seis tamaños distintos. */
+.titulo{ margin:0 0 16px; }
+.titulo h1{ margin:0 0 3px; }
+.titulo .sub{ margin:0; max-width:78ch; }
+
+/* =========================================================================
+   5. CAMPOS
+   ========================================================================= */
+label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; font-weight:500; }
+
 input[type="text"],input[type="email"],input[type="password"],input[type="date"],
-input[type="time"],input[type="datetime-local"],input[type="number"],textarea,select{
-  width:100%; min-width:0; max-width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:8px;
+input[type="time"],input[type="datetime-local"],input[type="number"],input[type="search"],
+textarea,select{
+  width:100%; min-width:0; max-width:100%; padding:8px 11px;
+  border:1px solid var(--border-fuerte); border-radius:var(--r-sm);
   background:var(--input); font-size:16px; box-sizing:border-box; color:var(--text);
   -webkit-appearance:none; appearance:none; height:44px; font-family:inherit;
+  transition:border-color var(--t1) var(--curva), box-shadow var(--t1) var(--curva);
+}
+input:hover:not(:disabled),select:hover:not(:disabled),textarea:hover:not(:disabled){
+  border-color:var(--muted-cla);
+}
+input:focus,select:focus,textarea:focus{
+  outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(14,165,233,.16);
 }
 select{
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'><path d='M6 9l6 6 6-6' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
   background-repeat:no-repeat; background-position:right 10px center; padding-right:34px;
 }
-textarea{ min-height:90px; height:auto; resize:vertical; }
-input:disabled,select:disabled,textarea:disabled{ background:#f3f4f6; color:#4b5563; }
-input.invalido,select.invalido,textarea.invalido{ border-color:var(--danger); background:#fef2f2; }
+textarea{ min-height:90px; height:auto; resize:vertical; line-height:1.5; }
+input:disabled,select:disabled,textarea:disabled{ background:#f1f5f9; color:#64748b; cursor:not-allowed; }
+input.invalido,select.invalido,textarea.invalido{ border-color:var(--danger); background:var(--danger-bg); }
+input.invalido:focus,select.invalido:focus,textarea.invalido:focus{ box-shadow:0 0 0 3px rgba(185,28,28,.14); }
+::placeholder{ color:var(--muted-cla); }
 
 .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+.campo{ display:flex; flex-direction:column; gap:3px; }
+.derivado{ font-size:11.5px; color:var(--muted); margin-top:4px; display:block; }
 
+/* =========================================================================
+   6. BOTONES
+   ========================================================================= */
 .btn{
-  appearance:none; border:1px solid var(--border); background:#fff; border-radius:999px;
-  padding:8px 12px; cursor:pointer; font-weight:600; font-size:13px; color:#334155;
+  appearance:none; border:1px solid var(--border-fuerte); background:#fff;
+  border-radius:var(--r-full); padding:8px 14px; cursor:pointer;
+  font-weight:600; font-size:13px; color:#334155; font-family:inherit;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  text-decoration:none; line-height:1.2; white-space:nowrap;
+  transition:transform var(--t1) var(--curva), box-shadow var(--t1) var(--curva),
+             background-color var(--t1) var(--curva), border-color var(--t1) var(--curva),
+             color var(--t1) var(--curva);
 }
+.btn:hover{ border-color:var(--muted-cla); box-shadow:var(--sombra-1); color:var(--ink); }
+.btn:active{ transform:translateY(1px); box-shadow:none; }
+
 .btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
-.btn.secondary{ background:var(--ok); color:#fff; border:0; }
-.btn.ghost{ background:#fff; border:1px dashed #d1d5db; color:#334155; }
-.btn.danger{ background:var(--danger); color:#fff; border:0; }
+.btn.primary:hover{ background:var(--accent-osc); border-color:var(--accent-osc);
+                    color:#fff; box-shadow:0 3px 10px rgba(14,165,233,.32); }
+.btn.marca{ background:var(--marca); border-color:var(--marca); color:#fff; }
+.btn.marca:hover{ background:var(--marca-osc); border-color:var(--marca-osc); color:#fff; }
+.btn.secondary{ background:var(--ok); color:#fff; border-color:var(--ok); }
+.btn.secondary:hover{ background:#166534; border-color:#166534; color:#fff; }
+.btn.ghost{ background:#fff; border:1px dashed var(--border-fuerte); color:#334155; }
+.btn.danger{ background:var(--danger); color:#fff; border-color:var(--danger); }
+.btn.danger:hover{ background:#991b1b; border-color:#991b1b; color:#fff; }
 .btn.sel{ background:var(--accent); border-color:var(--accent); color:#fff; }
-.btn[disabled]{ background:#9ca3af !important; color:#fff !important; cursor:not-allowed !important; opacity:.9; }
+.btn.sm{ padding:5px 11px; font-size:12px; }
+.btn.bloque{ width:100%; padding:12px; font-size:14px; }
+.btn[disabled],.btn[aria-disabled="true"]{
+  background:#e2e8f0 !important; color:#94a3b8 !important; border-color:#e2e8f0 !important;
+  cursor:not-allowed !important; box-shadow:none !important; transform:none !important;
+}
 
 /* Control segmentado (tipo de orden, sí/no) */
-.seg{ display:inline-flex; border:1px solid var(--border); border-radius:999px; overflow:hidden; background:#fff; }
-.seg button{ border:0; background:#fff; padding:9px 18px; font-size:14px; font-weight:600; color:#475569; cursor:pointer; }
+.seg{ display:inline-flex; border:1px solid var(--border-fuerte); border-radius:var(--r-full);
+      overflow:hidden; background:#fff; box-shadow:var(--sombra-1); }
+.seg button{
+  border:0; background:#fff; padding:9px 18px; font-size:14px; font-weight:600;
+  color:#475569; cursor:pointer; font-family:inherit;
+  transition:background-color var(--t1) var(--curva), color var(--t1) var(--curva);
+}
+.seg button:hover:not(.on){ background:var(--bg-alt); }
 .seg button.on{ background:var(--accent); color:#fff; }
 
-/* Combobox con búsqueda (local: 100 opciones, no caben en un <select> de celular) */
+/* =========================================================================
+   7. ARMAZON DE LA APLICACION (escritorio)
+   La barra de arriba y su navegación. Antes cada página la redefinía y no
+   había forma de saltar de un módulo a otro: había que volver al panel.
+   ========================================================================= */
+.app-barra{
+  position:sticky; top:0; z-index:50;
+  background:linear-gradient(100deg, var(--marca-osc) 0%, var(--marca) 55%, #0d5fa8 100%);
+  color:#fff; box-shadow:0 1px 0 rgba(255,255,255,.08) inset, var(--sombra-2);
+}
+.app-barra-fila{
+  max-width:1320px; margin:0 auto; padding:9px 16px;
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+}
+.app-marca{
+  display:inline-flex; align-items:center; gap:9px; color:#fff; text-decoration:none;
+  font-weight:700; font-size:14.5px; letter-spacing:-.01em; flex-shrink:0;
+}
+.app-marca img{ height:24px; width:auto; display:block; }
+.app-marca .punto{
+  width:9px; height:9px; border-radius:50%; background:var(--accent);
+  box-shadow:0 0 0 3px rgba(14,165,233,.28);
+}
+.app-marca .fino{ font-weight:400; opacity:.72; }
+.app-espacio{ flex:1 1 auto; }
+
+.app-yo{ display:flex; align-items:center; gap:9px; font-size:13px; flex-wrap:wrap; }
+.app-yo .nom{ font-weight:600; color:#fff; }
+.app-yo .chip{ background:rgba(255,255,255,.16); color:#eff6ff; border:1px solid rgba(255,255,255,.18); }
+.app-yo .btn{ background:rgba(255,255,255,.12); border-color:rgba(255,255,255,.28); color:#fff; }
+.app-yo .btn:hover{ background:rgba(255,255,255,.22); border-color:rgba(255,255,255,.45); color:#fff; }
+
+/* La navegación por módulos. Solo aparecen los que el rol puede abrir: no se
+   dibuja un enlace que va a devolver 403. */
+.app-nav{ background:rgba(255,255,255,.07); border-top:1px solid rgba(255,255,255,.10); }
+.app-nav-fila{
+  max-width:1320px; margin:0 auto; padding:0 10px;
+  display:flex; gap:2px; overflow-x:auto; scrollbar-width:none;
+}
+.app-nav-fila::-webkit-scrollbar{ display:none; }
+.app-nav a{
+  position:relative; padding:10px 13px 11px; font-size:13px; font-weight:600;
+  color:rgba(255,255,255,.76); text-decoration:none; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:7px;
+  transition:color var(--t1) var(--curva), background-color var(--t1) var(--curva);
+}
+.app-nav a:hover{ color:#fff; background:rgba(255,255,255,.09); }
+.app-nav a.on{ color:#fff; }
+.app-nav a.on::after{
+  content:''; position:absolute; left:10px; right:10px; bottom:0; height:3px;
+  background:var(--accent); border-radius:3px 3px 0 0; animation:subrayado var(--t2) var(--curva);
+}
+/* El contador del módulo: cuántos pendientes tiene quien mira. Es lo que
+   convierte la navegación en un tablero — se ve el trabajo sin entrar. */
+.app-nav .cuenta,.cuenta{
+  min-width:19px; height:19px; padding:0 6px; border-radius:var(--r-full);
+  background:rgba(255,255,255,.20); color:#fff;
+  font-size:11px; font-weight:700; font-variant-numeric:tabular-nums;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.cuenta.urge{ background:#ef4444; color:#fff; }
+.cuenta.ojo{ background:#f59e0b; color:#1c1917; }
+
+@media (max-width:640px){
+  .app-barra-fila{ padding:8px 12px; gap:8px; }
+  .app-yo .chip{ display:none; }
+  .app-yo .chip.siempre{ display:inline-flex; }
+}
+
+/* =========================================================================
+   8. CIFRAS Y TARJETAS
+   ========================================================================= */
+.tiles{ display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:10px; margin:0 0 18px; }
+.tile{
+  background:#fff; border:1px solid var(--border); border-radius:var(--r);
+  padding:12px 14px; position:relative; overflow:hidden; box-shadow:var(--sombra-1);
+  transition:transform var(--t2) var(--curva), box-shadow var(--t2) var(--curva);
+}
+/* La cinta de color a la izquierda dice de qué familia es la cifra sin teñir
+   todo el recuadro, que a seis tarjetas seguidas cansa la vista. */
+.tile::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--border-fuerte); }
+.tile .n,.tile .v{ font-size:27px; font-weight:700; line-height:1.1; font-variant-numeric:tabular-nums;
+                   letter-spacing:-.02em; }
+.tile .t,.tile .k{ font-size:11.5px; color:var(--muted); text-transform:uppercase;
+                   letter-spacing:.05em; margin-top:3px; font-weight:600; }
+.tile .pie{ font-size:11.5px; color:var(--muted); margin-top:6px; text-transform:none; letter-spacing:0; }
+
+a.tile,.tile.clic{ text-decoration:none; color:inherit; cursor:pointer; display:block; }
+a.tile:hover,.tile.clic:hover{ transform:translateY(-2px); box-shadow:var(--sombra-3); }
+
+.tile.alerta,.tile.rojo{ background:var(--danger-bg); border-color:var(--danger-bd); }
+.tile.alerta::before,.tile.rojo::before{ background:#ef4444; }
+.tile.alerta .n,.tile.rojo .v,.tile.rojo .n{ color:var(--danger); }
+
+.tile.vence,.tile.ambar{ background:var(--warn-bg); border-color:var(--warn-bd); }
+.tile.vence::before,.tile.ambar::before{ background:#f59e0b; }
+.tile.vence .n,.tile.ambar .v,.tile.ambar .n{ color:var(--warn); }
+
+.tile.atend,.tile.verde{ background:var(--ok-bg); border-color:var(--ok-bd); }
+.tile.atend::before,.tile.verde::before{ background:#22c55e; }
+.tile.atend .n,.tile.verde .v,.tile.verde .n{ color:var(--ok); }
+
+.tile.azul{ background:var(--info-bg); border-color:var(--info-bd); }
+.tile.azul::before{ background:#3b82f6; }
+.tile.azul .v,.tile.azul .n{ color:var(--info); }
+
+.tile.viol{ background:var(--viol-bg); border-color:var(--viol-bd); }
+.tile.viol::before{ background:#8b5cf6; }
+.tile.viol .v,.tile.viol .n{ color:var(--viol); }
+
+/* =========================================================================
+   9. DISTINTIVOS: estado, prioridad, zona, antigüedad
+   Todos comparten forma para que se lean como un mismo idioma, y todos llevan
+   palabra además de color.
+   ========================================================================= */
+.chip{
+  display:inline-flex; align-items:center; gap:5px;
+  font-size:11.5px; font-weight:600; color:#475569; background:#f1f5f9;
+  border:1px solid transparent; border-radius:var(--r-full); padding:3px 9px;
+  white-space:nowrap; line-height:1.35;
+}
+.chip b{ color:var(--ink); font-weight:700; }
+.chip.cerrada{ background:var(--ok-bg); color:var(--ok); border-color:var(--ok-bd); }
+.chip.curso{ background:var(--info-bg); color:var(--info); border-color:var(--info-bd); }
+
+/* --- Estado del caso ---------------------------------------------------
+   Estos siete son la máquina de estados real de `casos_gestion`. Si algún día
+   se agrega uno al ENUM, va aquí también: un estado sin color se dibuja gris y
+   en mayúsculas, y se nota enseguida. */
+.est{
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:11.5px; font-weight:700; border-radius:var(--r-full);
+  padding:3px 10px 3px 8px; white-space:nowrap; border:1px solid transparent;
+}
+.est::before{ content:''; width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
+.est-nuevo{        background:#f1f5f9;         color:#475569;      border-color:#e2e8f0; }
+.est-asignado{     background:var(--info-bg);  color:var(--info);  border-color:var(--info-bd); }
+.est-en_revision{  background:var(--warn-bg);  color:var(--warn);  border-color:var(--warn-bd); }
+.est-atendido{     background:var(--teal-bg);  color:var(--teal);  border-color:var(--teal-bd); }
+.est-resuelto{     background:var(--ok-bg);    color:var(--ok);    border-color:var(--ok-bd); }
+.est-no_compete{   background:var(--viol-bg);  color:var(--viol);  border-color:var(--viol-bd); }
+.est-cerrado_sin_atencion{ background:var(--danger-bg); color:var(--danger); border-color:var(--danger-bd); }
+.est-espera_repuesto{ background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
+
+/* --- Prioridad --------------------------------------------------------- */
+.prio{ font-size:11px; font-weight:700; letter-spacing:.04em; border-radius:var(--r-full);
+       padding:3px 9px; border:1px solid transparent; white-space:nowrap; display:inline-block; }
+.prio-alta{  background:#fee2e2; color:#991b1b; border-color:#fecaca; }
+.prio-media{ background:#fef3c7; color:#92400e; border-color:#fde68a; }
+.prio-baja{  background:#e0f2fe; color:#075985; border-color:#bae6fd; }
+.prio-sd{    background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
+
+/* --- Zona --------------------------------------------------------------
+   El color de zona se repite en el buzón, en la asignación y en el panel. Un
+   jefe de LARB aprende a reconocer «lo suyo» de un vistazo. */
+.zona{
+  display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:700;
+  border-radius:var(--r-sm); padding:2px 8px; background:#f1f5f9; color:var(--z-otra);
+  border:1px solid currentColor; white-space:nowrap;
+}
+.zona::before{ content:''; width:6px; height:6px; border-radius:2px; background:currentColor; }
+.zona-uio{  color:var(--z-uio);  background:#f5f3ff; }
+.zona-larb{ color:var(--z-larb); background:#f0fdfa; }
+.zona-cnlj{ color:var(--z-cnlj); background:#fff7ed; }
+.zona-otra{ color:var(--z-otra); background:#f8fafc; }
+
+/* --- Antigüedad --------------------------------------------------------
+   Los tramos son los de una mesa de servicio, adaptados al compromiso real de
+   INDUSTEC: un caso de KFC se atiende dentro de la semana. Lo que pasa de 7
+   días sin informe lo cierra `Reconciliar.php` por falta de atención, así que
+   el rojo aquí es exactamente el borde de ese corte. */
+.edad{ font-size:11.5px; font-weight:700; border-radius:var(--r-full); padding:2px 8px;
+       border:1px solid transparent; white-space:nowrap; display:inline-block; }
+.edad-hoy{   background:var(--ok-bg);     color:var(--ok);     border-color:var(--ok-bd); }
+.edad-3{     background:var(--info-bg);   color:var(--info);   border-color:var(--info-bd); }
+.edad-7{     background:var(--warn-bg);   color:var(--warn);   border-color:var(--warn-bd); }
+.edad-viejo{ background:var(--danger-bg); color:var(--danger); border-color:var(--danger-bd); }
+
+/* =========================================================================
+   10. LINEA DE ESTADOS
+   La lógica del sistema, dibujada. Un caso nace en el correo de SAP, se
+   reparte, el informe lo marca atendido, y la administración confirma el
+   cierre en SAP: son dos manos y hay que verlo.
+   ========================================================================= */
+.linea{ display:flex; align-items:stretch; gap:0; flex-wrap:wrap; margin:0 0 16px;
+        border:1px solid var(--border); border-radius:var(--r); overflow:hidden; background:#fff; }
+.linea a,.linea .paso{
+  flex:1 1 118px; min-width:0; padding:10px 12px; text-decoration:none; color:inherit;
+  border-right:1px solid var(--border); position:relative;
+  transition:background-color var(--t1) var(--curva);
+}
+.linea a:last-child,.linea .paso:last-child{ border-right:0; }
+.linea a:hover{ background:var(--bg-alt); }
+.linea .paso-n{ font-size:21px; font-weight:700; line-height:1.1; font-variant-numeric:tabular-nums; }
+.linea .paso-t{ font-size:11px; color:var(--muted); text-transform:uppercase;
+                letter-spacing:.045em; font-weight:600; margin-top:2px; }
+.linea .paso-d{ font-size:11.5px; color:var(--muted); margin-top:4px; line-height:1.4; }
+.linea a.on{ background:var(--marca-cla); box-shadow:inset 0 -3px 0 var(--accent); }
+@media (max-width:720px){
+  .linea a,.linea .paso{ flex:1 1 46%; border-bottom:1px solid var(--border); }
+}
+
+/* =========================================================================
+   11. TABLAS
+   ========================================================================= */
+.tabla-wrap{
+  overflow-x:auto; border:1px solid var(--border); border-radius:var(--r);
+  background:#fff; box-shadow:var(--sombra-1); -webkit-overflow-scrolling:touch;
+}
+table{ width:100%; border-collapse:collapse; font-size:13px; }
+th{
+  text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:9px 10px; border-bottom:1px solid var(--border);
+  background:var(--bg-alt); position:sticky; top:0; z-index:2; font-weight:700; white-space:nowrap;
+}
+td{ padding:10px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+tbody tr{ transition:background-color var(--t1) var(--curva); }
+tbody tr:hover{ background:#f8fbff; }
+tbody tr:last-child td{ border-bottom:0; }
+
+/* La fila con alerta se marca con una barra a la izquierda, no tiñendo la fila
+   entera: con muchas seguidas, el rojo de fondo deja de significar nada. */
+tr.con-alerta td:first-child{ box-shadow:inset 3px 0 0 #ef4444; }
+tr.con-alerta{ background:#fffbfb; }
+tr.mio td:first-child{ box-shadow:inset 3px 0 0 var(--accent); }
+
+.desc{ color:var(--muted); font-size:12px; display:block; margin-top:3px;
+       max-width:44ch; overflow-wrap:anywhere; }
+.alerta-txt{ font-size:11.5px; color:var(--danger); display:block; margin-top:3px; }
+.vencido{ color:var(--danger); font-weight:700; }
+.vacio{ padding:34px 16px; text-align:center; color:var(--muted); }
+.vacio .icono{ font-size:26px; display:block; margin-bottom:8px; opacity:.5; }
+
+.acciones-fila,.acc{ display:flex; gap:5px; flex-wrap:wrap; }
+.acc .btn{ padding:5px 10px; font-size:12px; }
+
+/* =========================================================================
+   12. FILTROS
+   ========================================================================= */
+.filtros{
+  display:flex; gap:9px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px;
+  padding:12px; background:var(--bg-alt); border:1px solid var(--border); border-radius:var(--r);
+}
+.filtros label{ font-size:10.5px; color:var(--muted); text-transform:uppercase;
+                letter-spacing:.045em; font-weight:700; }
+.filtros select,.filtros input[type=text],.filtros input[type=search]{
+  height:38px; min-width:132px; font-size:13.5px;
+}
+.filtros .btn{ height:38px; }
+
+/* Filtros de un toque. Van antes que los desplegables porque el 90% de las
+   veces lo que se quiere es «lo de hoy» o «lo que tiene alerta», y eso no
+   debería costar tres clics. */
+.filtros-rapidos{ display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+.fr{
+  display:inline-flex; align-items:center; gap:7px; padding:6px 12px;
+  border:1px solid var(--border-fuerte); border-radius:var(--r-full); background:#fff;
+  font-size:12.5px; font-weight:600; color:#475569; text-decoration:none; cursor:pointer;
+  transition:all var(--t1) var(--curva);
+}
+.fr:hover{ border-color:var(--accent); color:var(--marca); box-shadow:var(--sombra-1); }
+.fr.on{ background:var(--marca); border-color:var(--marca); color:#fff; }
+.fr .n{
+  min-width:19px; height:19px; padding:0 6px; border-radius:var(--r-full);
+  background:#f1f5f9; color:#475569; font-size:11px; font-weight:700;
+  display:inline-flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums;
+}
+.fr.on .n{ background:rgba(255,255,255,.22); color:#fff; }
+.fr.roja .n{ background:#fee2e2; color:#991b1b; }
+.fr.ambar .n{ background:#fef3c7; color:#92400e; }
+
+/* =========================================================================
+   13. AVISOS
+   Cuatro niveles y tres formas, y cada forma tiene su momento:
+
+     `.aviso`        contextual, dentro del flujo. Explica algo del contenido
+                     que se está mirando. NO se va solo.
+     `.aviso.banda`  estado global de la pantalla (datos viejos, sin señal).
+                     Vive arriba y desaparece cuando la condición se resuelve.
+     `.toast`        confirma una acción que YA ocurrió. Se va solo.
+
+   La regla de reparto es simple: si la persona tiene que hacer algo, es
+   `.aviso`; si solo necesita saber que su acción salió bien, es `.toast`. Un
+   error jamás va en toast, porque el toast se va y el error hay que leerlo.
+   ========================================================================= */
+.aviso{
+  display:flex; gap:10px; align-items:flex-start;
+  border:1px solid var(--border); background:#fff; border-radius:var(--r);
+  padding:11px 13px; font-size:13px; line-height:1.5; margin-bottom:14px;
+  animation:entrar var(--t3) var(--curva) both;
+}
+.aviso .ic{ flex-shrink:0; font-size:15px; line-height:1.35; }
+.aviso .cuerpo{ min-width:0; flex:1; }
+.aviso b{ font-weight:700; }
+.aviso p{ margin:5px 0 0; }
+.aviso ul{ margin:6px 0 0; padding-left:18px; }
+.aviso li{ margin:2px 0; }
+.aviso .cerrar{
+  flex-shrink:0; border:0; background:transparent; color:inherit; opacity:.5;
+  cursor:pointer; font-size:16px; line-height:1; padding:2px 4px; border-radius:var(--r-sm);
+}
+.aviso .cerrar:hover{ opacity:1; background:rgba(0,0,0,.06); }
+
+.aviso.ok{      background:var(--ok-bg);     border-color:var(--ok-bd);     color:#14532d; }
+.aviso.info{    background:var(--info-bg);   border-color:var(--info-bd);   color:#1e3a8a; }
+.aviso.warn{    background:var(--warn-bg);   border-color:var(--warn-bd);   color:#78350f; }
+.aviso.err,
+.aviso.danger{  background:var(--danger-bg); border-color:var(--danger-bd); color:#7f1d1d; }
+.aviso.neutro{  background:var(--bg-alt);    border-color:var(--border);    color:#334155; }
+.aviso.banda{ border-radius:0; margin:0; border-left:0; border-right:0; border-top:0; }
+
+/* Nombres heredados: los usan páginas y hojas ya escritas. Se conservan para no
+   romperlas, y apuntan al mismo aspecto. */
+.ok:not(.aviso):not(.btn):not(.toast){ background:var(--ok-bg); border:1px solid var(--ok-bd); color:#14532d;
+     border-radius:var(--r); padding:11px 13px; font-size:13px; margin-bottom:14px; }
+.err:not(.aviso):not(.toast){ background:var(--danger-bg); border:1px solid var(--danger-bd); color:#7f1d1d;
+      border-radius:var(--r); padding:11px 13px; font-size:13px; margin-bottom:14px; }
+.nota-regular{
+  border:1px solid var(--warn-bd); background:var(--warn-bg); border-radius:var(--r);
+  padding:11px 13px; font-size:13px; color:#78350f; line-height:1.5;
+}
+
+/* Panel de validación del formulario */
+.validacion{ margin-top:12px; border-radius:var(--r); padding:11px 13px; font-size:13px; display:none; }
+.validacion.bloquea{ display:block; background:var(--danger-bg); border:1px solid var(--danger-bd);
+                     color:#991b1b; animation:sacudir var(--t3) var(--curva); }
+.validacion.advierte{ display:block; background:var(--warn-bg); border:1px solid var(--warn-bd); color:var(--warn); }
+.validacion.ok{ display:block; background:var(--ok-bg); border:1px solid var(--ok-bd); color:#166534; }
+.validacion ul{ margin:6px 0 0; padding-left:18px; }
+.validacion li{ margin:2px 0; }
+
+/* --- Avisos efímeros ---------------------------------------------------- */
+#toasts{
+  position:fixed; right:16px; bottom:16px; z-index:90;
+  display:flex; flex-direction:column; gap:9px; max-width:min(380px,calc(100vw - 32px));
+  pointer-events:none;
+}
+.toast{
+  pointer-events:auto; display:flex; gap:10px; align-items:flex-start;
+  background:#fff; border:1px solid var(--border); border-left-width:4px;
+  border-radius:var(--r); padding:11px 13px; box-shadow:var(--sombra-3);
+  font-size:13px; line-height:1.45; color:var(--ink);
+  animation:toast-entra var(--t3) var(--curva) both;
+}
+.toast.saliendo{ animation:toast-sale var(--t2) var(--curva) both; }
+.toast .ic{ flex-shrink:0; }
+.toast .cerrar{ border:0; background:transparent; cursor:pointer; opacity:.45; font-size:15px;
+                line-height:1; padding:2px 3px; color:inherit; }
+.toast .cerrar:hover{ opacity:1; }
+.toast.ok{   border-left-color:#22c55e; }
+.toast.info{ border-left-color:#3b82f6; }
+.toast.warn{ border-left-color:#f59e0b; }
+.toast.err{  border-left-color:#ef4444; }
+@media (max-width:520px){
+  #toasts{ left:12px; right:12px; bottom:calc(var(--nav-abajo) + 12px); max-width:none; }
+  body:not(.con-nav-abajo) #toasts{ bottom:12px; }
+}
+
+/* --- Barra de novedades -------------------------------------------------
+   Aparece cuando el servidor tiene datos nuevos y NO recarga sola: la
+   administradora puede estar a medio leer un caso, y recargarle la pantalla
+   debajo es peor que no avisar. */
+#novedades{
+  position:fixed; left:50%; transform:translateX(-50%); bottom:18px; z-index:80;
+  display:flex; align-items:center; gap:10px;
+  background:#0f172a; color:#fff; border-radius:var(--r-full);
+  padding:9px 10px 9px 18px; font-size:13.5px; box-shadow:var(--sombra-4);
+  max-width:calc(100vw - 24px); animation:subir var(--t3) var(--curva) both;
+}
+#novedades[hidden]{ display:none !important; }
+#novedades .btn{ padding:6px 13px; font-size:12.5px; }
+#novedades .btn:not(.primary){ background:transparent; color:#cbd5e1; border-color:#334155; }
+#novedades .btn:not(.primary):hover{ background:rgba(255,255,255,.08); color:#fff; }
+#novedades .vivo{
+  width:8px; height:8px; border-radius:50%; background:#22c55e; flex-shrink:0;
+  animation:latido 2s ease-in-out infinite;
+}
+@media (max-width:520px){ #novedades{ padding-left:14px; font-size:12.5px; } }
+
+/* --- Franja de estado de la conexión -------------------------------------
+   Fija arriba, delgada, sin botón de cerrar. Con señal desaparece sola; sin
+   señal se queda, porque el técnico tiene que saber que lo que ve puede ser de
+   ayer y qué va a pasar con lo que llene. */
+.estado-red{
+  position:sticky; top:0; z-index:60; padding:9px 14px; font-size:13px; line-height:1.4;
+  border-bottom:1px solid transparent; text-align:center; font-weight:600;
+}
+.estado-red.sin{ background:var(--warn-bg); color:#78350f; border-bottom-color:var(--warn-bd); }
+.estado-red.con{ background:var(--ok-bg); color:#166534; border-bottom-color:var(--ok-bd); }
+
+/* =========================================================================
+   14. FORMULARIO DE ORDEN — piezas propias
+   ========================================================================= */
 .combo{ position:relative; }
 .combo-input{ padding-right:34px; }
 .combo-clear{
-  position:absolute; top:6px; right:6px; width:32px; height:32px; border:0; border-radius:8px;
-  background:#f3f4f6; color:#475569; font-size:20px; line-height:1; cursor:pointer;
+  position:absolute; top:6px; right:6px; width:32px; height:32px; border:0; border-radius:var(--r-sm);
+  background:#f1f5f9; color:#475569; font-size:20px; line-height:1; cursor:pointer;
 }
+.combo-clear:hover{ background:#e2e8f0; }
 .combo-lista{
   position:absolute; z-index:30; left:0; right:0; top:calc(100% + 4px);
   max-height:min(56vh,340px); overflow-y:auto; -webkit-overflow-scrolling:touch;
   margin:0; padding:4px; list-style:none;
-  background:var(--card); border:1px solid var(--border); border-radius:10px;
-  box-shadow:0 12px 32px rgba(15,23,42,.16);
+  background:var(--card); border:1px solid var(--border); border-radius:var(--r);
+  box-shadow:var(--sombra-3); animation:entrar var(--t2) var(--curva) both;
 }
-.combo-grupo{
-  font-size:11px; font-weight:700; color:var(--muted);
-  text-transform:uppercase; letter-spacing:.05em; padding:8px 10px 4px;
-}
-.combo-opt{ padding:10px; border-radius:8px; cursor:pointer; font-size:14px; color:var(--ink); }
-.combo-opt.activa,.combo-opt:hover{ background:#e0f2fe; }
+.combo-grupo{ font-size:11px; font-weight:700; color:var(--muted);
+              text-transform:uppercase; letter-spacing:.05em; padding:8px 10px 4px; }
+.combo-opt{ padding:10px; border-radius:var(--r-sm); cursor:pointer; font-size:14px; color:var(--ink); }
+.combo-opt.activa,.combo-opt:hover{ background:var(--accent-cla); }
 .combo-opt .cod{ font-weight:700; }
 .combo-opt .cad{ color:var(--muted); }
 .combo-vacio{ padding:10px; color:var(--muted); font-size:13px; }
 
 /* Ficha de la orden asignada — lo que vino de SAP, sin que nadie lo teclee */
 .ficha{
-  margin-top:10px; border:1px solid #bae6fd; background:#f0f9ff; border-radius:10px; padding:10px 12px;
+  margin-top:10px; border:1px solid #bae6fd; background:linear-gradient(180deg,#f0f9ff,#fff);
+  border-radius:var(--r); padding:11px 13px; animation:entrar var(--t3) var(--curva) both;
 }
 .ficha .ficha-tit{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
-.ficha .ficha-aviso{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:700; font-size:15px; color:#075985; }
+.ficha .ficha-aviso{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:700;
+                     font-size:15px; color:#075985; }
 .ficha dl{ display:grid; grid-template-columns:auto minmax(0,1fr); gap:4px 12px; margin:0; font-size:13px; }
 .ficha dt{ color:var(--muted); }
 .ficha dd{ margin:0; color:var(--ink); }
-.ficha .cita{ margin-top:8px; padding:8px 10px; background:#fff; border-radius:8px;
-  border-left:3px solid var(--accent); font-size:13px; color:#334155; }
-.prio{ font-size:11px; font-weight:700; letter-spacing:.04em; border-radius:999px; padding:3px 9px; }
-.prio-alta{ background:#fee2e2; color:#991b1b; }
-.prio-media{ background:#fef3c7; color:#92400e; }
-.prio-baja{ background:#e0f2fe; color:#075985; }
-.prio-sd{ background:#f1f5f9; color:#475569; }
+.ficha .cita{ margin-top:8px; padding:8px 10px; background:#fff; border-radius:var(--r-sm);
+              border-left:3px solid var(--accent); font-size:13px; color:#334155; }
 
-/* Aviso de que la orden nace sin aviso SAP y entra a la cola de regularización */
-.nota-regular{
-  border:1px solid #fde68a; background:var(--warn-bg); border-radius:10px;
-  padding:10px 12px; font-size:13px; color:#78350f; line-height:1.45;
-}
-
-/* Chips de datos derivados (zona, cadena) */
 .chips{ display:flex; gap:6px; flex-wrap:wrap; margin-top:2px; }
-.chip{ font-size:12px; color:#475569; background:#f1f5f9; border-radius:999px; padding:4px 9px; }
-.chip b{ color:#0b1220; }
 
-/* Aviso de campo derivado / solo lectura */
-.derivado{ font-size:11px; color:var(--muted); margin-top:3px; display:block; }
-
-/* Bloques repetibles (equipos, técnicos) */
-.bloque{ border:1px solid #eef4fb; background:#fff; border-radius:10px; padding:10px; margin:10px 0; }
-.bloque-tit{ display:flex; justify-content:space-between; align-items:center; gap:6px 8px; flex-wrap:wrap; margin-bottom:8px; font-size:14px; font-weight:700; }
+.bloque{ border:1px solid var(--border); background:#fff; border-radius:var(--r);
+         padding:11px; margin:10px 0; animation:entrar var(--t2) var(--curva) both; }
+.bloque-tit{ display:flex; justify-content:space-between; align-items:center; gap:6px 8px;
+             flex-wrap:wrap; margin-bottom:8px; font-size:14px; font-weight:700; }
 .bloque-tit .btn{ padding:5px 10px; }
 
-/* Evidencia fotográfica */
-.picker{ border:1px dashed var(--border); border-radius:10px; padding:10px; background:#fff; }
+.picker{ border:1px dashed var(--border-fuerte); border-radius:var(--r); padding:11px; background:#fff;
+         transition:border-color var(--t1) var(--curva), background-color var(--t1) var(--curva); }
+.picker:hover{ border-color:var(--accent); background:var(--accent-cla); }
 .slot-list{ display:flex; flex-direction:column; gap:6px; margin-top:8px; }
-.slot{ display:flex; align-items:center; justify-content:space-between; background:#fff; border:1px solid #eef2f6; border-radius:6px; padding:6px 8px; }
-.slot .name{ font-size:13px; color:#0b1220; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:62%; }
+.slot{ display:flex; align-items:center; justify-content:space-between; background:#fff;
+       border:1px solid var(--border); border-radius:var(--r-sm); padding:6px 8px;
+       animation:entrar var(--t2) var(--curva) both; }
+.slot .name{ font-size:13px; color:var(--ink); overflow:hidden; text-overflow:ellipsis;
+             white-space:nowrap; max-width:62%; }
 .slot .actions{ display:flex; gap:6px; }
-.slot .actions button{ padding:6px 8px; border-radius:6px; border:0; background:#f3f4f6; cursor:pointer; }
-.small{ font-size:12px; color:var(--muted); }
+.slot .actions button{ padding:6px 8px; border-radius:var(--r-sm); border:0; background:#f1f5f9;
+                       cursor:pointer; font-family:inherit; }
+.slot .actions button:hover{ background:#e2e8f0; }
 
-/* Firma */
-.sig-wrap{ border:1px dashed #94a3b8; border-radius:10px; background:#fff; padding:8px; }
-.sig-canvas{ width:100%; height:180px; display:block; background:#fff; border-radius:8px; border:1px solid #e6eef3; touch-action:none; }
+.sig-wrap{ border:1px dashed var(--border-fuerte); border-radius:var(--r); background:#fff; padding:8px; }
+.sig-canvas{ width:100%; height:180px; display:block; background:#fff; border-radius:var(--r-sm);
+             border:1px solid var(--border); touch-action:none; }
 
-/* Satisfacción */
 #rating{ display:flex; gap:8px; flex-wrap:wrap; justify-content:space-between; }
-#rating .star{ display:flex; flex-direction:column; align-items:center; cursor:pointer; }
-#rating .star span:first-child{ font-size:12px; color:#333; margin-bottom:2px; }
-#rating .star span:last-child{ font-size:24px; color:#fbbf24; line-height:1; }
+#rating .star{ display:flex; flex-direction:column; align-items:center; cursor:pointer;
+               padding:4px 6px; border-radius:var(--r-sm); transition:background-color var(--t1) var(--curva); }
+#rating .star:hover{ background:var(--bg-alt); }
+#rating .star span:first-child{ font-size:12px; color:#475569; margin-bottom:2px; }
+#rating .star span:last-child{ font-size:24px; color:#fbbf24; line-height:1;
+                               transition:transform var(--t1) var(--curva); }
+#rating .star:hover span:last-child{ transform:scale(1.16); }
 
-/* Panel de validación (lo que hoy es un alert() gigante) */
-.validacion{ margin-top:12px; border-radius:10px; padding:10px 12px; font-size:13px; display:none; }
-.validacion.bloquea{ display:block; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
-.validacion.advierte{ display:block; background:var(--warn-bg); border:1px solid #fde68a; color:var(--warn); }
-.validacion.ok{ display:block; background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; }
-.validacion ul{ margin:6px 0 0; padding-left:18px; }
-.validacion li{ margin:2px 0; }
-
-.footer{ margin-top:14px; }
+.footer{ margin-top:16px; }
 .pendientes{ font-size:12px; color:var(--muted); margin-top:6px; }
+
+/* =========================================================================
+   15. DIALOGOS
+   ========================================================================= */
+dialog{
+  border:none; border-radius:var(--r-md); padding:20px; max-width:520px;
+  width:calc(100% - 28px); box-shadow:var(--sombra-4); color:var(--ink);
+  animation:dialogo var(--t2) var(--curva) both;
+}
+dialog::backdrop{ background:rgba(15,23,42,.5); animation:aparecer var(--t2) var(--curva) both; }
+dialog h2{ border:0; padding:0; margin:0 0 4px; font-size:17px; }
+dialog label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+dialog select,dialog textarea,dialog input{ width:100%; }
+dialog [hidden]{ display:none !important; }
+
+/* En el celular el diálogo sube desde abajo y ocupa el ancho: alcanzarlo con
+   el pulgar importa más que centrarlo. */
+@media (max-width:560px){
+  dialog{
+    margin:auto auto 0; width:100%; max-width:none;
+    border-radius:var(--r-lg) var(--r-lg) 0 0; padding:18px 16px calc(18px + env(safe-area-inset-bottom));
+    animation:hoja var(--t2) var(--curva) both;
+  }
+}
+
+.enlace-caja{
+  font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all;
+  background:var(--bg-alt); border:1px solid var(--border); border-radius:var(--r-sm);
+  padding:10px; margin:8px 0; user-select:all;
+}
+
+/* =========================================================================
+   16. MOVIMIENTO
+   Cada animación existe por una razón concreta:
+     entrar     — el contenido llega de algún sitio, no aparece de la nada
+     escalona   — las tarjetas se leen en orden, no todas de golpe
+     dialogo    — el diálogo sale del centro, y se entiende que tapa lo de atrás
+     hoja       — en el celular sube desde el borde, como una hoja
+     toast      — entra por el borde: viene de fuera del flujo, no interrumpe
+     latido     — algo está vivo ahora mismo (el vigilante del buzón)
+     sacudir    — la validación falló donde estás mirando
+   ========================================================================= */
+@keyframes entrar{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:none; } }
+@keyframes aparecer{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes subir{ from{ opacity:0; transform:translateX(-50%) translateY(14px); }
+                  to{ opacity:1; transform:translateX(-50%) translateY(0); } }
+@keyframes dialogo{ from{ opacity:0; transform:translateY(10px) scale(.975); } to{ opacity:1; transform:none; } }
+@keyframes hoja{ from{ opacity:0; transform:translateY(30px); } to{ opacity:1; transform:none; } }
+@keyframes toast-entra{ from{ opacity:0; transform:translateX(24px) scale(.97); } to{ opacity:1; transform:none; } }
+@keyframes toast-sale{ from{ opacity:1; transform:none; } to{ opacity:0; transform:translateX(24px) scale(.97); } }
+@keyframes latido{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:.45; transform:scale(.82); } }
+@keyframes subrayado{ from{ transform:scaleX(.2); opacity:0; } to{ transform:scaleX(1); opacity:1; } }
+@keyframes sacudir{ 0%,100%{ transform:translateX(0); } 22%{ transform:translateX(-5px); }
+                    44%{ transform:translateX(5px); } 66%{ transform:translateX(-3px); } }
+@keyframes destacar{ from{ background:#fef9c3; } to{ background:transparent; } }
+@keyframes girar{ to{ transform:rotate(360deg); } }
+
+/* Entrada escalonada. El `--i` lo pone la plantilla en cada tarjeta o fila; el
+   tope de 12 evita que la número 40 tarde dos segundos en aparecer. */
+.escalona > *{ animation:entrar var(--t3) var(--curva) both;
+               animation-delay:calc(min(var(--i,0),12) * 34ms); }
+.entra{ animation:entrar var(--t3) var(--curva) both; }
+.recien{ animation:destacar 2.4s var(--curva); }
+.girando{ animation:girar 900ms linear infinite; display:inline-block; }
+
+/* Sin excepciones: quien pidió menos movimiento no recibe ninguno. Se apaga la
+   animación, no el elemento — todo tiene que quedar visible y usable. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms !important; animation-iteration-count:1 !important;
+    transition-duration:.001ms !important; scroll-behavior:auto !important;
+  }
+}
+
+/* =========================================================================
+   17. UTILIDADES
+   ========================================================================= */
+.entre{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+.oculto-visual{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.pila{ display:flex; flex-direction:column; gap:3px; }
+.solo-movil{ display:none; }
+@media (max-width:720px){ .solo-movil{ display:initial; } .solo-ancho{ display:none !important; } }
 
 @media (max-width:420px){
   input,textarea,select{ font-size:16px; height:46px; }
+  .wrap{ padding:8px; margin:8px auto; }
+  .card{ padding:13px 13px 16px; }
 }
 
-/* --- Franja de estado de la conexión -------------------------------------
-   Fija arriba, delgada, sin botón de cerrar. Con señal desaparece sola; sin
-   señal se queda, porque el técnico tiene que saber que lo que ve puede ser
-   de ayer y que todavía no puede enviar. */
-.estado-red{
-  position:sticky; top:0; z-index:60; padding:9px 14px; font-size:13px; line-height:1.4;
-  border-bottom:1px solid transparent;
+@media print{
+  .app-barra,.app-nav,#toasts,#novedades,.filtros,.filtros-rapidos,.acciones-fila,
+  .acc,.nav-abajo,.fab{ display:none !important; }
+  body{ background:#fff; }
+  .card{ border:0; box-shadow:none; padding:0; }
 }
-.estado-red.sin{ background:var(--warn-bg); color:#78350f; border-bottom-color:#fde68a; }
-.estado-red.con{ background:#f0fdf4; color:#166534; border-bottom-color:#bbf7d0; }
+
+/* =========================================================================
+   18. LA APP DEL TECNICO — móvil primero, y con forma de bandeja de correo
+   -------------------------------------------------------------------------
+   POR QUE UNA BANDEJA Y NO UNA TABLA
+   El técnico no administra: atiende. Su pregunta es siempre la misma —«¿qué
+   tengo pendiente y qué sigue?»— y esa es exactamente la pregunta que responde
+   una bandeja de correo. Todo el mundo sabe usar una sin que se la expliquen:
+   lo no leído resalta, lo de arriba es lo más nuevo, se toca y se abre.
+
+   CONDICIONES REALES DE USO, que mandan sobre cualquier gusto:
+     - de pie, en la cocina de un local, con una mano y a veces con guantes
+       -> objetivo táctil de 44 px como mínimo, nada de menús desplegables
+     - con señal intermitente o sin ella
+       -> la lista tiene que verse igual sin red, y decir de cuándo es
+     - a plena luz, con la pantalla al mínimo de brillo por batería
+       -> contraste alto, tipografía grande, sin gris sobre gris
+   ========================================================================= */
+
+/* Cuando hay barra inferior, el contenido reserva su alto. Sin esto la última
+   orden de la lista queda debajo de la barra y parece que no existe. */
+body.con-nav-abajo{ padding-bottom:calc(var(--nav-abajo) + env(safe-area-inset-bottom)); }
+
+.nav-abajo{
+  position:fixed; left:0; right:0; bottom:0; z-index:70;
+  display:flex; background:#fff; border-top:1px solid var(--border);
+  box-shadow:0 -2px 14px rgba(15,23,42,.08);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.nav-abajo a{
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:3px; padding:8px 4px; min-height:var(--nav-abajo);
+  text-decoration:none; color:var(--muted); font-size:11px; font-weight:600;
+  position:relative; transition:color var(--t1) var(--curva);
+}
+.nav-abajo a .ic{ font-size:19px; line-height:1; }
+.nav-abajo a.on{ color:var(--marca); }
+.nav-abajo a.on::before{
+  content:''; position:absolute; top:0; left:22%; right:22%; height:3px;
+  background:var(--accent); border-radius:0 0 3px 3px;
+}
+.nav-abajo a:active{ background:var(--bg-alt); }
+/* El globo de pendientes sobre el icono. Es la única cifra que el técnico
+   necesita ver sin entrar. */
+.nav-abajo .globo{
+  position:absolute; top:5px; left:50%; margin-left:5px;
+  min-width:17px; height:17px; padding:0 5px; border-radius:var(--r-full);
+  background:#ef4444; color:#fff; font-size:10.5px; font-weight:700;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-variant-numeric:tabular-nums; box-shadow:0 0 0 2px #fff;
+}
+
+/* --- Cabecera compacta de la app móvil --------------------------------- */
+.mov-cab{
+  position:sticky; top:0; z-index:50; color:#fff;
+  background:linear-gradient(100deg, var(--marca-osc), var(--marca) 60%, #0d5fa8);
+  padding:calc(10px + env(safe-area-inset-top)) 14px 12px;
+  box-shadow:var(--sombra-2);
+}
+.mov-cab .fila{ display:flex; align-items:center; gap:10px; }
+.mov-cab .hola{ font-size:17px; font-weight:700; letter-spacing:-.01em; }
+.mov-cab .quien{ font-size:12px; opacity:.8; margin-top:1px; }
+.mov-cab .btn{ background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.26); color:#fff; }
+.mov-cab .btn:hover{ background:rgba(255,255,255,.24); color:#fff; }
+.mov-cab a{ color:#fff; }
+
+/* --- Pestañas de la bandeja --------------------------------------------
+   Pendientes / Repuestos / Atendidas. Van dentro de la cabecera de color,
+   deslizan si no caben, y llevan su cifra: es la navegación principal del
+   técnico y tiene que estar donde llega el pulgar. */
+.mov-tabs{ display:flex; gap:6px; margin-top:12px; overflow-x:auto; scrollbar-width:none; }
+.mov-tabs::-webkit-scrollbar{ display:none; }
+.mov-tabs a{
+  flex:0 0 auto; display:inline-flex; align-items:center; gap:7px;
+  padding:8px 14px; border-radius:var(--r-full); text-decoration:none;
+  background:rgba(255,255,255,.13); color:rgba(255,255,255,.9);
+  font-size:13px; font-weight:600; white-space:nowrap; border:1px solid transparent;
+  transition:background-color var(--t1) var(--curva), color var(--t1) var(--curva);
+}
+.mov-tabs a.on{ background:#fff; color:var(--marca); }
+.mov-tabs a .n{
+  min-width:19px; height:19px; padding:0 6px; border-radius:var(--r-full);
+  background:rgba(255,255,255,.24); font-size:11px; font-weight:700;
+  display:inline-flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums;
+}
+.mov-tabs a.on .n{ background:var(--accent-cla); color:var(--marca); }
+.mov-tabs a.on .n.urge{ background:#fee2e2; color:#991b1b; }
+
+/* --- La bandeja ---------------------------------------------------------
+   Cada fila es un caso. La barra de color de la izquierda es la prioridad; el
+   punto azul, que todavía no se abrió. Se lee en el orden en que se mira: qué
+   local, qué pasa, desde cuándo. */
+.bandeja{ list-style:none; margin:0; padding:0; }
+.bandeja li{
+  border-bottom:1px solid var(--border); background:#fff;
+  animation:entrar var(--t3) var(--curva) both;
+  animation-delay:calc(min(var(--i,0),10) * 30ms);
+}
+.bandeja li:last-child{ border-bottom:0; }
+.bandeja a{
+  display:flex; gap:11px; padding:13px 14px 13px 11px;
+  text-decoration:none; color:inherit; position:relative;
+  border-left:4px solid transparent;
+  transition:background-color var(--t1) var(--curva);
+}
+.bandeja a:active{ background:var(--accent-cla); }
+.bandeja a.p-alta{  border-left-color:#ef4444; }
+.bandeja a.p-media{ border-left-color:#f59e0b; }
+.bandeja a.p-baja{  border-left-color:#38bdf8; }
+.bandeja a.p-sd{    border-left-color:#cbd5e1; }
+
+.bandeja .marca{ flex-shrink:0; width:10px; padding-top:5px; }
+.bandeja .nuevo{ width:9px; height:9px; border-radius:50%; background:var(--accent); display:block; }
+
+.bandeja .cuerpo{ flex:1; min-width:0; }
+.bandeja .lin1{ display:flex; align-items:baseline; gap:8px; }
+.bandeja .local{ font-weight:700; font-size:14.5px; color:var(--ink); flex:1; min-width:0;
+                 overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bandeja .cuando{ font-size:11.5px; color:var(--muted); flex-shrink:0; font-variant-numeric:tabular-nums; }
+.bandeja .asunto{ font-size:13.5px; color:var(--ink); margin-top:2px;
+                  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bandeja .vista{ font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.4;
+                 display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.bandeja .pie{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:7px; }
+.bandeja li.leido .local{ font-weight:600; color:#334155; }
+
+/* Ficha de un caso abierto en el celular */
+.mov-ficha{ background:#fff; border-bottom:1px solid var(--border); padding:14px; }
+.mov-ficha .aviso-n{ font-family:ui-monospace,Menlo,monospace; font-size:13px; color:var(--muted); }
+.mov-ficha h1{ font-size:18px; margin:4px 0 8px; }
+.mov-ficha dl{ display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 12px; margin:12px 0 0; font-size:13.5px; }
+.mov-ficha dt{ color:var(--muted); }
+.mov-ficha dd{ margin:0; }
+
+/* Acciones grandes, apiladas: en el celular un botón de 13 px al lado de otro
+   se pulsa mal con guantes. */
+.mov-acciones{ display:flex; flex-direction:column; gap:9px; padding:14px; }
+.mov-acciones .btn{ width:100%; padding:13px; font-size:14.5px; border-radius:var(--r); }
+
+/* Botón flotante: emitir una orden desde cualquier punto de la bandeja. */
+.fab{
+  position:fixed; right:16px; bottom:calc(var(--nav-abajo) + 16px + env(safe-area-inset-bottom));
+  z-index:75; width:56px; height:56px; border-radius:50%;
+  background:var(--accent); color:#fff; border:0; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-size:26px; line-height:1;
+  box-shadow:0 6px 20px rgba(14,165,233,.42); text-decoration:none;
+  transition:transform var(--t1) var(--curva), box-shadow var(--t1) var(--curva);
+}
+.fab:hover{ background:var(--accent-osc); color:#fff; box-shadow:0 8px 26px rgba(14,165,233,.5); }
+.fab:active{ transform:scale(.94); }
+
+/* --- La cola de envios ---------------------------------------------------
+   Lo que se llenó sin señal y todavía no salió. Es la pieza que hace que el
+   técnico confíe en trabajar sin conexión: si no ve dónde quedó su orden, la
+   vuelve a llenar, y entonces sí llegan dos PDFs a Grupo KFC. */
+.cola{
+  border:1px solid var(--warn-bd); background:var(--warn-bg); border-radius:var(--r);
+  padding:11px 13px; margin:12px 14px; font-size:13px; color:#78350f;
+}
+.cola .fila{ display:flex; align-items:center; gap:9px; }
+.cola .n{
+  min-width:26px; height:26px; border-radius:var(--r-full); background:#d97706; color:#fff;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-weight:700; font-size:13px; flex-shrink:0; font-variant-numeric:tabular-nums;
+}
+.cola ul{ margin:9px 0 0; padding-left:0; list-style:none; }
+.cola li{
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+  padding:7px 9px; background:rgba(255,255,255,.65); border-radius:var(--r-sm); margin-bottom:5px;
+  font-size:12.5px;
+}
+.cola li .est-envio{ font-weight:700; }
+.cola.enviando{ border-color:var(--info-bd); background:var(--info-bg); color:#1e3a8a; }
+.cola.enviando .n{ background:#2563eb; }
+.cola.lista{ border-color:var(--ok-bd); background:var(--ok-bg); color:#14532d; }
+.cola.lista .n{ background:#16a34a; }
+
+/* =========================================================================
+   19. REPUESTOS Y EQUIPOS DESHABILITADOS
+   -------------------------------------------------------------------------
+   La misión que fijó la gerencia: un equipo parado en un local de KFC deja de
+   facturar, así que se resuelve dentro de las 48 horas. Por eso esta sección
+   se mide en horas y no en días como el resto del sistema, y por eso el reloj
+   es lo primero que se ve de cada pedido.
+   ========================================================================= */
+.rep{
+  border:1px solid var(--border); border-radius:var(--r); background:#fff;
+  padding:13px; margin-bottom:10px; box-shadow:var(--sombra-1);
+  border-left:4px solid var(--border-fuerte);
+  animation:entrar var(--t3) var(--curva) both;
+  animation-delay:calc(min(var(--i,0),12) * 30ms);
+}
+.rep.deshabilitado{ border-left-color:#ef4444; }
+.rep.vencido{ border-left-color:#b91c1c; background:linear-gradient(90deg,#fef2f2,#fff 60%); }
+.rep.atendido{ border-left-color:#22c55e; }
+.rep .cab{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; }
+.rep .que{ font-weight:700; font-size:14.5px; }
+.rep .meta{ font-size:12px; color:var(--muted); margin-top:2px; }
+.rep .nota{
+  margin-top:9px; padding:9px 11px; background:var(--bg-alt);
+  border-left:3px solid var(--accent); border-radius:0 var(--r-sm) var(--r-sm) 0;
+  font-size:13px; color:#334155; line-height:1.5;
+}
+.rep .nota .de{ font-size:11.5px; color:var(--muted); display:block; margin-top:5px; }
+.rep .acciones{ display:flex; gap:6px; flex-wrap:wrap; margin-top:11px; }
+
+/* El hilo de insistencias. Cada recordatorio que manda el técnico se apila:
+   la administración ve de un golpe cuántas veces preguntaron por lo mismo, que
+   es justo el dato que se perdía cuando esto se hacía por WhatsApp. */
+.hilo{ margin-top:9px; border-left:2px solid var(--border); padding-left:11px; }
+.hilo .msg{ font-size:12.5px; margin-bottom:8px; }
+.hilo .msg .quien{ font-weight:700; }
+.hilo .msg .cuando{ color:var(--muted); font-size:11.5px; margin-left:6px; }
+.hilo .msg .txt{ color:#334155; margin-top:2px; line-height:1.45; }
+.hilo .msg.insiste .txt{ color:#7f1d1d; }
+
+/* Barra de progreso de las 48 horas. Se llena y cambia de color; al pasarse,
+   se queda llena y roja: el atraso no se esconde. */
+.barra48{ height:5px; border-radius:var(--r-full); background:#e2e8f0; overflow:hidden; margin-top:9px; }
+.barra48 i{ display:block; height:100%; border-radius:var(--r-full);
+            transition:width var(--t3) var(--curva); }
+.barra48 i.bien{ background:#22c55e; }
+.barra48 i.ojo{  background:#f59e0b; }
+.barra48 i.mal{  background:#ef4444; }
+
+/* =========================================================================
+   20. FORMULARIO GUIADO
+   -------------------------------------------------------------------------
+   POR QUE POR PASOS Y NO TODO A LA VEZ
+   El formulario único cubre correctivo y preventivo, con repuesto y sin él,
+   con equipo y sin equipo. Puesto entero en pantalla son más de cuarenta
+   campos, y el técnico tiene que decidir cuáles le tocan — que es exactamente
+   la decisión que el sistema ya sabe tomar. Preguntando primero el cliente y
+   el tipo de orden, el resto se arma solo y quedan a la vista únicamente los
+   campos de ESE caso.
+
+   El paso se marca como completo cuando sus obligatorios están llenos, y ahí
+   se abre el siguiente. Nunca se bloquea el retroceso: se puede volver a
+   corregir cualquier paso sin perder lo escrito.
+   ========================================================================= */
+.pasos{ display:flex; gap:0; margin:0 0 18px; overflow-x:auto; scrollbar-width:none; }
+.pasos::-webkit-scrollbar{ display:none; }
+.pasos .p{
+  flex:1 0 auto; min-width:0; display:flex; align-items:center; gap:8px;
+  padding:9px 14px 9px 11px; font-size:12.5px; font-weight:600; color:var(--muted);
+  background:var(--bg-alt); border:1px solid var(--border); border-right:0; white-space:nowrap;
+  transition:background-color var(--t2) var(--curva), color var(--t2) var(--curva);
+}
+.pasos .p:first-child{ border-radius:var(--r) 0 0 var(--r); }
+.pasos .p:last-child{ border-right:1px solid var(--border); border-radius:0 var(--r) var(--r) 0; }
+.pasos .p .n{
+  width:21px; height:21px; border-radius:50%; background:#e2e8f0; color:#64748b;
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:11.5px; font-weight:700; flex-shrink:0;
+  transition:background-color var(--t2) var(--curva), color var(--t2) var(--curva);
+}
+.pasos .p.activo{ background:var(--marca-cla); color:var(--marca); border-color:#bfdbfe; }
+.pasos .p.activo .n{ background:var(--accent); color:#fff; }
+.pasos .p.listo{ background:var(--ok-bg); color:var(--ok); border-color:var(--ok-bd); }
+.pasos .p.listo .n{ background:var(--ok); color:#fff; }
+.pasos .p.listo .n::after{ content:'✓'; }
+.pasos .p.listo .n span{ display:none; }
+
+/* Un paso del formulario. Los que todavía no tocan quedan plegados y grises;
+   no se ocultan, para que se vea cuánto falta. */
+.paso-caja{
+  border:1px solid var(--border); border-radius:var(--r); background:#fff;
+  margin-bottom:11px; overflow:hidden;
+  transition:border-color var(--t2) var(--curva), box-shadow var(--t2) var(--curva);
+}
+.paso-caja.abierto{ border-color:#bfdbfe; box-shadow:0 0 0 3px rgba(14,165,233,.10); }
+.paso-caja > .cab{
+  display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer;
+  background:#fff; border:0; width:100%; text-align:left; font-family:inherit;
+}
+.paso-caja > .cab:hover{ background:var(--bg-alt); }
+.paso-caja > .cab .tit{ flex:1; min-width:0; font-size:14.5px; font-weight:700; color:var(--ink); }
+.paso-caja > .cab .resu{ font-size:12.5px; color:var(--muted); font-weight:400; margin-top:2px; display:block; }
+.paso-caja > .cab .flecha{ color:var(--muted); transition:transform var(--t2) var(--curva); flex-shrink:0; }
+.paso-caja.abierto > .cab .flecha{ transform:rotate(90deg); }
+.paso-caja > .cuerpo{ padding:0 14px 16px; animation:desplegar var(--t2) var(--curva); }
+.paso-caja:not(.abierto) > .cuerpo{ display:none; }
+.paso-caja.pendiente > .cab .tit{ color:var(--muted-cla); }
+.paso-caja.pendiente > .cab{ cursor:not-allowed; }
+
+@keyframes desplegar{ from{ opacity:0; transform:translateY(-5px); } to{ opacity:1; transform:none; } }
+
+/* Las tarjetas de opción: en vez de un desplegable de tres valores, tres
+   objetivos grandes. Menos toques y menos error al elegir con guantes. */
+.opciones{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:9px; }
+.opcion{
+  display:flex; flex-direction:column; gap:3px; padding:13px;
+  border:1.5px solid var(--border); border-radius:var(--r); background:#fff;
+  cursor:pointer; text-align:left; font-family:inherit;
+  transition:all var(--t1) var(--curva);
+}
+.opcion:hover{ border-color:var(--accent); background:var(--accent-cla); }
+.opcion .t{ font-size:14.5px; font-weight:700; color:var(--ink); }
+.opcion .d{ font-size:12px; color:var(--muted); line-height:1.4; }
+.opcion.on{ border-color:var(--accent); background:var(--accent-cla);
+            box-shadow:0 0 0 3px rgba(14,165,233,.14); }
+.opcion.on .t{ color:var(--marca); }
+.opcion input{ position:absolute; opacity:0; pointer-events:none; }
+
+/* Campo que aparece porque una respuesta anterior lo pidió. La entrada suave
+   explica de dónde salió: no estaba, y apareció por lo que acabas de elegir. */
+.condicional{ animation:desplegar var(--t2) var(--curva) both; }
+.condicional[hidden]{ display:none !important; }
+.porque{
+  font-size:11.5px; color:var(--info); background:var(--info-bg); border-radius:var(--r-sm);
+  padding:3px 8px; display:inline-block; margin-bottom:7px;
+}
+
+/* =========================================================================
+   21. GRAFICOS
+   -------------------------------------------------------------------------
+   SVG escrito a mano, sin librería. Tres razones, en orden de peso:
+     1. La política del proyecto es software libre y lo mínimo necesario. Una
+        librería de gráficos son cientos de kilobytes para dibujar seis barras.
+     2. El sitio no puede cargar guiones de terceros sin ampliar la superficie
+        de ataque, y aquí se muestran datos de un cliente.
+     3. Sin señal tiene que dibujarse igual. Lo que depende de una CDN, no.
+
+   La paleta pasó las seis comprobaciones del método (banda de luminosidad,
+   croma, separación para daltonismo, separación en visión normal y contraste
+   contra el fondo). Las zonas se validaron contra TODOS los pares, porque
+   aparecen juntas en el mismo gráfico; las series generales, contra los pares
+   adyacentes, que es lo que aplica a barras y anillos.
+
+   TODO GRAFICO LLEVA SU TABLA, debajo y plegada. No es un extra de
+   accesibilidad: es que a la administradora le van a preguntar «¿y cuántos
+   exactamente?» y la respuesta no puede ser pasar el dedo por una barra.
+   ========================================================================= */
+.viz{ background:#fff; border:1px solid var(--border); border-radius:var(--r);
+      padding:14px; box-shadow:var(--sombra-1); }
+.viz h3{ font-size:14px; margin:0 0 2px; font-weight:700; }
+.viz .viz-sub{ font-size:12px; color:var(--muted); margin:0 0 12px; line-height:1.45; }
+.viz svg{ display:block; width:100%; height:auto; overflow:visible; }
+
+.viz-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; margin-bottom:16px; }
+.viz-grid.ancho{ grid-template-columns:1fr; }
+
+/* Ejes y rejilla recesivos: la rejilla ayuda a leer, no compite con el dato. */
+.viz .rejilla{ stroke:#eef2f7; stroke-width:1; }
+.viz .eje{ stroke:var(--border-fuerte); stroke-width:1; }
+.viz .etiqueta{ font-size:11px; fill:var(--muted); font-family:inherit; }
+.viz .valor{ font-size:11.5px; fill:var(--ink); font-weight:700; font-family:inherit;
+             font-variant-numeric:tabular-nums; }
+/* Anillo de superficie sobre marcas que se tocan: separa sin meter otro color. */
+.viz .sep{ stroke:#fff; stroke-width:2; }
+.viz .marca{ transition:opacity var(--t1) var(--curva); cursor:default; }
+.viz g:hover > .marca:not(:hover){ opacity:.55; }
+
+.viz-leyenda{ display:flex; gap:12px; flex-wrap:wrap; margin-top:11px; font-size:12px; color:#334155; }
+.viz-leyenda span{ display:inline-flex; align-items:center; gap:6px; }
+.viz-leyenda i{ width:11px; height:11px; border-radius:3px; flex-shrink:0; }
+
+.viz-tabla{ margin-top:12px; }
+.viz-tabla summary{ font-size:12px; color:var(--muted); cursor:pointer; padding:4px 0; }
+.viz-tabla summary:hover{ color:var(--marca); }
+.viz-tabla table{ font-size:12.5px; margin-top:8px; }
+.viz-tabla td.n,.viz-tabla th.n{ text-align:right; font-variant-numeric:tabular-nums; }
+
+/* La cifra sola. Cuando el dato es uno, un gráfico de una barra es ruido. */
+.hero{ background:#fff; border:1px solid var(--border); border-radius:var(--r);
+       padding:16px; box-shadow:var(--sombra-1); }
+.hero .n{ font-size:38px; font-weight:700; line-height:1; letter-spacing:-.02em;
+          font-variant-numeric:tabular-nums; }
+.hero .t{ font-size:12.5px; color:var(--muted); margin-top:5px; }
+
+/* Barra de composición: una sola fila que reparte el total. Para «de 918 casos,
+   cuántos en cada estado» dice más que un pastel de siete quesitos. */
+.compo{ display:flex; height:26px; border-radius:var(--r-sm); overflow:hidden; background:#f1f5f9; }
+.compo i{ display:block; height:100%; box-shadow:inset -2px 0 0 #fff; }
+.compo i:last-child{ box-shadow:none; }

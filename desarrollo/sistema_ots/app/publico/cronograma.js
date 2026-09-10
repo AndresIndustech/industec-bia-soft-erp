@@ -398,6 +398,38 @@
       });
   }
 
+  /**
+   * Quien es y que alcanza, segun el servidor.
+   *
+   * El selector de zona pasa a ser un FILTRO sobre lo que ya se recibio, no
+   * una simulacion de rol. Para un jefe de zona trae una sola opcion —la suya—
+   * y se deshabilita: ofrecerle «las 3 zonas» cuando el servidor solo le manda
+   * una es prometer algo que no va a pasar.
+   */
+  function pintarQuienSoy(a) {
+    var nom = document.getElementById('barraNombre');
+    var chip = document.getElementById('barraAlcance');
+    if (nom) { nom.textContent = a.nombre || ''; }
+    if (chip) { chip.textContent = a.zona ? ('Zona ' + a.zona) : 'Las 3 zonas'; }
+
+    var sel = document.getElementById('usuario');
+    if (!sel) { return; }
+    sel.innerHTML = '';
+
+    if (a.zona) {
+      sel.innerHTML = '<option value="' + a.zona + '">Zona ' + a.zona + '</option>';
+      sel.disabled = true;
+      zonaVista = a.zona;
+    } else {
+      sel.innerHTML = '<option value="ADMIN">Las 3 zonas</option>' +
+                      '<option value="UIO">Solo UIO</option>' +
+                      '<option value="LARB">Solo LARB</option>' +
+                      '<option value="CNLJ">Solo CNLJ</option>';
+      sel.disabled = false;
+      zonaVista = 'ADMIN';
+    }
+  }
+
   /* ---------- Arranque ---------- */
   document.addEventListener('DOMContentLoaded', function () {
     $('#panelCerrar').addEventListener('click', cerrarPanel);
@@ -414,9 +446,20 @@
       if (e.key === 'Escape') { cerrarModal(); cerrarPanel(); }
     });
 
-    fetch('cronograma.php').then(function (r) { return r.json(); }).then(function (j) {
+    fetch('cronograma.php', { credentials: 'same-origin' }).then(function (r) {
+      /* Sin sesión el servidor responde 401 en JSON. Se manda al ingreso en
+         vez de dibujar un calendario vacío, que es lo que pasaba antes: la
+         pantalla cargaba, no traía nada y parecía que no había preventivos. */
+      if (r.status === 401 && navigator.onLine) {
+        location.href = 'login.php?r=cronograma.html';
+        return null;
+      }
+      return r.json();
+    }).then(function (j) {
+      if (!j) { return; }
       if (j.error) throw new Error(j.error);
       DATOS = j;
+      pintarQuienSoy(j.alcance || {});
       INGRESOS = (j.cronograma && j.cronograma.ingresos) || [];
       CORRECTIVOS = j.correctivos || [];
       var c = j.cronograma.conversion || {};

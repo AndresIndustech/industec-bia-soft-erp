@@ -149,7 +149,7 @@ $confirmar = 'Se van a crear ' . count($pendientes) . ' cuentas con contraseña 
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Alta del padrón · OTs INDUSTEC</title>
+<title>Alta del padrón · B.IA Soft ERP</title>
 <link rel="stylesheet" href="estilo.css">
 <style>
   .barra{ display:flex; justify-content:space-between; align-items:center; gap:12px;
@@ -176,7 +176,7 @@ $confirmar = 'Se van a crear ' . count($pendientes) . ' cuentas con contraseña 
 <body>
 
 <div class="barra noimprimir">
-  <strong><a href="panel.php" style="text-decoration:none;color:inherit">← Sistema de OTs</a></strong>
+  <strong><a href="panel.php" style="text-decoration:none;color:inherit">← B.IA Soft ERP</a></strong>
   <div style="display:flex;align-items:center;gap:10px;font-size:13px">
     <span style="font-weight:700"><?= e($u['nombre']) ?></span>
     <a class="btn" href="usuarios.php">Usuarios</a>

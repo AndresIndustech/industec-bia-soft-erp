@@ -34,25 +34,35 @@ function e(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES,
 <html lang="es">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cambiar contraseña · OTs INDUSTEC</title>
+<title>Cambiar contraseña · B.IA Soft ERP</title>
 <link rel="stylesheet" href="estilo.css">
+<meta name="theme-color" content="#0b4f8f">
 <style>
-  body{display:flex;align-items:center;justify-content:center;min-height:100vh}
-  .entrada{width:min(420px,100%);margin:20px}.entrada .card{padding:24px}
-  .err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:14px}
-  .ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:14px}
-  .campo{margin-bottom:12px}
+  body{ display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px; }
+  .entrada{ width:min(420px,100%); animation:entrar var(--t3) var(--curva) both; }
+  .entrada .card{ padding:26px; box-shadow:var(--sombra-3); }
+  .marca-cab{ display:flex; align-items:center; gap:10px; justify-content:center;
+              margin-bottom:18px; color:var(--marca); font-weight:700; font-size:16px; }
+  .marca-cab .punto{ width:11px; height:11px; border-radius:50%; background:var(--accent);
+                     box-shadow:0 0 0 4px rgba(14,165,233,.18); }
+  .campo{ margin-bottom:13px; }
 </style>
 </head>
 <body>
-<div class="entrada"><div class="card">
+<div class="entrada">
+  <div class="marca-cab"><span class="punto"></span>B.IA Soft ERP</div>
+  <div class="card">
   <h1 style="font-size:19px;margin:0 0 4px">Cambia tu contraseña</h1>
   <?php if ($u['debe_cambiar_clave'] && !$ok): ?>
     <p class="sub" style="margin:0 0 16px">La que tienes la creó otra persona. Elige una tuya antes de seguir.</p>
   <?php endif; ?>
-  <?php if ($error): ?><div class="err"><?= e($error) ?></div><?php endif; ?>
+  <?php if ($error): ?>
+    <div class="aviso err" role="alert"><span class="ic" aria-hidden="true">✕</span>
+      <div class="cuerpo"><?= e($error) ?></div></div>
+  <?php endif; ?>
   <?php if ($ok): ?>
-    <div class="ok">Contraseña actualizada.</div>
+    <div class="aviso ok" role="status"><span class="ic" aria-hidden="true">✓</span>
+      <div class="cuerpo">Contraseña actualizada.</div></div>
     <a class="btn primary" href="panel.php" style="display:inline-block;text-decoration:none">Ir al panel</a>
   <?php else: ?>
   <form method="post">
@@ -63,7 +73,7 @@ function e(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES,
       <span class="derivado">Mínimo 10 caracteres. Una frase que recuerdes sirve mejor que algo corto y raro.</span></div>
     <div class="campo"><label for="r">Repite la nueva</label>
       <input type="password" id="r" name="repite" autocomplete="new-password" required minlength="10"></div>
-    <button class="btn primary" type="submit" style="width:100%;padding:12px">Guardar</button>
+    <button class="btn primary bloque" type="submit">Guardar</button>
   </form>
   <?php endif; ?>
 </div></div>

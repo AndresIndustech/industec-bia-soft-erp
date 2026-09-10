@@ -83,64 +83,16 @@ $secreto = (string) ($cfg['sync_secreto'] ?? '');
 
 $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
         'JEFE_ZONA' => 'Jefe de zona', 'TECNICO' => 'Técnico'];
+
+require_once __DIR__ . '/nucleo/Ui.php';
+
+Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Órdenes emitidas']);
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Órdenes emitidas · OTs INDUSTEC</title>
-<link rel="stylesheet" href="estilo.css">
-<style>
-  .barra{ display:flex; justify-content:space-between; align-items:center; gap:12px;
-          flex-wrap:wrap; padding:10px 14px; background:#fff;
-          border-bottom:1px solid var(--border); position:sticky; top:0; z-index:40; }
-  .tiles{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-          gap:10px; margin:0 0 16px; }
-  .tile{ background:#fff; border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
-  .tile .n{ font-size:26px; font-weight:700; line-height:1.1; font-variant-numeric:tabular-nums; }
-  .tile .t{ font-size:11.5px; color:var(--muted); text-transform:uppercase;
-            letter-spacing:.05em; margin-top:2px; }
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em;
-      color:var(--muted); padding:8px 9px; border-bottom:1px solid var(--border);
-      background:#fff; position:sticky; top:0; }
-  td{ padding:9px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
-  .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; }
-  .tabla-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:#fff; }
-  .desc{ color:var(--muted); font-size:12px; display:block; margin-top:3px; }
-  .chip.cerrada{ background:#dcfce7; color:#166534; }
-  .chip.abierta{ background:#e0f2fe; color:#075985; }
-  .filtros{ display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; }
-  .filtros .campo{ display:flex; flex-direction:column; gap:3px; }
-  .filtros label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
-  .filtros select, .filtros input[type=text]{ height:38px; min-width:130px; }
-  .acc{ display:flex; gap:5px; flex-wrap:wrap; }
-  .acc .btn{ padding:5px 10px; font-size:12px; }
-  dialog{ border:none; border-radius:12px; padding:18px; max-width:520px; width:calc(100% - 28px);
-          box-shadow:0 18px 50px rgba(0,0,0,.25); }
-  dialog::backdrop{ background:rgba(15,23,42,.45); }
-  .enlace-caja{ font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all;
-                background:#f8fafc; border:1px solid var(--border); border-radius:8px;
-                padding:9px; margin:8px 0; user-select:all; }
-  .vacio{ padding:28px 14px; text-align:center; color:var(--muted); }
-</style>
-</head>
-<body>
+<div class="wrap ancho">
 
-<div class="barra">
-  <strong><a href="panel.php" style="text-decoration:none;color:inherit">← Sistema de OTs</a></strong>
-  <div style="display:flex;align-items:center;gap:10px;font-size:13px">
-    <span style="font-weight:700"><?= e($u['nombre']) ?></span>
-    <span class="chip"><?= e($ROL[$u['rol']] ?? $u['rol']) ?></span>
-    <a class="btn" href="salir.php">Salir</a>
-  </div>
-</div>
-
-<div class="wrap">
-  <div class="card">
-    <h1 style="font-size:19px;margin:0 0 4px">Órdenes emitidas</h1>
-    <p class="sub" style="margin:0 0 14px">
+  <div class="titulo entra">
+    <h1>Órdenes emitidas</h1>
+    <p class="sub">
       <?php if ($u['rol'] === 'TECNICO'): ?>
         Las órdenes que has atendido. Puedes abrir el informe o mandárselo al
         administrador del local.
@@ -148,6 +100,7 @@ $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
         Las órdenes con informe recibido<?= Auth::zonaAlcance() ? ' en ' . e((string) Auth::zonaAlcance()) : '' ?>.
       <?php endif; ?>
     </p>
+  </div>
 
     <?php if (!$filas && $fTexto === '' && $fEstado === ''): ?>
       <div class="nota-regular">
@@ -211,7 +164,8 @@ $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
               <td>
                 <b><?= e($f['local']) ?></b>
                 <span class="desc"><?= e($f['local_n']) ?></span>
-                <span class="desc"><?= e($f['zona']) ?> · <?= e($f['caso']) ?></span>
+                <span class="desc"><?= Ui::zona($f['zona']) ?></span>
+                <span class="desc"><?= e($f['caso']) ?></span>
               </td>
               <td class="mono"><?= e(substr($f['fecha'], 0, 10)) ?></td>
               <td>
@@ -236,7 +190,7 @@ $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
                 <span class="chip <?= $f['estado'] === 'Cerrada' ? 'cerrada' : 'abierta' ?>">
                   <?= $f['estado'] === 'Cerrada' ? 'con cierre' : 'en curso' ?>
                 </span>
-                <span class="desc"><?= e(Casos::etiquetaEstado($f['gestion'])) ?></span>
+                <span class="desc"><?= Ui::estado($f['gestion']) ?></span>
               </td>
               <td>
                 <div class="acc">
@@ -256,7 +210,6 @@ $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
         </table>
       </div>
     <?php endif; ?>
-  </div>
 </div>
 
 <dialog id="dlg">
@@ -302,5 +255,5 @@ function copiar() {
   });
 }
 </script>
-</body>
-</html>
+
+<?php Ui::pie(); ?>

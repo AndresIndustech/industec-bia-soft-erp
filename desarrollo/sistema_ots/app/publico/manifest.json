@@ -1,13 +1,13 @@
 {
-  "name": "Órdenes de Trabajo · INDUSTEC",
-  "short_name": "OT INDUSTEC",
+  "name": "B.IA Soft ERP · INDUSTEC",
+  "short_name": "B.IA Soft",
   "description": "Emisión de órdenes de trabajo en sitio, con o sin señal.",
   "start_url": "index.html",
   "scope": ".",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f5f7fb",
-  "theme_color": "#0ea5e9",
+  "background_color": "#eef2f8",
+  "theme_color": "#0b4f8f",
   "lang": "es-EC",
   "icons": [
     { "src": "iconos/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

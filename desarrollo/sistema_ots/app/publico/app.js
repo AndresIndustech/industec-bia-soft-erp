@@ -34,7 +34,17 @@
   /* ---------- Carga ---------- */
   function cargarCatalogo() {
     if (window.CATALOGOS) return Promise.resolve(window.CATALOGOS);
-    return fetch('catalogos.php').then(function (r) {
+    return fetch('catalogos.php', { credentials: 'same-origin' }).then(function (r) {
+      /* 401 = falta la sesion. Se manda al ingreso, y de vuelta aqui despues.
+         Solo con senal: sin cobertura la copia guardada sirve y hay que dejarlo
+         trabajar, que es el punto entero del modo sin conexion. */
+      if (r.status === 401 && navigator.onLine) {
+        location.href = 'login.php?r=index.html';
+        return new Promise(function () {});   // se corta la cadena: ya nos vamos
+      }
+      if (r.status === 401) {
+        throw new Error('Entra al sistema cuando tengas señal para actualizar tus datos.');
+      }
       if (!r.ok) throw new Error('catalogos.php respondió ' + r.status);
       // El trabajador de servicio marca con `x-guardado-en` lo que sirve desde
       // la copia local. Es la señal honesta de que estos datos no son de ahora:
@@ -256,10 +266,71 @@
     nota.textContent = partes.join(' ');
   }
 
+  /* Quien tiene la sesion abierta. Lo trae `yo.php` y el trabajador de
+     servicio lo guarda, asi que sigue estando sin senal. */
+  var YO = null;
+
+  /**
+   * Quien emite la orden.
+   *
+   * ANTES esto leia un desplegable con los 19 tecnicos, y el tecnico tenia que
+   * buscarse en la lista. Dos problemas en uno: un gesto de mas en cada orden
+   * —al empezar, cuando lo que quiere es resolver y salir del local— y un
+   * agujero de trazabilidad, porque una lista con los 19 nombres permite
+   * firmar como cualquiera de ellos.
+   *
+   * AHORA sale de la sesion. Se busca en el catalogo por nombre para heredar
+   * la zona y el id del padron; si no calza, se usa lo de la sesion y la
+   * pantalla lo dice en vez de dejar el campo en blanco (I-7).
+   *
+   * `envio.php` vuelve a tomar la identidad de la sesion al recibir y descarta
+   * lo que venga aqui, asi que editar el HTML no cambia quien firma.
+   */
   function tecnicoSesion() {
-    var id = $('#tecSesion').value;
-    if (!id) return null;
-    return CAT.tecnicos.filter(function (t) { return String(t.id) === id; })[0] || null;
+    if (!YO) return null;
+    var t = CAT.tecnicos.filter(function (x) { return mismoNombre(x.nombre, YO.nombre); })[0];
+    return {
+      id: t ? t.id : YO.id,
+      nombre: YO.nombre,
+      zona: YO.zona || (t ? t.zona : null),
+      del_padron: !!t
+    };
+  }
+
+  /* La nomina guarda el nombre legal completo (ANTHONY MEDARDO JUMBO ROJANO) y
+     el usuario del sistema puede tener una forma mas corta. Comparar cadenas
+     enteras marcaba como desconocido a casi todo el mundo, que es falso: es la
+     misma persona. Se comparan los apellidos y el primer nombre. */
+  function mismoNombre(a, b) {
+    function tk(x) {
+      return String(x || '').toUpperCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .split(/[^A-Z]+/).filter(function (p) { return p.length > 2; });
+    }
+    var ta = tk(a), tb = tk(b);
+    if (!ta.length || !tb.length) return false;
+    var comunes = ta.filter(function (p) { return tb.indexOf(p) !== -1; });
+    return comunes.length >= Math.min(2, Math.min(ta.length, tb.length));
+  }
+
+  function pintarYo() {
+    var n = $('#yoNombre'), z = $('#yoZona'), nota = $('#yoNota');
+    if (!n) return;
+    if (!YO) {
+      n.textContent = 'No se pudo leer tu sesión';
+      nota.textContent = 'Vuelve a entrar al sistema. La orden tiene que quedar firmada '
+                       + 'con tu nombre y sin eso no se puede emitir.';
+      nota.style.color = '#b91c1c';
+      return;
+    }
+    var t = tecnicoSesion();
+    n.textContent = YO.nombre;
+    if (t && t.zona) { z.textContent = 'Zona ' + t.zona; z.hidden = false; }
+    $('#tecSesion').value = t ? String(t.id) : '';
+    nota.textContent = (t && t.del_padron)
+      ? 'Sale de tu sesión: no se elige y queda como firma de la orden.'
+      : 'Sale de tu sesión. Tu nombre no calza con ninguno del padrón de técnicos, '
+      + 'así que la orden queda marcada para que la administración lo revise.';
   }
 
   function alElegirAviso(a) {
@@ -627,15 +698,77 @@
       firma_presente: firma.tieneTinta(),
       fotos_cantidad: fotos.length,
       tecnico: nombres.join(', '),
+      /* La cadena viaja con la orden aunque se derive del maestro. Es lo que
+         permite reportar por cliente el dia que INDUSTEC atienda a mas de uno,
+         y se copia en el momento: si el maestro cambia manana, la orden tiene
+         que seguir diciendo a que cliente se le hizo el trabajo. */
+      cadena: l ? (l.cadena || null) : null,
+      /* La premisa del servicio, como dato: una visita concluye el trabajo. */
+      concluida: $('#concluida').value === '1',
+      pendiente: pendienteDeLaOrden(),
+      novedades: novedadesDeLaOrden(),
       _hoy: isoLocal(HOY)
     };
+  }
+
+  /**
+   * El equipo que quedo sin concluir, si lo hubo.
+   *
+   * Se recoge aqui, en la orden, y no en una pantalla aparte, porque el plazo
+   * de 48 horas empieza a correr en el momento en que el tecnico sale del local
+   * sabiendo que el equipo quedo parado. Preguntarlo despues por telefono deja
+   * ese momento sin registrar, y con el, el plazo sin punto de partida.
+   */
+  function pendienteDeLaOrden() {
+    if ($('#concluida').value === '1') return null;
+    return {
+      diagnostico: ($('#pen_diagnostico').value || '').trim(),
+      equipo_desc: ($('#pen_equipo').value || '').trim(),
+      parte: ($('#pen_parte').value || '').trim(),
+      deshabilitado: $('#pen_parado').checked
+    };
+  }
+
+  /** Lo que se vio en el local y no era la orden. Cero o varias. */
+  function novedadesDeLaOrden() {
+    return $$('#novedades .bloque').map(function (b) {
+      var d = b.querySelector('.nov-desc');
+      if (!d || !d.value.trim()) return null;
+      return {
+        /* El UUID lo genera el celular al escribir la novedad: es la clave que
+           hace que un reintento sin senal no la registre dos veces. */
+        novedad_uuid: b.dataset.uuid,
+        tipo: b.querySelector('.nov-tipo').value,
+        riesgo: b.querySelector('.nov-riesgo').value,
+        responsable: b.querySelector('.nov-resp').value,
+        equipo_desc: (b.querySelector('.nov-equipo').value || '').trim(),
+        descripcion: d.value.trim()
+      };
+    }).filter(Boolean);
   }
 
   /* Reglas propias de la captura, encima de las 30 del formato único. */
   function reglasDeCaptura(o) {
     var extra = [];
+
+    /* La premisa del servicio, hecha regla: una intervención concluye el
+       trabajo. Dejar un equipo sin concluir es legítimo —es la excepción
+       prevista— pero exige decir qué se encontró, porque ese texto es lo que
+       sostiene el veredicto de las 48 horas y la respuesta a Grupo KFC. */
+    if (o.pendiente && !o.pendiente.diagnostico) {
+      extra.push({ campo: 'pen_diagnostico', severidad: 'BLOQUEA',
+                   mensaje: 'si el trabajo no quedó concluido, escribe qué encontraste' });
+    }
+    if (o.pendiente && o.pendiente.deshabilitado && !o.pendiente.equipo_desc && !o.aviso) {
+      extra.push({ campo: 'pen_equipo', severidad: 'ADVIERTE',
+                   mensaje: 'la orden no tiene aviso y el equipo no está identificado: '
+                          + 'la administración no va a saber de qué equipo se trata' });
+    }
     if (!tecnicoSesion()) {
-      extra.push({ campo: 'tecnico', severidad: 'BLOQUEA', mensaje: 'elige quién llena la orden' });
+      // Ya no se elige: sale de la sesion. Si falta, la sesion se perdio, y
+      // una orden sin firma identificada no se puede emitir.
+      extra.push({ campo: 'tecnico', severidad: 'BLOQUEA',
+                   mensaje: 'no se pudo leer tu sesión; vuelve a entrar al sistema antes de enviar' });
     }
     if (o.origen === 'ASIGNADA' && !o.aviso) {
       extra.push({ campo: 'aviso', severidad: 'BLOQUEA',
@@ -696,7 +829,23 @@
     return { bloquea: bloq.length > 0 };
   }
 
-  /* ---------- Envío (v1: solo resumen) ---------- */
+  /* ---------- Envío ------------------------------------------------------
+     LA ORDEN SE GUARDA EN EL CELULAR ANTES DE INTENTAR MANDARLA.
+
+     Ese orden importa y no es un detalle. El técnico llena la orden en la
+     cocina de un local donde no entra el dato; si el guardado ocurriera
+     después de fallar el envío, la orden que se pierde es justo la del caso en
+     que el navegador se cierra a mitad del intento.
+
+     `Cola.encolar()` vuelve en cuanto la orden está a salvo en disco. El envío
+     es cosa del programa a partir de ahí: sale solo cuando vuelve la señal,
+     aunque el técnico cierre la aplicación.
+
+     EL RECIBO DICE LA VERDAD. Mientras la migración 003 no esté aplicada, el
+     servidor guarda la orden pero NO genera el PDF ni manda el correo. Poner
+     «enviada correctamente» haría que el técnico lo diera por hecho y que el
+     local nunca reciba su informe (I-7).
+     --------------------------------------------------------------------- */
   function alEnviar(e) {
     e.preventDefault();
     var o = reunirOrden();
@@ -704,21 +853,84 @@
     var res = pintarValidacion(hallazgos);
     $('#panelValidacion').scrollIntoView({ behavior: 'smooth', block: 'center' });
     if (res.bloquea) return;
-    if (hallazgos.length && !confirm('Hay ' + hallazgos.length + ' aviso(s) para revisar. ¿Enviar igual?')) return;
 
-    var resumen = {
-      nombre_canonico: nombreCanonico(o),
-      correlativo: 'lo reserva el servidor con el secuencial de la zona ' + (o.zona || '?'),
-      responsable: (tecnicoSesion() || {}).nombre || null,
-      correos: { local: $('#correolocal').value, jefe_op: $('#correojefeop').value },
-      tarea_administracion: o.sin_aviso
-        ? 'REGULARIZAR: abrir el caso en SAP o pedírselo a Grupo KFC. Bloquea repuestos y cierre.'
-        : null,
-      orden: o
+    var seguir = function () {
+      var btn = $('#submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Guardando…';
+
+      if (!window.Cola) {
+        /* Sin la cola no hay garantía de que la orden sobreviva a un fallo de
+           red, y una orden perdida son veinte minutos de trabajo del técnico
+           dentro de un local. Antes que arriesgarlo, se para y se dice. */
+        btn.disabled = false;
+        btn.textContent = 'Revisar y enviar';
+        if (window.UI) {
+          UI.toast('No se pudo preparar el envío. Recarga la aplicación antes de llenar la orden.', 'err');
+        }
+        return;
+      }
+
+      Cola.encolar(o).then(function () {
+        mostrarRecibo(o);
+      }).catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'Revisar y enviar';
+        if (window.UI) {
+          UI.toast('No se pudo guardar la orden en este celular. No cierres la pantalla: '
+                 + 'anota los datos antes de salir.', 'err');
+        }
+      });
     };
-    $('#rNombre').textContent = resumen.nombre_canonico || '(sin local, no se puede componer el nombre)';
+
+    if (hallazgos.length) {
+      /* Las advertencias no bloquean, pero se confirman con lo que dicen a la
+         vista: el `confirm()` del navegador dejaba al técnico decidiendo a
+         ciegas, y en el celular sale como una alerta del sistema que la gente
+         descarta sin leer. */
+      if (window.UI && UI.confirmar) {
+        UI.confirmar({
+          titulo: 'Hay ' + hallazgos.length + ' aviso' + (hallazgos.length === 1 ? '' : 's') + ' para revisar',
+          detalle: 'No impiden enviar, pero conviene mirarlos: quedan marcados en la orden '
+                 + 'y la administración los va a ver.',
+          ok: 'Enviar así'
+        }, seguir);
+      } else if (confirm('Hay ' + hallazgos.length + ' aviso(s) para revisar. ¿Enviar igual?')) {
+        seguir();
+      }
+      return;
+    }
+    seguir();
+  }
+
+  function mostrarRecibo(o) {
+    var conSenal = navigator.onLine;
+    $('#rNombre').textContent = nombreCanonico(o) || '(sin local, no se puede componer el nombre)';
     $('#rTarea').hidden = !o.sin_aviso;
-    $('#rResumen').textContent = JSON.stringify(resumen, null, 2);
+
+    $('#rEstado').className = 'aviso ' + (conSenal ? 'info' : 'warn');
+    $('#rEstadoTxt').innerHTML = conSenal
+      ? '<b>Orden guardada y en camino.</b> Se está enviando ahora. Si la señal se corta, '
+      + 'sale sola en cuanto vuelva — no hace falta que la llenes otra vez.'
+      : '<b>Orden guardada en este celular.</b> No hay señal, así que todavía no salió. '
+      + 'Se envía sola en cuanto vuelva la cobertura, <b>aunque cierres la aplicación</b>. '
+      + 'Puedes seguir llenando las siguientes.';
+
+    var extra = [];
+    if (o.pendiente) {
+      extra.push(o.pendiente.deshabilitado
+        ? 'El equipo quedó registrado como deshabilitado: desde ahora corren las 48 horas '
+        + 'para que se decida la vía —repuesto, reparación, garantía o baja—.'
+        : 'El equipo quedó registrado como trabado. No corre el plazo de 48 horas porque '
+        + 'el local todavía lo puede usar.');
+    }
+    if (o.novedades && o.novedades.length) {
+      extra.push('Reportaste ' + o.novedades.length + ' novedad'
+               + (o.novedades.length === 1 ? '' : 'es') + ' del local. Las revisa tu jefe de zona.');
+    }
+    $('#rExtra').innerHTML = extra.length ? '<li>' + extra.join('</li><li>') + '</li>' : '';
+    $('#rExtraWrap').hidden = !extra.length;
+
     $('#otForm').hidden = true;
     $('#resultado').hidden = false;
     $('#resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -773,6 +985,12 @@
     initFotos();
     initRating();
 
+    fetch('yo.php', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.ok) { YO = d; } })
+      .catch(function () { /* sin senal: se resuelve con lo cacheado o se avisa */ })
+      .then(function () { pintarYo(); });
+
     cargarCatalogo().then(function (cat) {
       CAT = normalizar(cat);
       AVISOS = cat.avisos || { datos: [], cobertura: null };
@@ -781,12 +999,7 @@
         locales: CAT.locales, equipos: CAT.equipos, tipos: CAT.tipos, tecnicos: CAT.tecnicos
       });
 
-      $('#tecSesion').innerHTML = '<option value="">Elige tu nombre…</option>' + opcionesTecnicos();
-      $('#tecSesion').addEventListener('change', function () {
-        comboAviso.limpiar();
-        alSoltarAviso();
-        refrescarAvisos();
-      });
+      pintarYo();
 
       initComboLocal();
       initComboAviso();
@@ -806,8 +1019,21 @@
         CAT.tipos.length + ' tipos · ' + CAT.tecnicos.length + ' técnicos · ' +
         AVISOS.datos.length + ' órdenes abiertas.';
     }).catch(function (err) {
-      $('#pendientes').textContent = 'No se pudo cargar el catálogo: ' + err.message;
-      $('#pendientes').style.color = '#b91c1c';
+      /* Un mensaje que diga que hacer, no solo que fallo. El anterior era
+         «No se pudo cargar el catálogo: catalogos.php respondió 503», que le
+         dice algo al programador y nada al tecnico dentro de un local. */
+      var caja = $('#pendientes');
+      caja.innerHTML = '';
+      var aviso = document.createElement('div');
+      aviso.className = 'aviso err';
+      aviso.setAttribute('role', 'alert');
+      aviso.innerHTML = '<span class="ic" aria-hidden="true">✕</span><div class="cuerpo">' +
+        '<b>No se pudieron cargar los locales ni los equipos.</b>' +
+        '<p>' + (navigator.onLine
+          ? 'Hay señal, así que es un problema del sistema. Avisa a la administración antes de llenar la orden a mano.'
+          : 'Estás sin señal y este celular no tiene una copia guardada. Conéctate una vez y la aplicación queda lista para trabajar sin cobertura.') +
+        '</p><p class="small">Detalle técnico: ' + String(err && err.message || err) + '</p></div>';
+      caja.appendChild(aviso);
     });
   });
 

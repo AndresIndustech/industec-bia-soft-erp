@@ -6,11 +6,50 @@ Automatización de la gestión de órdenes de trabajo (OTs) para **INDUSTEC**, e
 
 **Quién es quién:** el usuario de estas sesiones es **Andrés Basantes**, de INDUSTECH SOLUTIONS S.A.S., que **presta** el servicio. Su cliente es **INDUSTEC** (gerente: César Basantes), que lo **recibe**. Rige la cotización **C26-115**: tres fases de un mes, desde el 2 de septiembre de 2026.
 
-## Antes de hacer nada
+## El ciclo de toda conversación — se abre leyendo el plan y se cierra actualizándolo
 
-1. Lee **[`ESTADO.md`](ESTADO.md)** — qué está hecho, qué sigue, y qué está tocando cada conversación en paralelo.
-2. Consulta **[`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md)** para la tarea concreta: cada una trae su criterio de aceptación y su tabla *autónomo / requiere aprobación / prohibido*.
-3. Si vas a ejecutar algo que escriba en la base o mueva archivos, **anótate en §5.1 de `ESTADO.md`** primero.
+Este proyecto se ejecuta en conversaciones que no se conocen entre sí. Lo único
+que las une son estos dos documentos, así que **leerlos al empezar y dejarlos al
+día al terminar no es burocracia: es la única continuidad que hay.**
+
+### Antes de hacer nada
+
+1. Lee **[`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md)** — empieza por **§11b «Arranque
+   para una conversación nueva»**, que dice en un párrafo dónde está parado el
+   proyecto, cuál es la siguiente acción concreta, qué está bloqueado y por
+   quién, y los errores que este proyecto **ya pagó** y no hay que repetir.
+   Después, la tarea que te toque: cada una trae su criterio de aceptación y su
+   tabla *autónomo / requiere aprobación / prohibido*.
+2. Lee **[`ESTADO.md`](ESTADO.md)** §1 y §1b — qué funciona hoy, con su cifra
+   verificada. El plan dice qué construir; `ESTADO.md` dice qué se construyó.
+3. **Anótate en §5.1 de `ESTADO.md`** antes de tocar nada, y bórrate al
+   terminar. Si esa tabla tiene filas, hay otra conversación trabajando: mira
+   §5.2 para saber si choca con lo tuyo.
+4. Invoca la skill **`industec-invariantes`** antes de la primera línea de código.
+
+### Al terminar — obligatorio, no opcional
+
+Una tarea no está cerrada hasta que la próxima conversación pueda continuarla
+sin preguntarte nada. Antes de dar por terminado:
+
+1. **Actualiza `PLAN_INDUSTEC.md`.** Si la tarea quedó hecha, márcala y escribe
+   la siguiente con su criterio de aceptación y su tabla de permisos. Si quedó a
+   medias, di **exactamente** en qué subtarea y qué falta. Y actualiza **§11b**:
+   la siguiente acción concreta, lo que se desbloqueó y lo que sigue bloqueado.
+2. **Actualiza `ESTADO.md`** con lo que quedó funcionando **y su cifra
+   verificada**, no con una descripción. Bórrate de §5.1.
+3. **Pega la evidencia.** El comando que comprueba el criterio de aceptación y
+   su salida literal. Nada «a medias» ni «debería funcionar».
+4. **Si aprendiste un error que costó tiempo**, escríbelo en la lista de §11b
+   del plan. Es la sección que evita que la siguiente conversación lo repita.
+5. **Di también lo que NO se pudo comprobar.** Un «verificado» que en realidad
+   fue «pasa el lint» es peor que no decir nada: la próxima conversación
+   construye encima creyendo que hay suelo (I-7).
+
+**Nunca dupliques un hecho entre los dos documentos.** El plan dice qué
+construir y con qué criterio; `ESTADO.md` dice qué se construyó y qué cifra dio.
+Dos versiones del mismo hecho se separan, y la que se queda atrás es la que
+alguien lee.
 
 ## Reglas que no se violan
 

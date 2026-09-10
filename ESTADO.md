@@ -8,20 +8,30 @@
 **Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
 
 **Nombre del sistema, decidido por Andrés el 2026-09-10: B.IA Soft ERP.**
-Hasta ahora las pantallas dicen «Sistema de OTs». El renombre en la interfaz
-**no se aplicó desde aquí** porque `app/publico/` lo tiene en uso activo la
-conversación de rediseño de interfaces (ver §5.1 más abajo); aplicarlo aquí
-habría chocado con cambios suyos sin confirmar. Queda como pendiente explícito
-de la próxima tarea que toque esa carpeta: cambiar el nombre en `<title>`, en
-las cabeceras (`Sistema de OTs` → `B.IA Soft ERP`) y en `manifest.json` (el
-nombre que ve el celular al instalar la app).
+✅ **Aplicado en la interfaz el 2026-09-10**, por la conversación del rediseño
+—que era la que tenía `app/publico/` en uso, así que le tocaba—: el `<title>` de
+las trece pantallas (sale de `Ui::cabecera()`, un solo sitio), la marca de la
+barra (`B.IA Soft ERP`), el ingreso, el cambio de clave, el alta del padrón, y
+`manifest.json` con el nombre que ve el celular al instalar la app
+(`B.IA Soft`). Comprobado: no queda ninguna mención de «Sistema de OTs» ni de
+«OT INDUSTEC» en `.php`, `.html` ni `.json`. **Sin desplegar**, como el resto
+del rediseño.
 
 > **Si esta es una conversación nueva: empieza leyendo esto, en orden.**
-> 1. Esta sección y la §1b completas.
-> 2. [`SISTEMA_COMPLETO.md`](SISTEMA_COMPLETO.md) — el sistema de punta a punta, incluida la §5b de LOPDP (recién ampliada, ver abajo).
-> 3. §3 de aquí abajo, para lo que sigue.
-> No hace falta releer el resto del repositorio: estos tres documentos son la
-> foto completa al 2026-09-08.
+> 1. **[`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) §11b — «Arranque para una conversación nueva».**
+>    Dice en un párrafo dónde está parado el proyecto, cuál es la siguiente acción
+>    concreta, qué está bloqueado y por quién, y los errores que este proyecto **ya
+>    pagó**. Es el punto de entrada.
+> 2. Esta sección y la §1b completas — qué funciona hoy, con su cifra verificada.
+> 3. La tarea que te toque en el plan, con su criterio de aceptación y su tabla
+>    *autónomo / requiere aprobación / prohibido*.
+> 4. [`SISTEMA_COMPLETO.md`](SISTEMA_COMPLETO.md) solo si vas a tocar seguridad o
+>    datos personales: su §5b tiene lo de la LOPDP.
+>
+> **Y no cierres la conversación sin actualizar el plan y este archivo.** Es
+> directiva del cliente desde el 2026-09-10 y está en el `CLAUDE.md` del
+> proyecto: el proyecto se ejecuta en conversaciones que no se conocen entre sí,
+> y estos dos documentos son la única continuidad que hay.
 
 ---
 
@@ -229,6 +239,7 @@ se contrasta contra ellos y se corrige lo que haga falta.
 
 | # | Tarea | Depende de | ¿Paralelizable? |
 |---|---|---|---|
+| **T2.12** | **Puesta en marcha de las interfaces por rol.** Doce subtareas con compuerta, en [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md). Arranca con **aplicar la migración 007** (requiere aprobación). Lo construido está probado en local —206 comprobaciones, 0 fallos— pero **nunca se abrió contra la base real**: la verificación de alcance con los tres roles, la prueba sin señal de punta a punta y el reloj de 48 h contra datos reales siguen pendientes | Aprobación para la 007 y para desplegar | **No**: cada subtarea es compuerta de la siguiente |
 | **T1.11-b** | Llevar el consolidador vivo (`agente2_consolidador.py`) al modelo del histórico: agrupar por (aviso, zona), arrastrar por evidencia y leer los campos SAP nuevos. Hoy sigue con la lógica vieja del 87,3% | nada | Sí |
 | **T2.4.0–T2.4.4** | Continuidad de datos del sistema en producción: parches de seguridad, espejo verificado, purga con compuerta de hash, normalización y publicación. Ver [`ARQUITECTURA_SISTEMA_OTS.md`](ARQUITECTURA_SISTEMA_OTS.md) | SSH habilitado | Sí, salvo la purga |
 | **T2.5.2** | Los controles del formato único como código probable, y medidos contra las 7.069 órdenes. **Hecho**: 14 pruebas en verde, informe en `SALIDAS IA\OTS\CONTROLES_MEDIDOS.md` | T2.5.1 | Sí |

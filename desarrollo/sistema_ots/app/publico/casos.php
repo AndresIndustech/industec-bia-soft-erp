@@ -237,10 +237,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-$flash = $_SESSION['flash'] ?? null;
-unset($_SESSION['flash']);
-$aviso_ok = $flash['ok'] ?? null;
-$error    = $flash['error'] ?? null;
+/* El error se pinta aqui; el exito se lo lleva `Ui::pie()` como aviso efimero.
+   La regla es la misma en todo el sistema: si hay que hacer algo, aviso fijo;
+   si solo hay que enterarse de que salio bien, aviso que se va solo. */
+$error = $_SESSION['flash']['error'] ?? null;
+unset($_SESSION['flash']['error']);
 
 function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
 
@@ -263,9 +264,14 @@ $fTexto = trim((string) ($_GET['q'] ?? ''));
 $fDias  = (string) ($_GET['dias'] ?? '');              // '' = toda la ventana
 $fVence = isset($_GET['vencidos']);
 $fAtn   = (string) ($_GET['atn'] ?? '');            // '' | sin | curso | cerrada
+/* Estado de gestion. Es el filtro que usan los enlaces del panel: «tienes 12
+   atendidos esperando cierre» tiene que dejar a la persona delante de ESOS 12,
+   no de la lista completa para que los busque. */
+$fEst   = (string) ($_GET['est'] ?? '');
 $desdeF = $fDias !== '' ? date('Y-m-d', strtotime('-' . (int) $fDias . ' days')) : null;
 
-$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $porAviso) {
+$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $fEst, $porAviso, $gestion) {
+    if ($fEst !== '' && (($gestion[$c['aviso'] ?? '']['estado'] ?? 'NUEVO') !== $fEst)) { return false; }
     if ($fAtn !== '') {
         $e = $porAviso[$c['aviso'] ?? '']['estado_industec'] ?? null;
         if ($fAtn === 'sin' && $e !== null) { return false; }
@@ -318,6 +324,15 @@ $nSemana = count(array_filter($todos, fn($c) => ($c['fecha_creacion'] ?? '') >= 
 $nAyer   = count(array_filter($todos, fn($c) => ($c['fecha_creacion'] ?? '') >= $desde1));
 $nSinZona = count(array_filter($todos, fn($c) => empty($c['zona'])));
 $nAtend   = count(array_filter($todos, fn($c) => isset($porAviso[$c['aviso'] ?? ''])));
+/* Lo unico que de verdad hay que repartir: llego y nadie lo ha tocado. */
+$nSinAsignar = count(array_filter($todos, fn($c) =>
+    (($gestion[$c['aviso'] ?? '']['estado'] ?? 'NUEVO') === 'NUEVO')
+    && !isset($porAviso[$c['aviso'] ?? ''])));
+$porGestion = [];
+foreach ($todos as $c) {
+    $k = $gestion[$c['aviso'] ?? '']['estado'] ?? 'NUEVO';
+    $porGestion[$k] = ($porGestion[$k] ?? 0) + 1;
+}
 $nCerrIn  = count(array_filter($todos, fn($c) =>
     ($porAviso[$c['aviso'] ?? '']['estado_industec'] ?? '') === 'CERRADA'));
 $porZona  = [];
@@ -343,72 +358,21 @@ $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
         'JEFE_ZONA' => 'Jefe de zona', 'TECNICO' => 'Técnico'];
 $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar',
                 'SIN_ALERTA' => 'sin alerta'];
+
+require_once __DIR__ . '/nucleo/Ui.php';
+require_once __DIR__ . '/nucleo/Pendientes.php';
+
+$cuentas = ['casos' => $nSinAsignar > 0 ? ['n' => $nSinAsignar] : null];
+$pc = Pendientes::contadores();
+if ($pc['vencidos'] > 0) { $cuentas['repuestos'] = ['n' => $pc['vencidos'], 'tono' => 'urge']; }
+
+Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Buzón de casos · OTs INDUSTEC</title>
-<link rel="stylesheet" href="estilo.css">
-<style>
-  .barra{ display:flex; justify-content:space-between; align-items:center; gap:12px;
-          flex-wrap:wrap; padding:10px 14px; background:#fff;
-          border-bottom:1px solid var(--border); position:sticky; top:0; z-index:40; }
-  .tiles{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-          gap:10px; margin:0 0 16px; }
-  .tile{ background:#fff; border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
-  .tile .n{ font-size:26px; font-weight:700; line-height:1.1; font-variant-numeric:tabular-nums; }
-  .tile .t{ font-size:11.5px; color:var(--muted); text-transform:uppercase;
-            letter-spacing:.05em; margin-top:2px; }
-  .tile.alerta{ border-color:#fecaca; background:#fef2f2; } .tile.alerta .n{ color:#991b1b; }
-  .tile.vence{ border-color:#fde68a; background:var(--warn-bg); } .tile.vence .n{ color:#92400e; }
+<div class="wrap ancho">
 
-  .filtros{ display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; }
-  .filtros .campo{ display:flex; flex-direction:column; gap:3px; }
-  .filtros label{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
-  .filtros select, .filtros input[type=text]{ height:38px; min-width:130px; }
-
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em;
-      color:var(--muted); padding:8px 9px; border-bottom:1px solid var(--border);
-      background:#fff; position:sticky; top:0; }
-  td{ padding:9px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
-  tr.con-alerta{ background:#fffbfb; }
-  tr.con-alerta td:first-child{ box-shadow:inset 3px 0 0 #ef4444; }
-  .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; }
-  .tabla-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:#fff; }
-  .vencido{ color:#991b1b; font-weight:700; }
-  .alerta-txt{ font-size:11.5px; color:#991b1b; display:block; margin-top:3px; }
-  .desc{ color:var(--muted); font-size:12px; display:block; margin-top:3px;
-         max-width:42ch; overflow-wrap:anywhere; }
-  .acciones-fila{ display:flex; gap:5px; flex-wrap:wrap; }
-  .btn[disabled]{ opacity:.42; cursor:not-allowed; }
-  .proximo{ border:1px dashed var(--border); border-radius:10px; padding:14px; background:#fff; }
-  .proximo li{ margin-bottom:8px; }
-  .vacio{ padding:28px 14px; text-align:center; color:var(--muted); }
-  .ok{ background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
-  .err{ background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
-  .tile.atend{ border-color:#bbf7d0; background:#f0fdf4; } .tile.atend .n{ color:#166534; }
-  .chip.cerrada{ background:#dcfce7; color:#166534; }
-  .chip.curso{ background:#e0f2fe; color:#075985; }
-</style>
-</head>
-<body>
-
-<div class="barra">
-  <strong><a href="panel.php" style="text-decoration:none;color:inherit">← Sistema de OTs</a></strong>
-  <div style="display:flex;align-items:center;gap:10px;font-size:13px">
-    <span style="font-weight:700"><?= e($u['nombre']) ?></span>
-    <span class="chip"><?= e($ROL[$u['rol']] ?? $u['rol']) ?><?= $zonaAlc ? ' · ' . e($zonaAlc) : ' · las 3 zonas' ?></span>
-    <a class="btn" href="salir.php">Salir</a>
-  </div>
-</div>
-
-<div class="wrap">
-  <div class="card">
-    <h1 style="font-size:19px;margin:0 0 4px">Buzón de casos</h1>
-    <p class="sub" style="margin:0 0 14px">
+  <div class="titulo entra">
+    <h1>Buzón de casos</h1>
+    <p class="sub">
       Lo que Grupo KFC pide por el correo de SAP.
       <?php if ($u['rol'] === 'TECNICO'): ?>
         Ves los casos que te hayan asignado.
@@ -418,17 +382,19 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
         Ves las tres zonas.
       <?php endif; ?>
     </p>
+  </div>
 
-    <?php if ($aviso_ok): ?><div class="ok"><?= e($aviso_ok) ?></div><?php endif; ?>
-    <?php if ($error): ?><div class="err"><?= e($error) ?></div><?php endif; ?>
+  <?php /* El aviso de exito sale como aviso efimero desde `Ui::pie()`: ya
+           ocurrio y no hay nada que hacer con el. El error se queda fijo aqui,
+           porque hay que leerlo y actuar. */ ?>
+  <?php if ($error): ?><?= Ui::aviso('err', e($error), true) ?><?php endif; ?>
 
     <?php if (!$fuente): ?>
-      <div class="nota-regular">
-        <b>No hay datos del buzón.</b>
-        Falta <span class="mono">catalogos/casos_sap.json</span>, que genera
-        <span class="mono">t2_6_imap_avisos.py</span> al leer el correo. Hasta que
-        esté, esta pantalla no puede decir qué hay pendiente — y no va a inventarlo.
-      </div>
+      <?= Ui::aviso('warn',
+          '<b>No hay datos del buzón.</b>'
+        . '<p>Falta <span class="mono">catalogos/casos_sap.json</span>, que genera '
+        . '<span class="mono">t2_6_imap_avisos.py</span> al leer el correo. Hasta que '
+        . 'esté, esta pantalla no puede decir qué hay pendiente — y no va a inventarlo.</p>') ?>
     <?php else: ?>
 
       <div class="nota-regular" style="margin-bottom:16px">
@@ -469,6 +435,51 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
           <div class="tile"><div class="n"><?= $nSinZona ?></div><div class="t">Sin zona resuelta</div></div>
         <?php endif; ?>
       </div>
+
+      <?php /* =====================================================================
+         LA LINEA DE ESTADOS.
+         Es el ciclo de vida real de un caso, dibujado y con su cifra. Sirve
+         para dos cosas a la vez: filtrar de un clic, y —sobre todo— que
+         cualquiera entienda de un vistazo POR DONDE va el trabajo y qué falta
+         para cerrarlo. El cierre es de dos manos y eso no se deduce de una
+         tabla: el sistema marca ATENDIDO al ver la orden, y la administración
+         confirma aparte que además lo cerró en SAP.
+         ===================================================================== */ ?>
+      <?php
+      $PASOS = [
+          'NUEVO'           => 'llegó del correo, sin técnico',
+          'ASIGNADO'        => 'tiene técnico, se espera el informe',
+          'ESPERA_REPUESTO' => 'el equipo quedó trabado',
+          'ATENDIDO'        => 'orden emitida; falta cerrarlo en SAP',
+          'RESUELTO'        => 'cerrado por las dos partes',
+      ];
+      ?>
+      <nav class="linea" aria-label="Estados del caso">
+        <?php foreach ($PASOS as $k => $ayuda): ?>
+          <a href="?est=<?= $k ?>" class="<?= $fEst === $k ? 'on' : '' ?>"
+             title="<?= e(Ui::ayudaEstado($k)) ?>">
+            <div class="paso-n" data-n="<?= (int) ($porGestion[$k] ?? 0) ?>">0</div>
+            <div class="paso-t"><?= e(Ui::etiquetaEstado($k)) ?></div>
+            <div class="paso-d"><?= e($ayuda) ?></div>
+          </a>
+        <?php endforeach; ?>
+      </nav>
+      <?php
+      $aparte = [];
+      foreach (['EN_REVISION', 'NO_COMPETE', 'CERRADO_SIN_ATENCION'] as $k) {
+          if (!empty($porGestion[$k])) { $aparte[$k] = $porGestion[$k]; }
+      }
+      ?>
+      <?php if ($aparte): ?>
+        <p class="sub" style="margin:-8px 0 16px">
+          Fuera de esa línea:
+          <?php foreach ($aparte as $k => $cn): ?>
+            <a href="?est=<?= $k ?>" style="text-decoration:none">
+              <span class="est est-<?= e(strtolower($k)) ?>"><?= (int) $cn ?> <?= e(Ui::etiquetaEstado($k)) ?></span>
+            </a>
+          <?php endforeach; ?>
+        </p>
+      <?php endif; ?>
 
       <?php /* La cifra de vencidos va aqui abajo y con su explicacion, no como
                numero grande: 911 de 918 no es un atraso, es como funciona SAP. */ ?>
@@ -545,6 +556,17 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
                  placeholder="aviso, local, equipo o texto del pedido">
         </div>
         <div class="campo">
+          <label for="f-est">Estado</label>
+          <select id="f-est" name="est">
+            <option value="">Cualquiera</option>
+            <?php foreach (Ui::ESTADOS as $k => [$et, $_]): ?>
+              <option value="<?= e($k) ?>" <?= $fEst === $k ? 'selected' : '' ?>>
+                <?= e($et) ?><?= !empty($porGestion[$k]) ? ' (' . (int) $porGestion[$k] . ')' : '' ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div class="campo">
           <label for="f-atn">Atención</label>
           <select id="f-atn" name="atn">
             <option value="">Todos</option>
@@ -567,7 +589,7 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
           <label>&nbsp;</label>
           <button class="btn primary" type="submit" style="height:38px">Filtrar</button>
         </div>
-        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn): ?>
+        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn || $fEst): ?>
           <div class="campo">
             <label>&nbsp;</label>
             <a class="btn" href="casos.php" style="height:38px;display:flex;align-items:center">Limpiar</a>
@@ -610,12 +632,12 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
               </td>
               <td>
                 <?php if (!empty($c['zona'])): ?>
-                  <?= e($c['zona']) ?>
+                  <?= Ui::zona($c['zona']) ?>
                   <?php if (!empty($c['zona_discrepa'])): ?>
                     <span class="alerta-txt">llegó al buzón de <?= e($c['zona_por_buzon'] ?? '?') ?></span>
                   <?php endif; ?>
                 <?php else: ?>
-                  <span class="sub">sin resolver</span>
+                  <?= Ui::zona(null) ?>
                 <?php endif; ?>
               </td>
               <td>
@@ -630,7 +652,13 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
                   <span class="alerta-txt">⚠ <?= e(is_array($a) ? ($a['motivo'] ?? $a['regla'] ?? json_encode($a)) : (string) $a) ?></span>
                 <?php endforeach; ?>
               </td>
-              <td><span class="prio prio-<?= e($prio ?: 'sd') ?>"><?= e($c['prioridad'] ?? 'S/D') ?></span></td>
+              <td>
+                <?= Ui::prioridad($c['prioridad'] ?? null) ?>
+                <?php /* La antiguedad al lado de la prioridad, no en otra
+                         columna: juntas responden «esto es urgente Y lleva
+                         mucho», que es lo que decide qué se atiende primero. */ ?>
+                <span class="desc"><?= Ui::edad($c['fecha_creacion'] ?? null) ?></span>
+              </td>
               <td>
                 <?php $a = $porAviso[$c['aviso'] ?? ''] ?? null; ?>
                 <?php if ($a === null): ?>
@@ -709,7 +737,7 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
 
                 <?php if ($g): ?>
                   <span class="desc">
-                    <?= e(Casos::etiquetaEstado($est)) ?>
+                    <?= Ui::estado($est) ?>
                     <?php if (!empty($g['tecnico_nombre'])): ?>
                       · <?= e($g['tecnico_nombre']) ?><?= $g['tecnico_auto'] ? ' (del informe)' : '' ?>
                     <?php endif; ?>
@@ -778,7 +806,6 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
       <?php endif; ?>
 
     <?php endif; ?>
-  </div>
 </div>
 
 <?php /* El diálogo de acciones.
@@ -833,14 +860,7 @@ $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar'
     </div>
   </form>
 </dialog>
-<style>
-  dialog#acc{ border:none; border-radius:12px; padding:18px; max-width:480px;
-              width:calc(100% - 28px); box-shadow:0 18px 50px rgba(0,0,0,.25); }
-  dialog#acc::backdrop{ background:rgba(15,23,42,.45); }
-  dialog#acc label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
-  dialog#acc select, dialog#acc textarea{ width:100%; }
-  dialog#acc [hidden]{ display:none !important; }
-</style>
+
 <script>
 /* Qué pide cada acción. Sale de aquí y no del HTML de cada fila para que el
    texto que ve la persona esté en un solo sitio y no en 900 copias. */
@@ -877,66 +897,4 @@ function abrir(accion, aviso) {
 }
 </script>
 
-<?php /* La barra de novedades. Aparece cuando el buzon cambio en el servidor y
-         NO recarga sola: la administradora puede estar leyendo un caso o a
-         medio filtrar, y recargarle la pagina debajo seria peor que no avisar.
-         Es la misma regla que se fijo para las alertas del cronograma: visible
-         siempre, sin estorbar, hasta que la persona decida. */ ?>
-<div id="novedades" hidden>
-  <span id="nov-txt">El buzón se actualizó</span>
-  <button class="btn primary" type="button" id="nov-ver">Ver lo nuevo</button>
-  <button class="btn" type="button" id="nov-no" title="Se vuelve a avisar en el próximo cambio">Ahora no</button>
-</div>
-<style>
-  #novedades{ position:fixed; left:50%; transform:translateX(-50%); bottom:18px;
-              z-index:60; display:flex; align-items:center; gap:10px;
-              background:#0b1220; color:#fff; border-radius:999px;
-              padding:9px 10px 9px 18px; font-size:13.5px;
-              box-shadow:0 8px 26px rgba(0,0,0,.28); max-width:calc(100vw - 24px); }
-  #novedades[hidden]{ display:none !important; }
-  #novedades .btn{ padding:6px 13px; font-size:12.5px; }
-  #nov-no{ background:transparent; color:#cbd5e1; border-color:#334155; }
-  @media (max-width:520px){ #novedades{ padding-left:14px; font-size:12.5px; } }
-</style>
-<script>
-(function () {
-  var caja = document.getElementById("novedades");
-  var txt  = document.getElementById("nov-txt");
-  var base = null;          // la version con la que se dibujo esta pagina
-  var visto = null;         // la version que ya se descarto con "Ahora no"
-
-  function mirar() {
-    fetch("novedades.php", { cache: "no-store", credentials: "same-origin" })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) {
-        if (!d || !d.hay) { return; }
-        if (base === null) { base = d.version; return; }   // primera lectura
-        if (d.version === base || d.version === visto) { caja.hidden = true; return; }
-        var n = (typeof d.total === "number") ? d.total : null;
-        txt.textContent = n === null
-          ? "El buzón se actualizó"
-          : "El buzón se actualizó — ahora hay " + n + (n === 1 ? " caso" : " casos");
-        caja.dataset.version = d.version;
-        caja.hidden = false;
-      })
-      .catch(function () { /* sin señal: se reintenta al rato, sin molestar */ });
-  }
-
-  document.getElementById("nov-ver").addEventListener("click", function () {
-    location.reload();
-  });
-  document.getElementById("nov-no").addEventListener("click", function () {
-    visto = Number(caja.dataset.version) || null;
-    caja.hidden = true;
-  });
-
-  mirar();
-  setInterval(mirar, 30000);
-  // Al volver a la pestaña se mira enseguida, en vez de esperar los 30 s.
-  document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) { mirar(); }
-  });
-})();
-</script>
-</body>
-</html>
+<?php Ui::pie(['novedades' => true]); ?>

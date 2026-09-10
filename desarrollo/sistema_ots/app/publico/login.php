@@ -39,37 +39,46 @@ function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ingreso · Sistema de OTs INDUSTEC</title>
+<title>Ingreso · B.IA Soft ERP</title>
 <link rel="stylesheet" href="estilo.css">
+<meta name="theme-color" content="#0b4f8f">
 <style>
-  body{ display:flex; align-items:center; justify-content:center; min-height:100vh; }
-  .entrada{ width:min(400px,100%); margin:20px; }
-  .entrada .card{ padding:24px; }
+  /* El ingreso es la unica pantalla sin barra de aplicacion, asi que la marca
+     tiene que estar aqui: es lo que le dice al tecnico que abrio lo correcto
+     antes de teclear su clave. */
+  body{ display:flex; align-items:center; justify-content:center; min-height:100vh;
+        padding:20px; }
+  .entrada{ width:min(400px,100%); animation:entrar var(--t3) var(--curva) both; }
+  .marca-cab{ display:flex; align-items:center; gap:10px; justify-content:center;
+              margin-bottom:18px; color:var(--marca); font-weight:700; font-size:16px; }
+  .marca-cab .punto{ width:11px; height:11px; border-radius:50%; background:var(--accent);
+                     box-shadow:0 0 0 4px rgba(14,165,233,.18); }
+  .entrada .card{ padding:26px; box-shadow:var(--sombra-3); }
   .entrada h1{ font-size:20px; margin:0 0 4px; }
-  .entrada .sub{ margin:0 0 18px; }
-  .campo{ margin-bottom:12px; }
-  .err{ background:#fef2f2; border:1px solid #fecaca; color:#991b1b;
-        border-radius:9px; padding:10px 12px; font-size:13px; margin-bottom:14px; }
-  .ses{ background:var(--warn-bg); border:1px solid #fde68a; color:#78350f;
-        border-radius:9px; padding:10px 12px; font-size:13px; margin-bottom:14px; }
+  .entrada .sub{ margin:0 0 20px; }
+  .campo{ margin-bottom:13px; }
   .ses dl{ display:grid; grid-template-columns:auto 1fr; gap:2px 10px; margin:8px 0 0; }
   .ses dt{ opacity:.8; }
   .ses dd{ margin:0; }
-  .pie{ font-size:12px; color:var(--muted); text-align:center; margin-top:14px; }
+  .pie{ font-size:12px; color:var(--muted); text-align:center; margin-top:16px; }
 </style>
 </head>
 <body>
 <div class="entrada">
+  <div class="marca-cab"><span class="punto"></span>B.IA Soft ERP</div>
   <div class="card">
-    <h1>Sistema de OTs</h1>
+    <h1>B.IA Soft ERP</h1>
     <p class="sub">INDUSTEC · gestión de órdenes de trabajo</p>
 
     <?php if ($error && !$sesionAbierta): ?>
-      <div class="err"><?= e($error) ?></div>
+      <div class="aviso err" role="alert">
+        <span class="ic" aria-hidden="true">✕</span>
+        <div class="cuerpo"><?= e($error) ?></div>
+      </div>
     <?php endif; ?>
 
     <?php if ($sesionAbierta): ?>
-      <div class="ses">
+      <div class="aviso warn ses" style="display:block">
         <b>Ya tienes una sesión abierta.</b>
         <dl>
           <dt>Desde</dt><dd><?= e($sesionAbierta['desde']) ?></dd>
@@ -84,7 +93,7 @@ function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES
         <input type="hidden" name="usuario" value="<?= e($usuario) ?>">
         <input type="hidden" name="clave" value="<?= e($_POST['clave'] ?? '') ?>">
         <input type="hidden" name="desplazar" value="1">
-        <button class="btn primary" type="submit" style="width:100%;padding:12px">
+        <button class="btn primary bloque" type="submit">
           Cerrar la otra sesión y entrar aquí
         </button>
       </form>
@@ -100,7 +109,7 @@ function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES
           <label for="clave">Contraseña</label>
           <input type="password" id="clave" name="clave" autocomplete="current-password" required>
         </div>
-        <button class="btn primary" type="submit" style="width:100%;padding:12px">Entrar</button>
+        <button class="btn primary bloque" type="submit">Entrar</button>
       </form>
       <p class="pie">Si olvidaste tu contraseña, pídesela al administrador del sistema.</p>
     <?php endif; ?>

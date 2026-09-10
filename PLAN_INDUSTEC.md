@@ -527,6 +527,97 @@ Rediseñado como cola persistente, no envío directo — PHPMailer no reintenta 
 
 ---
 
+### T2.5 – T2.11 · Ejecutadas — el detalle NO se repite aquí
+
+Entre el 2026-09-06 y el 2026-09-10 se ejecutaron siete tareas que este plan no
+tenía numeradas cuando se escribió: catálogos del formulario, lector del buzón
+SAP, cronograma de preventivos, padrón de técnicos, vigilante IMAP en vivo,
+despliegue por SSH y cruce de informes de OT.
+
+**Están documentadas, con sus cifras verificadas, en [`ESTADO.md`](ESTADO.md)
+§1b.** No se copian aquí a propósito: dos versiones del mismo hecho se separan,
+y la que se queda atrás es la que alguien lee. El plan dice qué construir y con
+qué criterio; `ESTADO.md` dice qué se construyó y qué cifra dio.
+
+---
+
+### T2.12 · Puesta en marcha de las interfaces por rol
+
+**Lo construido está listo y sin desplegar.** El 2026-09-09/10 se rediseñaron
+las trece pantallas del sistema nuevo, se construyó la aplicación móvil del
+técnico con captura sin señal, el control de las 48 horas de los equipos
+deshabilitados, las novedades del preventivo y el tablero gráfico. Reseña
+completa: [`SALIDAS IA\OTS\REDISENO_INTERFACES.md`](SALIDAS%20IA/OTS/REDISENO_INTERFACES.md).
+
+Esta tarea es **solo la puesta en marcha**: aplicar, desplegar y verificar.
+Nada de escribir código nuevo — si al verificar aparece un defecto, se corrige,
+pero el alcance no es agregar funciones.
+
+**Por qué se descompone así:** cada subtarea es una compuerta. La siguiente no
+empieza hasta que la anterior pegó su evidencia. El orden no es una preferencia:
+sin la migración no hay tablas, sin tablas la verificación de alcance no puede
+correr, y sin verificar el alcance no se despliega algo que muestra datos de un
+cliente.
+
+| # | Subtarea | Qué ataca | Verificación exacta |
+|---|---|---|---|
+| **T2.12.1** | 🚦 Aplicar `sql/007_pendientes_y_captura.sql` | Sin las tablas, el control de 48 h, las novedades y la recepción de órdenes no existen | Correr las 7 consultas del pie del propio archivo y **pegar su salida literal**. Las tres que no se negocian: `SHOW CREATE TABLE pendientes\G` muestra `UNIQUE KEY uq_pendiente (aviso, activo_fijo)`; `SHOW CREATE TABLE ot_capturadas\G` muestra `UNIQUE KEY uq_captura_envio (envio_uuid)`; `SHOW COLUMNS FROM casos_gestion LIKE 'estado'` termina en `,'ESPERA_REPUESTO')` |
+| **T2.12.2** | Idempotencia de la migración | Una segunda corrida que duplique deja el tablero contando doble | Correr la 007 **dos veces seguidas**. `SELECT COUNT(*) FROM permisos WHERE codigo LIKE 'repuestos%' OR codigo LIKE 'novedades%'` → 7 en las dos corridas. Y la prueba de inserción doble del pie del archivo → `COUNT(*) = 1` |
+| **T2.12.3** | Desplegar a **UIO solamente** (I-8) | Un defecto en tres zonas a la vez | `t2_10_desplegar.py`, que verifica por hash. Abrir las 13 pantallas con un usuario de cada rol y **que ninguna dé error de PHP ni quede en blanco** |
+| **T2.12.4** | 🚦 Verificar el alcance por zona **con los tres roles** | Que un jefe de zona vea datos de otra zona. Es la comprobación más importante de toda la tarea | Entrar como administradora, jefe de UIO y jefe de CNLJ y **contar filas** en `casos.php`, `pendientes.php`, `novedades_visita.php`, `ordenes.php`, `reportes.php` y `cronograma.html`. Las cifras de los dos jefes deben sumar sin solaparse y ser menores que la de la administradora. Pedir otra zona por la URL (`?zona=CNLJ` siendo jefe de UIO) → **0 filas y ninguna fuga** |
+| **T2.12.5** | Verificar el alcance con un **POST fabricado a mano** | Que esconder un botón se confunda con proteger | `curl` un POST a `pendientes.php` con `pendiente_id` de otra zona y a `novedades_visita.php` con `novedad_id` de otra zona, con la cookie de un jefe de zona → **rechazado en el servidor**, y la fila queda en `bitacora` con `exito = 0` |
+| **T2.12.6** | Verificar los dos extremos que se cerraron el 10-sep | Que un despliegue los reabra por descuido | `curl` sin cookie a `catalogos.php` y a `cronograma.php` → **401 en JSON**, no un catálogo. Con cookie de jefe de zona a `cronograma.php` → solo su zona |
+| **T2.12.7** | 🚦 Prueba de captura **sin señal**, de punta a punta | Que una orden se pierda, o que llegue dos veces | **Apagar el servidor de verdad** — no cortar la red con el depurador, que no reproduce el caso: el trabajador de servicio tiene su propio contexto de red. Abrir el formulario, llenar una orden completa, comprobar que la cola dice «guardada, esperando señal». Encender el servidor. La orden sale sola y **`SELECT COUNT(*) FROM ot_capturadas WHERE envio_uuid = '<el uuid>'` da 1**, no 2 |
+| **T2.12.8** | Reintento con sesión caducada | Que un 401 marque como inválida una orden que está perfecta | Con órdenes en la cola, cerrar la sesión desde otro navegador (sesión única). El siguiente intento debe dejarlas en «falta entrar», **no** en «rechazada». Volver a entrar → salen solas |
+| **T2.12.9** | Verificar el reloj de 48 h contra datos reales | Que la cifra del globo de navegación y la de la pantalla discrepen | Abrir un pendiente con equipo deshabilitado. Comprobar que el globo de «Repuestos y equipos», la tarjeta «Fuera de plazo» y la lista filtrada con `?g=vencidos` **dan el mismo número**. Contrastar con la consulta 6 del pie de la 007 |
+| **T2.12.10** | Verificar el ciclo completo de un caso | Que la reconciliación pise un estado que puso una persona | Recorrer un caso de prueba: asignar → el técnico lo deja trabado → veredicto → avanzar la vía → resolver. Después correr `reconciliar_cli.php` y comprobar con la consulta 5 del pie de la 007 que **da 0 filas** |
+| **T2.12.11** | Esperar **48 horas** y extender a LARB y CNLJ | Desplegar a las tres zonas un defecto que se ve al segundo día | Que en 48 h no haya entrado ninguna incidencia del personal de UIO. Recién entonces `t2_10_desplegar.py` al resto |
+| **T2.12.12** | Capacitación mínima, **una hoja por rol** | Que la interfaz nueva se aprenda por prueba y error delante del cliente | Tres hojas en `SALIDAS IA\OTS\`: técnico (bandeja, cómo se llena sin señal, cómo se insiste), jefe de zona (repartir, los cuatro veredictos, el reloj), administración (confirmar cierre en SAP, novedades, reportes). Cada una con capturas del sistema ya desplegado |
+
+**La regla de negocio que esta tarea pone a funcionar**, y contra la que se mide
+todo lo de arriba: *una intervención concluye el trabajo; el único motivo válido
+para no concluir es que el equipo dependa de una pieza o de un tercero; y si un
+equipo queda deshabilitado hay **48 horas** para dar uno de cuatro veredictos —
+repuesto, reparación, garantía o baja.* El plazo mide **la decisión**, no la
+reparación completa: una garantía puede tardar semanas sin que sea
+incumplimiento. Lo que no puede pasar es que a las 72 horas nadie haya decidido.
+
+**Lo que ya está verificado y no hay que repetir** (evidencia en
+`REDISENO_INTERFACES.md` §13): `php -l` 38/38, `node --check` 9/9, balance de
+etiquetas 13/13, y tres suites de prueba que se corren solas —
+`pruebas/prueba_48h.php` (96 comprobaciones), `pruebas/prueba_graficos.mjs`
+(62) y `pruebas/prueba_contratos.mjs` (48), **206 en total, 0 fallos**. Antes de
+tocar nada, correrlas: si alguna falla, algo se movió.
+
+```bash
+cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas"
+D:/SOFTWARE/PHP83/php.exe prueba_48h.php     # 96 · 0
+node prueba_graficos.mjs                      # 62 · 0
+node prueba_contratos.mjs                     # 48 · 0
+```
+
+**Lo que NO cubre ninguna de esas pruebas, y por eso existe esta tarea:** nada
+se abrió nunca contra la base real. Todo lo verificado es sintaxis, estructura y
+lógica pura. Ninguna prueba demuestra que una consulta devuelva lo que se
+espera, ni que el filtro de zona filtre.
+
+| Autónomo | Requiere aprobación humana | Prohibido |
+|---|---|---|
+| Correr las tres suites de prueba; leer el código; preparar el paquete de despliegue; escribir las hojas de capacitación; corregir un defecto que aparezca al verificar | **Aplicar la 007** (cambia el esquema); **desplegar a UIO**; **extender a LARB y CNLJ** después de las 48 h | Desplegar a las tres zonas de una vez; extender antes de las 48 h; dar por buena T2.12.4 sin haber contado filas con los tres roles; borrar o vaciar cualquier tabla del cliente; tocar `nucleo/config.php` en el servidor |
+
+**Aceptación global de T2.12:** las trece pantallas abren con los cuatro roles
+sin error; los dos jefes de zona no ven ni una fila de la otra zona, ni por
+pantalla ni por URL ni por POST; una orden llenada con el servidor apagado llega
+una sola vez al encenderlo; y las tres cifras del reloj de 48 h coinciden entre
+sí y con la consulta de la migración.
+
+**Si algo de esto no cuadra, se detiene y se documenta la discrepancia.** No se
+sigue con una advertencia (I-10). Y si un dato real contradice lo que dice este
+plan, **gana el dato**: se anota y se consulta, no se improvisa una
+interpretación.
+
+---
+
 # FASE 3 · DECISIÓN — Noviembre
 
 > **Cierra con:** tablero de decisión y equipo capaz de operarlo por su cuenta.
@@ -672,6 +763,123 @@ Inventario de **32 hallazgos, 10 críticos**: contraseña SMTP en texto plano en
 8. ~~**🚦 T1.8** Puerta: liberación del Drive.~~ **Cancelada** — ver arriba. El Drive queda intocable de forma indefinida.
 
 Las tareas T1.9 a T1.11 avanzan en paralelo conforme se desbloqueen sus dependencias. T1.9 sigue bloqueada por falta de acceso al TrueNAS; T1.10 y T1.11 avanzan sin depender de Drive ni del TrueNAS.
+
+---
+
+## 11b. Arranque para una conversación nueva — al 2026-09-10
+
+> Esta sección existe para que quien abra una conversación nueva pueda **empezar
+> a ejecutar sin preguntar nada**. Se actualiza cada vez que cambia lo que sigue.
+
+### Qué leer, y en qué orden
+
+| Orden | Documento | Para qué |
+|---|---|---|
+| 1 | [`ESTADO.md`](ESTADO.md) §1 y §1b | Qué funciona hoy, con su cifra verificada |
+| 2 | [`ESTADO.md`](ESTADO.md) §5.1 | **Anótate ahí antes de tocar nada.** Si la tabla tiene filas, hay otra conversación trabajando |
+| 3 | Este plan, **T2.12** | La tarea que sigue, con su criterio de aceptación y su tabla de permisos |
+| 4 | [`SALIDAS IA\OTS\REDISENO_INTERFACES.md`](SALIDAS%20IA/OTS/REDISENO_INTERFACES.md) | Qué se construyó y **qué se rompió al construirlo** (§9b: cuatro defectos y por qué fallaban en silencio) |
+
+No hace falta leer el resto del repositorio. Y la skill **`industec-invariantes`**
+se invoca siempre al empezar, antes de la primera línea.
+
+### Dónde está parado el proyecto, en un párrafo
+
+La Fase 1 está cerrada: 7.069 órdenes en el árbol canónico y en la base. La
+Fase 2 está avanzada: el buzón de casos opera de verdad (asignar, derivar,
+veredicto, cierre de dos manos), el vigilante IMAP trae los casos en segundos,
+el despliegue va por SSH con verificación por hash, y el 2026-09-10 se terminó
+el rediseño de las trece pantallas más la aplicación móvil del técnico con
+captura sin señal, el control de las 48 horas y el tablero gráfico. **Todo eso
+está escrito, probado en local y sin desplegar.**
+
+### La siguiente acción, concreta
+
+**T2.12.1 — aplicar `sql/007_pendientes_y_captura.sql`**, que requiere
+aprobación de Andrés porque cambia el esquema. Sin esa migración, el control de
+48 horas, las novedades y la recepción de órdenes no tienen tablas: las
+pantallas existen y dicen que el módulo no está instalado.
+
+Mientras eso se aprueba, lo que **sí** se puede hacer sin pedir permiso:
+
+```bash
+# 1. Que nada se haya movido: 206 comprobaciones, 0 fallos
+cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas"
+D:/SOFTWARE/PHP83/php.exe prueba_48h.php
+node prueba_graficos.mjs
+node prueba_contratos.mjs
+
+# 2. Escribir las tres hojas de capacitación (T2.12.12)
+# 3. Preparar el paquete de despliegue de T2.12.3
+```
+
+### Lo que está bloqueado, y por quién
+
+| Bloqueado | Lo desbloquea |
+|---|---|
+| Aplicar la 007 y la 003 | **Andrés** — cambian el esquema |
+| Desplegar a UIO, y 48 h después a LARB y CNLJ | **Andrés** (I-8) |
+| Que el PDF y el correo salgan del sistema nuevo | La migración `003` (`correlativos` con reserva atómica y `email_queue`) |
+| El 36% del correctivo que el buzón no trae | Confirmar la causa — ver `SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md` |
+| Respaldo TrueNAS (T1.9) | Acceso físico al equipo |
+| Metas reales de SLA (T2.2) | El anexo de niveles de servicio del contrato con KFC |
+| Sacar el proyecto del único disco | Nada técnico: `git remote -v` no devuelve nada y hay 40+ commits en un solo disco |
+| Delegado de protección de datos ante la SPDP | Trámite: gratis, en línea, guía en `TRAMITE_DELEGADO_DATOS.md`. **El plazo venció hace más de 8 meses** |
+
+### Entorno
+
+```bash
+cd "D:\INDUSTECH IA\desarrollo\agentes"
+.venv/Scripts/python.exe scripts/<script>.py     # siempre el venv, no el python del sistema
+
+D:/SOFTWARE/PHP83/php.exe                        # el PHP local, para -l y para las pruebas
+node                                             # v24, para node --check y las pruebas .mjs
+```
+
+- **Base del archivo histórico:** MariaDB local, esquema `industec_ots`
+- **Base operativa:** MySQL en Hostinger, `u671729428_ots` (usuarios, casos, gestión)
+- **Credenciales:** `desarrollo/agentes/config/.env` y `app/publico/nucleo/config.php`, los dos fuera de git
+- **Sitio de pruebas:** `darkviolet-armadillo-872352.hostingersite.com/ot/`
+- **SSH:** `u671729428@82.25.73.181:65002`, llave ed25519
+
+### Errores de este proyecto que ya se pagaron — no repetirlos
+
+Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
+
+1. **Derivar la cadena o la zona del prefijo del código de local.** `J018EC` es
+   Cajun y otros códigos con `J` son Juan Valdez. Se resuelve **siempre** por el
+   maestro. Ese atajo cruzó cuatro locales de Quito a Cuenca.
+2. **Exigir el aviso SAP en el nombre canónico.** Mandó 185 documentos correctos
+   a cuarentena: los preventivos no nacen de un aviso.
+3. **`ON DUPLICATE KEY UPDATE` sin la `UNIQUE KEY` que lo respalde.** No
+   actualiza: duplica todo en cada corrida. Pasó con `observaciones_calidad`.
+4. **Escribir un archivo con un nombre que ya existe.** El 2026-09-10 la
+   pantalla de novedades sobrescribió `novedades.php`, que era el extremo del
+   vigilante del buzón: `ui.js` recibía HTML donde esperaba JSON y la barra de
+   «el buzón se actualizó» dejó de aparecer, **sin un solo error visible**.
+   Antes de escribir, comprobar: `git cat-file -e HEAD:<ruta>`.
+5. **Confundir un 401 con un rechazo de contenido.** En la cola de envíos del
+   técnico, tratar la sesión caducada como «orden inválida» perdía veinte
+   minutos de su trabajo. Los 4xx no son todos iguales.
+6. **Medir con un catálogo sin declarar su cobertura temporal.** Un export de
+   SAP que solo cubría 8 de 12 meses generó ~1.662 falsos positivos.
+7. **Creer que esconder un botón protege un endpoint.** Un POST se fabrica a
+   mano. La validación va en el servidor, en la cláusula `WHERE`.
+8. **Poner la protección en el `.json` y olvidar el `.php` que lo sirve.** Pasó
+   dos veces: `catalogos.php` y `cronograma.php` entregaban locales, correos del
+   cliente y nombres del personal sin ninguna sesión.
+
+### Lo que no se toca, nunca
+
+1. **`G:\Mi unidad`** (Drive de INDUSTEC) es de solo lectura, **indefinidamente**.
+2. **`D:\RESPALDOS\_ORIGEN_DRIVE`** y **`_ORIGEN_SISTEMA`**: espejos intactos. La
+   red de seguridad.
+3. **Nada del cliente se borra** sin que él lo pida **en el momento**. Aprobar un
+   plan no autoriza ejecutar un borrado.
+4. **`nucleo/config.php`** en el servidor: lo único intocable del sitio de pruebas.
+5. **En Hostinger, solo el sitio de pruebas.** Los demás sitios del panel
+   —incluido el sistema en producción— no se modifican. Y **ningún trámite que
+   genere un cobro** lo hace un agente.
 
 ---
 

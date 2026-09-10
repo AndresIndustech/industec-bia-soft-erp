@@ -26,8 +26,11 @@ if ($u['debe_cambiar_clave']) { header('Location: clave.php'); exit; }
 
 function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
 
+/* Se lee el flash pero NO se borra el exito: `Ui::pie()` lo convierte en aviso
+   efimero al cerrar la pagina. El error si se consume aqui, porque se pinta
+   aqui. */
 $flash = $_SESSION['flash'] ?? null;
-unset($_SESSION['flash']);
+unset($_SESSION['flash']['error']);
 
 $gestion  = Casos::gestion();
 $catalogo = Casos::catalogo()['datos'] ?? [];
@@ -72,64 +75,27 @@ usort($sinAsignar, function ($a, $b) {
 
 $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
         'JEFE_ZONA' => 'Jefe de zona', 'TECNICO' => 'Técnico'];
+
+require_once __DIR__ . '/nucleo/Ui.php';
+
+Ui::cabecera($u, 'asignacion.php',
+    ['asignar' => $sinAsignar ? ['n' => count($sinAsignar), 'tono' => 'ojo'] : null,
+     'casos'   => $sinAsignar ? ['n' => count($sinAsignar)] : null],
+    ['titulo' => 'Asignación']);
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Asignación · OTs INDUSTEC</title>
-<link rel="stylesheet" href="estilo.css">
-<style>
-  .barra{ display:flex; justify-content:space-between; align-items:center; gap:12px;
-          flex-wrap:wrap; padding:10px 14px; background:#fff;
-          border-bottom:1px solid var(--border); position:sticky; top:0; z-index:40; }
-  .equipo{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
-           gap:10px; margin-bottom:22px; }
-  .persona{ background:#fff; border:1px solid var(--border); border-radius:10px; padding:11px 13px; }
-  .persona .n{ font-weight:700; font-size:13.5px; }
-  .persona .u{ font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:var(--muted); }
-  .persona .cifras{ display:flex; gap:14px; margin-top:8px; }
-  .persona .cifra b{ display:block; font-size:20px; line-height:1.1; font-variant-numeric:tabular-nums; }
-  .persona .cifra span{ font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
-  .persona.cargado{ border-color:#fde68a; background:var(--warn-bg); }
-  .persona.libre .cifra b{ color:var(--ok); }
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em;
-      color:var(--muted); padding:8px 9px; border-bottom:1px solid var(--border); background:#fff; }
-  td{ padding:9px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
-  .mono{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; }
-  .desc{ color:var(--muted); font-size:12px; display:block; margin-top:3px; max-width:44ch; }
-  .tabla-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:#fff; }
-  .asignar{ display:flex; gap:6px; align-items:center; }
-  .asignar select{ height:34px; min-width:150px; font-size:12.5px; }
-  .asignar .btn{ padding:6px 12px; font-size:12.5px; }
-  .ok{ background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
-  .err{ background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
-  .vacio{ padding:28px 14px; text-align:center; color:var(--muted); }
-</style>
-</head>
-<body>
+<div class="wrap ancho">
 
-<div class="barra">
-  <strong><a href="panel.php" style="text-decoration:none;color:inherit">← Sistema de OTs</a></strong>
-  <div style="display:flex;align-items:center;gap:10px;font-size:13px">
-    <span style="font-weight:700"><?= e($u['nombre']) ?></span>
-    <span class="chip"><?= e($ROL[$u['rol']] ?? $u['rol']) ?><?= Auth::zonaAlcance() ? ' · ' . e((string) Auth::zonaAlcance()) : '' ?></span>
-    <a class="btn" href="casos.php">Buzón</a>
-    <a class="btn" href="salir.php">Salir</a>
-  </div>
-</div>
-
-<div class="wrap">
-  <div class="card">
-    <h1 style="font-size:19px;margin:0 0 4px">Asignación</h1>
-    <p class="sub" style="margin:0 0 16px">
-      Cómo está repartido el trabajo, y qué falta por repartir.
+  <div class="titulo entra">
+    <h1>Asignación</h1>
+    <p class="sub">
+      Cómo está repartido el trabajo y qué falta por repartir. Es la otra mitad
+      del buzón: allí se mira caso por caso, aquí se mira a quién le cabe uno más.
     </p>
+  </div>
 
-    <?php if (!empty($flash['ok'])): ?><div class="ok"><?= e($flash['ok']) ?></div><?php endif; ?>
-    <?php if (!empty($flash['error'])): ?><div class="err"><?= e($flash['error']) ?></div><?php endif; ?>
+  <?php /* El exito sale como aviso efimero desde `Ui::pie()`; el error se queda
+           fijo, porque hay que leerlo y corregir algo. */ ?>
+  <?php if (!empty($flash['error'])): ?><?= Ui::aviso('err', e($flash['error']), true) ?><?php endif; ?>
 
     <h2>El equipo (<?= count($carga) ?>)</h2>
     <p class="sub" style="margin:0 0 10px">
@@ -181,7 +147,8 @@ $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
             </td>
             <td>
               <b><?= e($c['local'] ?? '—') ?></b>
-              <span class="desc"><?= e($c['local_nombre'] ?? '') ?> · <?= e($c['zona'] ?? '') ?></span>
+              <span class="desc"><?= e($c['local_nombre'] ?? '') ?></span>
+              <span class="desc"><?= Ui::zona($c['zona'] ?? null) ?></span>
             </td>
             <td>
               <?= e($c['caso'] ?? '') ?>
@@ -192,8 +159,14 @@ $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
                 <span class="desc"><?= e(mb_strimwidth((string) $c['descripcion_trabajo'], 0, 120, '…', 'UTF-8')) ?></span>
               <?php endif; ?>
             </td>
-            <td><span class="prio prio-<?= e($prio ?: 'sd') ?>"><?= e($c['prioridad'] ?? 'S/D') ?></span></td>
-            <td class="mono"><?= e($c['fecha_creacion'] ?? '—') ?></td>
+            <td><?= Ui::prioridad($c['prioridad'] ?? null) ?></td>
+            <td>
+              <span class="mono"><?= e($c['fecha_creacion'] ?? '—') ?></span>
+              <?php /* La antiguedad al lado de la fecha: a los 7 dias sin
+                       informe el caso se cierra solo por falta de atencion, y
+                       eso hay que verlo venir, no descubrirlo despues. */ ?>
+              <span class="desc"><?= Ui::edad($c['fecha_creacion'] ?? null) ?></span>
+            </td>
             <td>
               <form method="post" action="casos.php" class="asignar">
                 <input type="hidden" name="accion" value="asignar">
@@ -214,7 +187,6 @@ $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
         </tbody>
       </table>
     </div>
-  </div>
 </div>
-</body>
-</html>
+
+<?php Ui::pie(['novedades' => true]); ?>

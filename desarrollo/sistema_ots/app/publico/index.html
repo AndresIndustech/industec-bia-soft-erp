@@ -3,17 +3,19 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Orden de Trabajo · INDUSTEC</title>
+<title>Orden de Trabajo · B.IA Soft ERP</title>
 <link rel="stylesheet" href="estilo.css" />
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0ea5e9">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="OT INDUSTEC">
+<meta name="apple-mobile-web-app-title" content="B.IA Soft">
 <link rel="apple-touch-icon" href="iconos/icono-192.png">
 </head>
 <body>
+<div id="estadoRed" class="estado-red" hidden></div>
+<div id="cola" hidden></div>
 <div class="wrap">
   <div class="card">
     <div class="logo-top">
@@ -24,19 +26,56 @@
 
     <form id="otForm" novalidate>
 
-      <!-- ============ LA ORDEN ============
-           El técnico NO teclea números. El correlativo INDUSTEC lo reserva el
-           servidor con el secuencial de su zona, y el aviso SAP sale de la orden
-           que se le asignó. Solo el caso de emergencia nace sin aviso, y ese
-           queda marcado como tarea de la administración. -->
+      <!-- ============ 1. QUE VAS A HACER ============
+           Es la primera pregunta porque de ella depende TODO lo que viene
+           despues: el preventivo pide dia de ingreso y repite el bloque de
+           equipo hasta 7 veces; el correctivo, ni una cosa ni la otra.
+           Preguntarla en segundo lugar obligaba a rehacer lo ya llenado. -->
+      <h2>¿Qué vas a hacer?</h2>
+      <div class="opciones" id="segTipo" role="group" aria-label="Tipo de orden">
+        <button type="button" class="opcion on" data-v="CORRECTIVO">
+          <span class="t">Correctivo</span>
+          <span class="d">Algo se dañó y hay que repararlo. Nace de un aviso de SAP.</span>
+        </button>
+        <button type="button" class="opcion" data-v="PREVENTIVO">
+          <span class="t">Preventivo</span>
+          <span class="d">Ingreso programado del cronograma. Se revisan varios equipos.</span>
+        </button>
+      </div>
+      <input type="hidden" name="tipo" id="tipo" value="CORRECTIVO">
+      <span class="derivado" id="tipoDerivado" hidden></span>
+      <div id="wrapDia" class="condicional" hidden style="margin-top:12px">
+        <span class="porque">Aparece porque elegiste preventivo</span>
+        <label for="dia_intervencion">Día de intervención (del ingreso preventivo)</label>
+        <select name="dia_intervencion" id="dia_intervencion">
+          <option value="">Elige el día (1–5)</option>
+          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+        </select>
+      </div>
+
+      <!-- ============ 2. LA ORDEN ============
+           El técnico NO teclea números y ya no elige su nombre. El correlativo
+           INDUSTEC lo reserva el servidor con el secuencial de su zona; el
+           aviso SAP sale de la orden que se le asignó; y quién la emite sale de
+           la SESION. Solo el caso de emergencia nace sin aviso, y ese queda
+           marcado como tarea de la administración. -->
       <h2>La orden</h2>
       <div class="grid g2">
         <div>
-          <label for="tecSesion">Técnico</label>
-          <select id="tecSesion" name="tecnico_sesion" required>
-            <option value="">Elige tu nombre…</option>
-          </select>
-          <span class="derivado">Cuando exista el ingreso por usuario, esto lo pone la sesión y no se elige.</span>
+          <label>Quién la emite</label>
+          <!-- Antes esto era un desplegable con los 19 técnicos y había que
+               buscarse. Costaba un gesto en cada orden y permitía firmar como
+               otro; ahora es la sesión y no se puede cambiar. `envio.php`
+               vuelve a tomarlo de la sesión al recibir, así que editar el HTML
+               no sirve de nada. -->
+          <div class="ficha" id="fichaYo" style="margin-top:0">
+            <div class="ficha-tit">
+              <span class="ficha-aviso" id="yoNombre">Cargando…</span>
+              <span class="chip" id="yoZona" hidden></span>
+            </div>
+            <span class="derivado" id="yoNota">Sale de tu sesión: no se elige y queda como firma de la orden.</span>
+          </div>
+          <input type="hidden" name="tecnico_sesion" id="tecSesion" value="">
         </div>
         <div>
           <label>Número de orden INDUSTEC</label>
@@ -76,22 +115,6 @@
         <label style="margin-top:10px">Por qué no había orden asignada</label>
         <input type="text" name="motivo_sin_aviso" id="motivo_sin_aviso"
                placeholder="p. ej. emergencia durante la visita: la freidora 2 dejó de calentar">
-      </div>
-
-      <!-- ============ TIPO DE ORDEN ============ -->
-      <h2>Tipo de orden</h2>
-      <div class="seg" id="segTipo" role="group" aria-label="Tipo de orden">
-        <button type="button" data-v="CORRECTIVO" class="on">Correctivo</button>
-        <button type="button" data-v="PREVENTIVO">Preventivo</button>
-      </div>
-      <input type="hidden" name="tipo" id="tipo" value="CORRECTIVO">
-      <span class="derivado" id="tipoDerivado" hidden></span>
-      <div id="wrapDia" hidden style="margin-top:10px">
-        <label>Día de intervención (del ingreso preventivo)</label>
-        <select name="dia_intervencion" id="dia_intervencion">
-          <option value="">Elige el día (1–5)</option>
-          <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
-        </select>
       </div>
 
       <!-- ============ DATOS GENERALES ============ -->
@@ -185,6 +208,60 @@
       <label style="margin-top:10px">Observaciones generales</label>
       <textarea name="observaciones" id="observaciones" placeholder="Opcional"></textarea>
 
+      <!-- ============ ¿CONCLUYO? ============
+           La premisa del servicio: una intervención concluye el trabajo. Lo
+           que no concluye tiene que quedar registrado aquí mismo, con su
+           diagnóstico, porque a partir de ese momento corre el plazo de 48
+           horas para que alguien decida la vía. Si esto se pregunta después,
+           por teléfono, no queda registro de cuándo empezó a correr. -->
+      <h2>¿Quedó concluido el trabajo?</h2>
+      <p class="sub">En INDUSTEC una visita cierra el trabajo. Si no se pudo,
+        el único motivo válido es que el equipo dependa de una pieza o de un
+        tercero — y eso hay que dejarlo escrito.</p>
+      <div class="opciones" id="segConcluye" role="group" aria-label="¿Concluyó el trabajo?">
+        <button type="button" class="opcion on" data-v="si">
+          <span class="t">Sí, quedó operando</span>
+          <span class="d">El equipo funciona y el caso se puede cerrar.</span>
+        </button>
+        <button type="button" class="opcion" data-v="no">
+          <span class="t">No, quedó trabado</span>
+          <span class="d">Depende de un repuesto, de un taller o de una garantía.</span>
+        </button>
+      </div>
+      <input type="hidden" name="concluida" id="concluida" value="1">
+
+      <div id="wrapTrabado" class="condicional" hidden style="margin-top:12px">
+        <span class="porque">Aparece porque el trabajo no quedó concluido</span>
+        <div class="bloque">
+          <div>
+            <label for="pen_diagnostico">Qué encontraste y por qué no se pudo cerrar</label>
+            <textarea id="pen_diagnostico" name="pen_diagnostico" rows="3"
+              placeholder="p. ej. la resistencia de la freidora 2 está abierta; se midió continuidad y no pasa"></textarea>
+            <span class="derivado">Es lo que sostiene el veredicto de tu jefe de zona y la respuesta a Grupo KFC.</span>
+          </div>
+          <div class="grid g2" style="margin-top:10px">
+            <div>
+              <label for="pen_equipo">Qué equipo es</label>
+              <input type="text" id="pen_equipo" name="pen_equipo" placeholder="freidora 2, cámara de frío…">
+            </div>
+            <div>
+              <label for="pen_parte">Qué haría falta, si ya lo sabes</label>
+              <input type="text" id="pen_parte" name="pen_parte" placeholder="resistencia de 5 kW — opcional">
+            </div>
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:9px;margin-top:12px;padding:11px;
+                        border:1px solid var(--danger-bd);background:var(--danger-bg);
+                        border-radius:var(--r);font-size:13.5px;color:#7f1d1d">
+            <input type="checkbox" id="pen_parado" name="pen_parado" value="1"
+                   style="width:auto;height:auto;margin:2px 0 0">
+            <span><b>El equipo quedó fuera de servicio.</b> Marca esto solo si el local
+              no lo puede usar. Enciende el plazo de <b>48 horas</b> para que se decida
+              la vía —repuesto, reparación, garantía o baja— y aparece en rojo en el
+              tablero de tu jefe de zona.</span>
+          </label>
+        </div>
+      </div>
+
       <!-- ============ ESTADO OT (complementario) ============ -->
       <h2>Estado de la orden</h2>
       <p class="sub">Referencial. El cierre real lo define el estatus del aviso en SAP, nunca esta casilla.</p>
@@ -207,6 +284,26 @@
         </div>
         <div class="slot-list" id="fileList"><div class="small">Sin fotos</div></div>
         <div class="small">En el sistema de hoy las fotos viajan dentro del envío y superan el límite: PDFs en blanco. Aquí van aparte.</div>
+      </div>
+
+      <!-- ============ NOVEDADES DE LA VISITA ============
+           Sin esto, la plancha que ya estaba fallando y el tomacorriente
+           recalentado se quedan en la cabeza del técnico, y el mismo local
+           rompe el mismo equipo tres veces al año sin que nadie pueda decir
+           por qué. Va aquí, al final, porque se llena mirando alrededor
+           cuando el trabajo ya está hecho. -->
+      <h2>¿Viste algo más en el local?</h2>
+      <p class="sub">Lo que no era tu orden: un equipo que va a fallar, o algo de
+        otra área —eléctrico, ventilación, desagüe, obra— que hace fallar los
+        equipos. Lo revisa tu jefe de zona y decide si se le pide el aviso a
+        Grupo KFC. <b>Es opcional</b>, pero es lo que evita la próxima urgencia.</p>
+      <!-- `novedadesVisita`, no `novedades`: ese id lo usa `ui.js` para la barra
+           de «el buzón se actualizó», y al coincidir le ponía `hidden` a las
+           novedades que el técnico acababa de escribir. Seguían en el envío,
+           pero desaparecían de la pantalla. -->
+      <div id="novedadesVisita"></div>
+      <div class="row" style="margin-top:6px">
+        <button type="button" class="btn secondary" id="addNovedad">+ Reportar una novedad</button>
       </div>
 
       <!-- ============ SATISFACCIÓN ============
@@ -246,25 +343,60 @@
 
     </form>
 
-    <!-- Resultado del envío (v1: resumen, sin PDF ni correo todavía) -->
+    <!-- ============ RECIBO DEL ENVIO ============
+         Lo que ve el tecnico despues de pulsar enviar.
+
+         ANTES esto era un volcado de JSON con el objeto de la orden. Servia
+         para depurar y para nada mas: el tecnico no tiene por que leer un
+         `dia_intervencion: null` para saber si su trabajo quedo registrado.
+
+         AHORA responde las tres preguntas que de verdad se hace al salir del
+         local: quedo guardado, va a salir, y que falta. Y lo dice segun haya
+         senal o no, porque son dos situaciones distintas y confundirlas es lo
+         que hace que alguien vuelva a llenar una orden que ya estaba a salvo. -->
     <section id="resultado" hidden>
-      <div class="validacion ok" style="display:block">
-        <b>El paso de fondo:</b> primero se escribe la fila en la base y se reserva
-        el correlativo en una transacción atómica; recién entonces se genera el PDF
-        y se encolan los correos. Un fallo del correo ya no borra la orden.
+      <div class="aviso info" id="rEstado" role="status">
+        <span class="ic" aria-hidden="true">✓</span>
+        <div class="cuerpo" id="rEstadoTxt"></div>
       </div>
+
+      <div id="rExtraWrap" hidden>
+        <div class="aviso neutro">
+          <span class="ic" aria-hidden="true">i</span>
+          <div class="cuerpo">
+            <b>Lo que además quedó registrado</b>
+            <ul id="rExtra"></ul>
+          </div>
+        </div>
+      </div>
+
       <div class="nota-regular" id="rTarea" hidden>
         <b>Queda una tarea para la administración.</b> Esta orden nació sin aviso SAP:
         hay que regularizarla —pedirle el caso a Grupo KFC o crearlo en SAP— antes de
         solicitar repuestos o darla por cerrada. El trabajo ya está registrado y se contabiliza.
       </div>
-      <h2>Nombre canónico que saldría</h2>
-      <p id="rNombre" style="font-family:ui-monospace,monospace;font-size:15px;color:#0b1220;word-break:break-all"></p>
-      <p class="sub">El <code>NNNN</code> lo reemplaza el correlativo que reserva el servidor.</p>
-      <h2>Resumen del envío</h2>
-      <pre id="rResumen" style="white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px;font-size:12px;overflow:auto"></pre>
+
+      <h2>Cómo va a quedar archivada</h2>
+      <p id="rNombre" class="mono" style="font-size:15px;color:var(--ink);word-break:break-all"></p>
+      <p class="sub">El <code>NNNN</code> lo reemplaza el correlativo que reserva el servidor
+        con el secuencial de tu zona.</p>
+
+      <!-- Se dice qué falta todavía, con esas palabras. Fingir que el informe
+           ya salió es peor que no decir nada: el técnico lo da por hecho y el
+           local nunca lo recibe. -->
+      <div class="aviso warn">
+        <span class="ic" aria-hidden="true">!</span>
+        <div class="cuerpo">
+          <b>El PDF y el correo al local todavía no salen de aquí.</b>
+          <p>La orden queda guardada y completa en el sistema, pero el informe al
+            administrador del local se sigue emitiendo por el camino de siempre.
+            Eso cambia cuando se active la emisión automática.</p>
+        </div>
+      </div>
+
       <div class="footer">
-        <button type="button" class="btn primary" id="rNueva">Nueva orden</button>
+        <button type="button" class="btn primary bloque" id="rNueva">Llenar otra orden</button>
+        <p class="pendientes"><a href="mis.php">Volver a mi bandeja</a></p>
       </div>
     </section>
   </div>
@@ -272,8 +404,14 @@
 
 <!-- En producción esto valida también en el servidor (nucleo/Validacion.php);
      el navegador valida para que el técnico se entere en el momento. -->
+<script src="ui.js"></script>
 <script src="offline.js"></script>
+<script src="cola.js"></script>
 <script src="reglas.js"></script>
 <script src="app.js"></script>
+<!-- `guia.js` va DESPUES de app.js: envuelve en pasos las secciones que app.js
+     ya dejó funcionando. Si no carga, el formulario sigue siendo el de siempre,
+     entero y usable — es mejora progresiva, no un requisito. -->
+<script src="guia.js"></script>
 </body>
 </html>

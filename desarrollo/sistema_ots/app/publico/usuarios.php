@@ -149,46 +149,12 @@ $todos = array_values(array_filter(
 
 $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
         'JEFE_ZONA' => 'Jefe de zona', 'TECNICO' => 'Técnico'];
+
+require_once __DIR__ . '/nucleo/Ui.php';
+
+Ui::cabecera($u, 'usuarios.php', [], ['titulo' => 'Usuarios y permisos']);
 ?>
-<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Usuarios y permisos · OTs INDUSTEC</title>
-<link rel="stylesheet" href="estilo.css">
-<style>
-  .barra{ display:flex; justify-content:space-between; align-items:center; gap:12px;
-          flex-wrap:wrap; padding:10px 14px; background:#fff;
-          border-bottom:1px solid var(--border); position:sticky; top:0; z-index:40; }
-  table{ width:100%; border-collapse:collapse; font-size:13.5px; }
-  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em;
-      color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--border); }
-  td{ padding:10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
-  tr.baja td{ opacity:.5; }
-  .acciones{ display:flex; gap:6px; flex-wrap:wrap; }
-  .acciones .btn{ padding:5px 10px; font-size:12px; }
-  .clave{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:19px;
-          font-weight:700; letter-spacing:.06em; background:#fffbeb;
-          border:1px solid #fde68a; border-radius:8px; padding:8px 12px;
-          display:inline-block; margin-top:4px; user-select:all; }
-  .err{ background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
-  .ok{ background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:14px; }
-  .tabla-wrap{ overflow-x:auto; }
-</style>
-</head>
-<body>
-
-<div class="barra">
-  <strong><a href="panel.php" style="text-decoration:none;color:inherit">← Sistema de OTs</a></strong>
-  <div style="display:flex;align-items:center;gap:10px;font-size:13px">
-    <span style="font-weight:700"><?= e($u['nombre']) ?></span>
-    <span class="chip"><?= e($ROL[$u['rol']] ?? $u['rol']) ?></span>
-    <a class="btn" href="salir.php">Salir</a>
-  </div>
-</div>
-
-<div class="wrap">
+<div class="wrap ancho">
   <div class="card">
     <h1 style="font-size:19px;margin:0 0 4px">Usuarios y permisos</h1>
     <p class="sub" style="margin:0 0 16px">
@@ -353,5 +319,4 @@ $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
     </p>
   </div>
 </div>
-</body>
-</html>
+<?php Ui::pie(); ?>

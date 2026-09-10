@@ -78,7 +78,7 @@ if ($error === null && $claveOk && $_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Instalación · Sistema de OTs INDUSTEC</title>
+<title>Instalación · B.IA Soft ERP</title>
 <link rel="stylesheet" href="estilo.css">
 <style>
   .clave{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:20px;

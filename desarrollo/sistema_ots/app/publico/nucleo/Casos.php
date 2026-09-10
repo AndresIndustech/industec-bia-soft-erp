@@ -153,15 +153,19 @@ final class Casos
         return null;
     }
 
-    /** Etiqueta legible del estado, para no repetir el mismo array en cada vista. */
+    /**
+     * Etiqueta legible del estado.
+     *
+     * La lista completa vive en `Ui::ESTADOS` y esto delega ahí a propósito.
+     * Cuando estaba duplicada aquí se quedó corta DOS veces: le faltaron
+     * ATENDIDO y CERRADO_SIN_ATENCION al agregarlos al ENUM, y esos casos se
+     * dibujaban en crudo —«CERRADO_SIN_ATENCION», en mayúsculas y con guion
+     * bajo— en la pantalla que mira la administradora. Con una sola lista, el
+     * estado nuevo que se olvide sale mal en un sitio y no en cinco.
+     */
     public static function etiquetaEstado(?string $estado): string
     {
-        return [
-            'NUEVO'       => 'sin asignar',
-            'ASIGNADO'    => 'asignado',
-            'EN_REVISION' => 'en revisión',
-            'RESUELTO'    => 'resuelto',
-            'NO_COMPETE'  => 'no nos compete',
-        ][$estado ?? 'NUEVO'] ?? (string) $estado;
+        require_once __DIR__ . '/Ui.php';
+        return Ui::etiquetaEstado($estado);
     }
 }

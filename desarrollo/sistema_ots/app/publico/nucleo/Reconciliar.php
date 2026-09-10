@@ -29,8 +29,17 @@ require_once __DIR__ . '/Db.php';
  */
 final class Reconciliar
 {
-    /** Estados que una persona puso y que el automatismo no pisa. */
-    private const INTOCABLES = ['RESUELTO', 'NO_COMPETE', 'EN_REVISION'];
+    /**
+     * Estados que una persona puso y que el automatismo no pisa.
+     *
+     * ESPERA_REPUESTO entró en la 007 y es el caso menos evidente de la lista.
+     * Ese caso **sí** tiene informe —el técnico fue, diagnosticó y pidió la
+     * pieza—, así que sin esta línea la reconciliación lo marcaría ATENDIDO en
+     * cuanto viera la orden. La administradora lo daría por listo y lo cerraría
+     * en SAP con el equipo todavía parado esperando la resistencia. Sale de
+     * aquí cuando la pieza se instala, no cuando llega el informe que la pidió.
+     */
+    private const INTOCABLES = ['RESUELTO', 'NO_COMPETE', 'EN_REVISION', 'ESPERA_REPUESTO'];
 
     private static function anotar(string $accion, string $aviso, ?string $antes,
                                    ?string $despues, array $datos): void

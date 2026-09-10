@@ -14,8 +14,31 @@ declare(strict_types=1);
  * El shape de salida no cambia, así que el formulario no se entera.
  */
 
+/* -------------------------------------------------------------------------
+   EXIGE SESION. Verificado el 2026-09-10: no la exigia.
+
+   El `.htaccess` cierra los .json de `catalogos/` con 403, y de ahi se dio por
+   hecho que el dato estaba protegido. No lo estaba: este archivo es la puerta
+   que los sirve, y estaba abierta. Lo que salia por aqui sin ninguna sesion:
+
+     - los 100 locales, con su correo y su centro de coste
+     - los 1.173 activos fijos instalados, local por local
+     - los NOMBRES de los 19 tecnicos vigentes
+
+   Los dos ultimos son datos personales y de infraestructura de un cliente. La
+   pantalla del formulario los necesita; el internet, no.
+
+   Se responde en JSON (`true`) y no con una redireccion al login: quien pide
+   esto es un `fetch`, y una redireccion la guardaria como si fuera el catalogo.
+   ------------------------------------------------------------------------- */
+require_once __DIR__ . '/nucleo/Auth.php';
+$u = Auth::exigir('ots.crear', true);
+
 header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
+/* `private`: el trabajador de servicio SI la guarda —de eso vive el modo sin
+   senal— pero ningun proxy compartido debe. `no-store` habria dejado al
+   tecnico sin catalogo en cuanto se le cayera la cobertura. */
+header('Cache-Control: private, max-age=60');
 
 // Orden de búsqueda: una copia local junto al formulario (si alguien la puso),
 // si no, los catálogos vivos que generó t2_5_catalogos.py en SALIDAS IA.
