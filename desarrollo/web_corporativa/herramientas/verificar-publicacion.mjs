@@ -25,7 +25,9 @@ const marca = Date.now();
 const traer = (url, opciones = {}) => fetch(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' }, ...opciones });
 
 let problemas = 0;
+let avisos = 0;
 const mal = (m) => { problemas++; console.log('✗', m); };
+const aviso = (m) => { avisos++; console.log('⚠', m); };
 const bien = (m) => console.log('✓', m);
 
 console.log(`Comparando ${SITIO}\ncon         ${BASE}\n`);
@@ -38,6 +40,11 @@ for (const rel of archivos) {
     if (r.status !== 200) { mal(`${rel}: HTTP ${r.status}`); continue; }
     const remoto = sha(Buffer.from(await r.arrayBuffer()));
     if (remoto === local) bien(rel);
+    // Dos diferencias que pone el CDN de Hostinger y no la subida (medido el 11-sep-2026,
+    // con el disco del servidor cuadrando con sitio.sha256): recomprime los PNG al vuelo,
+    // y en los dominios temporales *.hostingersite.com sirve su propio robots.txt.
+    else if (rel.endsWith('.png')) aviso(`${rel}: el CDN lo recomprime (publicado ${remoto.slice(0, 12)}…); el original se compara en el disco del servidor (LEEME, sección 8)`);
+    else if (rel === 'robots.txt' && /\.hostingersite\.com$/.test(new URL(BASE).hostname)) aviso('robots.txt: en el dominio temporal lo sirve Hostinger y no el subido; mientras tanto protege el noindex de cada página');
     else mal(`${rel}: el hash no coincide (local ${local.slice(0, 12)}…, publicado ${remoto.slice(0, 12)}…)`);
   } catch (e) { mal(`${rel}: ${e.message}`); }
 }
@@ -63,5 +70,7 @@ try {
   [200, 301, 302, 303].includes(r.status) ? bien(`/ot/login.php responde (HTTP ${r.status})`) : mal(`/ot/login.php responde HTTP ${r.status}: revisar que la subida no haya tocado ot/`);
 } catch (e) { mal(`/ot/login.php: ${e.message}`); }
 
-console.log(problemas ? `\n${problemas} problema(s). Si solo fallan .html/.css/.js y el CDN de Hostinger tiene activada la minificación, desactivarla o volver a subir.` : '\nOK: lo publicado coincide byte a byte con sitio/ y el sistema sigue respondiendo.');
+console.log(problemas
+  ? `\n${problemas} problema(s). Si solo fallan .html/.css/.js y el CDN de Hostinger tiene activada la minificación, desactivarla o volver a subir.`
+  : `\nOK: lo publicado coincide con sitio/ y el sistema sigue respondiendo${avisos ? ` (${avisos} diferencia(s) que pone el CDN, marcadas con ⚠)` : ''}.`);
 process.exit(problemas ? 1 : 0);

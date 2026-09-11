@@ -6,7 +6,7 @@ Sitio estático (HTML + CSS + JavaScript, sin frameworks ni paso de compilación
 - Solo publica lo que ya es público en www.industec.me.
 - Lo que espera el visto bueno de César está en `NOTAS_PARA_CESAR.md` y **no** está en el HTML.
 
-**Estado al 11 de septiembre de 2026**: construido y verificado en local. **Todavía no está publicado.**
+**Estado al 11 de septiembre de 2026**: **publicado** en la raíz del dominio temporal y verificado por hash, en el disco del servidor y por la web (sección 8).
 
 ---
 
@@ -65,7 +65,9 @@ web_corporativa/
    - revisa que `/nosotros` redirija a `/nosotros/`;
    - revisa que `/ot/login.php` siga respondiendo.
 
-   Tiene que terminar en «OK». Si solo fallan los `.html`, `.css` o `.js` y el CDN de Hostinger tiene activada la minificación, hay que desactivarla y volver a subir.
+   Tiene que terminar en «OK». Si solo fallan los `.html`, `.css` o `.js` y el CDN de Hostinger tiene activada la minificación, hay que desactivarla y volver a subir. Los PNG y, en el dominio temporal, el `robots.txt` salen con ⚠: los cambia el CDN, no la subida, y el original se comprueba en el disco del servidor (sección 8).
+
+   En el PC de Andrés el antivirus inspecciona el HTTPS: correrlo como `NODE_OPTIONS=--use-system-ca node herramientas/verificar-publicacion.mjs`, para que Node use los certificados de Windows.
 
 5. **Prueba a mano en un celular:**
    - **WhatsApp**: el chat se abre con el mensaje «…les escribo desde su página web…».
@@ -164,7 +166,6 @@ web_corporativa/
 - **Ancla** `/servicios/#correctivo`: la sección queda a 84 px del borde, justo debajo de la cabecera de 69 px. Se midió en Edge headless sin emulación de dispositivo.
 - **Capturas**: la captura por línea de comandos de Edge no baja de unos 500 px de ancho, así que las de 390 px se tomaron por DevTools con métricas de 390 px.
 - **Sin probar**:
-  - la subida real a Hostinger;
   - WhatsApp y la llamada en un teléfono real;
   - Safari en iPhone.
 
@@ -212,5 +213,24 @@ Se revisó el sitio contra la lista de hechos públicos de www.industec.me y las
 
 - Andrés: confirmar «Acceso al sistema» como botón destacado de la cabecera. `contenido.md` pedía destacar WhatsApp.
 - César: las propuestas de `NOTAS_PARA_CESAR.md` (A1–A6 y B1–B14), incluida B13.
-- La subida real y `verificar-publicacion.mjs`.
+- La subida real y `verificar-publicacion.mjs`: **hechas el 11 de septiembre de 2026** (sección 8).
 - Prueba en un teléfono real: WhatsApp, llamada y Safari de iPhone.
+
+---
+
+## 8. Publicación del 11 de septiembre de 2026
+
+Se publicó en la raíz de `darkviolet-armadillo-872352.hostingersite.com` desde el PC de Andrés, por SSH, subiendo por nombre los siete elementos de `sitio/`: `index.html`, `robots.txt`, `assets/`, `nosotros/`, `servicios/`, `contacto/` y `acceso/`. Antes, en `public_html/` solo estaba `ot/`: no había `index.php`, `default.php` ni `.htaccess` que retirar. `ot/` no se tocó, y los permisos de la raíz y de `ot/` siguen en 755.
+
+- **En el disco del servidor, los 45 archivos cuadran con `sitio.sha256`.** Se comprueba así, desde esta carpeta:
+  ```bash
+  sed 's#  sitio/#  #' sitio.sha256 | ssh -i <llave> -p 65002 u671729428@82.25.73.181 \
+    'cd domains/darkviolet-armadillo-872352.hostingersite.com/public_html && sha256sum -c --quiet - && echo OK'
+  ```
+- **Por la web** (`verificar-publicacion.mjs`): HTML, CSS, JS, SVG y WebP coinciden byte a byte; las cinco URL limpias sirven su `index.html`; `/nosotros` redirige con 301 a `/nosotros/`; `/ot/login.php` responde 200.
+- **Dos diferencias las pone el CDN de Hostinger, no la subida.** El verificador las marca con ⚠ y no como falla:
+  - **Los PNG** los recomprime al vuelo: el logo de 6.412 B llega con 7.495 B, igual que pasa con los íconos de `/ot/`.
+  - **El `robots.txt`** del dominio temporal lo sirve el CDN, con «Googlebot: Disallow: /» y «*: Allow: /». El nuestro («Disallow: /») está en el disco, pero no llega. Mientras dure el dominio temporal, lo que evita la indexación es el `noindex` de cada página, que sí llega. En www.industec.me debería servirse el subido: comprobarlo al migrar.
+- **Como la ve un navegador**, sin parámetros y en br, gzip y sin comprimir, responden 200: `/`, `/acceso/`, `/nosotros/`, `/servicios/`, `/contacto/`, `/robots.txt` y `/assets/css/estilos.css`.
+- **El sistema, igual que antes:** `/ot/login.php`, `/ot/` y `/ot/sw.js` responden 200; `/ot/catalogos/locales.json` y `/ot/nucleo/config.php`, 403. Lo único que cambió es `/`, que antes daba 403 y ahora es la web.
+- **Sigue sin probar:** WhatsApp y la llamada en un teléfono real, y Safari en iPhone.
