@@ -143,6 +143,26 @@
     return new Date(t).toLocaleDateString('es-EC');
   };
 
+  /* --- La barra de abajo del técnico -------------------------------------
+     La misma que mis.php pinta en el servidor, para las pantallas estáticas
+     —cronograma.html— que no pueden llamar a PHP (T2.13.4). Es una función
+     pura para poder probarla sin navegador, y prueba_barra_tecnico.mjs la
+     compara con la de mis.php: si cambia una y no la otra, falla. */
+  UI.BARRA_TECNICO = [
+    ['bandeja',     'mis.php',             '▤', 'Bandeja'],
+    ['historial',   'mis.php?t=atendidas', '✓', 'Historial'],
+    ['emitir',      'index.html',          '✎', 'Emitir'],
+    ['repuestos',   'pendientes.php',      '◷', 'Repuestos'],
+    ['preventivos', 'cronograma.html',     '▦', 'Preventivos']
+  ];
+  UI.barraTecnico = function (activa) {
+    return '<nav class="nav-abajo" aria-label="Principal">' +
+      UI.BARRA_TECNICO.map(function (b) {
+        return '<a href="' + b[1] + '"' + (b[0] === activa ? ' class="on" aria-current="page"' : '') +
+               '><span class="ic">' + b[2] + '</span>' + b[3] + '</a>';
+      }).join('') + '</nav>';
+  };
+
   /* --- Barra de novedades ------------------------------------------------
      El vigilante del buzón (t2_9) empuja los casos nuevos en segundos. Esta
      barra avisa y NO recarga sola: quien mira puede estar a medio leer un caso

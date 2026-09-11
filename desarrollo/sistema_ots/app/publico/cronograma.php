@@ -179,13 +179,19 @@ Auth::bitacora('CONSULTAR', 'cronograma', 'datos',
                'alcance=' . ($zonaAlcance ?? 'todas')
              . ' locales=' . count($locales) . ' correctivos=' . count($correctivos));
 
-echo json_encode([
+/* Al técnico no le van ni el padrón ni el maestro de locales (T2.13.4): la
+   pantalla no usa el padrón, y los locales solo alimentan «agendar un local»,
+   que no le toca. Eran nombres del personal y correos de cada local viajando a
+   su celular sin que nada los usara. */
+$esTecnico = $u['rol'] === 'TECNICO';
+$salida = [
     'generado'    => date('c'),
     /* La pantalla necesita saber que alcance le toco para poder decirlo, y para
        no ofrecer un selector de zonas que el servidor va a ignorar. */
     'alcance'     => ['zona' => $zonaAlcance, 'rol' => $u['rol'], 'nombre' => $u['nombre']],
     'cronograma'  => $cron,
-    'locales'     => array_values($locales),
-    'tecnicos'    => array_values($tecnicos),
+    'locales'     => $esTecnico ? [] : array_values($locales),
     'correctivos' => $correctivos,
-], JSON_UNESCAPED_UNICODE);
+];
+if (!$esTecnico) { $salida['tecnicos'] = array_values($tecnicos); }
+echo json_encode($salida, JSON_UNESCAPED_UNICODE);

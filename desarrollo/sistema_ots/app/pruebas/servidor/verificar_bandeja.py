@@ -1,4 +1,4 @@
-"""verificar_bandeja.py — T2.13.2, T2.13.3 y T2.13.5 contra el sitio de pruebas, entrando
+"""verificar_bandeja.py — T2.13.2 a T2.13.5 contra el sitio de pruebas, entrando
 con las cuentas de prueba: el formulario le ofrece al técnico solo sus casos abiertos, la
 bandeja y el historial salen de la base, no del catálogo del buzón, y el buzón de avisos le
 cuenta lo suyo (le asignan o le quitan un caso, le responden, le resuelven una novedad).
@@ -188,6 +188,17 @@ def main():
     anotar("T2.13.5", "A ve «Te respondieron» y «Resolvieron una novedad que reportaste»",
            "Te respondieron" in c and "Resolvieron una novedad" in c, st)
     anotar("T2.13.5", "y al abrirlos vuelve a 0", avisos_de(sa) == 0, "")
+
+    print("\n== T2.13.4 · el cronograma del técnico ==")
+    st, _, c = sa.pedir("cronograma.php")
+    j = json.loads(c) if st == 200 else {}
+    anotar("T2.13.4", "técnico A: cronograma.php sin el padrón (sin clave «tecnicos»)", st == 200 and "tecnicos" not in j,
+           sorted(j))
+    anotar("T2.13.4", "técnico A: y con «locales» vacío", st == 200 and j.get("locales") == [], len(j.get("locales") or []))
+    st, _, c = sj.pedir("cronograma.php")
+    j = json.loads(c) if st == 200 else {}
+    anotar("T2.13.4", "el jefe de zona sí los recibe: los usa para agendar",
+           st == 200 and "tecnicos" in j and len(j.get("locales") or []) > 0, f"{st} · locales={len(j.get('locales') or [])}")
 
     for se in (sa, sb, sj, sad):
         se.pedir("salir.php")

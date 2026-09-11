@@ -398,6 +398,25 @@
       });
   }
 
+  /* El técnico entra aquí desde su bandeja, en el celular (T2.13.4): lleva la
+     misma barra de abajo que mis.php y no la de módulos de la oficina —que lo
+     mandaba al panel y al buzón, que no son suyos—, y sin «agendar un local»,
+     que no le toca: el servidor ya no le manda el maestro de locales. Se
+     esconde con `style.display` y no con `hidden`, porque el CSS de la barra y
+     de los botones fija su propio `display` y le ganaría al atributo. */
+  function barraDelTecnico() {
+    var nav = document.querySelector('.app-nav');
+    if (nav) { nav.style.display = 'none'; }
+    var marca = document.querySelector('.app-marca');
+    if (marca) { marca.setAttribute('href', 'mis.php'); }
+    var ag = document.getElementById('btnAgendar');
+    if (ag) { ag.style.display = 'none'; }
+    if (window.UI && window.UI.barraTecnico && !document.querySelector('.nav-abajo')) {
+      document.body.classList.add('con-nav-abajo');
+      document.body.insertAdjacentHTML('beforeend', window.UI.barraTecnico('preventivos'));
+    }
+  }
+
   /**
    * Quien es y que alcanza, segun el servidor.
    *
@@ -411,6 +430,7 @@
     var chip = document.getElementById('barraAlcance');
     if (nom) { nom.textContent = a.nombre || ''; }
     if (chip) { chip.textContent = a.zona ? ('Zona ' + a.zona) : 'Las 3 zonas'; }
+    if (a.rol === 'TECNICO') { barraDelTecnico(); }
 
     var sel = document.getElementById('usuario');
     if (!sel) { return; }
