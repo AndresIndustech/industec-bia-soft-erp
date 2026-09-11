@@ -68,6 +68,19 @@ $mios    = $esTecnico
                              array_merge(Casos::ABIERTOS_TECNICO, Casos::CERRADOS_TECNICO), $gestion)
          : Casos::enAlcance($fuente['datos'] ?? [], $gestion);
 
+/* Los avisos del técnico (T2.13.5): lo que le pasó en las dos últimas semanas y
+   qué es nuevo desde su visita anterior. «Visto» se lee ANTES de anotar esta
+   consulta en la bitácora, porque es justo esa anotación la que lo mueve. */
+$avisos = [];
+$vistoAntes = null;
+if ($esTecnico) {
+    require_once __DIR__ . '/nucleo/Avisos.php';
+    $vistoAntes = Avisos::visto((int) $u['usuario_id']);
+    $avisos = Avisos::delTecnico((int) $u['usuario_id'], date('Y-m-d H:i:s', time() - 14 * 86400));
+}
+$esNuevo = fn(array $a): bool => $vistoAntes === null || $a['cuando'] > $vistoAntes;
+$nuevos  = count(array_filter($avisos, $esNuevo));
+
 Auth::bitacora('CONSULTAR', 'bandeja', 'mis', 'visibles=' . count($mios));
 
 /* =========================================================================
@@ -442,7 +455,7 @@ $cuandoCerro = fn(array $c): string => (string) ($c['_gestion']['atendido_en'] ?
 usort($grupos['atendidas'], fn($a, $b) => strcmp($cuandoCerro($b), $cuandoCerro($a)));
 
 $tab = (string) ($_GET['t'] ?? 'pendientes');
-if (!isset($grupos[$tab])) { $tab = 'pendientes'; }
+if (!isset($grupos[$tab]) && !($tab === 'avisos' && $esTecnico)) { $tab = 'pendientes'; }
 
 /* Los pendientes de equipo que él abrió, para la pestaña «Esperando». */
 $misPend = Pendientes::disponible() ? Pendientes::lista(['grupo' => 'abiertos']) : [];
@@ -467,7 +480,8 @@ $errFlash = Ui::errorFlash();
 $okFlash  = $_SESSION['flash']['ok'] ?? null;
 unset($_SESSION['flash']);
 
-$ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' => 'Atendidas'];
+$ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' => 'Atendidas']
+      + ($esTecnico ? ['avisos' => 'Avisos'] : []);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -503,7 +517,8 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
   <nav class="mov-tabs" aria-label="Mis órdenes">
     <?php foreach ($ETIQ as $k => $et): ?>
       <?php
-      $cn = count($grupos[$k]) + ($k === 'atendidas' ? count($capturas) : 0);
+      // En «Avisos» el globo cuenta solo lo nuevo: es lo que todavía no vio.
+      $cn = $k === 'avisos' ? $nuevos : count($grupos[$k]) + ($k === 'atendidas' ? count($capturas) : 0);
       // El globo de «Esperando» se pone rojo si alguno de sus equipos pasó de
       // las 48 h sin veredicto: es lo único de esta pantalla que corre contra
       // reloj, y el técnico es quien puede empujarlo insistiendo.
@@ -538,6 +553,14 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
          sí llegan dos PDFs a Grupo KFC. */ ?>
 <div id="cola" hidden></div>
 
+<?php if ($esTecnico): ?>
+  <?php /* La barra de avisos: novedades.php le cuenta al técnico SUS avisos nuevos y
+           ui.js la muestra sin recargarle la pantalla (T2.13.5). */ ?>
+  <div id="novedades" hidden><span class="vivo"></span><span id="nov-txt">Tienes avisos nuevos</span>
+    <button class="btn primary" type="button" id="nov-ver">Ver</button>
+    <button class="btn" type="button" id="nov-no" title="Se vuelve a avisar en el próximo cambio">Ahora no</button></div>
+<?php endif; ?>
+
 <?php if (!$fuente): ?>
   <div style="padding:14px">
     <?= Ui::aviso('warn',
@@ -548,6 +571,40 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
 <?php endif; ?>
 
 <main>
+<?php if ($tab === 'avisos'): ?>
+  <?php /* Los avisos (T2.13.5): lo de las dos últimas semanas, con lo nuevo desde su
+           visita anterior marcado. Sale de lo que el sistema ya registra. */ ?>
+  <?php if (!$avisos): ?>
+    <div class="vacio" style="padding:44px 24px">
+      <span class="icono">✓</span>
+      <b style="display:block;font-size:15px;color:var(--ink);margin-bottom:6px">No tienes avisos</b>
+      <span style="display:block;max-width:44ch;margin:0 auto;line-height:1.55">Aquí te avisamos cuando te
+        asignen o te quiten un caso, cuando respondan sobre un equipo que quedó trabado y cuando resuelvan
+        una novedad que reportaste.</span>
+    </div>
+  <?php else: ?>
+    <div style="padding:14px">
+      <?php foreach ($avisos as $av): ?>
+        <?php $nuevo = $esNuevo($av);
+              $suyo  = $av['aviso'] !== null && isset($misAvisos[$av['aviso']]); ?>
+        <div class="rep <?= $av['tipo'] === 'QUITADO' ? '' : 'atendido' ?>"
+             style="margin-bottom:10px<?= $nuevo ? ';border-left:4px solid var(--accent)' : '' ?>">
+          <div class="cab">
+            <div style="min-width:0">
+              <div class="que"><?= $e($av['titulo']) ?><?= $nuevo ? ' <span class="chip">nuevo</span>' : '' ?></div>
+              <div class="meta"><?= $av['aviso'] !== null ? 'Aviso ' . $e($av['aviso']) . ' · ' : '' ?><span
+                   data-hace="<?= $e($av['cuando']) ?>"><?= $e(substr($av['cuando'], 0, 16)) ?></span></div>
+            </div>
+            <?php if ($suyo): ?>
+              <a class="btn sm" href="?ver=<?= rawurlencode($av['aviso']) ?>">Ver el caso</a>
+            <?php endif; ?>
+          </div>
+          <?php if ($av['texto'] !== ''): ?><div class="nota"><?= $e($av['texto']) ?></div><?php endif; ?>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+<?php else: ?>
 <?php
 $lista = $grupos[$tab];
 $verCapturas = $tab === 'atendidas' && $capturas;
@@ -664,6 +721,7 @@ if (!$lista && !$verCapturas):
     </div>
   <?php endif; ?>
 <?php endif; ?>
+<?php endif; /* avisos */ ?>
 </main>
 
 <?php /* El botón flotante. Emitir una orden es LA acción del técnico y tiene que

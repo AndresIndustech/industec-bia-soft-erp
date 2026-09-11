@@ -168,10 +168,18 @@
           if (!d || !d.hay) { return; }
           if (base === null) { base = d.version; return; }     // primera lectura
           if (d.version === base || d.version === visto) { caja.hidden = true; return; }
-          var n = (typeof d.total === 'number') ? d.total : null;
-          txt.textContent = n === null
-            ? 'El buzón se actualizó'
-            : 'El buzón se actualizó — ahora hay ' + n + (n === 1 ? ' caso' : ' casos');
+          if (typeof d.avisos === 'number') {
+            // Al técnico no le cuenta el buzón sino SUS avisos (T2.13.5), y «Ver»
+            // lo lleva a ellos en vez de recargar la pantalla en la que está.
+            if (d.avisos === 0) { caja.hidden = true; return; }
+            txt.textContent = d.avisos === 1 ? 'Tienes 1 aviso nuevo' : 'Tienes ' + d.avisos + ' avisos nuevos';
+          } else {
+            var n = (typeof d.total === 'number') ? d.total : null;
+            txt.textContent = n === null
+              ? 'El buzón se actualizó'
+              : 'El buzón se actualizó — ahora hay ' + n + (n === 1 ? ' caso' : ' casos');
+          }
+          caja.dataset.ir = d.ir || '';
           caja.dataset.version = d.version;
           caja.hidden = false;
         })
@@ -180,7 +188,11 @@
 
     var ver = document.getElementById('nov-ver');
     var no  = document.getElementById('nov-no');
-    if (ver) { ver.addEventListener('click', function () { location.reload(); }); }
+    if (ver) {
+      ver.addEventListener('click', function () {
+        if (caja.dataset.ir) { location.href = caja.dataset.ir; } else { location.reload(); }
+      });
+    }
     if (no) {
       no.addEventListener('click', function () {
         visto = Number(caja.dataset.version) || null;

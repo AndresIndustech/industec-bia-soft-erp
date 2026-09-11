@@ -1,6 +1,11 @@
-"""verificar_bandeja.py — T2.13.2 y T2.13.3 contra el sitio de pruebas, entrando con las
-cuentas de prueba: el formulario le ofrece al técnico solo sus casos abiertos, y la bandeja
-y el historial salen de la base, no del catálogo del buzón.
+"""verificar_bandeja.py — T2.13.2, T2.13.3 y T2.13.5 contra el sitio de pruebas, entrando
+con las cuentas de prueba: el formulario le ofrece al técnico solo sus casos abiertos, la
+bandeja y el historial salen de la base, no del catálogo del buzón, y el buzón de avisos le
+cuenta lo suyo (le asignan o le quitan un caso, le responden, le resuelven una novedad).
+
+En T2.13.5 el jefe de prueba le pasa al técnico B uno de los casos reales de prueba de A y se
+lo devuelve, la administración responde en el hilo del pendiente de prueba y resuelve una
+novedad de prueba de A. Todo eso lo borra deshacer_prueba.php.
 
 Requiere haber corrido ~/respaldos/preparar_prueba.php, que le crea al técnico A los avisos
 sintéticos 99990011 (ASIGNADO) y 99990012 (ATENDIDO sin orden de cierre). Deja lo que
@@ -13,6 +18,7 @@ Sale con 1 si algo falla.
 import datetime
 import json
 import sys
+import time
 import uuid
 
 from verificar_http import D, SALIDA, Sesion, anotar, resultados, sql, ssh
@@ -123,7 +129,67 @@ def main():
     anotar("T2.13.3", "y aparece en su historial, diciendo que el PDF aún no sale de la app",
            f"Aviso {ABIERTO}" in c and "todavía no se genera desde la app" in c, st)
 
-    for se in (sa, sb):
+    print("\n== T2.13.5 · el buzón de avisos del técnico ==")
+    reg = json.loads(ssh("cat ~/respaldos/prueba_deshacer.json"))
+    caso = next(x for x in reg["elegidos"]
+                if sql("SELECT estado FROM casos_gestion WHERE aviso = ?", [x])[0]["estado"] == "ASIGNADO")
+    b = claves["ids"]["tec_prueba_uio_b"]
+    sj, sad = Sesion("jefe_prueba_uio"), Sesion("admin_prueba")
+    sj.entrar(claves["claves"]["jefe_prueba_uio"])
+    sad.entrar(claves["claves"]["admin_prueba"])
+
+    def avisos_de(se):
+        st_, _, c_ = se.pedir("novedades.php")
+        return (json.loads(c_) if st_ == 200 else {}).get("avisos")
+
+    # «Te quitaron» sale de la asignación anterior en la bitácora: la de preparar_prueba
+    # fue por SQL, así que primero el jefe se lo asigna a A por la pantalla.
+    sj.pedir("casos.php", form={"accion": "asignar", "aviso": caso, "tecnico": a})
+    sa.pedir("mis.php")
+    sb.pedir("mis.php")                 # los dos abren su bandeja: ahí queda su «visto»
+    time.sleep(1.2)                     # la bitácora guarda segundos: lo nuevo, después
+    na, nb = avisos_de(sa), avisos_de(sb)
+    anotar("T2.13.5", "recién abierta la bandeja, A y B no tienen avisos", na == 0 and nb == 0, f"A={na} B={nb}")
+    st, _, _ = sj.pedir("casos.php", form={"accion": "asignar", "aviso": caso, "tecnico": b})
+    na, nb = avisos_de(sa), avisos_de(sb)
+    anotar("T2.13.5", "el jefe le pasa a B un caso de A → B 1 aviso y A 1 («te quitaron»)",
+           st == 302 and na == 1 and nb == 1, f"{st} · A={na} B={nb}")
+    st, _, c = sb.pedir("mis.php?t=avisos")
+    anotar("T2.13.5", "B lo ve en su pestaña Avisos: «Te asignaron un caso», con enlace",
+           "Te asignaron un caso" in c and f"?ver={caso}" in c, st)
+    st, _, c = sa.pedir("mis.php?t=avisos")
+    anotar("T2.13.5", "A ve «Te quitaron un caso», sin enlace a una ficha que ya no es suya",
+           "Te quitaron un caso" in c and f"?ver={caso}" not in c, st)
+    na, nb = avisos_de(sa), avisos_de(sb)
+    anotar("T2.13.5", "A y B abrieron su bandeja → los dos en 0", na == 0 and nb == 0, f"A={na} B={nb}")
+    time.sleep(1.2)
+    st, _, _ = sj.pedir("casos.php", form={"accion": "asignar", "aviso": caso, "tecnico": a})
+    na, nb = avisos_de(sa), avisos_de(sb)
+    anotar("T2.13.5", "el jefe se lo devuelve a A → A 1 aviso y B 1", st == 302 and na == 1 and nb == 1,
+           f"{st} · A={na} B={nb}")
+    sa.pedir("mis.php")
+    sb.pedir("mis.php")
+    time.sleep(1.2)
+    st, _, _ = sad.pedir("pendientes.php", form={"accion": "responder", "pendiente_id": reg["pendientes"]["uio"],
+                                                  "nota": "PRUEBA T2.13.5: respuesta de la administración"})
+    na, nb = avisos_de(sa), avisos_de(sb)
+    anotar("T2.13.5", "la administración responde sobre el equipo trabado de A → A 1 aviso, B 0",
+           na == 1 and nb == 0, f"{st} · A={na} B={nb}")
+    u_nov = "99990000-0000-4000-8000-000000000002"
+    ejecutar("INSERT INTO novedades (novedad_uuid, zona, tipo, descripcion, riesgo, responsable_prop, reportada_por) "
+             "VALUES (?, 'UIO', 'OTRO', 'PRUEBA T2.13.5: novedad de prueba, no es real', 'BAJO', 'INDUSTEC', ?) "
+             "ON DUPLICATE KEY UPDATE estado = 'REPORTADA', veredicto_por = NULL, veredicto_en = NULL", [u_nov, a])
+    nov = sql("SELECT novedad_id FROM novedades WHERE novedad_uuid = ?", [u_nov])[0]["novedad_id"]
+    st, _, _ = sad.pedir("novedades_visita.php", form={"accion": "resolver", "novedad_id": nov, "estado": "DESCARTADA",
+                                                        "nota": "PRUEBA T2.13.5", "aviso_sap": ""})
+    na = avisos_de(sa)
+    anotar("T2.13.5", "la administración resuelve una novedad de A → A 2 avisos", na == 2, f"{st} · A={na}")
+    st, _, c = sa.pedir("mis.php?t=avisos")
+    anotar("T2.13.5", "A ve «Te respondieron» y «Resolvieron una novedad que reportaste»",
+           "Te respondieron" in c and "Resolvieron una novedad" in c, st)
+    anotar("T2.13.5", "y al abrirlos vuelve a 0", avisos_de(sa) == 0, "")
+
+    for se in (sa, sb, sj, sad):
         se.pedir("salir.php")
     (SALIDA / "resultado_bandeja.json").write_text(json.dumps(resultados, ensure_ascii=False, indent=1), encoding="utf-8")
     fallas = [r for r in resultados if not r["ok"]]

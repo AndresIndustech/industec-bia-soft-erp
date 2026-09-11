@@ -97,6 +97,8 @@ ARCHIVOS = [
     "nucleo/Auth.php", "nucleo/Db.php", "nucleo/Validacion.php",
     "nucleo/Ui.php", "nucleo/Casos.php", "nucleo/Pendientes.php",
     "nucleo/Novedades.php", "nucleo/Reconciliar.php", "nucleo/Catalogo.php",
+    # `Avisos.php` arma el buzón del técnico (T2.13.5): lo cargan mis.php y novedades.php.
+    "nucleo/Avisos.php",
 
     # --- La app del técnico. `cola.js` es lo que evita perder una orden
     #     llenada sin señal: si falta, el botón de enviar no guarda nada. -----
