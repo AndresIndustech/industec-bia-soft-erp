@@ -33,7 +33,16 @@
     tono = tono || 'info';
     opciones = opciones || {};
     var caja = document.getElementById('toasts');
-    if (!caja) { return null; }
+    if (!caja) {
+      // Las pantallas PHP lo traen de Ui::cabecera; el formulario del técnico
+      // (index.html) no, y ahí se perdían en silencio el «no se pudo guardar la
+      // orden en este celular» y los avisos del recibo. Se crea donde falte.
+      caja = document.createElement('div');
+      caja.id = 'toasts';
+      caja.setAttribute('role', 'status');
+      caja.setAttribute('aria-live', 'polite');
+      document.body.appendChild(caja);
+    }
 
     var t = document.createElement('div');
     t.className = 'toast ' + tono;

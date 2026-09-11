@@ -155,8 +155,14 @@ final class Pendientes
             return ['(p.abierto_por = ? OR p.aviso IN (SELECT aviso FROM casos_gestion WHERE asignado_a = ?))',
                     [(int) $u['usuario_id'], (int) $u['usuario_id']]];
         }
+        // La zona que vale es la del caso, no la que tenía al abrirse: derivar un
+        // caso cambia `casos_gestion.zona`, y el pendiente tiene que irse con él.
+        // Antes el jefe de la zona vieja lo seguía viendo y podía dar el
+        // veredicto, y el de la nueva no se enteraba. Igual que Casos::enAlcance.
         $zona = Auth::zonaAlcance();
-        if ($zona !== null) { return ['p.zona = ?', [$zona]]; }
+        if ($zona !== null) {
+            return ['COALESCE((SELECT g.zona FROM casos_gestion g WHERE g.aviso = p.aviso), p.zona) = ?', [$zona]];
+        }
         return ['1=1', []];
     }
 
