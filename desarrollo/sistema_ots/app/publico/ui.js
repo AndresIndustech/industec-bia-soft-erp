@@ -127,8 +127,10 @@
 
   /* --- Tiempo relativo ---------------------------------------------------
      «hace 3 h» se entiende de un vistazo; «2026-09-09 11:20» hay que restarlo
-     mentalmente. Se calcula en el navegador para no arrastrar la zona horaria
-     del servidor, que en Hostinger no es la de Ecuador. */
+     mentalmente. Las fechas llegan del servidor en hora de Ecuador (Db.php
+     fija la zona de la base y la de PHP) y sin zona escrita, así que el
+     navegador las lee como hora local: cuadra en un celular de Ecuador. Hasta
+     el 2026-09-11 llegaban en UTC y esto salía corrido cinco horas. */
   UI.hace = function (iso) {
     var t = Date.parse((iso || '').replace(' ', 'T'));
     if (isNaN(t)) { return ''; }

@@ -94,8 +94,9 @@ final class Pendientes
 
     /* Las horas del reloj las calcula MySQL, con sus propias fechas: restar
        strtotime() contra time() solo cuadra si la base y el PHP de la web
-       corren en la misma zona (el 2026-09-10 sí, las dos en UTC), y eso lo
-       decide el hosting, no el código. */
+       corren en la misma zona. Desde T2.13.7 las dos van en hora de Ecuador
+       porque las fija Db.php; antes las fijaba el hosting (UTC en Hostinger),
+       y calcularlo aquí sigue sin depender de eso. */
     private const MINUTOS =
         'TIMESTAMPDIFF(MINUTE, COALESCE(p.plazo_desde, p.abierto_en), NOW()) AS min_plazo,
          TIMESTAMPDIFF(MINUTE, COALESCE(p.plazo_desde, p.abierto_en), p.veredicto_en) AS min_veredicto';

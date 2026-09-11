@@ -221,7 +221,11 @@
       // --- FECHA ---
       var fecha = o.fecha_atencion;
       if (fecha) {
-        var hoy = o._hoy || new Date().toISOString().slice(0, 10);
+        // `_hoy` lo pone app.js con la fecha local. El respaldo, también local:
+        // toISOString() da la fecha de UTC, que desde las 19:00 ya es mañana.
+        var ahora = new Date();
+        var hoy = o._hoy || (ahora.getFullYear() + '-' + ('0' + (ahora.getMonth() + 1)).slice(-2) +
+                             '-' + ('0' + ahora.getDate()).slice(-2));
         if (fechaSolo(fecha) > fechaSolo(hoy)) {
           add('fecha_atencion', 'FECHA_FUTURA', fecha + ' es posterior a hoy');
         }
