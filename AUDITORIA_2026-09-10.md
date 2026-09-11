@@ -26,8 +26,8 @@ repositorio privado `AndresIndustech/industec-bia-soft-erp`.
 **Lo que NO se pudo comprobar:** no hay PHP ni base local en este PC (`prueba_48h.php` no se
 corrió); `prueba_offline.mjs` necesita Chrome con el servidor apagado; nada se probó con un
 usuario real, porque 18 de 19 cuentas siguen con la clave inicial y no se usa la clave de una
-persona; la **zona horaria del PHP de la web** no se pudo medir (la base y el PHP de línea de
-órdenes están en UTC).
+persona. La **zona horaria del PHP de la web** se midió después, esa misma noche: UTC, igual que
+la base y que el PHP de línea de órdenes (ver §6, «La hora»).
 
 ---
 
@@ -52,7 +52,7 @@ Afectan a quien ya usa el sitio (la administradora). Andrés aprobó desplegarlo
 | El **trabajador de servicio v2** guarda en caché cualquier pantalla y cualquier PDF y los devuelve **ignorando la dirección**: abrir el PDF de una orden puede mostrar el de otra | `sw.js` del commit 0938243, desplegado: `cachePrimero` con `ignoreSearch` para todo lo que no es catálogo | `sw.js` v4: solo armazón y datos; nada de PHP ni PDF; subir la versión purga lo guardado |
 | La **reconciliación deshace cada 3 horas** la reasignación hecha por una persona (vuelve al firmante del informe) y fabrica casos «ASIGNADO» sin nadie | Las 2 filas huérfanas del servidor (avisos 10336163 y 10336625, creadas a las 21:20:01 del 09-09) y el upsert desplegado | `Reconciliar.php`: el firmante solo se pone si nadie asignó ni derivó (`asignado_por`, `derivado_en`); la guarda va en el SQL |
 | El **jefe de zona abre PDFs de otras zonas**, con la firma del administrador del local | `pdf.php` desplegado solo cortaba al técnico | Corte por zona para todo rol con alcance |
-| **El bloqueo por intentos puede no bloquear**: `bloqueado_hasta` salía de `date()` de PHP y se comparaba con `NOW()` de la base, que corre en UTC. Además revelaba qué cuentas existen y cualquiera podía bloquear cuentas | `Auth.php` desplegado = local. **Depende de la zona horaria del PHP web, no medida** | Bloqueo en SQL, tope de 20 rechazos por conexión en 15 min, mensaje único |
+| **El bloqueo por intentos** revelaba qué cuentas existen y cualquiera podía bloquear cuentas ajenas. Se temía además que no bloqueara (`bloqueado_hasta` salía de `date()` de PHP y se comparaba con `NOW()` de la base) | `Auth.php` desplegado = local. La zona del PHP web se midió esa noche: UTC, como la base, así que el bloqueo viejo **sí** bloqueaba | Bloqueo en SQL, tope de 20 rechazos por conexión en 15 min, mensaje único |
 | La **clave provisional impresa** servía en los extremos JSON (catálogos, envíos) | `exigir()` no miraba `debe_cambiar_clave` | Se exige en `exigir()` |
 | **Redirección abierta** con `login.php?r=//otro-sitio` | La expresión aceptaba `//` | Rechazado |
 | **XSS en `usuarios.php`**: el nombre iba dentro del JS de un `onsubmit`; una administradora podía escalar a superadministrador | `htmlspecialchars` no protege dentro de JS en un atributo | El texto va en `data-confirma` |
@@ -89,7 +89,7 @@ en todas las pantallas sí quedó activa con `Auth.php`: 19 cuentas la tienen pe
 | El botón «Emitir la orden de este caso» **no precargaba el aviso** (el enlace mandaba `?aviso=` y solo se leía `?local=`); el combo filtraba por zona | Requisito 1 de Andrés | `app.js` |
 | La orden en cola **no estaba ligada a quien la llenó**: en un celular compartido salía firmada por el siguiente | Trazabilidad de la firma | `cola.js`, `envio.php` (409) |
 | Cerrar sesión **no borraba** del teléfono los catálogos ni la bandeja; un 401 se servía desde la caché | Datos de KFC y del personal en teléfonos personales | `sw.js`, `salir.php` |
-| El reloj de 48 h se calculaba en PHP contra fechas de una base en UTC | Tarjetas desfasadas y veredictos a tiempo registrados como tarde | `Pendientes.php` (horas en SQL) |
+| El reloj de 48 h se calculaba en PHP contra fechas de la base | Si el PHP de la web corriera en otra zona que la base, tarjetas desfasadas 5 h. Medido esa noche: los dos en UTC, así que en este servidor no había desfase; en SQL deja de depender de esa configuración | `Pendientes.php` (horas en SQL) |
 | Un equipo resuelto que vuelve a fallar **no abría nada**; el diagnóstico nuevo pisaba el anterior; un segundo equipo del mismo caso se fundía con el primero | El equipo quedaba parado sin reloj | `Pendientes.php`, `app.js`, 007 (`DIAGNOSTICO`) |
 | Un equipo trabado en un caso ya ATENDIDO no lo pasaba a ESPERA_REPUESTO | Se cerraba en SAP con el equipo parado | `Pendientes.php` |
 | La garantía negada reiniciaba el reloj desde la apertura original y contaba el equipo como a tiempo y vencido a la vez | Indicador de 48 h falso | `Pendientes.php`, 007 (`plazo_desde`) |
@@ -188,6 +188,21 @@ De las dudas que dejó abiertas:
 - `t2_6`: las celdas vacías de la tabla del correo corren los campos (una «Activo Fijo» vacía deja
   la descripción en su lugar). **No se cambió a ciegas**: hay que mirar un correo real en la
   estación antes de tocar el parser.
+
+### La hora: el servidor en UTC, el negocio en Ecuador (medido el 2026-09-10 por la noche)
+
+La base (`NOW()`) y el PHP de la web (`date.timezone=UTC`, medido con una sonda que se borró al
+instante) corren los dos en **UTC**: entre ellos no hay desfase, así que el reloj de 48 h y el
+bloqueo por intentos, que se calculan en SQL, están bien. Pero el negocio vive en hora de Ecuador
+(UTC−5) y el código no convierte:
+
+- todas las fechas de la base son `DATETIME` con `DEFAULT current_timestamp()`: se guardan en UTC y
+  se muestran tal cual, **5 horas adelantadas** (`asignado_en`, `recibida_en`, la bitácora…);
+- `date('Y-m-d')` da el «hoy» de UTC: desde las 19:00 de Ecuador ya es mañana, y un caso que vence
+  hoy sale «vencido» esa noche (`casos.php:257`, `mis.php:193`, `panel.php:64`, `asignacion.php:40`,
+  `reportes.php:67`, `Ui::dias`). Solo `envio.php` fija `America/Guayaquil`.
+
+No bloquea el despliegue de prueba. Se corrige en T2.13.7, antes de que haya usuarios reales.
 
 ### Producción (`yellow-elephant`) — diferido al corte por decisión de Andrés del 2026-09-10
 

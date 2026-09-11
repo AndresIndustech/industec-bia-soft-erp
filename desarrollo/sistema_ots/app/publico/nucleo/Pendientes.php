@@ -92,9 +92,10 @@ final class Pendientes
                              'EN_TALLER', 'DEVUELTO_TALLER', 'GARANTIA_RECLAMADA',
                              'GARANTIA_APROBADA', 'GARANTIA_NEGADA', 'BAJA_PROPUESTA', 'BAJA_APROBADA'];
 
-    /* Las horas del reloj las calcula MySQL. La base guarda en UTC y el PHP de
-       la web corre en otra zona: restar strtotime() contra time() daba 5 h de
-       más, el mismo error que ya se había corregido en Auth. */
+    /* Las horas del reloj las calcula MySQL, con sus propias fechas: restar
+       strtotime() contra time() solo cuadra si la base y el PHP de la web
+       corren en la misma zona (el 2026-09-10 sí, las dos en UTC), y eso lo
+       decide el hosting, no el código. */
     private const MINUTOS =
         'TIMESTAMPDIFF(MINUTE, COALESCE(p.plazo_desde, p.abierto_en), NOW()) AS min_plazo,
          TIMESTAMPDIFF(MINUTE, COALESCE(p.plazo_desde, p.abierto_en), p.veredicto_en) AS min_veredicto';

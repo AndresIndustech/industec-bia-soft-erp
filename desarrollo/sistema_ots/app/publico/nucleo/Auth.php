@@ -98,10 +98,11 @@ final class Auth
         }
 
         if (!password_verify($clave, $u['clave_hash'])) {
-            /* El bloqueo lo calcula MySQL. Antes salía de date() de PHP, que en
-               la web corre en otra zona que la base: el `bloqueado_hasta` quedaba
-               horas en el pasado y el bloqueo no bloqueaba. Un bloqueo vencido
-               tampoco se suma al siguiente: el contador vuelve a cero. */
+            /* El bloqueo lo calcula MySQL. Antes salía de date() de PHP: si la
+               web corriera en otra zona que la base, `bloqueado_hasta` quedaría
+               horas en el pasado y el bloqueo no bloquearía (el 2026-09-10 las
+               dos están en UTC, pero eso lo decide el hosting). Un bloqueo
+               vencido tampoco se suma al siguiente: el contador vuelve a cero. */
             Db::ejecutar('UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL
                            WHERE usuario_id = ? AND bloqueado_hasta IS NOT NULL
                              AND bloqueado_hasta <= NOW()', [$u['usuario_id']]);

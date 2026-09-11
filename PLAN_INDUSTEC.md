@@ -652,6 +652,7 @@ se termina en la app nueva y producción no se toca.
 | **T2.13.4** | Cronograma móvil del técnico | `cronograma.php` deja de mandar `tecnicos` (la pantalla no lo usa) y `locales` al técnico; `cronograma.html` le pinta la barra móvil. Criterio: `curl -b a.txt $B/cronograma.php` → sin clave `tecnicos` y `locales` vacío; la barra se prueba con una función pura en `prueba_contratos.mjs` |
 | **T2.13.5** | Buzón de avisos del técnico, **sin tabla nueva** | `novedades.php` (rama TECNICO) devuelve total y versión propios desde lo que ya se registra: asignaciones (`casos_gestion.asignado_en`), respuestas y veredictos del hilo (`pendiente_notas`), veredictos de sus novedades y «te quitaron el caso» (bitácora). «Visto hasta» = su último `CONSULTAR bandeja` en la bitácora. Pestaña «Avisos» en `mis.php` con globo. Criterio: el jefe de prueba asigna un aviso sintético a A → total de A = 1 y de B = 0; A abre la bandeja → total 0 |
 | **T2.13.6** | Comunicados de zona (**solo si Andrés los aprueba**) | Tabla `comunicados` con `UNIQUE (comunicado_uuid)`, zona forzada en el servidor y «visto por X de Y». Condicionado a que el piloto muestre uso real: un comunicado que nadie abre le hace creer al jefe que avisó |
+| **T2.13.7** | La hora de Ecuador en todo el sistema | Hoy la base y el PHP corren en UTC y el negocio en UTC−5 (medido el 2026-09-10; ver AUDITORIA §6). **Opción elegida: una sola zona para todo.** `Db::conn()` ejecuta `SET time_zone = '-05:00'` (Ecuador no cambia de hora) y un arranque común fija `date_default_timezone_set('America/Guayaquil')`; las filas ya guardadas se corren −5 h una sola vez, en el sitio de pruebas (en `casos_gestion.tocado_en`, que lleva `ON UPDATE`, el `UPDATE` tiene que fijarla explícita o se pisa con `NOW()`). Descartada: guardar en UTC y convertir al mostrar, porque obliga a tocar cada pantalla y cada comparación con las fechas del catálogo de SAP, que llegan en hora local. Criterio: a las 20:00 de Ecuador, `SELECT NOW()` y `date('Y-m-d H:i')` dan la hora de Ecuador; un caso con `fecha_estimada` = hoy **no** sale vencido; la hora de `recibida_en` que ve el técnico en su recibo es la de su reloj |
 
 | Autónomo | Requiere aprobación humana | Prohibido |
 |---|---|---|
@@ -1009,8 +1010,10 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     `envio.php` buscaba `locales.json['locales']` y `equipos.json`; `t2_5` escribe
     `{'datos': …}` y `equipos_por_local.json`. Habría rechazado el 100 % de las
     órdenes. Un solo lector para todos: `nucleo/Catalogo.php`.
-11. **Restar fechas en PHP que guardó MySQL.** La base corre en UTC y el PHP de la
-    web no: el reloj de 48 h y el bloqueo por intentos se calculan en SQL.
+11. **Restar fechas en PHP que guardó MySQL.** Que coincidan lo decide la configuración del
+    hosting, no el código (el 2026-09-10 la base y el PHP de la web corren los dos en UTC): el
+    reloj de 48 h y el bloqueo por intentos se calculan en SQL. La hora del negocio, la de
+    Ecuador, es otro asunto: T2.13.7.
 
 ### Lo que no se toca, nunca
 

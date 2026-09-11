@@ -206,7 +206,7 @@ if ($aviso !== '') {
 // horas sin cobertura, y para medir tiempos de atención vale la primera. Pero
 // el reloj del teléfono no manda sin límite: fuera de [-7 días, +10 min] se
 // toma la hora de llegada y se marca. Va con FROM_UNIXTIME para quedar en el
-// mismo reloj que `recibida_en`: la base corre en UTC y el PHP de la web no.
+// mismo reloj que `recibida_en` (el de la base), sin depender de la zona del PHP.
 $t = strtotime((string) ($j['capturada_en'] ?? ''));
 if ($t === false || $t > time() + 600 || $t < time() - 7 * 86400) {
     $observaciones[] = 'FECHA_DE_CAPTURA_DUDOSA';
