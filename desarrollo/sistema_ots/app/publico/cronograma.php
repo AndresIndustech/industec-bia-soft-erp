@@ -29,6 +29,7 @@ declare(strict_types=1);
    Es la misma regla que ya se corrigio una vez en el buzon de casos.
    ------------------------------------------------------------------------- */
 require_once __DIR__ . '/nucleo/Auth.php';
+require_once __DIR__ . '/nucleo/Casos.php';
 $u = Auth::exigir('cronograma.ver', true);
 $zonaAlcance = Auth::zonaAlcance();   // null = las tres zonas
 
@@ -85,6 +86,8 @@ if (is_file($base . '/casos_sap.json')) {
         ];
     }
 }
+// El mismo alcance del buzón: el técnico, solo lo asignado; el jefe, su zona (con derivaciones).
+$correctivos = Casos::enAlcance($correctivos, Casos::gestion());
 
 /* -------------------------------------------------------------------------
    El recorte por zona.
@@ -122,7 +125,6 @@ if ($zonaAlcance !== null) {
 
     $locales     = array_values(array_filter($locales, $mia));
     $tecnicos    = array_values(array_filter($tecnicos, $mia));
-    $correctivos = array_values(array_filter($correctivos, $mia));
 
     /* Del cronograma se recorta SOLO `ingresos`, que es la lista de trabajo.
        Hacerlo en bloque sobre toda lista que aparezca en la raiz tenia un

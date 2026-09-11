@@ -32,6 +32,7 @@ declare(strict_types=1);
    esto es un `fetch`, y una redireccion la guardaria como si fuera el catalogo.
    ------------------------------------------------------------------------- */
 require_once __DIR__ . '/nucleo/Auth.php';
+require_once __DIR__ . '/nucleo/Casos.php';
 $u = Auth::exigir('ots.crear', true);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -93,6 +94,8 @@ $equipos = leer("$base/equipos_por_local.json");
 $avisos = ['datos' => [], 'cobertura' => null];
 if (is_file("$base/casos_sap.json")) {
     $j = json_decode((string) file_get_contents("$base/casos_sap.json"), true);
+    // Con sesión no alcanzaba: cualquier técnico recibía los 909 casos de las 3 zonas.
+    $j['datos'] = Casos::enAlcance($j['datos'] ?? [], Casos::gestion());
     $avisos = [
         'datos' => array_map(static fn($c) => [
             'aviso'               => $c['aviso'],
@@ -122,7 +125,8 @@ if (is_file("$base/casos_sap.json")) {
     ];
 } elseif (is_file("$base/avisos_abiertos.json")) {
     $j = json_decode((string) file_get_contents("$base/avisos_abiertos.json"), true);
-    $avisos = ['datos' => $j['datos'] ?? [], 'cobertura' => $j['cobertura'] ?? null];
+    $avisos = ['datos' => Casos::enAlcance($j['datos'] ?? [], Casos::gestion()),
+               'cobertura' => $j['cobertura'] ?? null];
 }
 
 echo json_encode([
