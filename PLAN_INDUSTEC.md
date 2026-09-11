@@ -561,9 +561,9 @@ cliente.
 
 | # | Subtarea | Qué ataca | Verificación exacta |
 |---|---|---|---|
-| **T2.12.1** | 🚦 Aplicar `sql/007_pendientes_y_captura.sql` | Sin las tablas, el control de 48 h, las novedades y la recepción de órdenes no existen | Correr **los dos bloques de verificación** del propio archivo y **pegar su salida literal**: las 7 consultas numeradas del pie, y el bloque aparte «VERIFICACION de las novedades» que está antes (fácil de saltar, porque no está al final). Las tres que no se negocian: `SHOW CREATE TABLE pendientes\G` muestra `UNIQUE KEY uq_pendiente (aviso, activo_fijo)`; `SHOW CREATE TABLE ot_capturadas\G` muestra `UNIQUE KEY uq_captura_envio (envio_uuid)`; `SHOW COLUMNS FROM casos_gestion LIKE 'estado'` termina en `,'ESPERA_REPUESTO')` |
-| **T2.12.2** | Idempotencia de la migración | Una segunda corrida que duplique deja el tablero contando doble | Correr la 007 **dos veces seguidas**. `SELECT COUNT(*) FROM permisos WHERE codigo LIKE 'repuestos%' OR codigo LIKE 'novedades%'` → 7 en las dos corridas. Y la prueba de inserción doble del pie del archivo → `COUNT(*) = 1` |
-| **T2.12.3** | Desplegar a **UIO solamente** (I-8) | Un defecto en tres zonas a la vez | `t2_10_desplegar.py`, que verifica por hash. Abrir las 13 pantallas con un usuario de cada rol y **que ninguna dé error de PHP ni quede en blanco**. ⚠️ **Corregido el 2026-09-10:** hay **un solo sitio para las tres zonas**, así que «desplegar solo a UIO» no existe: el piloto se hace dejando activas solo las cuentas de UIO (baja temporal de las de LARB y CNLJ desde `usuarios.php`, con bitácora) o con una compuerta `zonas_habilitadas` en `nucleo/config.php`. **La vía la elige Andrés** antes de este paso |
+| **T2.12.1** | ✅ **Hecho el 2026-09-11** · Aplicar `sql/007_pendientes_y_captura.sql` | Sin las tablas, el control de 48 h, las novedades y la recepción de órdenes no existen | Correr **los dos bloques de verificación** del propio archivo y **pegar su salida literal**: las 7 consultas numeradas del pie, y el bloque aparte «VERIFICACION de las novedades» que está antes (fácil de saltar, porque no está al final). Las tres que no se negocian: `SHOW CREATE TABLE pendientes\G` muestra `UNIQUE KEY uq_pendiente (aviso, activo_fijo)`; `SHOW CREATE TABLE ot_capturadas\G` muestra `UNIQUE KEY uq_captura_envio (envio_uuid)`; `SHOW COLUMNS FROM casos_gestion LIKE 'estado'` termina en `,'ESPERA_REPUESTO')` |
+| **T2.12.2** | ✅ **Hecho el 2026-09-11** · Idempotencia de la migración | Una segunda corrida que duplique deja el tablero contando doble | Correr la 007 **dos veces seguidas**. `SELECT COUNT(*) FROM permisos WHERE codigo LIKE 'repuestos%' OR codigo LIKE 'novedades%'` → 7 en las dos corridas. Y la prueba de inserción doble del pie del archivo → `COUNT(*) = 1` |
+| **T2.12.3** | ✅ **Desplegado entero el 2026-09-11**: nadie usa el sitio de pruebas, así que el piloto por zona queda para cuando empiece el uso real · Desplegar a **UIO solamente** (I-8) | Un defecto en tres zonas a la vez | `t2_10_desplegar.py`, que verifica por hash. Abrir las 13 pantallas con un usuario de cada rol y **que ninguna dé error de PHP ni quede en blanco**. ⚠️ **Corregido el 2026-09-10:** hay **un solo sitio para las tres zonas**, así que «desplegar solo a UIO» no existe: el piloto se hace dejando activas solo las cuentas de UIO (baja temporal de las de LARB y CNLJ desde `usuarios.php`, con bitácora) o con una compuerta `zonas_habilitadas` en `nucleo/config.php`. **La vía la elige Andrés** antes de este paso |
 | **T2.12.4** | 🚦 Verificar el alcance por zona **con los tres roles** | Que un jefe de zona vea datos de otra zona. Es la comprobación más importante de toda la tarea | Entrar como administradora, jefe de UIO y jefe de CNLJ y **contar filas** en `casos.php`, `pendientes.php`, `novedades_visita.php`, `ordenes.php`, `reportes.php` y `cronograma.html`. Las cifras de los dos jefes deben sumar sin solaparse y ser menores que la de la administradora. Pedir otra zona por la URL (`?zona=CNLJ` siendo jefe de UIO) → **0 filas y ninguna fuga** |
 | **T2.12.5** | Verificar el alcance con un **POST fabricado a mano** | Que esconder un botón se confunda con proteger | `curl` un POST a `pendientes.php` con `pendiente_id` de otra zona y a `novedades_visita.php` con `novedad_id` de otra zona, con la cookie de un jefe de zona → **rechazado en el servidor**, y la fila queda en `bitacora` con `exito = 0` |
 | **T2.12.6** | Verificar los dos extremos que se cerraron el 10-sep | Que un despliegue los reabra por descuido | `curl` sin cookie a `catalogos.php` y a `cronograma.php` → **401 en JSON**, no un catálogo (**comprobado el 2026-09-10 tras subirlos**). Con cookie de jefe de zona a `cronograma.php` → solo su zona. **Con cookie de un técnico** a `catalogos.php` → `avisos` = exactamente sus casos asignados; ninguna prueba de T2.12 entraba como técnico |
@@ -854,6 +854,15 @@ desplegar desde la estación sin fusionarla pisa en el servidor lo que ya se cor
 el 2026-09-10 el sitio de pruebas tiene `sw.js` v4, `pdf.php`, `nucleo/Reconciliar.php`,
 `nucleo/Auth.php` y los dos `.htaccess` de esa rama.
 
+**Actualización del 2026-09-11 (desde el PC, por decisión de Andrés: el sitio de pruebas no lo
+usa nadie de INDUSTEC).** T2.12.1, T2.12.2 y T2.12.3 **están hechos**: la 007 se aplicó dos
+veces sin duplicar (`verificar_esquema.php` «permisos (con la 007)» y TODO OK; pasan las 20
+comprobaciones de los dos bloques del pie) y los 48 archivos confirmados del rediseño están en el
+servidor, verificados por hash. Herramientas y respaldo previo en `~/respaldos/` del servidor
+(`verificar_007.php`, `revertir_007.php`). **No se vuelve a aplicar ni a desplegar desde la
+estación sin fusionar antes la rama.** Lo que sigue: T2.12.4 a T2.12.6 (alcance por rol, con
+cuentas de prueba) y después T2.13 por el camino (a).
+
 **T2.12.1 — aplicar la migración 007.** Requiere aprobación de Andrés porque
 cambia el esquema: pídesela antes de correr nada. Desde el 2026-09-10 la 007 trae
 además `pendientes.plazo_desde` y la nota `DIAGNOSTICO`, y `verificar_esquema.php`
@@ -951,7 +960,7 @@ sobre-contó el backlog 8× en T1.11.
 | Bloqueado | Lo desbloquea |
 |---|---|
 | Aplicar la 007 y la 003 | **Andrés** — cambian el esquema |
-| Desplegar a UIO, y 48 h después a LARB y CNLJ | **Andrés** (I-8) |
+| Desplegar a UIO, y 48 h después a LARB y CNLJ | **Andrés** (I-8). El 2026-09-11 el rediseño se subió entero al sitio de pruebas porque nadie lo usa; el piloto por zona se decide cuando empiece el uso real |
 | Que el PDF y el correo salgan del sistema nuevo | La migración `003` (`correlativos` con reserva atómica y `email_queue`) |
 | El 36% del correctivo que el buzón no trae | Confirmar la causa — ver `SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md` |
 | Respaldo TrueNAS (T1.9) | Acceso físico al equipo |

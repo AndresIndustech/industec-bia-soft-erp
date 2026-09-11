@@ -78,6 +78,12 @@ abierta del ingreso, el XSS de `usuarios.php` —solo lo alcanza quien administr
 casos que quedan huérfanos al dar de baja a un técnico. La exigencia de cambiar la clave provisional
 en todas las pantallas sí quedó activa con `Auth.php`: 19 cuentas la tienen pendiente.
 
+**Actualización del 2026-09-11:** `login.php` y `usuarios.php` subieron con el rediseño completo
+(T2.12.3), así que la redirección abierta, el XSS de `usuarios.php` y los casos huérfanos al dar de
+baja quedan cerrados también en el sitio de pruebas. Del servidor se borraron `alta_padron.php` (una
+versión vieja que nada enlazaba) y `nucleo/config.php.previo` (copia vieja de `config.php`); los dos
+están en el respaldo.
+
 ---
 
 ## 4. Defectos del rediseño (sin desplegar), corregidos en código
