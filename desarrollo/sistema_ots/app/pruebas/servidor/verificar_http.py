@@ -131,7 +131,12 @@ def main():
     st, _, c = s["tec_prueba_uio_a"].pedir("catalogos.php")
     cat_a = json.loads(c) if st == 200 else {}
     avisos_a = sorted(a["aviso"] for a in cat_a.get("avisos", {}).get("datos", []))
-    anotar("T2.12.6", "técnico A: catalogos.php → exactamente sus casos asignados", avisos_a == sorted(elegidos), avisos_a, sorted(elegidos))
+    # Desde T2.13.2 el formulario ofrece los casos ABIERTOS del técnico según la base,
+    # incluidos los sintéticos que no están en el catálogo (verificar_bandeja.py).
+    abiertos_a = sorted(r["aviso"] for r in sql(
+        "SELECT aviso FROM casos_gestion WHERE asignado_a = ? AND estado IN ('ASIGNADO','ESPERA_REPUESTO')",
+        [ids["tec_prueba_uio_a"]]))
+    anotar("T2.12.6", "técnico A: catalogos.php → exactamente sus casos abiertos", avisos_a == abiertos_a, avisos_a, abiertos_a)
     st, _, c = s["tec_prueba_uio_b"].pedir("catalogos.php")
     avisos_b = [a["aviso"] for a in (json.loads(c) if st == 200 else {}).get("avisos", {}).get("datos", [])]
     anotar("T2.12.6", "técnico B (sin casos): catalogos.php → ningún aviso", st == 200 and avisos_b == [], f"{st} · {avisos_b}")

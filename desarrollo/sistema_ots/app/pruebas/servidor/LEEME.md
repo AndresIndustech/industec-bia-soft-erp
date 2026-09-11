@@ -13,11 +13,12 @@ producción.
 |---|---|---|---|
 | `verificar_007.php` | servidor, desde `ot/` | Los dos bloques de verificación del pie de la 007, con PASA/FALLA | No: sus pruebas de escritura van en una transacción que se revierte |
 | `revertir_007.php` | servidor, desde `ot/` | Deshace la 007 (solo si algo salió mal) | Sin `--si` solo dice lo que haría; se niega si las tablas tienen filas, salvo `--forzar` |
-| `preparar_prueba.php` | servidor, desde `ot/` | Crea o renueva 5 cuentas de prueba, asigna 2 casos de UIO al técnico A y deja datos de prueba en UIO y CNLJ | Sí, y todo queda en `~/respaldos/prueba_deshacer.json` |
-| `deshacer_prueba.php` | servidor, desde `ot/` | Revierte lo anterior: desactiva las cuentas, borra lo que crearon y devuelve los casos | Sí |
+| `preparar_prueba.php` | servidor, desde `ot/` | Crea o renueva 5 cuentas de prueba, asigna 2 casos de UIO al técnico A, le crea 2 avisos sintéticos fuera del catálogo (99990011 abierto y 99990012 atendido sin orden de cierre) y deja datos de prueba en UIO y CNLJ | Sí, y todo queda en `~/respaldos/prueba_deshacer.json` |
+| `deshacer_prueba.php` | servidor, desde `ot/` | Revierte lo anterior: desactiva las cuentas, borra lo que crearon y los avisos sintéticos, y devuelve los casos | Sí |
 | `alcance_cli.php` | servidor, desde `ot/` | Qué ve un usuario, con las mismas funciones que las pantallas | No |
 | `verificar_http.py` | PC o estación | Entra con las cuentas de prueba y comprueba pantallas, alcance, POST fabricados y la orden de la app | Sí: órdenes de prueba de las cuentas de prueba |
 | `verificar_ciclo.py` | PC o estación | El ciclo completo de un caso: trabado → veredicto → vía → resuelto | Sí: un pendiente de prueba |
+| `verificar_bandeja.py` | PC o estación | T2.13.2 y T2.13.3: el formulario le ofrece al técnico solo sus casos abiertos, y la bandeja y el historial salen de la base, con los casos que no están en el catálogo del buzón | Sí: una orden de prueba (el pendiente que abre lo borra al terminar) |
 | `hora_ecuador.php` | servidor, desde `ot/` | T2.13.7: pasa a hora de Ecuador, una sola vez, las fechas que el servidor guardó en UTC (todas las DATETIME menos `atendido_en`) | Sin `--si` solo dice lo que haría; se niega a correr dos veces o en una base que no escribía en UTC, y revierte si alguna fecha queda en el futuro |
 | `prueba_cola_vivo.mjs` | PC o estación, con Edge o Chrome | La cola sin servidor y con la sesión caída, con un navegador de verdad (T2.12.7 y T2.12.8), y que el celular reciba el `sw.js` vigente | Sí: dos órdenes de prueba |
 
@@ -34,6 +35,7 @@ php ~/respaldos/preparar_prueba.php
 # 3. Probar (desde el PC o la estación)
 python verificar_http.py
 python verificar_ciclo.py
+python verificar_bandeja.py
 node prueba_cola_vivo.mjs
 
 # 4. Deshacer (en el servidor) al terminar
@@ -47,9 +49,10 @@ en `~/respaldos/claves_prueba.json` (0600) y los scripts de Python las leen por 
 
 ## Cuidado
 
-- `preparar_prueba.php` asigna al técnico de prueba **dos casos reales de UIO**, porque los avisos
-  sintéticos no aparecen hasta T2.13.3: la bandeja sale del catálogo del buzón. Se devuelven a
-  como estaban con `deshacer_prueba.php`. No dejarlo corriendo sin necesidad.
+- `preparar_prueba.php` asigna al técnico de prueba **dos casos reales de UIO**: las pruebas de la
+  orden necesitan el local y los equipos que trae el catálogo del buzón. Se devuelven a como
+  estaban con `deshacer_prueba.php`. No dejarlo corriendo sin necesidad. Desde T2.13.3 crea además
+  avisos sintéticos `9999xxxx`, que no existen en SAP y se borran enteros al deshacer.
 - Agrega los técnicos de prueba a `catalogos/tecnicos.json`, con copia previa: `envio.php` exige
   que quien firma esté en el padrón. Si la estación empuja el padrón en medio, se pierden y la
   orden de prueba da 400; basta con volver a preparar.

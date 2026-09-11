@@ -12,6 +12,8 @@ declare(strict_types=1);
  *   azar y van SOLO a ~/respaldos/claves_prueba.json (0600, fuera de la web).
  * - Asigna al técnico A dos casos abiertos reales de UIO que estén en el catálogo y
  *   sin técnico, y le abre un pendiente de prueba en el primero.
+ * - Le crea al técnico A dos avisos sintéticos que no están en el catálogo (T2.13.2 y
+ *   T2.13.3): 99990011 ASIGNADO y 99990012 ATENDIDO sin orden de cierre.
  * - Crea en CNLJ un pendiente vencido y una novedad, ambos marcados PRUEBA, para
  *   intentar alcanzarlos desde UIO.
  * - Agrega los dos técnicos de prueba a catalogos/tecnicos.json (con copia previa),
@@ -70,7 +72,9 @@ $jcnl = $ids['jefe_prueba_cnlj'];
 // ------------------------------------------- 2. dos casos de UIO para el técnico A
 $cat   = json_decode((string) file_get_contents('catalogos/casos_sap.json'), true) ?: [];
 $casos = $cat['datos'] ?? [];
-$elegidos = array_column(Db::todos('SELECT aviso FROM casos_gestion WHERE asignado_a = ?', [$tecA]), 'aviso');
+// Los reales que ya tiene; los sintéticos (9999xxxx, abajo) no cuentan como estos dos.
+$elegidos = array_column(Db::todos("SELECT aviso FROM casos_gestion WHERE asignado_a = ? AND aviso NOT LIKE '9999%'",
+                                   [$tecA]), 'aviso');
 foreach ($casos as $c) {
     if (count($elegidos) >= 2) { break; }
     $a = (string) ($c['aviso'] ?? '');
@@ -88,6 +92,20 @@ foreach ($casos as $c) {
 }
 if (count($elegidos) < 2) { fwrite(STDERR, "No hay dos casos de UIO libres en el catálogo.\n"); exit(1); }
 $d['elegidos'] = array_values($elegidos);
+
+// ------ 2b. avisos sintéticos del técnico A, fuera del catálogo (T2.13.2 y T2.13.3)
+// Los 9999xxxx no existen en SAP: prueban lo que no está en el catálogo sin tocar
+// casos del cliente. Uno abierto (se ofrece en el formulario y se ve en la bandeja)
+// y uno atendido sin orden de cierre (se ve en el historial, diciendo que no hay PDF).
+$SINT = ['99990011' => 'ASIGNADO', '99990012' => 'ATENDIDO'];
+foreach ($SINT as $a => $est) {
+    Db::ejecutar("INSERT INTO casos_gestion (aviso, zona, estado, asignado_a, asignado_por, asignado_en, nota)
+                  VALUES (?, 'UIO', ?, ?, ?, NOW(), 'PRUEBA: aviso sintético, no existe en SAP')
+                  ON DUPLICATE KEY UPDATE estado = VALUES(estado), asignado_a = VALUES(asignado_a),
+                                          asignado_por = VALUES(asignado_por), ot_cierre = NULL",
+                 [(string) $a, $est, $tecA, $jefe]);
+}
+$d['sinteticos'] = array_map('strval', array_keys($SINT));
 
 // ------------------- 3. pendiente de prueba del técnico A (el reloj corre: parado)
 if (empty($d['pendientes']['uio'])) {
@@ -141,10 +159,11 @@ chmod($DES, 0600);
 Db::ejecutar("INSERT INTO bitacora (accion, entidad, referencia, estado_despues, exito, detalle, datos, ip, equipo)
               VALUES ('PRUEBA_PREPARAR', 'prueba', 'T2.12.4-6', 'PREPARADA', 1, ?, ?, '', 'CLI por SSH (PC de Andrés)')",
              ['Cuentas y datos de prueba del alcance por rol; se revierten con deshacer_prueba.php',
-              json_encode(['cuentas' => $ids, 'casos' => $d['elegidos'], 'pendientes' => $d['pendientes'],
+              json_encode(['cuentas' => $ids, 'casos' => $d['elegidos'], 'sinteticos' => $d['sinteticos'],
+                           'pendientes' => $d['pendientes'],
                            'novedades' => $d['novedades']], JSON_UNESCAPED_UNICODE)]);
 
 echo "cuentas: ", json_encode($ids), "\n";
-echo "casos del técnico A: ", implode(', ', $d['elegidos']), "\n";
+echo "casos del técnico A: ", implode(', ', $d['elegidos']), " · sintéticos: ", implode(', ', $d['sinteticos']), "\n";
 echo "pendientes de prueba: ", json_encode($d['pendientes']), " · novedades: ", json_encode($d['novedades']), "\n";
 echo "claves en $R/claves_prueba.json (0600) · deshacer: $DES\n";

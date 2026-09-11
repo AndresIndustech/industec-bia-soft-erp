@@ -69,29 +69,56 @@ $base = (string) Catalogo::carpeta();
  * KFC", no "casos pendientes segun SAP". El cierre sigue rigiendose por
  * estatus_general del export.
  */
+/* La forma que espera el formulario, desde una fila del catálogo del buzón. */
+$forma = static fn(array $c): array => [
+    'aviso'               => $c['aviso'],
+    'fecha_notificacion'  => $c['fecha_creacion'] ?? $c['recibido'] ?? null,
+    'fecha_estimada'      => $c['fecha_estimada'] ?? null,
+    'prioridad'           => $c['prioridad'] ?? null,
+    'caso'                => $c['caso'] ?? null,
+    'descripcion_trabajo' => $c['descripcion_trabajo'] ?? null,
+    'local'               => $c['local'] ?? null,
+    'local_nombre'        => $c['local_nombre'] ?? null,
+    'zona'                => $c['zona'] ?? null,
+    'cadena'              => $c['cadena'] ?? null,
+    'centro_coste_sap'    => $c['centro_coste_sap'] ?? null,
+    'equipo_sap'          => null,   // el correo no trae el numero de equipo
+    'equipo_denominacion' => $c['activo_fijo'] ?? null,
+    'estatus'             => 'POR ASIGNAR',
+    'orden_trabajo'       => $c['orden_trabajo'] ?? null,
+];
+
 $avisos = ['datos' => [], 'cobertura' => null];
-if (is_file("$base/casos_sap.json")) {
+if ($u['rol'] === 'TECNICO') {
+    /* Al técnico, sus casos ABIERTOS y desde la base (T2.13.2 y T2.13.3): los
+       que tiene ASIGNADO o ESPERA_REPUESTO, estén o no en el catálogo del
+       buzón. Uno que ya se atendió o se cerró deja de ofrecerse —el formulario
+       le ofrecía casos terminados—, y uno que quedó fuera de la ventana del
+       catálogo sigue apareciendo, con su número y nada que se invente (I-7). */
+    $gest   = Casos::gestion();
+    $mios   = Casos::delTecnico((int) $u['usuario_id'], Casos::ABIERTOS_TECNICO, $gest);
+    $sinCat = count(array_filter($mios, static fn($c) => !empty($c['sin_catalogo'])));
+    $avisos = [
+        'datos' => array_map(static function (array $c) use ($forma, $gest): array {
+            $f = $forma($c) + ['sin_catalogo' => !empty($c['sin_catalogo'])];
+            $f['estatus'] = Casos::etiquetaEstado($gest[$c['aviso']]['estado'] ?? null);
+            return $f;
+        }, $mios),
+        'cobertura' => [
+            'fuente'      => 'tus casos abiertos, en la base',
+            'generado'    => date('c'),
+            'hasta'       => null,
+            'advertencia' => $sinCat === 0 ? null : ($sinCat === 1
+                ? 'Uno de ellos no está en el listado del buzón: de ese solo se conoce el número de aviso.'
+                : "$sinCat de ellos no están en el listado del buzón: de esos solo se conoce el número de aviso."),
+        ],
+    ];
+} elseif (is_file("$base/casos_sap.json")) {
     $j = json_decode((string) file_get_contents("$base/casos_sap.json"), true);
     // Con sesión no alcanzaba: cualquier técnico recibía los 909 casos de las 3 zonas.
     $j['datos'] = Casos::enAlcance($j['datos'] ?? [], Casos::gestion());
     $avisos = [
-        'datos' => array_map(static fn($c) => [
-            'aviso'               => $c['aviso'],
-            'fecha_notificacion'  => $c['fecha_creacion'] ?? $c['recibido'] ?? null,
-            'fecha_estimada'      => $c['fecha_estimada'] ?? null,
-            'prioridad'           => $c['prioridad'] ?? null,
-            'caso'                => $c['caso'] ?? null,
-            'descripcion_trabajo' => $c['descripcion_trabajo'] ?? null,
-            'local'               => $c['local'] ?? null,
-            'local_nombre'        => $c['local_nombre'] ?? null,
-            'zona'                => $c['zona'] ?? null,
-            'cadena'              => $c['cadena'] ?? null,
-            'centro_coste_sap'    => $c['centro_coste_sap'] ?? null,
-            'equipo_sap'          => null,   // el correo no trae el numero de equipo
-            'equipo_denominacion' => $c['activo_fijo'] ?? null,
-            'estatus'             => 'POR ASIGNAR',
-            'orden_trabajo'       => $c['orden_trabajo'] ?? null,
-        ], $j['datos'] ?? []),
+        'datos' => array_map($forma, $j['datos'] ?? []),
         'cobertura' => [
             'fuente'      => 'buzon de INDUSTEC, en vivo',
             'generado'    => $j['generado'] ?? null,

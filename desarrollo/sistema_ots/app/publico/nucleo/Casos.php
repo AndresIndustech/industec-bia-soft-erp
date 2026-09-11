@@ -27,6 +27,11 @@ final class Casos
     private static ?array $catalogo = null;
     private static ?array $atenciones = null;
 
+    /** Lo que sigue siendo trabajo del técnico: su bandeja y su formulario (T2.13.2). */
+    public const ABIERTOS_TECNICO = ['ASIGNADO', 'ESPERA_REPUESTO'];
+    /** Lo que ya cerró, o se resolvió por otra vía: su historial (T2.13.3). */
+    public const CERRADOS_TECNICO = ['ATENDIDO', 'RESUELTO', 'NO_COMPETE'];
+
     private static function leerJson(string $nombre, string $clave): array
     {
         $candidatos = [
@@ -118,6 +123,35 @@ final class Casos
     }
 
     /**
+     * Los casos de un técnico en esos estados, desde la base y no desde el catálogo.
+     *
+     * El catálogo del buzón es una ventana que la estación reescribe entera: el
+     * 2026-09-10 había 4 casos ASIGNADO fuera de él y sus 3 técnicos no los veían
+     * ni en la bandeja ni en el formulario (T2.13.3). La lista la manda
+     * `casos_gestion`, que es lo que decidimos y persiste; el catálogo solo la
+     * completa. Lo que no está en él va con `sin_catalogo` y sin inventar nada (I-7).
+     *
+     * @param string[] $estados
+     * @return array<int,array<string,mixed>> filas con la forma del catálogo
+     */
+    public static function delTecnico(int $usuarioId, array $estados, array $gestion): array
+    {
+        $cat = [];
+        foreach (self::catalogo()['datos'] ?? [] as $c) { $cat[(string) ($c['aviso'] ?? '')] = $c; }
+        $out = [];
+        foreach ($gestion as $aviso => $g) {
+            $aviso = (string) $aviso;   // un aviso numérico llega como clave int
+            if ((int) ($g['asignado_a'] ?? 0) !== $usuarioId || !in_array($g['estado'], $estados, true)) {
+                continue;
+            }
+            $c = $cat[$aviso] ?? ['aviso' => $aviso, 'sin_catalogo' => true];
+            if (($g['zona'] ?? '') !== '') { $c['zona'] = $g['zona']; }   // la de la gestión manda
+            $out[] = $c;
+        }
+        return $out;
+    }
+
+    /**
      * Los técnicos a los que este usuario puede asignar.
      *
      * Un jefe de zona solo reparte entre los suyos. La administración ve las
@@ -151,7 +185,7 @@ final class Casos
         );
     }
 
-    /** ¿Existe ese aviso en el catálogo, y lo alcanza este usuario? */
+    /** ¿Existe ese aviso —en el catálogo o, para el técnico, asignado a él— y lo alcanza este usuario? */
     public static function alcanzaAviso(string $aviso, array $gestion): ?array
     {
         foreach (self::catalogo()['datos'] ?? [] as $c) {
@@ -159,6 +193,17 @@ final class Casos
                 $vis = self::enAlcance([$c], $gestion);
                 return $vis === [] ? null : $vis[0];
             }
+        }
+        /* Fuera del catálogo, al técnico le alcanza lo que tiene asignado en la
+           base: si no, el caso que ve en su bandeja (delTecnico) no se podía
+           reportar trabado y su orden salía marcada «fuera de alcance». Sin zona
+           en la gestión vale la del técnico, que es la del jefe que decide. */
+        $u = Auth::actual();
+        $g = $gestion[$aviso] ?? null;
+        if ($u !== null && $u['rol'] === 'TECNICO' && $g !== null
+            && (int) ($g['asignado_a'] ?? 0) === (int) $u['usuario_id']) {
+            return ['aviso' => $aviso, 'sin_catalogo' => true,
+                    'zona' => ($g['zona'] ?? '') !== '' ? $g['zona'] : ($u['zona'] ?? null)];
         }
         return null;
     }

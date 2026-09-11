@@ -227,7 +227,7 @@
       hidden: '#aviso', clear: '#avisoClear',
       vacio: 'No tienes casos asignados. Si atendiste algo sin caso, elige «Sin orden asignada».',
       clave: function (a) { return a.aviso; },
-      etiqueta: function (a) { return a.aviso + ' · ' + (a.local || a.centro_coste_sap) + ' · ' + (a.caso || 'sin tipo'); },
+      etiqueta: function (a) { return a.aviso + ' · ' + (a.local || a.centro_coste_sap || 'sin dato en el catálogo') + ' · ' + (a.caso || 'sin tipo'); },
       buscarEn: function (a) {
         return [a.aviso, a.local, a.local_nombre, a.caso, a.cadena, a.zona,
                 a.equipo_denominacion, a.centro_coste_sap].join(' ');
@@ -235,7 +235,7 @@
       grupo: function (a) { return a.caso || 'Sin tipo de trabajo'; },
       fila: function (a) {
         return '<span class="cod">' + esc(a.aviso) + '</span> · ' +
-               esc(a.local || a.centro_coste_sap) + ' ' +
+               esc(a.local || a.centro_coste_sap || 'sin dato en el catálogo') + ' ' +
                '<span class="cad">' + esc(a.local_nombre || '') + '</span>' +
                (a.fecha_notificacion ? ' <span class="cad">— ' + esc(fechaCorta(a.fecha_notificacion)) + '</span>' : '');
       },
@@ -245,7 +245,8 @@
   }
 
   /* Los avisos que se le ofrecen: los que el servidor ya recortó a su alcance
-     (catalogos.php aplica Casos::enAlcance; al técnico, sus casos asignados).
+     (catalogos.php aplica Casos::enAlcance; al técnico, sus casos abiertos según
+     la base, con Casos::delTecnico, estén o no en el catálogo del buzón).
      Aquí no se vuelve a filtrar por zona: un caso de otra zona que le asignaron
      para apoyar también es suyo, y el filtro viejo lo escondía. */
   function refrescarAvisos() {
@@ -345,8 +346,11 @@
       $('#localNota').textContent = 'Viene de la orden ' + a.aviso + '. Si el trabajo fue en otro local, elige “Sin orden asignada”.';
     } else {
       comboLocal.bloquear(false);
-      $('#localNota').textContent = 'El centro de coste ' + (a.centro_coste_sap || '?') +
-        ' de esta orden no resuelve contra el maestro. Elige el local a mano.';
+      // Un caso que no está en el catálogo del buzón solo trae su número (T2.13.3).
+      $('#localNota').textContent = a.sin_catalogo
+        ? 'Este caso no está en el listado del buzón: elige el local a mano.'
+        : 'El centro de coste ' + (a.centro_coste_sap || '?') +
+          ' de esta orden no resuelve contra el maestro. Elige el local a mano.';
     }
     // El tipo se deriva del caso de SAP, y se puede corregir.
     var caso = baja(a.caso || '');
@@ -385,7 +389,8 @@
       '</div>' +
       '<dl>' +
         '<dt>Trabajo</dt><dd>' + (a.caso ? esc(a.caso) : sd) + '</dd>' +
-        '<dt>Local</dt><dd>' + esc(a.local || a.centro_coste_sap) + ' · ' + esc(a.local_nombre || '') + '</dd>' +
+        '<dt>Local</dt><dd>' + (a.local || a.centro_coste_sap
+          ? esc(a.local || a.centro_coste_sap) + ' · ' + esc(a.local_nombre || '') : sd) + '</dd>' +
         '<dt>Notificado</dt><dd>' + (a.fecha_notificacion ? esc(fechaCorta(a.fecha_notificacion)) : sd) + '</dd>' +
         '<dt>Comprometido</dt><dd>' + (a.fecha_estimada ? esc(fechaCorta(a.fecha_estimada)) : sd) + '</dd>' +
         '<dt>Activo</dt><dd>' + (a.equipo_denominacion ? esc(limpiarTipo(a.equipo_denominacion)) : sd) + '</dd>' +

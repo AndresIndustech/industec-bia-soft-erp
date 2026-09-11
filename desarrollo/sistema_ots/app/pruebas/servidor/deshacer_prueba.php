@@ -10,6 +10,7 @@ declare(strict_types=1);
  * - Borra lo que crearon ellas: órdenes capturadas, pendientes (y su hilo) y
  *   novedades. Es dato de prueba, no del cliente.
  * - Devuelve los dos casos del técnico A a como estaban antes.
+ * - Borra los avisos sintéticos (9999xxxx) de T2.13.2 y T2.13.3: no son del cliente.
  * - Restaura catalogos/tecnicos.json desde su copia.
  */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
@@ -29,6 +30,10 @@ try {
     $n1 = Db::ejecutar("DELETE FROM ot_capturadas WHERE usuario_id IN ($en)", $ids);
     $n2 = Db::ejecutar("DELETE FROM pendientes WHERE abierto_por IN ($en) OR activo_fijo LIKE 'PRUEBA-%'", $ids);
     $n3 = Db::ejecutar("DELETE FROM novedades WHERE reportada_por IN ($en) OR novedad_uuid LIKE '99990000-%'", $ids);
+    $ns = 0;
+    foreach ($d['sinteticos'] ?? [] as $aviso) {
+        $ns += Db::ejecutar("DELETE FROM casos_gestion WHERE aviso = ? AND aviso LIKE '9999%'", [(string) $aviso]);
+    }
     $nc = 0;
     foreach ($d['casos'] ?? [] as $aviso => $info) {
         if (empty($info['existia'])) {
@@ -48,7 +53,7 @@ try {
     Db::ejecutar("INSERT INTO bitacora (accion, entidad, referencia, estado_despues, exito, detalle, datos, ip, equipo)
                   VALUES ('PRUEBA_DESHACER', 'prueba', 'T2.12.4-6', 'REVERTIDA', 1, ?, ?, '', 'CLI por SSH (PC de Andrés)')",
                  ['Se revirtieron las cuentas y los datos de prueba del alcance por rol',
-                  json_encode(compact('n1', 'n2', 'n3', 'nc', 'nu'))]);
+                  json_encode(compact('n1', 'n2', 'n3', 'nc', 'ns', 'nu'))]);
     $pdo->commit();
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }
@@ -64,4 +69,5 @@ if (!empty($d['tecnicos_json']) && is_file($d['tecnicos_json'])) {
 }
 @unlink("$R/claves_prueba.json");
 unlink($DES);
-echo "órdenes de prueba borradas: $n1 · pendientes: $n2 · novedades: $n3 · casos devueltos: $nc · cuentas desactivadas: $nu\n";
+echo "órdenes de prueba borradas: $n1 · pendientes: $n2 · novedades: $n3 · casos devueltos: $nc · "
+   . "avisos sintéticos borrados: $ns · cuentas desactivadas: $nu\n";
