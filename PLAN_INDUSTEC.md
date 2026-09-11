@@ -652,7 +652,7 @@ se termina en la app nueva y producción no se toca.
 | **T2.13.4** | Cronograma móvil del técnico | `cronograma.php` deja de mandar `tecnicos` (la pantalla no lo usa) y `locales` al técnico; `cronograma.html` le pinta la barra móvil. Criterio: `curl -b a.txt $B/cronograma.php` → sin clave `tecnicos` y `locales` vacío; la barra se prueba con una función pura en `prueba_contratos.mjs` |
 | **T2.13.5** | Buzón de avisos del técnico, **sin tabla nueva** | `novedades.php` (rama TECNICO) devuelve total y versión propios desde lo que ya se registra: asignaciones (`casos_gestion.asignado_en`), respuestas y veredictos del hilo (`pendiente_notas`), veredictos de sus novedades y «te quitaron el caso» (bitácora). «Visto hasta» = su último `CONSULTAR bandeja` en la bitácora. Pestaña «Avisos» en `mis.php` con globo. Criterio: el jefe de prueba asigna un aviso sintético a A → total de A = 1 y de B = 0; A abre la bandeja → total 0 |
 | **T2.13.6** | Comunicados de zona (**solo si Andrés los aprueba**) | Tabla `comunicados` con `UNIQUE (comunicado_uuid)`, zona forzada en el servidor y «visto por X de Y». Condicionado a que el piloto muestre uso real: un comunicado que nadie abre le hace creer al jefe que avisó |
-| **T2.13.7** | La hora de Ecuador en todo el sistema | Hoy la base y el PHP corren en UTC y el negocio en UTC−5 (medido el 2026-09-10; ver AUDITORIA §6). **Opción elegida: una sola zona para todo.** `Db::conn()` ejecuta `SET time_zone = '-05:00'` (Ecuador no cambia de hora) y un arranque común fija `date_default_timezone_set('America/Guayaquil')`; las filas ya guardadas se corren −5 h una sola vez, en el sitio de pruebas (en `casos_gestion.tocado_en`, que lleva `ON UPDATE`, el `UPDATE` tiene que fijarla explícita o se pisa con `NOW()`). Descartada: guardar en UTC y convertir al mostrar, porque obliga a tocar cada pantalla y cada comparación con las fechas del catálogo de SAP, que llegan en hora local. Criterio: a las 20:00 de Ecuador, `SELECT NOW()` y `date('Y-m-d H:i')` dan la hora de Ecuador; un caso con `fecha_estimada` = hoy **no** sale vencido; la hora de `recibida_en` que ve el técnico en su recibo es la de su reloj |
+| **T2.13.7** | ✅ **Hecho el 2026-09-11**: `Db.php` fija las dos zonas (`time_zone = '-05:00'` por desfase, porque Hostinger no tiene cargadas las zonas con nombre —error 1298—, y `date_default_timezone_set` al cargarse, que es por donde pasa todo lo que toca la base) y `hora_ecuador.php` corrió −5 h las `DATETIME` del reloj del servidor, salvo `atendido_en`, que llega del informe en hora local. Verificado en el servidor: `NOW()` y `date()` dan la misma hora de Ecuador, ninguna fecha queda en el futuro, el recibo de la orden sale con la hora local y las 87 comprobaciones por rol siguen pasando · La hora de Ecuador en todo el sistema | Hoy la base y el PHP corren en UTC y el negocio en UTC−5 (medido el 2026-09-10; ver AUDITORIA §6). **Opción elegida: una sola zona para todo.** `Db::conn()` ejecuta `SET time_zone = '-05:00'` (Ecuador no cambia de hora) y un arranque común fija `date_default_timezone_set('America/Guayaquil')`; las filas ya guardadas se corren −5 h una sola vez, en el sitio de pruebas (en `casos_gestion.tocado_en`, que lleva `ON UPDATE`, el `UPDATE` tiene que fijarla explícita o se pisa con `NOW()`). Descartada: guardar en UTC y convertir al mostrar, porque obliga a tocar cada pantalla y cada comparación con las fechas del catálogo de SAP, que llegan en hora local. Criterio: a las 20:00 de Ecuador, `SELECT NOW()` y `date('Y-m-d H:i')` dan la hora de Ecuador; un caso con `fecha_estimada` = hoy **no** sale vencido; la hora de `recibida_en` que ve el técnico en su recibo es la de su reloj |
 
 | Autónomo | Requiere aprobación humana | Prohibido |
 |---|---|---|
@@ -868,6 +868,11 @@ T2.13.1 pasan (87 comprobaciones con ingreso real; herramientas en `desarrollo/s
 con su LEEME). T2.12.7 y T2.12.8 también pasan, con un navegador de verdad (`prueba_cola_vivo.mjs`).
 Falta T2.12.12 (hojas de capacitación).
 
+**T2.13.7, la hora de Ecuador, también el 2026-09-11:** `Db.php` fija la zona de la base y la de PHP,
+y las fechas que el servidor había guardado en UTC se corrieron una sola vez (`hora_ecuador.php`, con
+respaldo previo en `~/respaldos/`). Lo que sigue, en orden: T2.13.2, T2.13.3, T2.13.5, T2.13.4 y la
+migración 008 de la emisión.
+
 **T2.12.1 — aplicar la migración 007.** Requiere aprobación de Andrés porque
 cambia el esquema: pídesela antes de correr nada. Desde el 2026-09-10 la 007 trae
 además `pendientes.plazo_desde` y la nota `DIAGNOSTICO`, y `verificar_esquema.php`
@@ -1027,7 +1032,7 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
 11. **Restar fechas en PHP que guardó MySQL.** Que coincidan lo decide la configuración del
     hosting, no el código (el 2026-09-10 la base y el PHP de la web corren los dos en UTC): el
     reloj de 48 h y el bloqueo por intentos se calculan en SQL. La hora del negocio, la de
-    Ecuador, es otro asunto: T2.13.7.
+    Ecuador, es otro asunto: T2.13.7, hecha el 2026-09-11 (`Db.php` fija las dos zonas).
 12. **Probar solo contra la base de la estación.** En Hostinger la intercalación del servidor
     (`utf8mb4_unicode_ci`) chocaba con la que MariaDB les da a los parámetros de las preparadas
     nativas, y `NULLIF(?, '')` tumbaba con error 500 el veredicto, los cierres y las novedades; en la

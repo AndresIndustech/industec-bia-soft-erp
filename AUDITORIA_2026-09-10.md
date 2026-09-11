@@ -210,6 +210,20 @@ bloqueo por intentos, que se calculan en SQL, están bien. Pero el negocio vive 
 
 No bloquea el despliegue de prueba. Se corrige en T2.13.7, antes de que haya usuarios reales.
 
+**Corregido el 2026-09-11 (T2.13.7).** `Db.php` fija las dos zonas: `date_default_timezone_set` al
+cargarse —todo lo que toca la base pasa por ahí, en la web y en la consola— y `time_zone = '-05:00'`
+en la conexión, por desfase porque Hostinger no tiene cargadas las zonas con nombre (error 1298);
+Ecuador no cambia de hora en el año. Las dos herramientas de consola que abren su propia conexión y
+escriben (`aplicar_sql.php`, `alta_padron_cli.php`) fijan lo mismo. Antes de correr los datos se
+comprobó que todas las fechas las había escrito el reloj del servidor —la bitácora no tiene saltos, y
+las altas y los primeros ingresos cuadran al minuto— y que `atendido_en` no: llega del informe en hora
+local, unos minutos antes del alta del caso menos cinco horas. Con respaldo previo de la base,
+`hora_ecuador.php` corrió −5 h las 18 columnas con datos en una sola transacción, y antes de
+confirmar comprobó que ninguna quedara en el futuro, que es lo que delata una fecha en UTC leída en
+hora de Ecuador. Después: `NOW()` y `date()` dan la misma hora, el recibo de la orden sale con la
+hora local y las 87 comprobaciones por rol siguen pasando. De paso: el «hace 3 h» de las pantallas
+(`UI.hace`) leía la fecha en UTC como hora local y salía corrido cinco horas; ahora cuadra.
+
 ### Producción (`yellow-elephant`) — diferido al corte por decisión de Andrés del 2026-09-10
 
 `phpinfo.php` responde 200 público · WordPress 6.8.8 con vulnerabilidades · `guardas.php` sin
