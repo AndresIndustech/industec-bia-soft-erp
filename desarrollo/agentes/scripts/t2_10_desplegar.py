@@ -269,7 +269,10 @@ def verificar_web(lista: list[str]) -> list[str]:
     viejos = []
     for crudo in lista:
         rel = normalizar(crudo)
-        if not (rel.endswith((".js", ".css", ".html", ".png", ".svg")) or rel == "manifest.json"):
+        # Solo el código. Las imágenes las recomprime el CDN al vuelo (nodos
+        # «imm-edge»): el ícono de 1149 B llega de 1341 B aunque se esquive la
+        # caché, así que su hash nunca cuadra y no dice nada (medido el 2026-09-11).
+        if not (rel.endswith((".js", ".css", ".html")) or rel == "manifest.json"):
             continue
         local = hashlib.sha256((ORIGEN / rel).read_bytes()).hexdigest()
         # El CDN guarda una copia por cada forma de pedirlo: sin comprimir (curl)

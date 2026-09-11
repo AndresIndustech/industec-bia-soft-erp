@@ -266,3 +266,21 @@ corrige T2.13.3. Se revierte con `deshacer_prueba.php`, que devuelve los casos a
 **Nota para quien pruebe desde el PC de Andrés:** su antivirus (Avast) inspecciona el HTTPS con una
 raíz propia que Python 3.13+ rechaza por estricta. Los scripts lo toleran sin dejar de verificar la
 cadena; no es un problema del servidor.
+
+**T2.12.7 y T2.12.8, con un navegador de verdad** (`prueba_cola_vivo.mjs`, Edge sin ventana manejado
+por CDP): con el servidor «caído» —el dominio desviado a 127.0.0.1, porque Hostinger no se puede
+apagar— la app abre desde la caché y la orden queda guardada como PENDIENTE; al volver la señal sale
+sola y llega una vez. Si mientras tanto otra sesión del mismo técnico desplaza la del celular, la orden
+queda «falta entrar» (no «rechazada») y al volver a entrar sale sola. 15 de 15, con el celular
+recibiendo el trabajador de servicio vigente (v4).
+
+**Hallazgo: el CDN de Hostinger entregaba el `sw.js` y el `estilo.css` viejos.** El servidor marca js y
+css como `public, max-age=604800` y el CDN (hcdn) guarda una copia por dirección y por compresión.
+Horas después de subir el v4, la copia **comprimida** —la que reciben todos los navegadores— seguía
+siendo el `sw.js` v2 (el que guardaba cualquier PDF) y el `estilo.css` anterior (el rediseño se veía
+descuadrado), mientras el hash del disco cuadraba y un `curl` sin compresión recibía lo nuevo: la
+verificación miraba el lugar equivocado. Se corrigió con `Cache-Control: no-cache` para el código en
+el `.htaccess` de `ot/` (el CDN deja de guardarlo; cuesta un 304), una purga del CDN que hizo Andrés
+desde hPanel, y `t2_10`, que ahora pide cada archivo de código por la web, en sus dos variantes, y lo
+compara con lo subido. Las imágenes no se comparan: el CDN las recomprime al vuelo (el ícono de 1149 B
+llega de 1341 B aunque se esquive la caché).

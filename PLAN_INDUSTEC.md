@@ -567,8 +567,8 @@ cliente.
 | **T2.12.4** | ✅ **Hecho el 2026-09-11** · 🚦 Verificar el alcance por zona **con los tres roles** | Que un jefe de zona vea datos de otra zona. Es la comprobación más importante de toda la tarea | Entrar como administradora, jefe de UIO y jefe de CNLJ y **contar filas** en `casos.php`, `pendientes.php`, `novedades_visita.php`, `ordenes.php`, `reportes.php` y `cronograma.html`. Las cifras de los dos jefes deben sumar sin solaparse y ser menores que la de la administradora. Pedir otra zona por la URL (`?zona=CNLJ` siendo jefe de UIO) → **0 filas y ninguna fuga** |
 | **T2.12.5** | ✅ **Hecho el 2026-09-11** · Verificar el alcance con un **POST fabricado a mano** | Que esconder un botón se confunda con proteger | `curl` un POST a `pendientes.php` con `pendiente_id` de otra zona y a `novedades_visita.php` con `novedad_id` de otra zona, con la cookie de un jefe de zona → **rechazado en el servidor**, y la fila queda en `bitacora` con `exito = 0` |
 | **T2.12.6** | ✅ **Hecho el 2026-09-11** · Verificar los dos extremos que se cerraron el 10-sep | Que un despliegue los reabra por descuido | `curl` sin cookie a `catalogos.php` y a `cronograma.php` → **401 en JSON**, no un catálogo (**comprobado el 2026-09-10 tras subirlos**). Con cookie de jefe de zona a `cronograma.php` → solo su zona. **Con cookie de un técnico** a `catalogos.php` → `avisos` = exactamente sus casos asignados; ninguna prueba de T2.12 entraba como técnico |
-| **T2.12.7** | 🚦 Prueba de captura **sin señal**, de punta a punta | Que una orden se pierda, o que llegue dos veces | **Apagar el servidor de verdad** — no cortar la red con el depurador, que no reproduce el caso: el trabajador de servicio tiene su propio contexto de red. Abrir el formulario, llenar una orden completa, comprobar que la cola dice «guardada, esperando señal». Encender el servidor. La orden sale sola y **`SELECT COUNT(*) FROM ot_capturadas WHERE envio_uuid = '<el uuid>'` da 1**, no 2 |
-| **T2.12.8** | Reintento con sesión caducada | Que un 401 marque como inválida una orden que está perfecta | Con órdenes en la cola, cerrar la sesión desde otro navegador (sesión única). El siguiente intento debe dejarlas en «falta entrar», **no** en «rechazada». Volver a entrar → salen solas |
+| **T2.12.7** | ✅ **Hecho el 2026-09-11** con un navegador de verdad contra el servidor (`prueba_cola_vivo.mjs`): el servidor «caído» se simula desviando el dominio, porque Hostinger no se puede apagar · 🚦 Prueba de captura **sin señal**, de punta a punta | Que una orden se pierda, o que llegue dos veces | **Apagar el servidor de verdad** — no cortar la red con el depurador, que no reproduce el caso: el trabajador de servicio tiene su propio contexto de red. Abrir el formulario, llenar una orden completa, comprobar que la cola dice «guardada, esperando señal». Encender el servidor. La orden sale sola y **`SELECT COUNT(*) FROM ot_capturadas WHERE envio_uuid = '<el uuid>'` da 1**, no 2 |
+| **T2.12.8** | ✅ **Hecho el 2026-09-11** (`prueba_cola_vivo.mjs`) · Reintento con sesión caducada | Que un 401 marque como inválida una orden que está perfecta | Con órdenes en la cola, cerrar la sesión desde otro navegador (sesión única). El siguiente intento debe dejarlas en «falta entrar», **no** en «rechazada». Volver a entrar → salen solas |
 | **T2.12.9** | ✅ **Hecho el 2026-09-11** · Verificar el reloj de 48 h contra datos reales | Que la cifra del globo de navegación y la de la pantalla discrepen | Abrir un pendiente con equipo deshabilitado. Comprobar que el globo de «Repuestos y equipos», la tarjeta «Fuera de plazo» y la lista filtrada con `?g=vencidos` **dan el mismo número**. Contrastar con la consulta 6 del pie de la 007 |
 | **T2.12.10** | ✅ **Hecho el 2026-09-11** · Verificar el ciclo completo de un caso | Que la reconciliación pise un estado que puso una persona | Recorrer un caso de prueba: asignar → el técnico lo deja trabado → veredicto → avanzar la vía → resolver. Después correr `reconciliar_cli.php` y comprobar con la consulta 5 del pie de la 007 que **da 0 filas** |
 | **T2.12.11** | Esperar **48 horas** y extender a LARB y CNLJ | Desplegar a las tres zonas un defecto que se ve al segundo día | Que en 48 h no haya entrado ninguna incidencia del personal de UIO. Recién entonces `t2_10_desplegar.py` al resto |
@@ -865,7 +865,8 @@ cuentas de prueba) y después T2.13 por el camino (a).
 
 **Y la verificación por rol, el mismo 2026-09-11:** T2.12.3 a T2.12.6, T2.12.9, T2.12.10, T2.13.0 y
 T2.13.1 pasan (87 comprobaciones con ingreso real; herramientas en `desarrollo/sistema_ots/app/pruebas/servidor/`,
-con su LEEME). Faltan T2.12.7 y T2.12.8, que necesitan un navegador, y T2.12.12 (hojas de capacitación).
+con su LEEME). T2.12.7 y T2.12.8 también pasan, con un navegador de verdad (`prueba_cola_vivo.mjs`).
+Falta T2.12.12 (hojas de capacitación).
 
 **T2.12.1 — aplicar la migración 007.** Requiere aprobación de Andrés porque
 cambia el esquema: pídesela antes de correr nada. Desde el 2026-09-10 la 007 trae
@@ -1031,6 +1032,12 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     (`utf8mb4_unicode_ci`) chocaba con la que MariaDB les da a los parámetros de las preparadas
     nativas, y `NULLIF(?, '')` tumbaba con error 500 el veredicto, los cierres y las novedades; en la
     estación no se veía. Lo que se despliega se prueba contra el servidor, con cuentas de prueba.
+13. **Dar por desplegado lo que quedó en el disco del servidor.** El CDN de Hostinger guarda una
+    copia por dirección y por compresión, y marcaba el js y el css para 7 días: horas después de subir
+    el `sw.js` v4 y el `estilo.css` nuevo, los navegadores —que piden comprimido— seguían recibiendo
+    los viejos, mientras el hash del disco cuadraba y un `curl` sin compresión daba lo nuevo. El
+    `.htaccess` pide revalidar el código, una purga limpió lo guardado, y `t2_10` compara al final lo
+    que entrega la web en sus dos variantes. Las imágenes no se comparan: el CDN las recomprime.
 
 ### Lo que no se toca, nunca
 

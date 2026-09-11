@@ -18,6 +18,7 @@ producción.
 | `alcance_cli.php` | servidor, desde `ot/` | Qué ve un usuario, con las mismas funciones que las pantallas | No |
 | `verificar_http.py` | PC o estación | Entra con las cuentas de prueba y comprueba pantallas, alcance, POST fabricados y la orden de la app | Sí: órdenes de prueba de las cuentas de prueba |
 | `verificar_ciclo.py` | PC o estación | El ciclo completo de un caso: trabado → veredicto → vía → resuelto | Sí: un pendiente de prueba |
+| `prueba_cola_vivo.mjs` | PC o estación, con Edge o Chrome | La cola sin servidor y con la sesión caída, con un navegador de verdad (T2.12.7 y T2.12.8), y que el celular reciba el `sw.js` vigente | Sí: dos órdenes de prueba |
 
 ## Uso
 
@@ -32,6 +33,7 @@ php ~/respaldos/preparar_prueba.php
 # 3. Probar (desde el PC o la estación)
 python verificar_http.py
 python verificar_ciclo.py
+node prueba_cola_vivo.mjs
 
 # 4. Deshacer (en el servidor) al terminar
 php ~/respaldos/deshacer_prueba.php
