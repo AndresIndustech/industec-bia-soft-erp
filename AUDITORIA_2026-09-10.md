@@ -175,6 +175,7 @@ De las dudas que dejó abiertas:
 | `ordenes.php` | Los enlaces firmados se incrustan por fila sin registrar quién los generó; el técnico ve OT por asignación, no por firma | Baja |
 | `t2_11_informes_ot.py` | Sale con 0 aunque el empuje falle; descarta sin rastro los informes cuyo aviso no cruza; guarda en caché para siempre los fallos de lectura | Media |
 | `t2_12_cotejo_sap_abiertas.py` | Convierte «no pude leer» en «sin gestión» y recomienda asignar; su compuerta de cuadre es una tautología | Media |
+| `casos.php` y `Casos::alcanzaAviso` | Un caso que salió del catálogo del buzón responde «fuera de su alcance» hasta a un superadmin (aviso 10353555, dos intentos el 10-sep a las 19:22). Y **4 casos ASIGNADO a técnicos no están en el catálogo: sus 3 técnicos no los ven** en la bandeja. De 855 filas de gestión, 21 apuntan fuera del catálogo; las otras 17 están cerradas o atendidas. Lo resuelve T2.13.3 (bandeja e historial desde la base, no desde la ventana de 90 días); el mensaje tiene que distinguir «no está en el catálogo» de «fuera de tu alcance» | Media |
 
 ### En la estación
 
