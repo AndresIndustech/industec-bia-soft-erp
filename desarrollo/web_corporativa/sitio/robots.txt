@@ -1,0 +1,4 @@
+# DOMINIO TEMPORAL (darkviolet-armadillo-872352.hostingersite.com): no indexar nada.
+# Al pasar a www.industec.me, reemplazar este archivo por el indicado en LEEME.md.
+User-agent: *
+Disallow: /
