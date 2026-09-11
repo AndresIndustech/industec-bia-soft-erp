@@ -43,9 +43,9 @@ excluirla al minar rechazos por persona.
 
 ---
 
-## 3. Vivo en el sitio de pruebas, corregido en código, **pendiente de desplegar**
+## 3. Vivo en el sitio de pruebas — **desplegado el 2026-09-10**, salvo el ingreso y usuarios
 
-Afectan a quien ya usa el sitio (la administradora). Desplegarlos requiere la aprobación de Andrés.
+Afectan a quien ya usa el sitio (la administradora). Andrés aprobó desplegarlos el mismo día.
 
 | Defecto | Evidencia | Corrección |
 |---|---|---|
@@ -58,9 +58,25 @@ Afectan a quien ya usa el sitio (la administradora). Desplegarlos requiere la ap
 | **XSS en `usuarios.php`**: el nombre iba dentro del JS de un `onsubmit`; una administradora podía escalar a superadministrador | `htmlspecialchars` no protege dentro de JS en un atributo | El texto va en `data-confirma` |
 | Dar de baja a un técnico **deja sus casos huérfanos**, invisibles en «Por repartir» | `usuarios.php` solo desactivaba | Sus casos ASIGNADO vuelven a NUEVO, con bitácora |
 
-Los arreglos 1 a 4 se pueden desplegar solos: dependen solo de archivos que en el servidor son
-idénticos a los locales. **Las 2 filas huérfanas** necesitan una corrección de datos aparte (pasar
-a NUEVO), que también requiere aprobación.
+**Desplegado el 2026-09-10 hacia las 21:42 (Ecuador), con aprobación de Andrés:** `sw.js` v4,
+`pdf.php`, `nucleo/Reconciliar.php`, `nucleo/Auth.php` y los dos `.htaccess`, con `t2_10` (6 de 6
+verificados por hash, `php -l` en el sitio). Antes se comprobó que lo reemplazado eran versiones ya
+confirmadas en git —`sw.js` de 0938243, `Reconciliar.php` de 47a0b50, `pdf.php` y `Auth.php`
+iguales a master—, así que no se perdió nada de la estación; que las firmas públicas de `Auth` y
+`Reconciliar` no cambian (las usan `sync_casos.php` y `reconciliar_cli.php`), y que nada de lo
+subido llama a clases que falten en el servidor. Las 12 rutas probadas sin sesión responden igual
+antes y después, y las cabeceras nuevas salen.
+
+**Las 2 filas huérfanas** pasaron a NUEVO (bitácora 937, `CORREGIR_HUERFANAS`, con la foto del
+antes). No se habrían corregido solas: la reconciliación salta los casos abiertos sin informe.
+Quedan 0.
+
+**`login.php` y `usuarios.php` no se desplegaron**: su versión corregida viene con el rediseño y
+necesita `nucleo/Ui.php` y el `estilo.css` nuevo, que no están en el servidor (subida sola,
+`usuarios.php` daba error fatal). Suben con T2.12.3. Hasta entonces siguen vivos la redirección
+abierta del ingreso, el XSS de `usuarios.php` —solo lo alcanza quien administra usuarios— y los
+casos que quedan huérfanos al dar de baja a un técnico. La exigencia de cambiar la clave provisional
+en todas las pantallas sí quedó activa con `Auth.php`: 19 cuentas la tienen pendiente.
 
 ---
 

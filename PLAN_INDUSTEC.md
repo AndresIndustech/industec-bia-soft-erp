@@ -640,8 +640,8 @@ firma. Mientras sea así, el técnico sigue en el formulario de producción y lo
 requisitos 1 y 2 no le llegan. Dos caminos: **(a)** terminar la emisión en la app
 nueva — migración nueva `app/sql/008` con correlativos y cola de correo, y fotos y
 firma como dato —; **(b)** un puente: que «Emitir» abra el formulario de producción
-con el aviso y el técnico precargados. Antes de elegir (b), comprobar en la copia de
-`ENTRADAS IA` si ese formulario acepta datos por la dirección.
+con el aviso y el técnico precargados. **Andrés eligió (a) el 2026-09-10**: la emisión
+se termina en la app nueva y producción no se toca.
 
 | # | Subtarea | Verificación exacta |
 |---|---|---|
@@ -657,10 +657,11 @@ con el aviso y el técnico precargados. Antes de elegir (b), comprobar en la cop
 |---|---|---|
 | Código local, pruebas locales, `php -l` por SSH, `SELECT` de verificación en el sitio de pruebas | T2.13.0; aplicar migraciones; desplegar; T2.13.6 | Tocar producción; asignar o cerrar casos reales para probar; servir datos sin sesión; WhatsApp o servicios de pago; editar `casos.php`, `ordenes.php`, `Ui.php`, `estilo.css` o `busqueda.js` sin coordinar con su conversación |
 
-**Decisiones de Andrés que esta tarea necesita:** (1) cómo salen el PDF y el correo;
-(2) aprobar la 007 (T2.12.1); (3) notificaciones: solo automáticas, o también
-comunicados escritos; (4) el arranque con personas en UIO — 15 de 16 técnicos y los
-3 jefes nunca entraron, y la bandeja solo se llena si el jefe asigna en el sistema;
+**Decisiones de Andrés que esta tarea necesita:** (1) ~~cómo salen el PDF y el correo~~
+→ **(a), decidida el 2026-09-10**; (2) ~~aprobar la 007~~ → **la aplica la estación
+después de fusionar la rama** (T2.12.1); (3) notificaciones: solo automáticas, o también
+comunicados escritos; (4) el arranque con personas en UIO — 14 de 16 técnicos y 2 de
+los 3 jefes nunca entraron (medido la noche del 2026-09-10), y la bandeja solo se llena si el jefe asigna en el sistema;
 (5) cronograma por técnico: `t2_7` no genera quién va a cada ingreso.
 
 ---
@@ -848,7 +849,9 @@ por cambios locales en `ESTADO.md` u otro archivo, se apartan antes con
 `git stash push -- <archivo>` y se devuelven con `git stash pop`) y **reiniciar la tarea
 programada del vigilante**, que así toma el IDLE de 9 minutos. Esa rama trae las
 correcciones de la auditoría del 2026-09-10 ([`AUDITORIA_2026-09-10.md`](AUDITORIA_2026-09-10.md)):
-desplegar desde la estación sin fusionarla pisa en el servidor lo que ya se corrigió.
+desplegar desde la estación sin fusionarla pisa en el servidor lo que ya se corrigió: desde
+el 2026-09-10 el sitio de pruebas tiene `sw.js` v4, `pdf.php`, `nucleo/Reconciliar.php`,
+`nucleo/Auth.php` y los dos `.htaccess` de esa rama.
 
 **T2.12.1 — aplicar la migración 007.** Requiere aprobación de Andrés porque
 cambia el esquema: pídesela antes de correr nada. Desde el 2026-09-10 la 007 trae
@@ -953,7 +956,7 @@ sobre-contó el backlog 8× en T1.11.
 | Respaldo TrueNAS (T1.9) | Acceso físico al equipo |
 | Metas reales de SLA (T2.2) | El anexo de niveles de servicio del contrato con KFC |
 | ~~Sacar el proyecto del único disco~~ | ✅ **Hecho el 2026-09-10:** remoto privado `AndresIndustech/industec-bia-soft-erp`. La base y el árbol canónico siguen en un solo disco hasta el TrueNAS |
-| Desplegar los cuatro arreglos que ya afectan al sitio en uso (`sw.js`, `pdf.php`, `nucleo/Reconciliar.php`, `nucleo/Auth.php` con `login.php` y `usuarios.php`) y corregir las 2 filas «ASIGNADO» sin técnico | **Andrés** — ver [`AUDITORIA_2026-09-10.md`](AUDITORIA_2026-09-10.md) §3 |
+| ~~Desplegar los arreglos que ya afectan al sitio en uso y corregir las 2 filas «ASIGNADO» sin técnico~~ | ✅ **Hecho el 2026-09-10** con aprobación de Andrés: `sw.js` v4, `pdf.php`, `nucleo/Reconciliar.php`, `nucleo/Auth.php` y los dos `.htaccess`; huérfanas a NUEVO. `login.php` y `usuarios.php` suben con T2.12.3 porque necesitan el `Ui.php` y el `estilo.css` del rediseño. Ver [`AUDITORIA_2026-09-10.md`](AUDITORIA_2026-09-10.md) §3 |
 | Delegado de protección de datos ante la SPDP | Trámite: gratis, en línea, guía en `TRAMITE_DELEGADO_DATOS.md`. **El plazo venció hace más de 8 meses** |
 
 ### Entorno
