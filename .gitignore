@@ -62,3 +62,7 @@ desarrollo/agentes/logs/
 
 # Cache de tecnicos por OT: se rehace sola, no va al repositorio.
 desarrollo/agentes/config/cache_tecnicos.json
+
+# Ajustes locales de Claude Code de cada equipo (p. ej. disableClaudeAiConnectors en la
+# estacion, 11-sep-2026): son de esa maquina y no viajan en el repositorio.
+.claude/settings.local.json
