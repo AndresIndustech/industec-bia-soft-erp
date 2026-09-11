@@ -88,8 +88,10 @@ El proyecto se trabaja desde la estación y desde el PC de Andrés. Los une un r
   pisa en el servidor lo que ya se corrigió.
 - **Al terminar:** confirmar y `git push`. Lo que no está en el remoto no existe para el otro equipo.
 - Al remoto no va nada de `ENTRADAS IA`, `SALIDAS IA` ni credenciales (`.gitignore`).
-- Cada equipo tiene su propia llave SSH para Hostinger, para poder revocarlas por separado.
-  `t2_10_desplegar.py` usa la de `INDUSTEC_LLAVE_SSH` o, si no está, `config/clave_hostinger`.
+- Cada equipo tiene su propia llave SSH para Hostinger, para poder revocarlas por separado: en
+  hPanel la de la estación figura como «industec» y la del PC de Andrés como «PC Andres».
+  `t2_10_desplegar.py` usa la de `INDUSTEC_LLAVE_SSH` o, si no está, `config/clave_hostinger`
+  (la de la estación). En el PC: `INDUSTEC_LLAVE_SSH=C:/Users/andre/.ssh/industec_hostinger_pc`.
 - El servidor corre **PHP 8.2.33** y **MariaDB 11.8 en UTC** (medido el 2026-09-10). Las
   duraciones se calculan en SQL (`TIMESTAMPDIFF` con `NOW()`), nunca restando `strtotime()`.
 

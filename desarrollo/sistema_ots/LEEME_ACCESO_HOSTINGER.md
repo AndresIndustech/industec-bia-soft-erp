@@ -8,7 +8,8 @@ no "revisar que esté bien", sino una comprobación con respuesta objetiva.
 `darkviolet-armadillo-872352.hostingersite.com` (`darkorchid` se descartó el 2026-09-08)
 
 > **Actualizado el 2026-09-10.** SSH ya está habilitado y en uso: `u671729428@82.25.73.181`,
-> puerto 65002, con una llave por equipo (la de la estación es `desarrollo\agentes\config\clave_hostinger`).
+> puerto 65002, con una llave por equipo: la de la estación es `desarrollo\agentes\config\clave_hostinger`
+> (en hPanel, «industec») y la del PC de Andrés, `C:\Users\andre\.ssh\industec_hostinger_pc` («PC Andres»).
 > No hace falta generar otra en la estación: los pasos 1 y 2 quedan como referencia. `crontab`
 > no existe por SSH: los cron se revisan en hPanel → Avanzado → Cron Jobs. Donde los pasos 7.x
 > dicen `ot/pruebas/`, hoy es `ot/produccion/`. Los pasos 6 y 7 tocan producción: los ejecuta

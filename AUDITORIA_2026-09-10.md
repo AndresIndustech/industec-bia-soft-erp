@@ -207,7 +207,8 @@ el 08-sep. Los conteos de pruebas (48 → 54) los actualiza la conversación «c
 
 - Las claves iniciales impresas (`CLAVES_TECNICOS*`) salieron de la copia del PC de Andrés a una
   carpeta privada fuera de repositorios y de OneDrive. **Siguen vigentes para 18 personas.**
-- El PC de Andrés tiene llave SSH propia (pendiente de autorizar en hPanel). La de la estación
-  se borra de esa copia cuando la nueva funcione.
+- El PC de Andrés tiene llave SSH propia, autorizada en hPanel el 2026-09-10 como «PC Andres» (la
+  de la estación figura como «industec»). La copia de la llave de la estación se borró del PC ese
+  mismo día, después de comprobar que la nueva conecta y que `t2_10 --probar` funciona con ella.
 - El historial del repositorio conserva el correo de un empleado de KFC en un comentario de
   `guardas.php` (ya quitado del código vigente). No se reescribe el historial.
