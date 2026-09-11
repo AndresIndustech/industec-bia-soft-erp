@@ -48,8 +48,10 @@ import hashlib
 import os
 import posixpath
 import shlex
+import ssl
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parents[1]
@@ -249,11 +251,50 @@ def borrar(u: str, crudo: str) -> bool:
     return salida in ("BORRADO", "NO_EXISTIA")
 
 
+def verificar_web(lista: list[str]) -> list[str]:
+    """Lo que entrega la WEB, no solo lo que quedó en el disco del servidor.
+
+    El 2026-09-11 el CDN de Hostinger siguió sirviendo el sw.js v2 horas después
+    de subir el v4: el hash en el disco cuadraba y los celulares recibían el
+    viejo. Aquí se pide cada archivo público tal como lo pide un navegador, sin
+    esquivar el CDN, y se compara con lo que se subió.
+    """
+    host = RUTA_DESTINO.split("/")[1]
+    ctx = ssl.create_default_context()
+    # Un antivirus que inspecciona HTTPS (Avast en el PC de Andrés) presenta una
+    # raíz propia que Python 3.13+ rechaza por VERIFY_X509_STRICT. Se sigue
+    # verificando la cadena y el nombre; solo se quita esa rigidez.
+    ctx.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    viejos = []
+    for crudo in lista:
+        rel = normalizar(crudo)
+        if not (rel.endswith((".js", ".css", ".html", ".png", ".svg")) or rel == "manifest.json"):
+            continue
+        try:
+            with urllib.request.urlopen(f"https://{host}/ot/{rel}", timeout=30, context=ctx) as r:
+                web = hashlib.sha256(r.read()).hexdigest()
+        except Exception as e:
+            print(f"  {rel:<28} no se pudo leer por la web: {e}")
+            viejos.append(rel)
+            continue
+        if web != hashlib.sha256((ORIGEN / rel).read_bytes()).hexdigest():
+            viejos.append(rel)
+    if viejos:
+        print("\nATENCIÓN: la web todavía entrega una copia VIEJA de: " + ", ".join(viejos))
+        print("Es el CDN de Hostinger. Purga su caché en hPanel (sitio → Rendimiento → CDN)")
+        print("y vuelve a comprobar con --comprobar-web.")
+    else:
+        print("la web entrega exactamente lo que se subió")
+    return viejos
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("archivos", nargs="*", help="rutas relativas a publico/")
     ap.add_argument("--todo", action="store_true", help="sube la lista blanca completa")
     ap.add_argument("--probar", action="store_true", help="solo comprueba la conexión")
+    ap.add_argument("--comprobar-web", nargs="+", metavar="ARCHIVO",
+                    help="solo compara lo que entrega la web (con su CDN) con lo local")
     ap.add_argument("--borrar", nargs="+", metavar="ARCHIVO",
                     help="borra archivos del sitio de pruebas")
     args = ap.parse_args()
@@ -275,6 +316,9 @@ def main() -> None:
     if args.probar:
         return
 
+    if args.comprobar_web:
+        sys.exit(1 if verificar_web(args.comprobar_web) else 0)
+
     if args.borrar:
         ok = sum(borrar(u, rel) for rel in args.borrar)
         sys.exit(0 if ok == len(args.borrar) else 1)
@@ -285,7 +329,8 @@ def main() -> None:
 
     ok = sum(subir(u, rel) for rel in lista)
     print(f"\n{ok} de {len(lista)} archivos en el sitio de pruebas")
-    sys.exit(0 if ok == len(lista) else 1)
+    viejos = verificar_web(lista)
+    sys.exit(0 if ok == len(lista) and not viejos else 1)
 
 
 if __name__ == "__main__":
