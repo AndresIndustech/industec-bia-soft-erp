@@ -459,8 +459,8 @@ Aquí sí se toca: está contemplado en la cotización y el sistema es de desarr
 | **T2.1.2** | Selector de local desde el maestro, en vez de texto libre | Las 121 variantes y la zona cruzada, de raíz | Enviar con cada código de `locales`; ninguno debe poder escribirse fuera del maestro |
 | **T2.1.3** | Validación del aviso (8 dígitos, contra avisos conocidos) | Los typos que rompen el cruce | Enviar un aviso de 7 y uno de 9 dígitos: ambos rechazados con mensaje claro al técnico |
 | **T2.1.4** | Correos del local autocompletados desde el maestro | Rebotes por direcciones mal escritas | El correo de destino de una orden de prueba coincide con `locales.correo`, sin campo editable |
-| **T2.1.5** | Bloqueo del contador (transacción con `SELECT ... FOR UPDATE` o `UNIQUE KEY` sobre el correlativo) | Números duplicados por envíos simultáneos | Disparar 10 envíos concurrentes de prueba; 10 correlativos distintos, cero colisiones |
-| **T2.1.6** | Cola de reintento de correo (se integra con T2.3 en el punto de envío) | 82 fallos en que la orden no llegó a nadie | Un envío con SMTP caído a propósito: el job queda en `email_queue`, no se pierde |
+| **T2.1.5** | ✅ **Hecho el 2026-09-11 en la app nueva** (la 008, sitio de pruebas): reserva con `UPDATE ... LAST_INSERT_ID(ultimo + 1)`, `FOR UPDATE` sobre la orden y `UNIQUE KEY` en `id_industec`; 10 reservas simultáneas dieron 10 números seguidos · Bloqueo del contador (transacción con `SELECT ... FOR UPDATE` o `UNIQUE KEY` sobre el correlativo) | Números duplicados por envíos simultáneos | Disparar 10 envíos concurrentes de prueba; 10 correlativos distintos, cero colisiones |
+| **T2.1.6** | 🟡 **La cola existe desde el 2026-09-11** (`email_queue`, la 008): la orden queda guardada y su correo espera ahí; en el sitio de pruebas, RETENIDO. Falta el despachador con PHPMailer, que se prueba en el corte con el SMTP real · Cola de reintento de correo (se integra con T2.3 en el punto de envío) | 82 fallos en que la orden no llegó a nadie | Un envío con SMTP caído a propósito: el job queda en `email_queue`, no se pierde |
 
 **Regla no negociable de esta tarea — criterio único de cierre:** el campo canónico de estado de una OT es **`estatus_general`** (SAP, `CERRADO`/`TRATAMIENTO`/`ABIERTO`), el mismo que ya rige en la base de Fase 1. Cualquier señal interna del sistema (p. ej. existe una segunda orden de cierre) puede mostrarse como información complementaria, pero **nunca** como criterio de backlog, SLA o notificación — es el error real que sobre-contó el backlog 8× en T1.11 (I-10, I-12). Prueba de aceptación: para una muestra de OTs con estado SAP conocido, el sistema en producción reproduce ese estado exactamente.
 
@@ -641,7 +641,9 @@ requisitos 1 y 2 no le llegan. Dos caminos: **(a)** terminar la emisión en la a
 nueva — migración nueva `app/sql/008` con correlativos y cola de correo, y fotos y
 firma como dato —; **(b)** un puente: que «Emitir» abra el formulario de producción
 con el aviso y el técnico precargados. **Andrés eligió (a) el 2026-09-10**: la emisión
-se termina en la app nueva y producción no se toca.
+se termina en la app nueva y producción no se toca. **Hecho el 2026-09-11 en el sitio de pruebas** con la
+migración `008_emision.sql`: número, PDF y correo en cola, con las fotos y la firma como dato (ver
+ESTADO §1). Para producción falta el despachador de la cola y cargar los contadores reales.
 
 | # | Subtarea | Verificación exacta |
 |---|---|---|
@@ -872,8 +874,10 @@ Falta T2.12.12 (hojas de capacitación).
 y las fechas que el servidor había guardado en UTC se corrieron una sola vez (`hora_ecuador.php`, con
 respaldo previo en `~/respaldos/`). T2.13.2 y T2.13.3, el mismo día:
 la bandeja, el historial y el formulario del técnico salen de la base (`verificar_bandeja.py`). T2.13.5
-(el buzón de avisos del técnico) y T2.13.4 (su cronograma), también. Lo que sigue: la migración 008 de la
-emisión.
+(el buzón de avisos del técnico) y T2.13.4 (su cronograma), también. Y la 008, la emisión: la orden sale de la
+app con su número, su PDF y su correo en cola (`verificar_emision.py`). Con eso T2.13 queda hecha en el
+sitio de pruebas; lo que sigue es el piloto en UIO cuando empiece el uso real (I-8) y, para el
+corte, el despachador de la cola y los contadores reales.
 
 **La web corporativa de INDUSTEC** quedó publicada ese mismo día en la raíz del sitio de pruebas, con
 `/acceso/` como puerta de entrada al sistema (`desarrollo/web_corporativa/LEEME.md`, §8).
@@ -976,7 +980,7 @@ sobre-contó el backlog 8× en T1.11.
 |---|---|
 | Aplicar la 007 y la 003 | **Andrés** — cambian el esquema |
 | Desplegar a UIO, y 48 h después a LARB y CNLJ | **Andrés** (I-8). El 2026-09-11 el rediseño se subió entero al sitio de pruebas porque nadie lo usa; el piloto por zona se decide cuando empiece el uso real |
-| Que el PDF y el correo salgan del sistema nuevo | La migración `003` (`correlativos` con reserva atómica y `email_queue`) |
+| ~~Que el PDF y el correo salgan del sistema nuevo~~ | ✅ **El PDF, desde el 2026-09-11** (la 008, en el sitio de pruebas). El correo queda en `email_queue`; falta el despachador y los datos reales del corte: contadores de `counter_{zona}.txt` y destinatarios en `config.php` |
 | El 36% del correctivo que el buzón no trae | Confirmar la causa — ver `SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md` |
 | Respaldo TrueNAS (T1.9) | Acceso físico al equipo |
 | Metas reales de SLA (T2.2) | El anexo de niveles de servicio del contrato con KFC |

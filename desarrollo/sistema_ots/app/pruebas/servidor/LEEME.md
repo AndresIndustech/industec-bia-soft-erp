@@ -20,6 +20,7 @@ producción.
 | `verificar_ciclo.py` | PC o estación | El ciclo completo de un caso: trabado → veredicto → vía → resuelto | Sí: un pendiente de prueba |
 | `verificar_bandeja.py` | PC o estación | T2.13.2, T2.13.3 y T2.13.5: el formulario le ofrece al técnico solo sus casos abiertos; la bandeja y el historial salen de la base, con los casos que no están en el catálogo del buzón; y el buzón de avisos le cuenta lo suyo (le asignan o le quitan un caso, le responden, le resuelven una novedad) | Sí: una orden y una novedad de prueba, una respuesta en el hilo del pendiente de prueba, y el caso de prueba de A pasado a B y devuelto |
 | `hora_ecuador.php` | servidor, desde `ot/` | T2.13.7: pasa a hora de Ecuador, una sola vez, las fechas que el servidor guardó en UTC (todas las DATETIME menos `atendido_en`) | Sin `--si` solo dice lo que haría; se niega a correr dos veces o en una base que no escribía en UTC, y revierte si alguna fecha queda en el futuro |
+| `verificar_emision.py` | PC o estación | La 008: fotos por `foto.php`, la orden emitida con su número de la serie de pruebas, su PDF (quién lo abre y quién no), el correo retenido en la cola, el reintento sin número nuevo y 10 reservas simultáneas sin repetir (T2.1.5) | Sí: una orden emitida con su PDF y dos fotos |
 | `prueba_cola_vivo.mjs` | PC o estación, con Edge o Chrome | La cola sin servidor y con la sesión caída, con un navegador de verdad (T2.12.7 y T2.12.8), y que el celular reciba el `sw.js` vigente | Sí: dos órdenes de prueba |
 
 ## Uso
@@ -36,6 +37,7 @@ php ~/respaldos/preparar_prueba.php
 python verificar_http.py
 python verificar_ciclo.py
 python verificar_bandeja.py
+python verificar_emision.py
 node prueba_cola_vivo.mjs
 
 # 4. Deshacer (en el servidor) al terminar
