@@ -233,3 +233,36 @@ el 08-sep. Los conteos de pruebas (48 → 54) los actualiza la conversación «c
   mismo día, después de comprobar que la nueva conecta y que `t2_10 --probar` funciona con ella.
 - El historial del repositorio conserva el correo de un empleado de KFC en un comentario de
   `guardas.php` (ya quitado del código vigente). No se reescribe el historial.
+
+---
+
+## 7. Verificación por rol, con cuentas de prueba (2026-09-11)
+
+Después de aplicar la 007 y desplegar el rediseño se entró de verdad con cinco cuentas de prueba
+(administración, jefe de UIO, jefe de CNLJ y dos técnicos de UIO) y datos de prueba en las dos
+zonas. Las herramientas quedan en `desarrollo/sistema_ots/app/pruebas/servidor/` con su LEEME.
+
+| Qué | Resultado |
+|---|---|
+| Las 13 pantallas con los tres roles | Sin errores de PHP ni pantallas en blanco; 403 donde el rol no tiene permiso |
+| Alcance por zona (T2.12.4) | Jefe UIO 255 casos y jefe CNLJ 356, sin solaparse, contra 910 de la administración; pedir `?zona=CNLJ` siendo de UIO no trae nada |
+| POST fabricado contra otra zona (T2.12.5) | No cambia nada y **queda en la bitácora** con `exito = 0` (antes el rechazo por alcance no dejaba rastro: corregido) |
+| Extremos de datos (T2.12.6) | El técnico recibe exactamente sus casos; el que no tiene casos, ninguno; el cronograma del jefe, solo su zona |
+| Reloj de 48 h (T2.12.9) | El vencido de CNLJ sale para la administración y el jefe de CNLJ, no para el de UIO |
+| Orden de la app (T2.13.1) | 200 con recibo; el reintento no duplica; firmada con el nombre de la sesión aunque el celular mande otro; otro técnico recibe 409 |
+| Ciclo completo (T2.12.10) | Trabado desde la app → veredicto del jefe → vía hasta RESUELTO → el caso vuelve a ASIGNADO; la reconciliación no lo pisa |
+
+**Hallazgo grave, corregido el mismo día:** el veredicto de 48 h, el cierre y la reapertura de un
+pendiente, la resolución de novedades y el «cerrado en SAP» y las notas de `casos.php` daban **error
+500** en Hostinger: con preparadas nativas, MariaDB les da a los parámetros `utf8mb4_general_ci` y a
+los literales la intercalación del servidor (`utf8mb4_unicode_ci`), y `NULLIF(?, '')` fallaba con
+«Illegal mix of collations». En la estación no se veía. Se corrigió en un solo sitio, `Db.php`,
+fijando la intercalación de la conexión; ningún archivo de otra conversación se tocó.
+
+**Para probar se asignaron a un técnico de prueba dos casos reales de UIO** (10353767 y 10353788):
+los avisos sintéticos no aparecen porque la bandeja sale del catálogo del buzón, que es lo que
+corrige T2.13.3. Se revierte con `deshacer_prueba.php`, que devuelve los casos a como estaban.
+
+**Nota para quien pruebe desde el PC de Andrés:** su antivirus (Avast) inspecciona el HTTPS con una
+raíz propia que Python 3.13+ rechaza por estricta. Los scripts lo toleran sin dejar de verificar la
+cadena; no es un problema del servidor.
