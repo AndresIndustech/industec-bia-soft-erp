@@ -44,6 +44,7 @@ Uso:
 """
 
 import argparse
+import gzip
 import hashlib
 import os
 import posixpath
@@ -270,15 +271,24 @@ def verificar_web(lista: list[str]) -> list[str]:
         rel = normalizar(crudo)
         if not (rel.endswith((".js", ".css", ".html", ".png", ".svg")) or rel == "manifest.json"):
             continue
-        try:
-            with urllib.request.urlopen(f"https://{host}/ot/{rel}", timeout=30, context=ctx) as r:
-                web = hashlib.sha256(r.read()).hexdigest()
-        except Exception as e:
-            print(f"  {rel:<28} no se pudo leer por la web: {e}")
-            viejos.append(rel)
-            continue
-        if web != hashlib.sha256((ORIGEN / rel).read_bytes()).hexdigest():
-            viejos.append(rel)
+        local = hashlib.sha256((ORIGEN / rel).read_bytes()).hexdigest()
+        # El CDN guarda una copia por cada forma de pedirlo: sin comprimir (curl)
+        # y comprimida (todo navegador). El 2026-09-11 la comprimida del sw.js
+        # siguió vieja cuando la otra ya se había renovado: hay que mirar las dos.
+        for enc in ("identity", "gzip"):
+            pedido = urllib.request.Request(f"https://{host}/ot/{rel}", headers={
+                "Accept-Encoding": enc, "User-Agent": "t2_10_desplegar (comprobacion)"})
+            try:
+                with urllib.request.urlopen(pedido, timeout=30, context=ctx) as r:
+                    cuerpo = r.read()
+                    if (r.headers.get("Content-Encoding") or "").lower() == "gzip":
+                        cuerpo = gzip.decompress(cuerpo)
+            except Exception as e:
+                print(f"  {rel:<28} no se pudo leer por la web ({enc}): {e}")
+                viejos.append(f"{rel} ({enc})")
+                continue
+            if hashlib.sha256(cuerpo).hexdigest() != local:
+                viejos.append(f"{rel} ({'comprimida' if enc == 'gzip' else 'sin comprimir'})")
     if viejos:
         print("\nATENCIÓN: la web todavía entrega una copia VIEJA de: " + ", ".join(viejos))
         print("Es el CDN de Hostinger. Purga su caché en hPanel (sitio → Rendimiento → CDN)")
