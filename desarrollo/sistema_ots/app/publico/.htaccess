@@ -39,4 +39,17 @@
     Header always set Strict-Transport-Security "max-age=31536000"
 </IfModule>
 
+# El CDN de Hostinger (hcdn) guardaba 7 días lo que el servidor marca como
+# estático (Cache-Control: public, max-age=604800). El 2026-09-11 seguía
+# sirviendo el sw.js v2 horas después de subir el v4, y cualquier despliegue
+# habría tardado hasta una semana en llegar a los celulares. El código se
+# revalida en cada pedido (con ETag, cuesta un 304); el trabajador de servicio
+# ya guarda su copia para el modo sin señal. Los íconos siguen con caché larga.
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|css|html|json)$">
+        Header set Cache-Control "no-cache"
+        Header unset Expires
+    </FilesMatch>
+</IfModule>
+
 Options -Indexes
