@@ -19,7 +19,7 @@ require_once __DIR__ . '/nucleo/Auth.php';
 
 $u = Auth::exigir();
 if (!Auth::puede('usuarios.gestionar') && !Auth::puede('usuarios.operativos')) {
-    Auth::bitacora('DENEGADO', 'permiso', 'usuarios');
+    Auth::bitacora('DENEGADO', 'permiso', 'usuarios', null, null, null, [], false);
     http_response_code(403);
     exit('<p style="font-family:system-ui;padding:24px">No tienes permiso para esta sección.</p>');
 }
@@ -47,7 +47,8 @@ function objetivo(int $id): array
 {
     $o = Db::uno('SELECT * FROM usuarios WHERE usuario_id = ?', [$id]);
     if (!$o || !Auth::puedeGestionarA($o)) {
-        Auth::bitacora('DENEGADO', 'usuario', (string) $id, 'fuera de su rango o alcance');
+        Auth::bitacora('DENEGADO', 'usuario', (string) $id, 'fuera de su rango o alcance',
+                       null, null, [], false);
         http_response_code(403);
         exit('<p style="font-family:system-ui;padding:24px">No puedes gestionar a ese usuario.</p>');
     }

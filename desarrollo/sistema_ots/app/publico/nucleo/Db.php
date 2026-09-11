@@ -33,6 +33,13 @@ final class Db
             // Consultas preparadas de verdad, no emuladas: es lo que impide la
             // inyección de SQL aunque alguien concatene por descuido.
             PDO::ATTR_EMULATE_PREPARES   => false,
+            // La intercalación de la conexión, fijada a la de las tablas. Con
+            // preparadas nativas, MariaDB le da a cada parámetro la intercalación
+            // por defecto del juego (utf8mb4_general_ci) y a los literales la del
+            // servidor (utf8mb4_unicode_ci en Hostinger): `NULLIF(?, '')` fallaba
+            // con «Illegal mix of collations» y tumbaba el veredicto, el cierre de
+            // un pendiente y la resolución de novedades (medido el 2026-09-11).
+            PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci',
         ]);
         return self::$pdo;
     }

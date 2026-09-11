@@ -244,7 +244,13 @@ final class Novedades
         [$donde, $par] = self::alcance();
         array_unshift($par, $id);
         $n = Db::uno("SELECT n.* FROM novedades n WHERE n.novedad_id = ? AND ($donde)", $par);
-        if (!$n) { return [false, 'Esa novedad no existe o no está en tu alcance.']; }
+        if (!$n) {
+            // El rechazo por alcance deja rastro igual que el de permiso: un POST
+            // fabricado contra otra zona tiene que quedar en la bitácora (T2.12.5).
+            Auth::bitacora('DENEGADO', 'novedad', (string) $id, 'resolver fuera de alcance o inexistente',
+                           null, $estado, [], false);
+            return [false, 'Esa novedad no existe o no está en tu alcance.'];
+        }
 
         $avisoSap = trim($avisoSap);
         if ($estado === 'DERIVADA_SAP' && $avisoSap === '') {

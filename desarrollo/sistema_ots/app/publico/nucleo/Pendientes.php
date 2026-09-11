@@ -488,7 +488,13 @@ final class Pendientes
             return [false, 'No tienes permiso para dar el veredicto.'];
         }
         $p = self::uno($id);
-        if ($p === null) { return [false, 'Ese pendiente no existe o no está en tu alcance.']; }
+        if ($p === null) {
+            // El rechazo por alcance deja rastro igual que el de permiso: un POST
+            // fabricado contra otra zona tiene que quedar en la bitácora (T2.12.5).
+            Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
+                           null, null, [], false);
+            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+        }
         if (!isset(self::VIAS[$via])) { return [false, 'Esa no es una de las cuatro vías.']; }
         if (!$p['abierto'] || $p['via'] !== 'SIN_VEREDICTO') {
             // Un POST repetido no reescribe un veredicto ya dado ni el indicador.
@@ -556,7 +562,13 @@ final class Pendientes
             return [false, 'No tienes permiso para gestionar pendientes.'];
         }
         $p = self::uno($id);
-        if ($p === null) { return [false, 'Ese pendiente no existe o no está en tu alcance.']; }
+        if ($p === null) {
+            // El rechazo por alcance deja rastro igual que el de permiso: un POST
+            // fabricado contra otra zona tiene que quedar en la bitácora (T2.12.5).
+            Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
+                           null, null, [], false);
+            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+        }
         if (!isset(self::ESTADOS[$nuevo])) { return [false, 'Estado no válido.']; }
         if ($nuevo === $p['estado']) { return [false, 'El pendiente ya está en ese estado.']; }
         if (!$p['abierto']) { return [false, 'El pendiente ya está cerrado.']; }
@@ -655,7 +667,13 @@ final class Pendientes
             return [false, 'No tienes permiso para escribir aquí.'];
         }
         $p = self::uno($id);
-        if ($p === null) { return [false, 'Ese pendiente no existe o no está en tu alcance.']; }
+        if ($p === null) {
+            // El rechazo por alcance deja rastro igual que el de permiso: un POST
+            // fabricado contra otra zona tiene que quedar en la bitácora (T2.12.5).
+            Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
+                           null, null, [], false);
+            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+        }
 
         $texto = trim($texto);
         if ($texto === '') { return [false, 'Escribe qué quieres decirle a la administración.']; }
@@ -686,7 +704,13 @@ final class Pendientes
             return [false, 'No tienes permiso para responder aquí.'];
         }
         $p = self::uno($id);
-        if ($p === null) { return [false, 'Ese pendiente no existe o no está en tu alcance.']; }
+        if ($p === null) {
+            // El rechazo por alcance deja rastro igual que el de permiso: un POST
+            // fabricado contra otra zona tiene que quedar en la bitácora (T2.12.5).
+            Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
+                           null, null, [], false);
+            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+        }
         if (trim($texto) === '') { return [false, 'Escribe la respuesta.']; }
 
         self::anotar($id, 'RESPUESTA', $texto, false);
