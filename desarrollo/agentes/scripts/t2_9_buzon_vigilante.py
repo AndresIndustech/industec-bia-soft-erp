@@ -37,8 +37,9 @@ COMO LO HACE, Y POR QUE ASI
    Hostinger nunca la ve, así que quien comprometa el hosting no se lleva el
    acceso al buzón de la empresa.
 
-5. SOLO EMPUJA SI CAMBIO ALGO. Compara el hash del contenido; si el barrido da
-   lo mismo, no manda nada.
+5. INTENTA EMPUJAR SOLO SI CAMBIO ALGO: compara el hash del archivo. Pero el
+   lector sella dentro la hora del barrido, así que en la práctica casi siempre
+   empuja (anotado en la auditoría del 2026-09-10; no rompe nada, solo sobra).
 
 CUANTO TARDA DE VERDAD
   correo -> estación   : segundos (IDLE)
@@ -68,17 +69,22 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
+# Las rutas salen de la ubicación de este archivo: en la estación dan lo mismo
+# que antes (D:\INDUSTECH IA\...) y en otra copia del proyecto no apuntan a una
+# unidad que no existe.
+BASE = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE / "config" / ".env"
 LECTOR = BASE / "scripts" / "t2_6_imap_avisos.py"
 INFORMES = BASE / "scripts" / "t2_11_informes_ot.py"
 PYTHON = BASE / ".venv" / "Scripts" / "python.exe"
-SALIDA = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS\catalogos\casos_sap.json")
+SALIDA = BASE.parents[1] / "SALIDAS IA" / "OTS" / "catalogos" / "casos_sap.json"
 ESTADO = BASE / "config" / "vigilante_estado.json"
 
-# RFC 2177 manda renovar el IDLE antes de los 29 minutos. Se usa 24 para tener
-# margen: si el servidor corta primero, se pierde el aviso hasta la renovacion.
-IDLE_MINUTOS = 24
+# RFC 2177 permite hasta 29 minutos, pero Titan corta el IDLE a los ~20: en los
+# logs del 2026-09-10 se ve el corte a los 20 min y, renovando a los 24, un
+# SSLEOFError en cada ciclo y el vigilante sordo en el medio. Se renueva a los
+# 9, con margen de sobra por debajo del corte.
+IDLE_MINUTOS = 9
 # Si el barrido se dispara, no se vuelve a disparar hasta pasado esto. Sin
 # freno, una tanda de 20 correos seguidos lanzaria 20 barridos encimados.
 ESPERA_MINIMA_SEG = 45
@@ -172,7 +178,10 @@ def procesar_informes(dias: int) -> bool:
             log(f"   {linea}")
         return False
     for linea in (r.stdout or "").splitlines():
-        if linea.strip().startswith(("casos pendientes con atencion", "empujado")):
+        # Los avisos de error del informe también: filtrados, un empuje fallido
+        # quedaba sin rastro en el log del vigilante.
+        if linea.strip().startswith(("casos pendientes con atencion", "empujado",
+                                     "ERROR", "AVISO", "SIN tecnico")):
             log(f"   {linea.strip()}")
     return True
 
@@ -207,7 +216,9 @@ def barrer_y_empujar(env: dict, dias: int) -> bool:
 # IMAP IDLE, de solo lectura
 # ---------------------------------------------------------------------------
 def abrir(env: dict) -> imaplib.IMAP4_SSL:
-    M = imaplib.IMAP4_SSL(env["IMAP_HOST"], int(env["IMAP_PORT"]))
+    # Con tiempo límite: sin él, una conexión que el servidor deja colgada al
+    # entrar bloquea al vigilante para siempre.
+    M = imaplib.IMAP4_SSL(env["IMAP_HOST"], int(env["IMAP_PORT"]), timeout=60)
     M.login(env["IMAP_USER"], env["IMAP_PASSWORD"])
     # readonly=True -> EXAMINE. El servidor no puede cambiar banderas ni aunque
     # este proceso se equivoque: es la restricción del cliente, en el protocolo.
@@ -215,6 +226,19 @@ def abrir(env: dict) -> imaplib.IMAP4_SSL:
     if ok != "OK":
         raise RuntimeError("no se pudo abrir INBOX en modo solo lectura")
     return M
+
+
+def contar(M: imaplib.IMAP4_SSL) -> int:
+    """Cuántos mensajes hay en INBOX. Se vuelve a EXAMINAR (solo lectura) tras
+    cada IDLE: lo que entra entre el DONE y el siguiente IDLE no llega como
+    aviso, y sin esta cuenta se perdía hasta el correo siguiente."""
+    # esperar_novedad deja el socket sin tiempo límite; aquí se le pone uno
+    # para que un EXAMINE sin respuesta no cuelgue al vigilante para siempre.
+    M.sock.settimeout(60)
+    ok, data = M.select("INBOX", readonly=True)
+    if ok != "OK":
+        raise RuntimeError("no se pudo volver a examinar INBOX")
+    return int(data[0])
 
 
 def esperar_novedad(M: imaplib.IMAP4_SSL, segundos: int) -> bool:
@@ -378,14 +402,29 @@ def main() -> None:
 
     espera = REINTENTO_INICIAL
     ultimo = 0.0
+    primera = True
     while True:
         M = None
         try:
             M = abrir(env)
             espera = REINTENTO_INICIAL          # conectó: se reinicia el castigo
+            if not primera:
+                # Lo que llegó con la conexión caída no avisa por IDLE: se barre
+                # al reconectar. Sin esto el vigilante quedaba sordo hasta el
+                # correo siguiente (logs del 2026-09-10).
+                log("reconectado: se barre lo que pudo llegar mientras tanto")
+                barrer_y_empujar(env, args.dias)
+                procesar_informes(args.dias)
+                ultimo = time.monotonic()
+            primera = False
+            conteo = contar(M)
             log(f"escuchando (renovación cada {IDLE_MINUTOS} min)")
             while True:
-                if esperar_novedad(M, IDLE_MINUTOS * 60):
+                hubo = esperar_novedad(M, IDLE_MINUTOS * 60)
+                ahora_n = contar(M)
+                if hubo or ahora_n != conteo:
+                    if not hubo:
+                        log(f"el buzón cambió sin aviso ({conteo} -> {ahora_n})")
                     falta = ESPERA_MINIMA_SEG - (time.monotonic() - ultimo)
                     if falta > 0:
                         log(f"esperando {falta:.0f}s para agrupar correos seguidos")
@@ -397,6 +436,9 @@ def main() -> None:
                     barrer_y_empujar(env, args.dias)
                     procesar_informes(args.dias)
                     ultimo = time.monotonic()
+                    conteo = contar(M)
+                else:
+                    conteo = ahora_n
         except KeyboardInterrupt:
             log("detenido a mano")
             break

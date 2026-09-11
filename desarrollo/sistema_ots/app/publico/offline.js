@@ -15,10 +15,8 @@
       celular o se va la batería, la orden a medias sigue ahí. Hoy, un corte
       de señal se lleva todo lo escrito.
 
-   LO QUE TODAVÍA NO HACE, y hay que decirlo: no encola envíos. El botón de
-   enviar necesita conexión. Encolar la orden completa —con sus fotos— es la
-   etapa siguiente y necesita IndexedDB, porque las fotos no caben en el
-   almacenamiento simple del navegador.
+   Encolar los envíos no es de este archivo: lo hace cola.js, en IndexedDB.
+   Cuando la orden queda a salvo en la cola, aquí se borra el borrador.
    ========================================================================= */
 
 (function () {
@@ -70,8 +68,8 @@
     b.hidden = false;
     b.innerHTML = hayRed
       ? '<b>Listo.</b> ' + (extra || '')
-      : '<b>Sin conexión.</b> Puedes llenar la orden: se guarda en el teléfono. ' +
-        'Para enviarla necesitas señal.' + (extra ? ' ' + extra : '');
+      : '<b>Sin conexión.</b> Puedes llenar la orden y enviarla: queda guardada en el ' +
+        'teléfono y sale sola cuando vuelvas a abrir la app con señal.' + (extra ? ' ' + extra : '');
   }
 
   function cuando(iso) {
@@ -176,12 +174,13 @@
         t = setTimeout(guardarBorrador, 600);
       }, true);
     });
-    // Al enviar, el borrador deja de tener sentido.
-    $('#otForm').addEventListener('submit', function () {
-      setTimeout(function () {
-        if (!$('#resultado') || $('#resultado').hidden) return;
-        try { localStorage.removeItem(CLAVE_BORRADOR); } catch (e) {}
-      }, 300);
+    // Cuando la orden queda a salvo en la cola, el borrador deja de tener
+    // sentido. Antes se miraba con un temporizador tras el submit, y con un
+    // aviso por confirmar el borrador sobrevivía: la app ofrecía «retomar» una
+    // orden que ya iba en camino, y reenviarla creaba otra con otro UUID.
+    window.addEventListener('orden-encolada', function () {
+      clearTimeout(t);
+      try { localStorage.removeItem(CLAVE_BORRADOR); } catch (e) {}
     });
   });
 })();

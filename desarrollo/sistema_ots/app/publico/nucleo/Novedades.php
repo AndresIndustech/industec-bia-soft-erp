@@ -173,17 +173,26 @@ final class Novedades
 
         $zona = strtoupper((string) ($d['zona'] ?? ''));
         if (!in_array($zona, ['UIO', 'LARB', 'CNLJ', 'OTRA'], true)) { $zona = null; }
-        // Un técnico solo reporta de su zona. Sin esto, un POST a mano mete
-        // novedades en la bandeja del jefe de otra zona.
-        if ($u['rol'] === 'TECNICO' && !empty($u['zona'])) { $zona = (string) $u['zona']; }
+        // Quien tiene alcance de zona solo reporta en la suya. Sin esto, un POST
+        // a mano mete novedades en la bandeja del jefe de otra zona (antes solo
+        // se forzaba al técnico; un jefe de zona podía escribir en cualquiera).
+        $za = Auth::zonaAlcance();
+        if ($za !== null) { $zona = $za !== '' ? $za : null; }
 
         Db::ejecutar(
             'INSERT INTO novedades
                 (novedad_uuid, aviso_origen, ot_origen, modulo_origen, local_codigo, zona, cadena,
                  tipo, activo_fijo, equipo_desc, descripcion, riesgo, responsable_prop,
                  reportada_por, detectada_en)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-             ON DUPLICATE KEY UPDATE descripcion = VALUES(descripcion), riesgo = VALUES(riesgo)',
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,FROM_UNIXTIME(?))
+             /* El reintento del mismo UUID solo refresca lo del mismo autor, y
+                mientras nadie la haya revisado: una novedad ya decidida no se
+                reescribe desde un celular. */
+             ON DUPLICATE KEY UPDATE
+                descripcion = IF(reportada_por = VALUES(reportada_por) AND estado = "REPORTADA",
+                                 VALUES(descripcion), descripcion),
+                riesgo      = IF(reportada_por = VALUES(reportada_por) AND estado = "REPORTADA",
+                                 VALUES(riesgo), riesgo)',
             [$uuid,
              ($d['aviso'] ?? '') !== '' ? mb_substr((string) $d['aviso'], 0, 20) : null,
              ($d['ot'] ?? '') !== '' ? mb_substr((string) $d['ot'], 0, 60) : null,
@@ -196,7 +205,10 @@ final class Novedades
              mb_substr(trim((string) ($d['equipo_desc'] ?? '')), 0, 160) ?: null,
              mb_substr($desc, 0, 800), $riesgo, $resp,
              (int) $u['usuario_id'],
-             ($d['detectada_en'] ?? '') !== '' ? date('Y-m-d H:i:s', (int) strtotime((string) $d['detectada_en'])) : null]
+             // En el reloj de la base, como `reportada_en`: FROM_UNIXTIME, no date().
+             isset($d['detectada_ts']) ? (int) $d['detectada_ts']
+                 : ((($d['detectada_en'] ?? '') !== '' && strtotime((string) $d['detectada_en']) !== false)
+                     ? strtotime((string) $d['detectada_en']) : null)]
         );
 
         $f = Db::uno('SELECT novedad_id FROM novedades WHERE novedad_uuid = ?', [$uuid]);

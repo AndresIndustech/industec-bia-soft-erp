@@ -68,6 +68,20 @@ final class Casos
         $u = Auth::actual();
         if ($u === null) { return []; }
 
+        /* La zona que vale es la de la gestión: un caso derivado ya no es de la
+           zona del catálogo. Se reescribe aquí, una vez, para que el filtro, los
+           contadores, los pendientes y la propia derivación usen la misma. Antes
+           solo el filtro la respetaba: derivar de vuelta un caso se rechazaba
+           para siempre con «ya está en esa zona». */
+        $casos = array_map(static function (array $c) use ($gestion): array {
+            $zg = $gestion[$c['aviso'] ?? '']['zona'] ?? null;
+            if ($zg !== null && $zg !== '' && $zg !== ($c['zona'] ?? null)) {
+                $c['zona_catalogo'] = $c['zona'] ?? null;
+                $c['zona'] = $zg;
+            }
+            return $c;
+        }, $casos);
+
         if ($u['rol'] === 'TECNICO') {
             $mios = array_keys(array_filter(
                 $gestion,
@@ -80,13 +94,9 @@ final class Casos
         $zona = Auth::zonaAlcance();
         if ($zona === null) { return $casos; }        // administración: las tres
 
-        /* Un caso derivado sale de la zona vieja y entra a la nueva: manda lo
-           que diga la gestión, no lo que trae el catálogo. Si no, el jefe que lo
-           derivó lo seguiría viendo y el que lo recibió no lo vería nunca. */
-        return array_values(array_filter($casos, function ($c) use ($zona, $gestion) {
-            $z = $gestion[$c['aviso'] ?? '']['zona'] ?? ($c['zona'] ?? null);
-            return $z === $zona;
-        }));
+        // Un caso derivado sale de la zona vieja y entra a la nueva (arriba ya
+        // lleva la zona de la gestión): el jefe que lo derivó deja de verlo.
+        return array_values(array_filter($casos, fn($c) => ($c['zona'] ?? null) === $zona));
     }
 
     /** La gestión de todos los casos, indexada por aviso. */

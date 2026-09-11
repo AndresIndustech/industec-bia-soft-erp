@@ -8,6 +8,10 @@ declare(strict_types=1);
  * son las comprobaciones que van al pie de cada archivo de `sql/`, ejecutadas
  * de verdad en vez de copiadas a mano.
  *
+ * Distingue si la 007 está aplicada. Sin eso, los conteos fijos de permisos
+ * (19/18/11/5) daban FALLA justo después de aplicarla bien, y nada de lo que
+ * crea la 007 se comprobaba (auditoría del 2026-09-10).
+ *
  * Solo CLI, y solo lee.
  */
 
@@ -32,6 +36,10 @@ function comprobar(string $que, $real, $esperado): void
            is_scalar($real) ? (string) $real : gettype($real),
            $bien ? 'OK' : 'FALLA');
 }
+
+$hay007 = (int) $db->query("SELECT COUNT(*) FROM information_schema.TABLES
+                             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pendientes'")
+                   ->fetchColumn() > 0;
 
 echo "casos_gestion\n";
 $e = $db->query("SHOW COLUMNS FROM casos_gestion LIKE 'estado'")->fetch();
@@ -59,17 +67,47 @@ $k = array_unique(array_column($db->query('SHOW KEYS FROM bitacora')->fetchAll()
 comprobar('indice de transiciones', in_array('idx_bitacora_transicion', $k, true) ? 'si' : 'no', 'si');
 comprobar('indice de rechazos', in_array('idx_bitacora_rechazos', $k, true) ? 'si' : 'no', 'si');
 
-echo "\npermisos\n";
+echo "\npermisos" . ($hay007 ? ' (con la 007)' : ' (sin la 007)') . "\n";
 $r = [];
 foreach ($db->query('SELECT rol, COUNT(*) n FROM rol_permisos GROUP BY rol') as $x) {
     $r[$x['rol']] = (int) $x['n'];
 }
-comprobar('SUPERADMIN', $r['SUPERADMIN'] ?? 0, 19);
-comprobar('ADMIN', $r['ADMIN'] ?? 0, 18);
-comprobar('JEFE_ZONA', $r['JEFE_ZONA'] ?? 0, 11);
-comprobar('TECNICO', $r['TECNICO'] ?? 0, 5);
+// La 007 suma 7 permisos a SUPERADMIN y ADMIN, 6 a JEFE_ZONA y 4 a TECNICO.
+$esperado = $hay007
+    ? ['SUPERADMIN' => 26, 'ADMIN' => 25, 'JEFE_ZONA' => 17, 'TECNICO' => 9]
+    : ['SUPERADMIN' => 19, 'ADMIN' => 18, 'JEFE_ZONA' => 11, 'TECNICO' => 5];
+foreach ($esperado as $rol => $n) {
+    comprobar($rol, $r[$rol] ?? 0, $n);
+}
 comprobar('ots.pdf existe',
           (int) $db->query("SELECT COUNT(*) FROM permisos WHERE codigo='ots.pdf'")->fetchColumn(), 1);
+
+if ($hay007) {
+    echo "\nmigracion 007\n";
+    $e = $db->query("SHOW COLUMNS FROM casos_gestion LIKE 'estado'")->fetch();
+    comprobar('ENUM del caso termina en ESPERA_REPUESTO',
+              str_ends_with($e['Type'], ",'ESPERA_REPUESTO')") ? 'si' : 'no', 'si');
+
+    $unica = function (string $tabla, string $indice) use ($db): string {
+        $f = $db->query("SHOW KEYS FROM `$tabla` WHERE Key_name = " . $db->quote($indice)
+                      . " AND Non_unique = 0")->fetchAll();
+        return implode(',', array_column($f, 'Column_name'));
+    };
+    comprobar('uq_pendiente (I-9)', $unica('pendientes', 'uq_pendiente'), 'aviso,activo_fijo');
+    comprobar('uq_captura_envio (I-9)', $unica('ot_capturadas', 'uq_captura_envio'), 'envio_uuid');
+    comprobar('uq_novedad (I-9)', $unica('novedades', 'uq_novedad'), 'novedad_uuid');
+
+    $cols = array_column($db->query('SHOW COLUMNS FROM pendientes')->fetchAll(), 'Field');
+    comprobar('columna plazo_desde', in_array('plazo_desde', $cols, true) ? 'si' : 'no', 'si');
+    $t = $db->query("SHOW COLUMNS FROM pendiente_notas LIKE 'tipo'")->fetch();
+    comprobar('nota DIAGNOSTICO', str_contains($t['Type'], "'DIAGNOSTICO'") ? 'si' : 'no', 'si');
+    $tr = $db->query("SHOW TRIGGERS WHERE `Table` = 'pendiente_notas'")->fetchAll();
+    comprobar('trigger de insistencias', count($tr), 1);
+    $fk = $db->query("SELECT COUNT(*) n FROM information_schema.KEY_COLUMN_USAGE
+                       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pendientes'
+                         AND REFERENCED_TABLE_NAME = 'usuarios'")->fetch();
+    comprobar('claves foraneas de pendientes a usuarios', $fk['n'], 3);
+}
 
 echo "\n" . ($ok ? 'TODO OK' : 'HAY FALLAS') . "\n";
 exit($ok ? 0 : 1);

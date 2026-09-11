@@ -93,24 +93,35 @@ if ($firma !== '' && $exp > 0) {
     // El alcance: un técnico solo abre lo suyo. Se resuelve por la gestión del
     // caso, no por el nombre del archivo -- el nombre lo escribe quien pide.
     $gestion = Casos::gestion();
+    $za = Auth::zonaAlcance();
+    // La zona que lleva el propio identificador (OT-…-UIO), que otValida ya
+    // exige: vale cuando la fila de gestión no tiene zona, como las que creó
+    // la reconciliación.
+    $zonaOt = preg_match('/-(UIO|LARB|CNLJ)$/', $ot, $mz) ? $mz[1] : null;
+    $encontrada = false;
     $mio = false;
     foreach ($gestion as $g) {
         if (($g['ot_cierre'] ?? null) === $ot) {
+            $encontrada = true;
             $mio = $u['rol'] === 'TECNICO'
                  ? ((int) $g['asignado_a'] === (int) $u['usuario_id'])
-                 : (Auth::zonaAlcance() === null || $g['zona'] === Auth::zonaAlcance());
+                 : ($za === null || (($g['zona'] ?? null) ?: $zonaOt) === $za);
             break;
         }
     }
-    /* Una orden que todavía no está en `casos_gestion` la puede abrir quien
-       gestiona casos, no un técnico: es el caso de una orden vieja que aún no
-       se reconcilió. Al técnico se le niega porque no hay forma de comprobar
-       que sea suya. */
-    if (!$mio && $u['rol'] === 'TECNICO') {
+    /* Una orden que todavía no está en `casos_gestion` la abre la
+       administración, y un jefe de zona solo si el identificador es de su
+       zona. Al técnico se le niega: no hay forma de comprobar que sea suya.
+       Hasta el 2026-09-10 el corte alcanzaba solo al técnico, y un jefe abría
+       los PDF de cualquier zona, con la firma del administrador del local. */
+    if (!$encontrada) {
+        $mio = $u['rol'] !== 'TECNICO' && ($za === null || $zonaOt === $za);
+    }
+    if (!$mio) {
         Auth::bitacora('DENEGADO', 'ot', $ot, 'PDF fuera de su alcance',
                        null, null, ['ot' => $ot], false);
         http_response_code(403);
-        exit('Esa orden no es tuya.');
+        exit($u['rol'] === 'TECNICO' ? 'Esa orden no es tuya.' : 'Esa orden no es de tu zona.');
     }
 }
 

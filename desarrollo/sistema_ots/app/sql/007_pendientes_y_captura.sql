@@ -101,6 +101,8 @@ CREATE TABLE IF NOT EXISTS pendientes (
     abierto_por     INT UNSIGNED NOT NULL,
     abierto_en      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
       COMMENT 'Cuándo el técnico dejó el equipo sin concluir. Es el cero del reloj de 48 horas.',
+    plazo_desde     DATETIME     NULL
+      COMMENT 'Desde cuándo corre el plazo si se reinició: una garantía negada obliga a decidir otra vía, y ese nuevo veredicto tiene sus propias 48 h. NULL = desde abierto_en.',
 
     prometido_para  DATE         NULL
       COMMENT 'Lo que la administración se compromete a cumplir. Es SU dato, no una estimación del sistema: si está vacío, la pantalla lo dice en vez de inventarlo (I-7).',
@@ -148,8 +150,8 @@ CREATE TABLE IF NOT EXISTS pendiente_notas (
     pendiente_id INT UNSIGNED NOT NULL,
     usuario_id   INT UNSIGNED NOT NULL,
 
-    tipo         ENUM('RECORDATORIO','RESPUESTA','VEREDICTO','CAMBIO_ESTADO') NOT NULL DEFAULT 'RECORDATORIO'
-      COMMENT 'RECORDATORIO lo escribe quien espera. RESPUESTA quien gestiona. VEREDICTO y CAMBIO_ESTADO los deja el sistema al mover el pendiente, para que el hilo se lea completo sin cruzarlo con la bitácora.',
+    tipo         ENUM('RECORDATORIO','RESPUESTA','VEREDICTO','CAMBIO_ESTADO','DIAGNOSTICO') NOT NULL DEFAULT 'RECORDATORIO'
+      COMMENT 'RECORDATORIO lo escribe quien espera. RESPUESTA quien gestiona. VEREDICTO y CAMBIO_ESTADO los deja el sistema al mover el pendiente, para que el hilo se lea completo sin cruzarlo con la bitácora. DIAGNOSTICO es un diagnóstico nuevo del mismo equipo: va al hilo en vez de pisar el que sostiene el veredicto.',
 
     texto        VARCHAR(600) NOT NULL,
     urgente      TINYINT(1)   NOT NULL DEFAULT 0
@@ -225,10 +227,12 @@ ALTER TABLE casos_gestion
 -- el borrador, viaja con cada intento, y es UNIQUE aquí.
 --
 -- LO QUE ESTA TABLA NO HACE, Y HAY QUE DECIRLO (I-7): no genera el PDF ni manda
--- el correo. Eso vive en la migración 003 (`correlativos` con reserva atómica y
--- `email_queue`), que sigue sin aplicarse. Hasta entonces la orden queda aquí,
--- completa y a salvo, en estado RECIBIDA, y la pantalla lo dice con esas
--- palabras en vez de fingir que ya salió.
+-- el correo. Eso necesita una migración NUEVA de app/sql (correlativos con
+-- reserva atómica y cola de correo) que todavía no está escrita: la «003» que
+-- citaban los documentos es agentes/sql/003, de la base de la estación, y
+-- altera tablas que aquí no existen. Hasta entonces la orden queda en estado
+-- RECIBIDA, sin fotos ni imagen de la firma, y la pantalla lo dice en vez de
+-- fingir que ya salió.
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS ot_capturadas (
     captura_id     INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -506,4 +510,11 @@ ON DUPLICATE KEY UPDATE rol = rol;
 --   -- 7. Los permisos quedaron repartidos como dice el diseño:
 --   SELECT rol, COUNT(*) FROM rol_permisos WHERE permiso LIKE 'repuestos%' GROUP BY rol;
 --     -- SUPERADMIN 4 · ADMIN 4 · JEFE_ZONA 3 · TECNICO 2
+--   Con los de novedades, el total por rol pasa de 19/18/11/5 a 26/25/17/9.
+--
+--   -- 8. Todo lo anterior junto, sin copiarlo a mano: desde la carpeta ot/ del
+--   --    servidor, `php verificar_esquema.php` tiene que terminar en «TODO OK».
+--   --    Comprueba también plazo_desde, la nota DIAGNOSTICO y el trigger.
+--   --    La cuenta de la base tiene ALL PRIVILEGES y log_bin=0 (verificado el
+--   --    2026-09-10), así que CREATE TRIGGER no choca con el binlog.
 -- ============================================================================

@@ -3,8 +3,16 @@
 Guía operativa para Andrés. Cada paso trae **cómo se verifica que salió bien** —
 no "revisar que esté bien", sino una comprobación con respuesta objetiva.
 
-**Cuenta:** `u671729428` · **Sitio del sistema de OTs:** `yellow-elephant-166233.hostingersite.com`
-· **Sitio de pruebas del sistema nuevo:** `darkorchid-crane-387868.hostingersite.com`
+**Cuenta:** `u671729428` · **Sistema de OTs en producción:** `yellow-elephant-166233.hostingersite.com`
+(carpeta `ot/produccion/`; no se toca, regla 9) · **Sitio de pruebas del sistema nuevo:**
+`darkviolet-armadillo-872352.hostingersite.com` (`darkorchid` se descartó el 2026-09-08)
+
+> **Actualizado el 2026-09-10.** SSH ya está habilitado y en uso: `u671729428@82.25.73.181`,
+> puerto 65002, con una llave por equipo (la de la estación es `desarrollo\agentes\config\clave_hostinger`).
+> No hace falta generar otra en la estación: los pasos 1 y 2 quedan como referencia. `crontab`
+> no existe por SSH: los cron se revisan en hPanel → Avanzado → Cron Jobs. Donde los pasos 7.x
+> dicen `ot/pruebas/`, hoy es `ot/produccion/`. Los pasos 6 y 7 tocan producción: los ejecuta
+> Andrés. El servidor corre PHP 8.2.33.
 
 ---
 

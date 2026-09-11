@@ -22,9 +22,19 @@ INDUSTEC factura hoy. Una cuenta SSH ve TODAS las carpetas del plan, así que un
 Por eso `RUTA_DESTINO` se verifica carácter por carácter antes de conectar, y
 cualquier otra ruta corta la ejecución. No alcanza con "acordarse".
 
+Y LA RUTA DE CADA ARCHIVO TAMBIEN PASA POR LA COMPUERTA. Hasta el 2026-09-10
+no se normalizaba: `--borrar ../../../yellow-elephant…/algo` llegaba a
+producción, y `./nucleo/config.php` se saltaba la lista de prohibidos.
+
 TAMPOCO SE HACE NADA QUE CUESTE DINERO. Si algún día SSH deja de funcionar
 porque el plan no lo incluye, este script reporta y se detiene. Subir de plan lo
 decide y lo ejecuta Andrés.
+
+CADA EQUIPO CON SU LLAVE
+Las rutas salen de la ubicación de este archivo, así que corre igual en la
+estación que en otra copia del proyecto. La estación usa config/clave_hostinger;
+otro equipo declara la suya en INDUSTEC_LLAVE_SSH, para que cada llave se pueda
+revocar por separado en hPanel.
 
 Uso:
     .venv/Scripts/python.exe scripts/t2_10_desplegar.py --probar
@@ -35,13 +45,16 @@ Uso:
 
 import argparse
 import hashlib
+import os
+import posixpath
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 
-BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
-ORIGEN = Path(r"D:\INDUSTECH IA\desarrollo\sistema_ots\app\publico")
-LLAVE = BASE / "config" / "clave_hostinger"
+BASE = Path(__file__).resolve().parents[1]
+ORIGEN = BASE.parent / "sistema_ots" / "app" / "publico"
+LLAVE = Path(os.environ.get("INDUSTEC_LLAVE_SSH") or (BASE / "config" / "clave_hostinger"))
 ENV_PATH = BASE / "config" / ".env"
 
 # --- La compuerta. Cambiar esto a mano es cambiar de sitio de destino. -------
@@ -76,9 +89,11 @@ SSH_HOST, SSH_PUERTO = "82.25.73.181", 65002
 ARCHIVOS = [
     # --- Armazón compartido: de aquí sale la barra y los avisos de todas -----
     "estilo.css", "ui.js", "graficos.js",
+    # `busqueda.js` lo cargan casos.php y ordenes.php desde el 2026-09-10.
+    "busqueda.js",
     "nucleo/Auth.php", "nucleo/Db.php", "nucleo/Validacion.php",
     "nucleo/Ui.php", "nucleo/Casos.php", "nucleo/Pendientes.php",
-    "nucleo/Novedades.php", "nucleo/Reconciliar.php",
+    "nucleo/Novedades.php", "nucleo/Reconciliar.php", "nucleo/Catalogo.php",
 
     # --- La app del técnico. `cola.js` es lo que evita perder una orden
     #     llenada sin señal: si falta, el botón de enviar no guarda nada. -----
@@ -101,7 +116,9 @@ ARCHIVOS = [
     "cronograma.html", "cronograma.css", "cronograma.js",
 
     # --- Lo que cierra el acceso directo a los datos -------------------------
-    "nucleo/.htaccess", "catalogos/.htaccess",
+    # El .htaccess de la raíz y el de ordenes_pdf/ vivían solo en el servidor
+    # hasta el 2026-09-10: un sitio subido desde cero quedaba sin ellos.
+    ".htaccess", "nucleo/.htaccess", "catalogos/.htaccess", "ordenes_pdf/.htaccess",
     "iconos/icono-192.png", "iconos/icono-512.png",
 ]
 
@@ -150,6 +167,16 @@ def compuerta() -> None:
                  f"Genérala y autoriza la pública en hPanel > Avanzado > Acceso SSH.")
 
 
+def normalizar(rel: str) -> str:
+    """La ruta de un archivo, dentro del sitio de pruebas o nada."""
+    r = posixpath.normpath(rel.replace("\\", "/"))
+    if r in ("", ".", "..") or r.startswith("/") or r.startswith("../") or ":" in r:
+        sys.exit(f"ABORTADO: {rel!r} sale del sitio de pruebas")
+    if not (ORIGEN / r).resolve().is_relative_to(ORIGEN.resolve()):
+        sys.exit(f"ABORTADO: {rel!r} sale de {ORIGEN}")
+    return r
+
+
 def usuario() -> str:
     env = {}
     if ENV_PATH.is_file():
@@ -158,7 +185,7 @@ def usuario() -> str:
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
                 env[k.strip()] = v.strip()
-    u = env.get("SSH_USER", "").strip()
+    u = (os.environ.get("INDUSTEC_SSH_USER") or env.get("SSH_USER", "")).strip()
     if not u:
         sys.exit("Falta SSH_USER en config/.env (lo da hPanel > Avanzado > Acceso SSH)")
     return u
@@ -173,19 +200,20 @@ def ssh(u: str, comando: str, *, texto: bool = True):
         capture_output=True, text=texto, timeout=120)
 
 
-def subir(u: str, rel: str) -> bool:
+def subir(u: str, crudo: str) -> bool:
     """Sube un archivo y comprueba por hash que llegó igual."""
+    rel = normalizar(crudo)
     local = ORIGEN / rel
+    if rel in PROHIBIDOS:
+        print(f"  {rel:<28} PROHIBIDO subir por esta vía")
+        return False
     if not local.is_file():
         print(f"  {rel:<28} NO EXISTE en {ORIGEN}")
-        return False
-    if rel.replace("\\", "/") in PROHIBIDOS:
-        print(f"  {rel:<28} PROHIBIDO subir por esta vía")
         return False
 
     remoto = f"{RUTA_DESTINO}/{rel}"
     carpeta = remoto.rsplit("/", 1)[0]
-    ssh(u, f"mkdir -p {carpeta!r}")
+    ssh(u, f"mkdir -p {shlex.quote(carpeta)}")
     r = subprocess.run(
         ["scp", "-i", str(LLAVE), "-P", str(SSH_PUERTO),
          "-o", "StrictHostKeyChecking=accept-new", "-o", "BatchMode=yes",
@@ -197,13 +225,28 @@ def subir(u: str, rel: str) -> bool:
 
     # Verificar, no confiar: el scp puede devolver 0 y dejar el archivo corto.
     esperado = hashlib.sha256(local.read_bytes()).hexdigest()
-    v = ssh(u, f"sha256sum {remoto!r} 2>/dev/null | cut -d' ' -f1")
+    v = ssh(u, f"sha256sum {shlex.quote(remoto)} 2>/dev/null | cut -d' ' -f1")
     obtenido = (v.stdout or "").strip()
     if obtenido != esperado:
         print(f"  {rel:<28} NO COINCIDE el hash tras subirlo")
         return False
     print(f"  {rel:<28} ok  {len(local.read_bytes()):>7} bytes")
     return True
+
+
+def borrar(u: str, crudo: str) -> bool:
+    """Borra un archivo del sitio de pruebas y comprueba que ya no está.
+    `rm -f` sale con 0 aunque el archivo no exista: no sirve como prueba."""
+    rel = normalizar(crudo)
+    if rel in PROHIBIDOS:
+        print(f"  {rel:<28} no se borra por esta vía")
+        return False
+    q = shlex.quote(f"{RUTA_DESTINO}/{rel}")
+    d = ssh(u, f"if [ -e {q} ]; then rm -- {q} && [ ! -e {q} ] && echo BORRADO; "
+               f"else echo NO_EXISTIA; fi")
+    salida = (d.stdout or "").strip()
+    print(f"  {rel:<28} {salida or 'ERROR ' + (d.stderr or '').strip()[:100]}")
+    return salida in ("BORRADO", "NO_EXISTIA")
 
 
 def main() -> None:
@@ -219,7 +262,7 @@ def main() -> None:
     u = usuario()
     print(f"destino: {u}@{SSH_HOST}:{SSH_PUERTO}  {RUTA_DESTINO}\n")
 
-    r = ssh(u, f"pwd && ls -d {RUTA_DESTINO!r} 2>/dev/null && echo CARPETA_OK")
+    r = ssh(u, f"pwd && ls -d {shlex.quote(RUTA_DESTINO)} 2>/dev/null && echo CARPETA_OK")
     if r.returncode != 0:
         sys.exit("No se pudo conectar por SSH.\n"
                  f"  {(r.stderr or '').strip()[:300]}\n\n"
@@ -233,19 +276,14 @@ def main() -> None:
         return
 
     if args.borrar:
-        for rel in args.borrar:
-            if rel.replace("\\", "/") in PROHIBIDOS or "/" not in RUTA_DESTINO:
-                print(f"  {rel:<28} no se borra por esta vía")
-                continue
-            d = ssh(u, f"rm -f {RUTA_DESTINO + '/' + rel!r}")
-            print(f"  {rel:<28} {'borrado' if d.returncode == 0 else 'ERROR'}")
-        return
+        ok = sum(borrar(u, rel) for rel in args.borrar)
+        sys.exit(0 if ok == len(args.borrar) else 1)
 
     lista = ARCHIVOS if args.todo else args.archivos
     if not lista:
         sys.exit("Dime qué archivos subir, o usa --todo.")
 
-    ok = sum(subir(u, rel.replace("\\", "/")) for rel in lista)
+    ok = sum(subir(u, rel) for rel in lista)
     print(f"\n{ok} de {len(lista)} archivos en el sitio de pruebas")
     sys.exit(0 if ok == len(lista) else 1)
 

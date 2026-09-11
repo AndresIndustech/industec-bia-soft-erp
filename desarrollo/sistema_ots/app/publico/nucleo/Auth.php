@@ -31,6 +31,15 @@ final class Auth
     private const INACTIVIDAD_MIN = 120;
     private const MAX_INTENTOS    = 5;
     private const BLOQUEO_MIN     = 15;
+    /** Intentos rechazados desde una misma conexión en 15 minutos antes de cortarla. */
+    private const TOPE_POR_IP     = 20;
+
+    /* Un solo mensaje para usuario inexistente, clave mala y cuenta bloqueada:
+       distinguirlos le decía a quien prueba qué cuentas existen. */
+    private const MSG_FALLO = 'Usuario o contraseña incorrectos. Tras varios intentos fallidos el ingreso se bloquea 15 minutos.';
+
+    /** Un hash bcrypt cualquiera: el usuario inexistente cuesta lo mismo que uno real. */
+    private const HASH_RELLENO = '$2y$10$abcdefghijklmnopqrstuu5Gg6mXg1K1xDQ.8dLYHPYO/7gM7c9Gu';
 
     private static ?array $usuario = null;
 
@@ -62,31 +71,49 @@ final class Auth
     public static function ingresar(string $usuario, string $clave, bool $desplazar = false): array
     {
         self::iniciarCookie();
+
+        // Tope por conexión, contado en el registro que ya existe. Sin él,
+        // cualquiera sin sesión podía mantener bloqueadas las cuentas que quisiera.
+        $porIp = Db::uno("SELECT COUNT(*) c FROM sesiones_log
+                           WHERE ip = ? AND evento = 'RECHAZADO'
+                             AND cuando > DATE_SUB(NOW(), INTERVAL 15 MINUTE)", [self::ip()]);
+        if ((int) ($porIp['c'] ?? 0) >= self::TOPE_POR_IP) {
+            self::registrar(null, $usuario, 'RECHAZADO', 'tope por conexion');
+            return ['ok' => false, 'motivo' => self::MSG_FALLO];
+        }
+
         $u = self::cargar('usuario = ?', [$usuario]);
 
-        // Mismo mensaje para usuario inexistente y clave mala: decir cuál de los
-        // dos falló le regala al atacante la mitad del trabajo.
+        // Mismo mensaje y mismo trabajo para usuario inexistente, clave mala y
+        // cuenta bloqueada: distinguirlos le regala al atacante qué cuentas existen.
         if (!$u || !$u['activo']) {
+            password_verify($clave, self::HASH_RELLENO);
             self::registrar(null, $usuario, 'RECHAZADO', $u ? 'inactivo' : 'no existe');
-            return ['ok' => false, 'motivo' => 'Usuario o contraseña incorrectos.'];
+            return ['ok' => false, 'motivo' => self::MSG_FALLO];
         }
 
         if ((int) $u['minutos_bloqueo'] > 0) {
-            $min = (int) $u['minutos_bloqueo'];
             self::registrar((int) $u['usuario_id'], $usuario, 'RECHAZADO', 'bloqueado');
-            return ['ok' => false, 'motivo' => "Demasiados intentos. Vuelve a probar en $min minuto(s)."];
+            return ['ok' => false, 'motivo' => self::MSG_FALLO];
         }
 
         if (!password_verify($clave, $u['clave_hash'])) {
-            $n = (int) $u['intentos_fallidos'] + 1;
-            $bloqueo = $n >= self::MAX_INTENTOS
-                ? date('Y-m-d H:i:s', time() + self::BLOQUEO_MIN * 60) : null;
-            Db::ejecutar(
-                'UPDATE usuarios SET intentos_fallidos = ?, bloqueado_hasta = ? WHERE usuario_id = ?',
-                [$n, $bloqueo, $u['usuario_id']]
-            );
+            /* El bloqueo lo calcula MySQL. Antes salía de date() de PHP, que en
+               la web corre en otra zona que la base: el `bloqueado_hasta` quedaba
+               horas en el pasado y el bloqueo no bloqueaba. Un bloqueo vencido
+               tampoco se suma al siguiente: el contador vuelve a cero. */
+            Db::ejecutar('UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL
+                           WHERE usuario_id = ? AND bloqueado_hasta IS NOT NULL
+                             AND bloqueado_hasta <= NOW()', [$u['usuario_id']]);
+            // Izquierda a derecha: el IF ya ve el contador incrementado.
+            Db::ejecutar('UPDATE usuarios
+                             SET intentos_fallidos = intentos_fallidos + 1,
+                                 bloqueado_hasta = IF(intentos_fallidos >= ?,
+                                                      DATE_ADD(NOW(), INTERVAL ? MINUTE), bloqueado_hasta)
+                           WHERE usuario_id = ?',
+                         [self::MAX_INTENTOS, self::BLOQUEO_MIN, $u['usuario_id']]);
             self::registrar((int) $u['usuario_id'], $usuario, 'RECHAZADO', 'clave incorrecta');
-            return ['ok' => false, 'motivo' => 'Usuario o contraseña incorrectos.'];
+            return ['ok' => false, 'motivo' => self::MSG_FALLO];
         }
 
         // ¿Hay una sesión viva en otro lado?
@@ -251,6 +278,20 @@ final class Auth
             }
             exit;
         }
+        // La clave provisional impresa solo sirve para cambiarla, también en los
+        // extremos JSON: hasta el 2026-09-10 el cambio se exigía únicamente en
+        // las pantallas, y con ella se consultaban catálogos y se enviaban órdenes.
+        $pagina = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+        if (!empty($u['debe_cambiar_clave']) && !in_array($pagina, ['clave.php', 'salir.php'], true)) {
+            if ($json) {
+                http_response_code(403);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['error' => 'debe_cambiar_clave'], JSON_UNESCAPED_UNICODE);
+            } else {
+                header('Location: clave.php');
+            }
+            exit;
+        }
         if ($permiso !== null && !self::puede($permiso)) {
             /* `exito = false`. Se detecto al correr las propias consultas de
                deteccion: esta denegacion se guardaba como exitosa, asi que
@@ -337,7 +378,9 @@ final class Auth
      * Se usa así, y nunca escondiendo opciones en la interfaz:
      *
      *     $z = Auth::zonaAlcance();
-     *     $sql = 'SELECT ... FROM casos' . ($z ? ' WHERE zona = ?' : '');
+     *     $sql = 'SELECT ... FROM casos' . ($z !== null ? ' WHERE zona = ?' : '');
+     *
+     * Con `!== null` y no por verdad: '' es «sin zona» y tiene que filtrar.
      */
     public static function zonaAlcance(): ?string
     {
@@ -345,7 +388,9 @@ final class Auth
         if (!$u) {
             return null;
         }
-        return in_array($u['rol'], ['SUPERADMIN', 'ADMIN'], true) ? null : $u['zona'];
+        // Falla cerrado: un jefe o un técnico sin zona no ve ninguna, en vez de
+        // las tres. null significa «todas» y es solo para la administración.
+        return in_array($u['rol'], ['SUPERADMIN', 'ADMIN'], true) ? null : (string) ($u['zona'] ?? '');
     }
 
     /** ¿Este usuario puede tocar algo de esta zona? */

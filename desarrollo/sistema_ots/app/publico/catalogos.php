@@ -33,6 +33,7 @@ declare(strict_types=1);
    ------------------------------------------------------------------------- */
 require_once __DIR__ . '/nucleo/Auth.php';
 require_once __DIR__ . '/nucleo/Casos.php';
+require_once __DIR__ . '/nucleo/Catalogo.php';
 $u = Auth::exigir('ots.crear', true);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -41,40 +42,17 @@ header('Content-Type: application/json; charset=utf-8');
    tecnico sin catalogo en cuanto se le cayera la cobertura. */
 header('Cache-Control: private, max-age=60');
 
-// Orden de búsqueda: una copia local junto al formulario (si alguien la puso),
-// si no, los catálogos vivos que generó t2_5_catalogos.py en SALIDAS IA.
-$candidatos = [
-    __DIR__ . '/catalogos',
-    __DIR__ . '/../../../../SALIDAS IA/OTS/catalogos',
-];
-$base = null;
-foreach ($candidatos as $c) {
-    if (is_file($c . '/locales.json')) { $base = $c; break; }
-}
-if ($base === null) {
+// El mismo lector que usa envio.php para validar: si los dos leyeran cada uno
+// a su manera, el formulario ofrecería lo que el servidor después rechaza.
+$cat = Catalogo::cargar();
+if ($cat === null) {
     http_response_code(500);
-    echo json_encode(['error' => 'no encuentro locales.json en ' . implode(' ni ', $candidatos)], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['error' => 'faltan los catálogos del formulario; corre t2_5_catalogos.py'],
+                     JSON_UNESCAPED_UNICODE);
     exit;
 }
-
-function leer(string $ruta): array
-{
-    if (!is_file($ruta)) {
-        http_response_code(500);
-        echo json_encode(['error' => "falta $ruta"], JSON_UNESCAPED_UNICODE);
-        exit;
-    }
-    $j = json_decode((string) file_get_contents($ruta), true);
-    return $j['datos'] ?? $j;
-}
-
-$locales = leer("$base/locales.json");
-$tecnicos = leer("$base/tecnicos.json");
-$tipos = array_map(
-    static fn($t) => is_string($t) ? $t : ($t['tipo'] ?? ''),
-    leer("$base/tipos_equipo.json")
-);
-$equipos = leer("$base/equipos_por_local.json");
+$base = (string) Catalogo::carpeta();
+['locales' => $locales, 'tecnicos' => $tecnicos, 'tipos' => $tipos, 'equipos' => $equipos] = $cat;
 
 /**
  * Las ordenes que se le ofrecen al tecnico.
