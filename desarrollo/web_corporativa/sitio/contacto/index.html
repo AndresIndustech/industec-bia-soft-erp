@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Contacto | INDUSTEC · WhatsApp 099 788 7709</title>
-<meta name="description" content="Escríbenos por WhatsApp, llámanos al 099 788 7709 o escribe a servicioalcliente@industec.me. Solicita tu consultoría integral gratuita.">
+<meta name="description" content="Empresas y cadenas: escríbenos por WhatsApp, llámanos al 099 788 7709 o escribe a servicioalcliente@industec.me. Consultoría integral gratuita.">
 <!-- DOMINIO TEMPORAL: quitar esta línea al pasar a www.industec.me (ver LEEME.md) -->
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#ffffff">
@@ -16,16 +16,17 @@
 <meta property="og:site_name" content="INDUSTEC">
 <meta property="og:locale" content="es_EC">
 <meta property="og:title" content="Contacto | INDUSTEC">
-<meta property="og:description" content="WhatsApp y teléfono 099 788 7709 · servicioalcliente@industec.me · Consultoría integral gratuita.">
+<meta property="og:description" content="Para empresas y cadenas · WhatsApp y teléfono 099 788 7709 · servicioalcliente@industec.me">
 <meta property="og:url" content="https://darkviolet-armadillo-872352.hostingersite.com/contacto/">
-<meta property="og:image" content="https://darkviolet-armadillo-872352.hostingersite.com/assets/img/og-industec.png">
+<meta property="og:image" content="https://darkviolet-armadillo-872352.hostingersite.com/assets/img/og-industec-cadenas-v2.jpg">
+<meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="INDUSTEC: asesoría, equipamiento y mantenimiento para restaurantes, hoteles y catering">
+<meta property="og:image:alt" content="INDUSTEC: mantenimiento de cocinas profesionales para cadenas de restaurantes y hoteles">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/assets/css/estilos.css">
+<link rel="stylesheet" href="/assets/css/estilos.css?v=128e359b">
 <script>document.documentElement.classList.add('js');</script>
-<script src="/assets/js/sitio.js" defer></script>
+<script src="/assets/js/sitio.js?v=c4bf515b" defer></script>
 </head>
 <body class="con-barra">
 <a class="saltar" href="#contenido">Saltar al contenido</a>
@@ -59,8 +60,9 @@
     <div class="contenedor cabeza-pagina__grid">
       <div>
         <p class="etiqueta">Contacto</p>
-        <h1 id="t-pagina">Hablemos de tu negocio</h1>
+        <h1 id="t-pagina">Hablemos de tu empresa</h1>
         <p class="cabeza-pagina__intro">Cuéntanos qué necesitas y te respondemos por el medio que prefieras.</p>
+        <p class="aviso-filtro"><span class="ico ico-info" aria-hidden="true"></span><span>Atendemos a empresas y cadenas, bajo contrato de servicio. No reparamos equipos domésticos ni atendemos a particulares.</span></p>
       </div>
       <div class="cabeza-pagina__adorno" aria-hidden="true"><img src="/assets/img/iconos/consultoria.svg" width="96" height="96" alt=""></div>
     </div>
@@ -75,7 +77,7 @@
           <h3>WhatsApp</h3>
           <p class="contacto-tarjeta__dato">+593 99 788 7709</p>
           <p class="contacto-tarjeta__texto">La forma más rápida. También puedes enviarnos fotos del equipo.</p>
-          <a class="boton boton--primario" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20negocio." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>Escribir por WhatsApp<span class="sr"> (se abre WhatsApp)</span></a>
+          <a class="boton boton--primario" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20empresa." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>Escribir por WhatsApp<span class="sr"> (se abre WhatsApp)</span></a>
         </li>
         <li class="contacto-tarjeta">
           <span class="tarjeta__icono"><img src="/assets/img/iconos/telefono.svg" width="30" height="30" alt=""></span>
@@ -114,7 +116,7 @@
     <div class="contenedor">
       <header class="seccion__cabeza">
         <h2 id="t-form">Prepara tu mensaje en un minuto</h2>
-        <p>Completa estos datos y envíalo por WhatsApp o por correo, como prefieras.</p>
+        <p>Completa los datos de tu empresa y envía el mensaje por WhatsApp o por correo, como prefieras.</p>
       </header>
       <noscript>
         <p class="nota-privacidad">Para preparar el mensaje aquí hace falta activar JavaScript en tu navegador. También puedes escribirnos directamente por WhatsApp o llamarnos al 099 788 7709, o escribir a servicioalcliente@industec.me.</p>
@@ -127,9 +129,10 @@
             <p class="campo__error" id="e-nombre" hidden>Escribe tu nombre.</p>
           </div>
           <div class="campo">
-            <label for="f-negocio">Tu negocio <span class="campo__opcional">(opcional)</span></label>
-            <input id="f-negocio" type="text" autocomplete="organization" maxlength="80" aria-describedby="a-negocio">
-            <p class="campo__ayuda" id="a-negocio">Ej.: restaurante, hotel o catering</p>
+            <label for="f-empresa">Empresa o cadena</label>
+            <input id="f-empresa" type="text" autocomplete="organization" maxlength="80" required aria-describedby="a-empresa">
+            <p class="campo__ayuda" id="a-empresa">El nombre comercial de tu empresa, cadena, hotel o local.</p>
+            <p class="campo__error" id="e-empresa" hidden>Escribe el nombre de tu empresa o cadena.</p>
           </div>
           <div class="campo">
             <label for="f-ciudad">Ciudad <span class="campo__opcional">(opcional)</span></label>
@@ -139,6 +142,7 @@
             <label for="f-necesidad">¿Qué necesitas?</label>
             <select id="f-necesidad" required>
               <option value="">Elige una opción</option>
+              <option>Un contrato de mantenimiento para mis locales</option>
               <option>Asesoría para comprar o instalar equipos</option>
               <option>Mantenimiento preventivo</option>
               <option>Mantenimiento predictivo</option>
@@ -210,9 +214,9 @@
       <div class="banda">
         <div>
           <h2 id="t-consultoria">Consultoría integral gratuita</h2>
-          <p>Cuéntanos tu proyecto y te orientamos sin costo.</p>
+          <p>Cuéntanos el proyecto de tu empresa o cadena y te orientamos sin costo.</p>
         </div>
-        <a class="boton boton--primario" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20solicitar%20la%20consultor%C3%ADa%20integral%20gratuita." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>Pedir mi consultoría gratuita<span class="sr"> (se abre WhatsApp)</span></a>
+        <a class="boton boton--primario" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20solicitar%20la%20consultor%C3%ADa%20integral%20gratuita%20para%20mi%20empresa." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>Pedir mi consultoría gratuita<span class="sr"> (se abre WhatsApp)</span></a>
       </div>
     </div>
   </section>
@@ -223,7 +227,7 @@
   <div class="contenedor pie__grid">
     <div class="pie__marca">
       <img src="/assets/img/logo-industec.png" width="768" height="143" alt="INDUSTEC, la solución a sus equipos" loading="lazy">
-      <p>Soluciones integrales para hoteles, restaurantes y catering en el Ecuador.</p>
+      <p>Asesoría, equipamiento y mantenimiento de cocinas profesionales para empresas y cadenas en el Ecuador.</p>
     </div>
     <nav aria-labelledby="pie-paginas">
       <h2 class="pie__titulo" id="pie-paginas">Páginas</h2>
@@ -237,7 +241,7 @@
     <div>
       <h2 class="pie__titulo">Contáctanos</h2>
       <ul>
-        <li><a href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20negocio." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>WhatsApp: +593 99 788 7709<span class="sr"> (se abre WhatsApp)</span></a></li>
+        <li><a href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20empresa." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>WhatsApp: +593 99 788 7709<span class="sr"> (se abre WhatsApp)</span></a></li>
         <li><a href="tel:+593997887709"><span class="ico ico-tel" aria-hidden="true"></span>Teléfono: 099 788 7709</a></li>
         <li><a href="mailto:servicioalcliente@industec.me?subject=Solicitud%20desde%20la%20web"><span class="ico ico-correo" aria-hidden="true"></span>Correo: servicioalcliente@industec.me</a></li>
       </ul>
@@ -250,9 +254,9 @@
 </footer>
 
 <aside class="barra-movil" aria-label="Contacto rápido">
-  <a class="barra-movil__wa" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20negocio." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>WhatsApp<span class="sr"> (se abre WhatsApp)</span></a>
+  <a class="barra-movil__wa" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20empresa." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>WhatsApp<span class="sr"> (se abre WhatsApp)</span></a>
   <a class="barra-movil__tel" href="tel:+593997887709"><span class="ico ico-tel" aria-hidden="true"></span>Llamar</a>
 </aside>
-<a class="wa-flotante" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20negocio." target="_blank" rel="noopener" aria-label="Escríbenos por WhatsApp (se abre WhatsApp)"><span class="ico ico-wa" aria-hidden="true"></span></a>
+<a class="wa-flotante" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20empresa." target="_blank" rel="noopener" aria-label="Escríbenos por WhatsApp (se abre WhatsApp)"><span class="ico ico-wa" aria-hidden="true"></span></a>
 </body>
 </html>

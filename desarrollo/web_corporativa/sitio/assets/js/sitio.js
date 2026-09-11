@@ -84,14 +84,16 @@
   var porId = function (id) { return document.getElementById(id); };
   var campos = {
     nombre: porId('f-nombre'),
-    negocio: porId('f-negocio'),
+    empresa: porId('f-empresa'),
     ciudad: porId('f-ciudad'),
     necesidad: porId('f-necesidad'),
     detalle: porId('f-detalle'),
     telefono: porId('f-telefono')
   };
+  /* La empresa es obligatoria: la web atiende a empresas y cadenas. */
   var obligatorios = [
     { campo: campos.nombre, error: porId('e-nombre') },
+    { campo: campos.empresa, error: porId('e-empresa') },
     { campo: campos.necesidad, error: porId('e-necesidad') },
     { campo: campos.detalle, error: porId('e-detalle') }
   ];
@@ -104,17 +106,17 @@
     return el.value.replace(/\r\n?/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
   };
 
-  /* Mismo mensaje para WhatsApp y para el cuerpo del correo; los campos opcionales vacíos se omiten. */
+  /* Mismo mensaje para WhatsApp y para el cuerpo del correo; los campos opcionales vacíos se omiten,
+     pero la línea «Empresa:» va siempre (en la vista previa, con «…» mientras esté vacía). */
   var armar = function (conHuecos) {
     var hueco = conHuecos ? '…' : '';
     var nombre = linea(campos.nombre);
-    var negocio = linea(campos.negocio);
+    var empresa = linea(campos.empresa);
     var ciudad = linea(campos.ciudad);
     var necesidad = campos.necesidad.value;
     var telefono = linea(campos.telefono);
     var detalle = parrafo(campos.detalle);
-    var l = [SALUDO, 'Nombre: ' + (nombre || hueco)];
-    if (negocio) l.push('Negocio: ' + negocio);
+    var l = [SALUDO, 'Nombre: ' + (nombre || hueco), 'Empresa: ' + (empresa || hueco)];
     if (ciudad) l.push('Ciudad: ' + ciudad);
     l.push('Necesito: ' + (necesidad || hueco));
     if (telefono) l.push('Teléfono: ' + telefono);
@@ -190,7 +192,7 @@
     var mensaje = armar(false);
     if (canal === 'correo') {
       abrir('mailto:' + CORREO +
-        '?subject=' + encodeURIComponent('Solicitud desde la web: ' + campos.necesidad.value) +
+        '?subject=' + encodeURIComponent('Solicitud desde la web: ' + campos.necesidad.value + ' - ' + linea(campos.empresa)) +
         '&body=' + encodeURIComponent(mensaje.replace(/\n/g, '\r\n')), false);
     } else {
       abrir('https://wa.me/' + NUMERO + '?text=' + encodeURIComponent(mensaje), true);

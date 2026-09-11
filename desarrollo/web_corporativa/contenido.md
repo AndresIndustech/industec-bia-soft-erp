@@ -1,9 +1,9 @@
 # Contenido de la web corporativa de INDUSTEC
 
-> **Preparado por**: Valentina (comercial y marketing, INDUSTECH) · **Fecha**: 11 de septiembre de 2026
+> **Preparado por**: Valentina (comercial y marketing, INDUSTECH) · **Fecha**: 11 de septiembre de 2026 · **Revisado**: 11 de septiembre de 2026 (enfoque en empresas y cadenas, logos y campo «Empresa o cadena»; ver la sección 1)
 > **Para**: quien arme el HTML en el dominio temporal `darkviolet-armadillo-872352.hostingersite.com`
 > **Estado**: textos finales, listos para pegar. Andrés los revisa; César da el visto bueno.
-> **Fuente única**: lo que hoy publica www.industec.me (revisado el 11 de septiembre de 2026). **No hay aquí ningún dato nuevo sin confirmar.** Todo lo que requiere el visto bueno de César está en `NOTAS_PARA_CESAR.md` y **no va al HTML**.
+> **Fuentes**: lo que hoy publica www.industec.me (revisado el 11 de septiembre de 2026) y lo que Andrés indicó ese mismo día sobre cómo quiere presentarse INDUSTEC: proveedor técnico de empresas y cadenas (comida rápida, restaurantes, hoteles, bares y cafeterías, catering), que trabaja con contrato de servicio y no repara equipos domésticos ni atiende a particulares. **No hay aquí ningún dato nuevo sin confirmar.** Todo lo que requiere el visto bueno de César está en `NOTAS_PARA_CESAR.md` y **no va al HTML**.
 
 ---
 
@@ -28,6 +28,11 @@
 | Se corrigen los títulos cruzados de la web actual: los logos de fabricantes aparecen hoy bajo «Nuestros clientes» y los restaurantes bajo «Marcas con las que trabajamos» | Error de la plantilla de Zyro. |
 | Se corrigen errores de tipeo («sócio», «negócio», «contatará», «Respuestos», «correccion») | Cuidado de marca. |
 | La página `/acceso/` no nombra cargos internos | La regla del proyecto prohíbe publicar la organización interna (zonas, personas). |
+| **11 de septiembre de 2026** · La web se presenta como **proveedor técnico de empresas y cadenas**: cadenas de comida rápida, restaurantes, hoteles, bares y cafeterías, catering. Nueva sección «A quién servimos» (3.3) | Pedido de César, a través de Andrés: la gente confunde el servicio con arreglos de cocina para casa o para particulares con equipo de gama baja, que INDUSTEC no hace. |
+| **11 de septiembre de 2026** · Una línea amable que filtra al cliente particular, en la portada y en contacto: «Atendemos a empresas y cadenas, bajo contrato de servicio. No reparamos equipos domésticos ni atendemos a particulares.» | Mismo pedido. Evita mensajes que no se van a atender y deja claro, antes de escribir, el tipo de cliente. |
+| **11 de septiembre de 2026** · El formulario pide **«Empresa o cadena»** como dato obligatorio (reemplaza a «Tu negocio», que era opcional) | Filtra al particular y le dice a César, desde el primer mensaje, de qué empresa le escriben. Se cambia un campo por otro: no se pide ningún dato más. |
+| **11 de septiembre de 2026** · **Logos** de clientes y de marcas de equipos, cada bloque con su nota | Pedido de Andrés. La nota de las marcas deja claro que mencionarlas no significa ser servicio técnico autorizado. |
+| **11 de septiembre de 2026** · Se nombran **freidoras y mantenedores de calor** | Los nombró Andrés. Los demás tipos de equipo siguen esperando a César (NOTAS, B4). |
 
 ---
 
@@ -39,8 +44,8 @@ Todos los mensajes de WhatsApp empiezan con **«les escribo desde su página web
 
 | Clave | Uso | Mensaje que se abre en WhatsApp | Enlace |
 |---|---|---|---|
-| `wa-general` | Portada, menú, botón flotante, cierres | «Hola INDUSTEC, les escribo desde su página web. Quiero información sobre sus servicios para mi negocio.» | `https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20negocio.` |
-| `wa-consultoria` | Consultoría integral gratuita | «Hola INDUSTEC, les escribo desde su página web. Quiero solicitar la consultoría integral gratuita.» | `https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20solicitar%20la%20consultor%C3%ADa%20integral%20gratuita.` |
+| `wa-general` | Portada, menú, botón flotante, cierres | «Hola INDUSTEC, les escribo desde su página web. Quiero información sobre sus servicios para mi empresa.» | `https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20empresa.` |
+| `wa-consultoria` | Consultoría integral gratuita | «Hola INDUSTEC, les escribo desde su página web. Quiero solicitar la consultoría integral gratuita para mi empresa.» | `https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20solicitar%20la%20consultor%C3%ADa%20integral%20gratuita%20para%20mi%20empresa.` |
 | `wa-asesoria` | Asesoría comercial | «Hola INDUSTEC, les escribo desde su página web. Necesito asesoría para elegir e instalar equipos.» | `https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Necesito%20asesor%C3%ADa%20para%20elegir%20e%20instalar%20equipos.` |
 | `wa-preventivo` | Mantenimiento preventivo | «Hola INDUSTEC, les escribo desde su página web. Quiero programar un mantenimiento preventivo.» | `https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20programar%20un%20mantenimiento%20preventivo.` |
 | `wa-predictivo` | Mantenimiento predictivo | «Hola INDUSTEC, les escribo desde su página web. Quiero información sobre el mantenimiento predictivo.» | `https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20el%20mantenimiento%20predictivo.` |
@@ -51,6 +56,10 @@ Todos los mensajes de WhatsApp empiezan con **«les escribo desde su página web
 | `mail-empleo` | Trabaja con nosotros | — | `mailto:servicioalcliente@industec.me?subject=Quiero%20trabajar%20en%20INDUSTEC` |
 
 Formato del número: en los textos va **099 788 7709**; en los enlaces, siempre en formato internacional (`+593997887709`). Los enlaces a `wa.me` se abren en una pestaña nueva (`target="_blank" rel="noopener"`), y el texto del enlace o su `aria-label` avisa «(se abre WhatsApp)».
+
+**Cambio del 11 de septiembre de 2026**: `wa-general` y `wa-consultoria` terminan ahora en «para mi empresa». Al integrarlo, en **todas** las páginas (también en `/acceso/`, que usa `wa-general` en su línea para clientes) se reemplaza `sus%20servicios%20para%20mi%20negocio.` por `sus%20servicios%20para%20mi%20empresa.`, e `integral%20gratuita.` por `integral%20gratuita%20para%20mi%20empresa.`. Los otros cinco mensajes no cambian, y los siete siguen empezando con «Hola INDUSTEC, les escribo desde su página web.».
+
+**Propuesta para Valentina (revisión del 11 de septiembre de 2026, NO aplicada)**: `wa-emergencia` es el único de los siete mensajes que no menciona el local ni la empresa, y es el que escribe quien busca una «reparación». Se propone «Hola INDUSTEC, les escribo desde su página web. Tengo una emergencia: un equipo de mi local dejó de funcionar.» (enlace: `…Tengo%20una%20emergencia%3A%20un%20equipo%20de%20mi%20local%20dej%C3%B3%20de%20funcionar.`). Si lo apruebas, se cambia en `/servicios/#correctivo` y en la franja de emergencia de `/contacto/`.
 
 ### 2.2 Encabezado
 
@@ -72,7 +81,7 @@ No se muestra en `/acceso/`.
 
 ### 2.5 Pie de página
 
-- Logo + «Soluciones integrales para hoteles, restaurantes y catering en el Ecuador.»
+- Logo + «Asesoría, equipamiento y mantenimiento de cocinas profesionales para empresas y cadenas en el Ecuador.» *(Cambió el 11 de septiembre de 2026; antes decía «Soluciones integrales para hoteles, restaurantes y catering en el Ecuador.». Va en las cinco páginas, también en `/acceso/`.)*
 - Columna **«Páginas»**: Inicio · Nosotros · Servicios · Contacto
 - Columna **«Contáctanos»**:
   - WhatsApp: +593 99 788 7709 → `wa-general`
@@ -83,8 +92,8 @@ No se muestra en `/acceso/`.
 
 ### 2.6 Bloque de cierre (se repite al final de Inicio, Nosotros y Servicios)
 
-- **Título**: «¿Un equipo te está dando problemas o tienes un proyecto nuevo?»
-- **Texto**: «Cuéntanos qué necesitas. Te respondemos por WhatsApp, por teléfono o por correo.»
+- **Título**: «¿Un equipo de tu local está fallando o tienes un proyecto nuevo?»
+- **Texto**: «Cuéntanos qué necesita tu empresa. Te respondemos por WhatsApp, por teléfono o por correo.»
 - **[CTA] principal**: «Escríbenos por WhatsApp» → `wa-general`
 - **[CTA] secundario**: «Llamar al 099 788 7709» → `tel`
 - **[CTA] terciario** (enlace de texto): «Enviar un correo» → `mail-general`
@@ -95,23 +104,27 @@ No se muestra en `/acceso/`.
 
 | Metadato | Texto |
 |---|---|
-| `<title>` (53 caracteres) | INDUSTEC \| Asesoría y mantenimiento de equipos HORECA |
-| `meta description` (142) | Asesoría, equipamiento y mantenimiento preventivo, predictivo y correctivo para restaurantes, hoteles y catering en Ecuador. Emergencias 24/7. |
-| `og:title` | INDUSTEC \| Asesoría y mantenimiento de equipos HORECA |
-| `og:description` | Tu único proveedor para asesoría, equipamiento y mantenimiento de restaurantes, hoteles y catering. Emergencias 24/7. |
-| H1 | Asesoría, equipamiento y mantenimiento para restaurantes, hoteles y catering |
+| `<title>` (62 caracteres) | INDUSTEC \| Mantenimiento de cocinas profesionales para cadenas |
+| `meta description` (151) | Asesoría, equipamiento y mantenimiento de cocinas profesionales para cadenas de restaurantes, hoteles, bares y cafeterías en Ecuador. Emergencias 24/7. |
+| `og:title` | INDUSTEC \| Mantenimiento de cocinas profesionales para cadenas |
+
+«Equipos de cocina» se cambió por «cocinas profesionales» antes de publicar la segunda entrega (11-sep-2026): sin el adjetivo, el título se lee igual para un electrodoméstico de casa (sección 9, «cocina profesional», y el pedido de César).
+| `og:description` (150) | Proveedor técnico de empresas y cadenas: asesoría, equipamiento y mantenimiento de cocinas profesionales, con contrato de servicio y emergencias 24/7. |
+| H1 | Mantenimiento de cocinas profesionales para cadenas de restaurantes y hoteles |
 
 ### 3.1 Portada (primera pantalla)
 
-> **Prueba de los 5 segundos**: **qué** (asesoría, equipamiento, mantenimiento) + **para quién** (restaurantes, hoteles, catering) + **cómo contactar** (dos botones). Todo debe verse sin bajar, también en el celular.
+> **Prueba de los 5 segundos**: **qué** (mantenimiento y equipamiento de cocinas profesionales) + **para quién** (empresas y cadenas) + **cómo contactar** (dos botones). Todo debe verse sin bajar, también en el celular. Desde el 11 de septiembre de 2026 hay una cuarta condición: **que nadie la confunda con un servicio de reparación para el hogar**.
 
-- **Etiqueta** (encima del título): «Soluciones integrales · Sector HORECA»
-- **H1**: «Asesoría, equipamiento y mantenimiento para restaurantes, hoteles y catering»
-- **Texto**: «Tu único proveedor para la excelencia: te ayudamos a elegir, instalar y mantener los equipos de tu negocio, con servicio de emergencia 24/7.»
+- **Etiqueta** (encima del título): «Proveedor técnico para empresas · Sector HORECA»
+- **H1**: «Mantenimiento de cocinas profesionales para cadenas de restaurantes y hoteles»
+- **Texto**: «Tu único proveedor para elegir, instalar y mantener los equipos de tus locales, de las freidoras a los mantenedores de calor, con contrato de mantenimiento y emergencias 24/7.»
 - **[CTA] principal**: «Escríbenos por WhatsApp» → `wa-general`
 - **[CTA] secundario**: «Llamar al 099 788 7709» → `tel`
 - **Enlace bajo los botones**: «o pide tu consultoría integral gratuita» → `wa-consultoria`
-- **Imagen**: ilustración propia en SVG de una cocina profesional, decorativa (`alt=""`). No usar las fotos de banco de imágenes de la web actual. Las fotos reales están propuestas en NOTAS, sección B2.
+- **Línea de filtro** (debajo de ese enlace; letra de cuerpo pequeña, en el azul `#48537E` o en el color del texto, con un ícono neutro de edificio o de información; **nunca en rojo**, que en esta web significa urgencia): «Atendemos a empresas y cadenas, bajo contrato de servicio. No reparamos equipos domésticos ni atendemos a particulares.»
+- **Imagen**: la cocina de un local de cadena, con aspecto técnico y empresarial: batería de freidoras, mantenedores de calor, acero inoxidable y, si cabe, un técnico trabajando. **Nada que se lea como cocina de casa** (cocina a gas con horno, refrigeradora de dos puertas, alacenas). Si es ilustración, es decorativa (`alt=""`). Si se usa la foto propia de la web actual (el técnico de INDUSTEC revisando las freidoras), su texto alternativo es «Técnico de INDUSTEC revisando una batería de freidoras en una cocina profesional». Toda imagen se aloja en `sitio/assets`: nada enlazado a Zyro ni a Pexels. Las demás fotos reales siguen propuestas en NOTAS, sección B2.
+- **Distintivos bajo la foto** (placa azul; textos de maquetación del 11 de septiembre de 2026, **pendientes de validar por Valentina**): «Freidoras y mantenedores de calor» · «Mantenimiento preventivo, predictivo y correctivo» · «Servicio para cadenas de restaurantes». Reemplazan a «Emergencias 24/7», que ya está en el texto de la portada y en la franja de confianza. No se nombran otros tipos de equipo hasta que César responda la B4.
 
 ### 3.2 Franja de confianza (4 datos, todos públicos)
 
@@ -120,19 +133,40 @@ No se muestra en `/acceso/`.
 | **2010** | Fundada para evolucionar la industria HORECA |
 | **+40 años** | De legado junto a grandes cadenas de comida rápida |
 | **24/7** | Servicio de emergencia |
-| **1 solo** | Proveedor para asesoría, equipos y mantenimiento |
+| **1 solo** | Proveedor para asesoría, equipos y mantenimiento de todos tus locales |
 
-### 3.3 Qué hacemos
+### 3.3 A quién servimos (nueva, 11 de septiembre de 2026)
+
+Va **justo después de la franja de confianza** y antes de «Qué hacemos»: primero para quién, después qué. Responde al pedido de César de presentarse como proveedor de empresas y cadenas.
+
+- **H2**: «A quién servimos»
+- **Texto**: «Somos el proveedor técnico de empresas y cadenas que no pueden detener su cocina.»
+
+Cinco tarjetas, sin enlace y sin cifras:
+
+| Ícono sugerido | Título | Texto |
+|---|---|---|
+| Tres fachadas de local iguales, en fila | Cadenas de comida rápida | Freidoras, mantenedores de calor y demás equipos al día en cada local, con el mismo estándar en toda la cadena. |
+| Tenedor y cuchillo | Restaurantes | Mantenimiento programado para que tu cocina no se detenga en plena operación, y respuesta rápida cuando algo falla. |
+| Edificio de hotel | Hoteles | Cocinas que trabajan desde el desayuno hasta el último evento, con un solo proveedor para equiparlas y mantenerlas. |
+| Taza y copa | Bares y cafeterías | Equipos a punto para las horas de mayor movimiento, sin paradas que frenen la atención. |
+| Campana de servicio (cloche) | Catering | Equipos confiables para producir en volumen y cumplir con cada evento a tiempo. |
+
+- **Pie de la sección**: «¿Tu empresa tiene varios locales? Te proponemos un contrato de mantenimiento que los cubra a todos.»
+- **[CTA]** (enlace de texto): «Escríbenos por WhatsApp» → `wa-general`
+- **Cuidado**: aquí no se nombran otros tipos de equipo (cocción, refrigeración, hielo, café…) hasta que César responda la B4 de las notas, ni se pone el nombre de un cliente en una tarjeta.
+
+### 3.4 Qué hacemos
 
 - **H2**: «Todo lo que tus equipos necesitan, con un solo proveedor»
-- **Texto**: «Te acompañamos desde que eliges un equipo hasta que lo mantienes funcionando.»
+- **Texto**: «Te acompañamos desde que eliges un equipo hasta que lo mantienes funcionando en cada uno de tus locales.»
 
 Cinco tarjetas; cada una enlaza a su sección en `/servicios/`.
 
 | Ícono sugerido | Título | Texto | Enlace (texto accesible) → destino |
 |---|---|---|---|
 | Portapapeles con visto bueno | Asesoría comercial | Te ayudamos a elegir el equipo adecuado, lo instalamos, lo ponemos en marcha y capacitamos a tu personal. | «Más sobre asesoría comercial» → `/servicios/#asesoria` |
-| Calendario con engranaje | Mantenimiento preventivo | Inspecciones, limpieza profunda y calibración programadas para que tus equipos no fallen. | «Más sobre mantenimiento preventivo» → `/servicios/#preventivo` |
+| Calendario con engranaje | Mantenimiento preventivo | Visitas programadas por contrato: inspección, limpieza profunda y calibración para que tus equipos no fallen. | «Más sobre mantenimiento preventivo» → `/servicios/#preventivo` |
 | Gráfica con lupa | Mantenimiento predictivo | Anticipamos los problemas antes de que ocurran. | «Más sobre mantenimiento predictivo» → `/servicios/#predictivo` |
 | Llave inglesa con rayo | Mantenimiento correctivo | Respuesta rápida ante fallas inesperadas, con servicio de emergencia 24/7 y repuestos garantizados. | «Más sobre mantenimiento correctivo» → `/servicios/#correctivo` |
 | Diana o mapa de ruta | Planificación | Solucionamos los problemas de forma definitiva y capacitamos a tu personal para evitar nuevas incidencias. | «Más sobre planificación» → `/servicios/#planificacion` |
@@ -140,28 +174,39 @@ Cinco tarjetas; cada una enlaza a su sección en `/servicios/`.
 - **[CTA]** debajo de las tarjetas: «Ver todos los servicios» → `/servicios/`
 - En el HTML, el enlace de cada tarjeta dice «Ver servicio» y su nombre accesible (`aria-label`) es «Ver servicio de asesoría comercial», «Ver servicio de mantenimiento preventivo»… El nombre accesible tiene que **empezar por el texto que se ve** (WCAG 2.5.3) para que funcione el control por voz; «Más sobre…» no lo cumplía.
 
-### 3.4 ¿Por qué elegir un proveedor integral?
+### 3.5 ¿Por qué elegir un proveedor integral?
 
 - **H2**: «¿Por qué elegir un proveedor integral?»
 - **Subtítulo**: «Un solo proveedor, múltiples beneficios»
 
 | Ícono (ya existe) | Título | Texto |
 |---|---|---|
-| `target-red.svg` | Único punto de contacto | Una sola relación para todo. Simplifica tu gestión. |
+| `target-red.svg` | Único punto de contacto | Una sola relación para todos tus locales. Simplifica tu gestión. |
 | `trending-red.svg` | Ahorro de costos | Ahorras con una negociación integral. |
 | `shield-red.svg` | Compatibilidad garantizada | Lo que te proponemos está pensado para funcionar en conjunto. |
 | `clock-red.svg` | Menos tiempo de implementación | Tu proyecto se pone en marcha antes. |
 
-### 3.5 Empresas que han confiado en nuestro trabajo
+### 3.6 Empresas que han confiado en nuestro trabajo (logos)
 
 - **H2**: «Empresas que han confiado en nuestro trabajo»
-- **Texto**: «Hemos realizado trabajos para marcas como:»
-- **Lista** (en este orden): KFC · American Deli · Arrayanes · Tropi Burger · Cinnabon · Naturissimo · Yanbal · Gus · TEVCOL · GPF · Menestras del Negro · Juan Valdez Café · V&V · El Bodegón · Baskin Robbins · San Felipe · Decamerón
-- **Presentación**: cuadrícula de logos en un solo tono gris, del mismo tamaño, sin enlaces. Si no se tienen los archivos de los logos, los nombres en texto con el mismo estilo. La grafía exacta de algunos nombres está por confirmar (NOTAS, A6); mientras tanto se publica como está aquí, que es como aparece hoy.
+- **Texto**: «Hemos realizado trabajos para cadenas y empresas como:»
+- **Lista** (en este orden, el de la galería de www.industec.me; **20 clientes**): KFC · American Deli · Ali's Parrilladas & Pizzería · Arrayanes · TropiBurger · Cinnabon · Naturíssimo · Yanbal · El Español · Gus · TEVCOL · Corporación GPF · Menestras del Negro · Juan Valdez Café · Vaco y Vaca · El Bodegón · Baskin Robbins · Il Cappo di Mangi · San Felipe · Decameron
+  - **Corrección de la revisión del 11 de septiembre de 2026**: la lista anterior tenía 17. Faltaban Ali's Parrilladas & Pizzería, El Español e Il Cappo di Mangi, que están en la galería pública pero cuyos archivos no dicen de qué empresa son. Además, cada nombre se escribe ahora como lo dice su propio logo: «Vaco y Vaca» (antes «V&V», que salió del nombre del archivo), «Decameron», «Naturíssimo», «TropiBurger» y «Corporación GPF». César lo confirma en NOTAS, A6.
+- **Presentación**: **logos** (pedido de Andrés del 11 de septiembre de 2026), del mismo alto visual, en una cuadrícula ordenada, sin enlaces y alojados en `sitio/assets`. Todos con el mismo tratamiento: todos en gris o todos a color. Si un logo no se consigue con calidad suficiente, ese nombre va en texto con el mismo estilo; nunca se deja un hueco. Texto alternativo de cada logo: el nombre de la empresa, tal cual (sección 8). La grafía exacta de algunos nombres está por confirmar (NOTAS, A6); mientras tanto se publica como está aquí, que es como aparece hoy.
+- **Nota bajo los logos** (letra pequeña, con contraste AA): «Los logos pertenecen a cada empresa y se muestran como referencia de trabajos realizados.»
+- **La portada muestra también las marcas de equipos** (pedido de Andrés del 11 de septiembre de 2026: «no olvides colocar los logos de los clientes y las marcas»): va el bloque 5.8 completo, **con su aviso**, justo después de los clientes y con el mismo fondo.
 
-### 3.6 Cierre
+### 3.7 Cierre
 
 Bloque 2.6.
+
+### 3.8 Orden de la portada y «Nuestro trabajo» (maquetación del 11 de septiembre de 2026)
+
+- **Orden**: portada → franja de confianza → A quién servimos (3.3) → Empresas que han confiado en nuestro trabajo (3.6, con logos) → Marcas de equipos con las que trabajamos (5.8, con logos y aviso) → Qué hacemos (3.4) → Nuestro trabajo → ¿Por qué elegir un proveedor integral? (3.5) → cierre. Los logos de las cadenas suben junto a «A quién servimos» porque son los que terminan de dar la lectura de proveedor de cadenas.
+- **Nuestro trabajo** (textos de maquetación, **pendientes de validar por Valentina**; el título es el de la galería de la web actual):
+  - **H2**: «Nuestro trabajo»
+  - **Texto**: «Fotos de trabajos realizados por nuestro equipo técnico.»
+  - **Cuatro fotos propias** de la web actual, sin caras ni letreros de clientes, con estos pies: «Vitrina caliente: revisión del tablero eléctrico» · «Mantenimiento en la cocina de un restaurante» · «Freidoras de presión en la cocina de un local» · «Mantenedores de calor en la línea de despacho». En `/servicios/` va el mismo bloque, entre «Planificación» y las marcas, con la foto de la portada («Revisión de una batería de freidoras») en lugar de la línea de despacho.
 
 ---
 
@@ -169,23 +214,23 @@ Bloque 2.6.
 
 | Metadato | Texto |
 |---|---|
-| `<title>` (49) | Nosotros \| INDUSTEC, soluciones integrales HORECA |
+| `<title>` (56) | Nosotros \| INDUSTEC, proveedor técnico de cadenas HORECA |
 | `meta description` (145) | Desde 2010 impulsamos la industria HORECA en Ecuador, con un legado de más de 40 años junto a las principales cadenas de comida rápida del mundo. |
-| `og:title` | Nosotros \| INDUSTEC, soluciones integrales HORECA |
-| `og:description` | Desde 2010 impulsamos la industria HORECA en Ecuador: más que un proveedor, tu aliado para escalar, automatizar e innovar. |
+| `og:title` | Nosotros \| INDUSTEC, proveedor técnico de cadenas HORECA |
+| `og:description` (144) | Desde 2010, proveedor técnico de empresas y cadenas HORECA en Ecuador, con un legado de más de 40 años junto a grandes cadenas de comida rápida. |
 | H1 | Desde 2010, evolucionando la industria HORECA en el Ecuador |
 
 ### 4.1 Encabezado
 
 - **Etiqueta**: «Nosotros»
 - **H1**: «Desde 2010, evolucionando la industria HORECA en el Ecuador»
-- **Texto**: «Diseñamos soluciones que ayudan a hoteles, restaurantes y servicios de catering a superar con éxito los retos de un entorno en constante cambio.»
+- **Texto**: «Trabajamos para empresas y cadenas de restaurantes, hoteles, bares, cafeterías y catering, con soluciones que las ayudan a superar los retos de un entorno en constante cambio.»
 
 ### 4.2 Nuestra historia
 
 - **H2**: «Nuestra historia»
 - **Párrafo 1**: «En 2010 fundamos INDUSTEC con un propósito: evolucionar la industria HORECA —hoteles, restaurantes y catering— en el Ecuador.»
-- **Párrafo 2**: «Sabemos que el sector exige agilidad y precisión. Por eso diseñamos soluciones que ayudan a los negocios a superar con éxito los retos de un entorno en constante cambio.»
+- **Párrafo 2**: «Sabemos que una cocina profesional no puede detenerse. Por eso trabajamos con empresas y cadenas, bajo contrato de servicio, y cuidamos sus equipos en cada local con el mismo estándar.»
 - **Frase destacada** (tipografía grande, con el ícono `star-red.svg`): «Más que un proveedor, somos tu mejor aliado para escalar, automatizar e innovar.»
 
 ### 4.3 Lo que nos hace diferentes
@@ -250,18 +295,19 @@ Bloque 2.6.
 
 | Metadato | Texto |
 |---|---|
-| `<title>` (55) | Servicios de asesoría y mantenimiento HORECA \| INDUSTEC |
-| `meta description` (146) | Asesoría comercial, mantenimiento preventivo, predictivo y correctivo con emergencias 24/7, y planificación para restaurantes, hoteles y catering. |
-| `og:title` | Servicios de asesoría y mantenimiento HORECA \| INDUSTEC |
-| `og:description` | Asesoría comercial, mantenimiento preventivo, predictivo y correctivo con emergencias 24/7, y planificación. |
+| `<title>` (57) | Servicios de mantenimiento para cadenas HORECA \| INDUSTEC |
+| `meta description` (149) | Asesoría, mantenimiento preventivo, predictivo y correctivo con emergencias 24/7, y planificación para cadenas de restaurantes, hoteles y cafeterías. |
+| `og:title` | Servicios de mantenimiento para cadenas HORECA \| INDUSTEC |
+| `og:description` (110) | Mantenimiento preventivo, predictivo y correctivo con emergencias 24/7 para las cocinas de empresas y cadenas. |
 | H1 | Todo el ciclo de tus equipos, con un solo proveedor |
 
 ### 5.1 Encabezado
 
-- **Etiqueta**: «Servicios»
+- **Etiqueta**: «Servicios para empresas y cadenas»
 - **H1**: «Todo el ciclo de tus equipos, con un solo proveedor»
-- **Texto**: «Más de cuatro décadas de experiencia técnica y operativa en el sector HORECA, desde la elección del equipo hasta su mantenimiento.»
+- **Texto**: «Más de cuatro décadas de experiencia técnica junto a cadenas del sector HORECA, desde la elección de cada equipo hasta su mantenimiento en todos tus locales.»
 - **[CTA]**: «Escríbenos por WhatsApp» → `wa-general`
+- **Línea de filtro** (debajo del botón; revisión del 11 de septiembre de 2026): la misma de la portada (3.1) y de contacto, en azul. Servicios es la página a la que llega quien busca una «reparación» (la guía «Un equipo ya falló» y el botón de emergencia 24/7), así que ahí también tiene que estar.
 
 ### 5.2 Guía rápida: ¿qué servicio necesitas?
 
@@ -290,7 +336,7 @@ Bloque 2.6.
 - **Ícono sugerido**: calendario con engranaje
 - **H2**: «Mantenimiento preventivo»
 - **Frase**: «Para que tus equipos no fallen.»
-- **Texto**: «Procedimientos periódicos y programados que mantienen tus equipos en óptimas condiciones.»
+- **Texto**: «Planes periódicos, programados por contrato, que mantienen en óptimas condiciones los equipos de todos tus locales.»
 - **Viñetas**: Inspecciones programadas · Limpieza profunda del equipamiento · Calibración para un funcionamiento óptimo · Reemplazo preventivo de componentes
 - **[CTA]**: «Programa tu mantenimiento preventivo» → `wa-preventivo`
 
@@ -309,7 +355,7 @@ Bloque 2.6.
 - **Visual**: es el bloque de urgencia; se destaca con el color rojo de la marca.
 - **H2**: «Mantenimiento correctivo»
 - **Frase**: «Cuando algo falla, respondemos rápido.»
-- **Texto**: «Respuesta rápida y efectiva ante problemas inesperados que requieren corrección inmediata.»
+- **Texto**: «Respuesta rápida y efectiva ante fallas inesperadas en los equipos de tus locales.»
 - **Viñetas**: Servicio de emergencia 24/7 · Diagnóstico rápido y preciso · Reparaciones especializadas · Repuestos garantizados
 - **[CTA] principal**: «Emergencia: escríbenos ahora» → `wa-emergencia`
 - **[CTA] secundario**: «Llamar al 099 788 7709» → `tel`
@@ -326,18 +372,23 @@ Bloque 2.6.
 ### 5.8 Marcas de equipos con las que trabajamos
 
 - **H2**: «Marcas de equipos con las que trabajamos»
-- **Texto**: «Conocemos y trabajamos con equipos de marcas como:»
-- **Lista** (en este orden): Westinghouse · Samsung · Hobart · Dean · Vollrath · Henny Penny · Copeland · Vitamix · Manitowoc · Greenheck · Bunn · Tecumseh · Torrey · Garland · Danfoss · Taylor · LG · Frymaster
-- **Cuidado**: no escribir «servicio técnico autorizado», «distribuidor oficial» ni nada parecido. La web actual no lo afirma (NOTAS, B7).
+- **Texto**: «Conocemos y trabajamos con equipos profesionales de marcas como:»
+- **Lista** (en este orden; 15 marcas): Frymaster · Henny Penny · Dean · Hobart · Garland · Taylor · Manitowoc · Vollrath · Bunn · Vitamix · Copeland · Tecumseh · Danfoss · Greenheck · Torrey
+  - **Orden de la revisión del 11 de septiembre de 2026**: primero los fabricantes de cocina profesional y luego refrigeración y extracción.
+  - **Samsung, LG y Westinghouse, retiradas** (misma fecha, antes de publicar): la web actual abre con Westinghouse y Samsung, las marcas que más se asocian con electrodomésticos, justo la lectura que César pidió evitar. Quedan procesadas en `fuentes/logos/retenidas/` y NOTAS, A6, le pregunta si corresponden a refrigeración o climatización comercial; si dice que sí, se reponen al final de la lista.
+  - **SilverChef** está en la galería de marcas de la web actual y no pasa a la nueva: es una empresa que financia equipos, no un fabricante.
+- **Presentación**: **logos**, con el mismo tratamiento que los de clientes (3.6), sin enlaces y alojados en `sitio/assets`. Texto alternativo: el nombre de la marca.
+- **Aviso bajo los logos** (visible, letra pequeña, con contraste AA; va **siempre** junto a este bloque, en cualquier página donde aparezca): «Las marcas y sus logos pertenecen a sus fabricantes. Mencionarlas no significa que INDUSTEC sea servicio técnico autorizado ni distribuidor oficial de ellas.»
+- **Cuidado**: fuera de ese aviso, no escribir «servicio técnico autorizado», «distribuidor oficial» ni nada parecido. La web actual no lo afirma (NOTAS, B7).
 
 ### 5.9 Empresas que han confiado en nuestro trabajo
 
-Mismo bloque que en 3.5 (título, texto y lista). En la web actual ambas listas están en esta página.
+Mismo bloque que en 3.6 (título, texto, logos y nota). En la web actual ambas listas están en esta página.
 
 ### 5.10 Cierre (variante)
 
 - **Título**: «¿No sabes qué servicio necesitas?»
-- **Texto**: «Cuéntanos qué pasa con tu equipo y te orientamos.»
+- **Texto**: «Cuéntanos qué pasa con los equipos de tu local y te orientamos.»
 - **Botones**: los mismos del bloque 2.6.
 
 ---
@@ -347,16 +398,17 @@ Mismo bloque que en 3.5 (título, texto y lista). En la web actual ambas listas 
 | Metadato | Texto |
 |---|---|
 | `<title>` (43) | Contacto \| INDUSTEC · WhatsApp 099 788 7709 |
-| `meta description` (135) | Escríbenos por WhatsApp, llámanos al 099 788 7709 o escribe a servicioalcliente@industec.me. Solicita tu consultoría integral gratuita. |
+| `meta description` (143) | Empresas y cadenas: escríbenos por WhatsApp, llámanos al 099 788 7709 o escribe a servicioalcliente@industec.me. Consultoría integral gratuita. |
 | `og:title` | Contacto \| INDUSTEC |
-| `og:description` | WhatsApp y teléfono 099 788 7709 · servicioalcliente@industec.me · Consultoría integral gratuita. |
-| H1 | Hablemos de tu negocio |
+| `og:description` (90) | Para empresas y cadenas · WhatsApp y teléfono 099 788 7709 · servicioalcliente@industec.me |
+| H1 | Hablemos de tu empresa |
 
 ### 6.1 Encabezado
 
 - **Etiqueta**: «Contacto»
-- **H1**: «Hablemos de tu negocio»
+- **H1**: «Hablemos de tu empresa»
 - **Texto**: «Cuéntanos qué necesitas y te respondemos por el medio que prefieras.»
+- **Línea de filtro** (justo debajo del texto, antes de las tres tarjetas; mismo estilo que en la portada): «Atendemos a empresas y cadenas, bajo contrato de servicio. No reparamos equipos domésticos ni atendemos a particulares.»
 
 ### 6.2 Tres formas de contactarnos (tarjetas grandes; en el celular, una debajo de otra)
 
@@ -376,14 +428,14 @@ Mismo bloque que en 3.5 (título, texto y lista). En la web actual ambas listas 
 ### 6.4 Formulario «Prepara tu mensaje»
 
 - **H2**: «Prepara tu mensaje en un minuto»
-- **Texto**: «Completa estos datos y envíalo por WhatsApp o por correo, como prefieras.»
+- **Texto**: «Completa los datos de tu empresa y envía el mensaje por WhatsApp o por correo, como prefieras.»
 
 | Etiqueta visible | Tipo | ¿Obligatorio? | Texto de ayuda o ejemplo |
 |---|---|---|---|
 | Tu nombre | texto | Sí | — |
-| Tu negocio | texto | No | Ej.: restaurante, hotel o catering |
+| Empresa o cadena | texto | Sí | El nombre comercial de tu empresa, cadena, hotel o local. |
 | Ciudad | texto | No | — |
-| ¿Qué necesitas? | lista | Sí | Opciones: «Asesoría para comprar o instalar equipos» · «Mantenimiento preventivo» · «Mantenimiento predictivo» · «Reparación o emergencia» · «Una falla que se repite» · «Otro» |
+| ¿Qué necesitas? | lista | Sí | Opciones: «Un contrato de mantenimiento para mis locales» · «Asesoría para comprar o instalar equipos» · «Mantenimiento preventivo» · «Mantenimiento predictivo» · «Reparación o emergencia» · «Una falla que se repite» · «Otro» |
 | Cuéntanos qué pasa | área de texto | Sí | Qué equipo es (marca y modelo, si los tienes), qué está pasando y desde cuándo. |
 | Teléfono | teléfono | No | Solo si prefieres que te llamemos. |
 
@@ -391,14 +443,16 @@ Mismo bloque que en 3.5 (título, texto y lista). En la web actual ambas listas 
 - **Botón secundario**: «Enviar por correo»
 - **Nota bajo los botones** (siempre visible): «Este formulario no guarda ni envía tus datos a ningún servidor: solo prepara el mensaje para que tú lo envíes desde tu WhatsApp o tu correo.»
 - **Aviso condicional**: si se elige «Reparación o emergencia», mostrar bajo los botones: «Si es urgente, llámanos: 099 788 7709» (con enlace a `tel`).
-- **Mensajes de validación**: «Escribe tu nombre.» · «Elige qué necesitas.» · «Cuéntanos brevemente qué pasa.»
+- **Mensajes de validación** (en el orden de los campos): «Escribe tu nombre.» · «Escribe el nombre de tu empresa o cadena.» · «Elige qué necesitas.» · «Cuéntanos brevemente qué pasa.»
 
-**Mensaje que arma el formulario** (el mismo para WhatsApp y para el cuerpo del correo). Las líneas de campos opcionales vacíos se omiten:
+**Campo «Empresa o cadena»** (11 de septiembre de 2026): reemplaza a «Tu negocio», que era opcional; no se agrega un campo más, así que el formulario sigue pidiendo lo mínimo (LOPDP, principio de minimización). Es obligatorio y va segundo, después del nombre. Para el HTML: `id="f-empresa"`, ayuda `id="a-empresa"`, error `id="e-empresa"`, `autocomplete="organization"`, `maxlength="80"`, `required`, sin `name=`; sin la marca «(opcional)». En `sitio.js` entra en la lista de obligatorios justo después del nombre. La opción nueva de «¿Qué necesitas?» va primera; «Reparación o emergencia» no cambia de texto, porque de ella depende el aviso de urgencia.
+
+**Mensaje que arma el formulario** (el mismo para WhatsApp y para el cuerpo del correo). Las líneas de campos opcionales vacíos se omiten; la línea «Empresa:» va siempre (en la vista previa, con «…» mientras esté vacía):
 
 ```
 Hola INDUSTEC, les escribo desde su página web.
 Nombre: {nombre}
-Negocio: {negocio}
+Empresa: {empresa o cadena}
 Ciudad: {ciudad}
 Necesito: {qué necesitas}
 Teléfono: {teléfono}
@@ -406,7 +460,7 @@ Detalle: {cuéntanos qué pasa}
 ```
 
 - WhatsApp: `https://wa.me/593997887709?text=` + `encodeURIComponent(mensaje)`
-- Correo: `mailto:servicioalcliente@industec.me?subject=` + `encodeURIComponent("Solicitud desde la web: " + qué necesitas)` + `&body=` + `encodeURIComponent(mensaje)` (saltos de línea como `%0D%0A`)
+- Correo: `mailto:servicioalcliente@industec.me?subject=` + `encodeURIComponent("Solicitud desde la web: " + qué necesitas + " - " + empresa o cadena)` + `&body=` + `encodeURIComponent(mensaje)` (saltos de línea como `%0D%0A`)
 - No se guarda nada: ni `localStorage`, ni cookies, ni envío a un servidor.
 
 ### 6.5 Antes de escribirnos, ten a mano
@@ -417,7 +471,7 @@ Detalle: {cuéntanos qué pasa}
 ### 6.6 Consultoría integral gratuita
 
 - **H2**: «Consultoría integral gratuita»
-- **Texto**: «Cuéntanos tu proyecto y te orientamos sin costo.»
+- **Texto**: «Cuéntanos el proyecto de tu empresa o cadena y te orientamos sin costo.»
 - **[CTA]**: «Pedir mi consultoría gratuita» → `wa-consultoria`
 
 *(Sin mapa, dirección ni horario: hoy no son públicos. Están propuestos en NOTAS, B1, B3 y B12.)*
@@ -429,14 +483,15 @@ Detalle: {cuéntanos qué pasa}
 | Metadato | Texto |
 |---|---|
 | `<title>` (30) | Acceso del personal \| INDUSTEC |
-| `meta description` (102) | Ingreso exclusivo del personal de INDUSTEC al sistema de gestión B.IA Soft ERP y a la app del técnico. |
+| `meta description` (88) | Ingreso exclusivo del personal al sistema de gestión de INDUSTEC y a la app del técnico. |
 | `robots` | `noindex, nofollow` **siempre, también en el dominio definitivo** |
 | H1 | Acceso del personal |
 
 - **Etiqueta**: «Solo personal de INDUSTEC»
 - **H1**: «Acceso del personal»
 - **Texto (dos líneas)**:
-  «Ingreso exclusivo del personal de INDUSTEC al sistema de gestión B.IA Soft ERP.»
+  «Ingreso exclusivo del personal al sistema de gestión de INDUSTEC.»
+  (Revisión del 11 de septiembre de 2026: se quitó el nombre del sistema, que no es un dato público de www.industec.me. Si Andrés autoriza nombrarlo, se repone aquí, en la description y en og:description.)
   «Entra con el usuario y la contraseña que te entregó el administrador del sistema.»
 - **[CTA] principal**: «Ingresar al sistema» → `/ot/login.php` · Texto debajo: «El sistema completo, desde el navegador.»
 - **[CTA] secundario**: «Abrir la app del técnico» → `/ot/` · Texto debajo: «Para trabajar desde el celular. Ábrela y agrégala a tu pantalla de inicio.»
@@ -453,13 +508,14 @@ Detalle: {cuéntanos qué pasa}
 |---|---|
 | Logo del encabezado (enlace a `/`) | «INDUSTEC, la solución a sus equipos. Ir al inicio» |
 | Logo del pie | «INDUSTEC, la solución a sus equipos» |
-| Ilustración de la portada (SVG) | `alt=""` (decorativa: el titular ya dice lo mismo) |
-| Íconos de servicios, beneficios, valores, pasos y contacto | `alt=""` o `aria-hidden="true"` si el SVG va dentro del HTML (el texto de al lado da el significado) |
+| Imagen de la portada | Si es ilustración: `alt=""` (decorativa: el titular ya dice lo mismo). Si es la foto propia del técnico: «Técnico de INDUSTEC revisando una batería de freidoras en una cocina profesional» |
+| Íconos de servicios, segmentos («A quién servimos»), beneficios, valores, pasos y contacto | `alt=""` o `aria-hidden="true"` si el SVG va dentro del HTML (el texto de al lado da el significado) |
 | Logos de empresas (si se usan como imagen) | El nombre de la empresa, tal cual: «KFC», «American Deli», «Juan Valdez Café»… |
 | Logos de marcas de equipos (si se usan como imagen) | El nombre de la marca: «Hobart», «Frymaster»… |
 | Botón flotante de WhatsApp | `aria-label`: «Escríbenos por WhatsApp (se abre WhatsApp)» |
-| Imagen para compartir en redes (`og:image`) | `og:image:alt`: «INDUSTEC: asesoría, equipamiento y mantenimiento para restaurantes, hoteles y catering» |
+| Imagen para compartir en redes (`og:image`) | `og:image:alt` (en las cinco páginas): «INDUSTEC: mantenimiento de cocinas profesionales para cadenas de restaurantes y hoteles» |
 | Fotos reales (cuando César las apruebe, NOTAS B2) | Describir qué se ve y quién lo hace; ej.: «Técnico de INDUSTEC calibrando una freidora en la cocina de un restaurante». **No nombrar al cliente** sin su autorización. |
+| «Nuestro trabajo» (11-sep-2026) | «Vitrina caliente de acero inoxidable con el tablero eléctrico abierto durante su mantenimiento» · «Dos técnicos dan mantenimiento a un horno rotativo de acero inoxidable en la cocina de un restaurante» · «Dos freidoras de presión bajo la campana de extracción en la cocina de un restaurante» · «Mantenedores de calor con temporizadores digitales sobre la línea de despacho de acero inoxidable de un restaurante» |
 
 ---
 
@@ -469,7 +525,7 @@ Detalle: {cuéntanos qué pasa}
 
 - `<html lang="es-EC">` · `charset UTF-8` · `viewport` para el celular.
 - `og:site_name`: «INDUSTEC» · `og:locale`: `es_EC` · `og:type`: `website` · `og:url`: la URL absoluta de cada página.
-- `og:image`: una sola imagen de 1200 × 630 px, hecha a partir del logo sobre fondo claro y con el texto «Asesoría, equipamiento y mantenimiento para restaurantes, hoteles y catering». Va con URL absoluta.
+- `og:image`: una sola imagen de 1200 × 630 px, con el logo sobre fondo claro y el texto «Mantenimiento de cocinas profesionales para cadenas de restaurantes y hoteles». Si lleva imagen, es la misma cocina de local de cadena de la portada, nunca una cocina de casa. Va con URL absoluta. Desde el 11 de septiembre de 2026 es `og-industec-cadenas.jpg` (JPEG de unos 100 KB: en PNG pasaría de 300 KB, y WhatsApp no muestra las vistas previas muy pesadas); su fuente es `fuentes/og/og.html`.
 - `twitter:card`: `summary_large_image`.
 - Favicon a partir del logo: la «İ» con su acento, o el monograma en el azul y el rojo del logo (`#48537E` y `#CC504B`).
 
@@ -494,10 +550,10 @@ Cambiar el dominio de las URL cuando se pase a www.industec.me, y ajustar la rut
   "@type": "LocalBusiness",
   "name": "INDUSTEC",
   "slogan": "Tu único proveedor para la excelencia",
-  "description": "Asesoría comercial, equipamiento especializado y mantenimiento preventivo, predictivo y correctivo para hoteles, restaurantes y catering (sector HORECA) en Ecuador.",
+  "description": "Asesoría comercial, equipamiento especializado y mantenimiento preventivo, predictivo y correctivo de cocinas profesionales para empresas y cadenas de restaurantes, hoteles, bares, cafeterías y catering (sector HORECA) en Ecuador.",
   "url": "https://darkviolet-armadillo-872352.hostingersite.com/",
   "logo": "https://darkviolet-armadillo-872352.hostingersite.com/assets/img/logo-industec.png",
-  "image": "https://darkviolet-armadillo-872352.hostingersite.com/assets/img/og-industec.png",
+  "image": "https://darkviolet-armadillo-872352.hostingersite.com/assets/img/og-industec-cadenas-v2.jpg",
   "telephone": "+593997887709",
   "email": "servicioalcliente@industec.me",
   "foundingDate": "2010",
@@ -541,6 +597,8 @@ Solo si Hostinger sirve `/404.html` sin configuración adicional. **No se añade
 ## 11. Notas para quien arma el HTML (contenido y accesibilidad)
 
 - **Contraste**: el rojo de la marca `#CC504B` sobre blanco da **4,36 : 1**, por debajo del mínimo AA de 4,5 : 1 para texto normal (lo mismo pasa con texto blanco sobre ese rojo). Se usa en íconos, bordes y títulos grandes (desde 24 px, o desde 18,7 px en negrita). Para texto rojo pequeño y para botones con texto blanco se usa **`#B5413C` (5,55 : 1)**. El azul del logo `#48537E` sobre blanco da 7,46 : 1 y sirve para todo.
-- **Enlaces con sentido propio**: nunca «Ver más» o «Clic aquí» solos; si el diseño lo pide corto, el texto completo va en `aria-label` (ver 3.3).
+- **Enlaces con sentido propio**: nunca «Ver más» o «Clic aquí» solos; si el diseño lo pide corto, el texto completo va en `aria-label` (ver 3.4).
 - **Un solo H1 por página**: el indicado en cada tabla de metadatos.
 - **Nada de cifras nuevas**: si alguien quiere agregar un número, pasa primero por `NOTAS_PARA_CESAR.md`.
+- **Palabras que el verificador rechaza** (`herramientas/verificar-sitio.mjs`, lista de datos no publicables): «zona» o «zonas» —aunque sea «zona de freidoras» o «zona caliente»—, «OT», un número seguido de «locales» («3 locales»), nombres de personas y las cifras retiradas. Los textos de este documento las evitan: que no aparezcan al maquetar, tampoco en comentarios HTML.
+- **«Cocina profesional», no «cocina industrial»**: en Ecuador se llama «cocina industrial» también a la cocina a gas de quemadores de alta presión que se compra para la casa o para un comedor pequeño, que es justo el cliente que INDUSTEC no atiende. En la web se dice «cocina profesional» y «equipos de cocina profesional».

@@ -6,6 +6,8 @@
 
 César, la nueva página usa **solo lo que hoy ya dice www.industec.me**, mejor ordenado y más fácil de leer en el celular. No agregamos ningún dato de su operación.
 
+**Lo que cambiamos el 11 de septiembre de 2026, por lo que usted le pidió a Andrés**: la página ahora deja claro que INDUSTEC es un proveedor técnico de **empresas y cadenas** (cadenas de comida rápida, restaurantes, hoteles, bares y cafeterías, catering), que trabaja con contrato de servicio y que **no repara equipos domésticos ni atiende a particulares**. La portada muestra la cocina de un local con freidoras y mantenedores de calor, no una cocina de casa, y la página muestra los **logos** de sus clientes y de las marcas de equipos. Solo necesitamos su confirmación en dos puntos: la **A6** (los logos) y la **B15** (a quién atienden).
+
 Aquí está lo que le propongo **corregir o agregar**. **Nada de esto se publica hasta que usted diga que sí.** Basta con marcar Sí o No en la tabla de abajo y, donde haga falta, mandarnos el dato o la foto.
 
 ---
@@ -17,11 +19,11 @@ Aquí está lo que le propongo **corregir o agregar**. **Nada de esto se publica
 | A1–A2 | Quitar las dos citas de estudios internacionales | Solo su aprobación (ya las quitamos del borrador) | [ ] Sí · [ ] No |
 | A3 | Quitar el «previene hasta un 85% de fallas» o respaldarlo con datos suyos | ¿Tiene registros propios? | [ ] Quitar · [ ] Tengo datos |
 | A5 | Tratar al cliente de «tú» en toda la web | Su preferencia | [ ] Tú · [ ] Usted |
-| A6 | Revisar los nombres de clientes | Confirmar la escritura correcta | [ ] Revisado |
+| A6 | Revisar los nombres de clientes **y autorizar que se muestren sus logos** | Confirmar la escritura correcta, que está de acuerdo con los logos y si reponemos Samsung, LG y Westinghouse (por ahora retiradas) | [ ] Revisado |
 | **B1** | **Decir en qué ciudad están y a dónde van** | Ciudad y zona de cobertura | [ ] Sí · [ ] No |
-| **B2** | **Fotos reales de su trabajo** | 6 a 10 fotos (lista abajo) | [ ] Sí · [ ] No |
+| **B2** | **Fotos reales de su trabajo** (la página ya usa 5 fotos de su web actual) | Confirmar que son suyas, el archivo original de la foto de la portada y 1 o 2 fotos de un mantenedor de calor o de una freidora de presión | [ ] Sí · [ ] No |
 | **B3** | **Horario de oficina y confirmar el 24/7** | Horario y número de emergencias | [ ] Sí · [ ] No |
-| **B4** | **Nombrar los tipos de equipos que atienden** | Marcar la lista | [ ] Sí · [ ] No |
+| **B4** | **Nombrar los demás tipos de equipos que atienden** (freidoras y mantenedores de calor ya están) | Marcar la lista | [ ] Sí · [ ] No |
 | B5 | Testimonios de clientes | 2 o 3 clientes que acepten, por escrito | [ ] Sí · [ ] No |
 | B6 | Casos de trabajo cortos | 2 o 3 historias | [ ] Sí · [ ] No |
 | B7 | Certificaciones o autorizaciones de marcas | Documento que lo respalde | [ ] Sí · [ ] No |
@@ -32,6 +34,7 @@ Aquí está lo que le propongo **corregir o agregar**. **Nada de esto se publica
 | B12 | Dirección y mapa | Solo si reciben visitas | [ ] Sí · [ ] No |
 | B13 | Volver a poner «Trabaja con nosotros» (la retiramos del borrador) | A qué correo llegan las hojas de vida | [ ] Sí · [ ] No |
 | B14 | Aviso de privacidad | Razón social y dirección | [ ] Sí · [ ] No |
+| **B15** | **Confirmar a quién atienden** (la web ya dice «bajo contrato de servicio») | ¿Atienden también, de forma puntual, a una empresa que aún no tiene contrato? | [ ] Solo con contrato · [ ] También sin contrato |
 
 ---
 
@@ -67,9 +70,26 @@ La web actual mezcla las dos formas: «tu restaurante» en la portada, «Describ
 
 ### A6. Nombres de clientes: confirmar la escritura
 
-Los publicamos tal como aparecen hoy. Por favor confirme: **V&V** (¿o es otro nombre?), **American Deli**, **Gus**, **Tropi Burger**, **TEVCOL**, **GPF** y **Decamerón**.
+La nueva página muestra los **20 clientes** de la galería de su web actual, con cada nombre escrito como lo dice su propio logo. Por favor confirme:
 
-Confirme también que está de acuerdo con seguir mostrando a sus clientes, que hoy ya aparecen en la web. **Importante**: antes de cerrar la web de Zyro hay que **descargar los logos** de clientes y marcas y las imágenes de «Nuestro trabajo»; si no, se pierden.
+- **Vaco y Vaca**, tal como dice su logo (en la web actual el archivo se llama «V&V»): confirmar.
+- **Decameron**, **Naturíssimo**, **TropiBurger** y **Corporación GPF**: los escribimos como en su logo.
+- **American Deli**, **Gus** y **TEVCOL**: confirmar la escritura.
+- **Ali's Parrilladas & Pizzería**, **El Español** e **Il Cappo di Mangi**: están en su web actual, pero se nos habían quedado fuera porque sus archivos no dicen de qué empresa son. Ya están en la página nueva: confirme que siguen siendo sus clientes y cómo se escriben.
+
+Confirme también que está de acuerdo con seguir mostrando a sus clientes, que hoy ya aparecen en la web. **Importante**: los logos de clientes y marcas y las fotos que usa la página nueva ya los respaldamos. Del resto de las fotos de «Nuestro trabajo» (24 de las 33) no hay copia: si quiere conservarlas, hay que **descargarlas antes de cerrar la web de Zyro**; si no, se pierden.
+
+**Logos (11 de septiembre de 2026)**: por pedido de Andrés, la nueva página muestra los **logos** de sus clientes y de las marcas de equipos, no solo los nombres, como hace la web actual. Debajo de los logos de clientes dice: «Los logos pertenecen a cada empresa y se muestran como referencia de trabajos realizados.» Debajo de las marcas: «Las marcas y sus logos pertenecen a sus fabricantes. Mencionarlas no significa que INDUSTEC sea servicio técnico autorizado ni distribuidor oficial de ellas.» Si algún cliente le ha pedido no aparecer, díganos cuál y lo quitamos.
+
+Algunos logos tienen un detalle:
+
+- **San Felipe** solo existe en su web en color blanco, así que lo mostramos en gris oscuro para que se vea sobre fondo claro.
+- **Arrayanes**, **Decameron** e **Il Cappo di Mangi** son archivos pequeños y se ven algo borrosos en pantallas de alta resolución. Al de Il Cappo di Mangi le quitamos la franja con la bandera y el fondo beige, para que quede como los demás.
+- **Menestras del Negro**: le quitamos el lema «Como preparado en casa.». Es la única mención a «casa» de toda la página y está justo en la sección que muestra que trabajan con empresas. ¿Tiene una versión oficial del logo sin el lema? Si prefiere mostrarlo completo, lo reponemos.
+
+Si tiene mejores versiones de cualquiera de estos logos, las cambiamos.
+
+**Marcas de equipos**: la lista abre ahora con los fabricantes de cocina profesional (Frymaster, Henny Penny, Dean, Hobart…) y sigue con refrigeración y extracción. **Samsung, LG y Westinghouse** están en su web actual, pero **las retiramos de la página nueva** mientras usted nos confirma: el público las asocia con electrodomésticos, justo la lectura que usted pidió evitar. ¿Corresponden a equipos de refrigeración o climatización comercial que ustedes atienden? Si es así, las volvemos a poner (ya están preparadas). **SilverChef**, que aparece entre las marcas de su web actual, no pasa a la página nueva: es una empresa que financia equipos, no un fabricante.
 
 ---
 
@@ -85,7 +105,18 @@ Hoy la web **no dice dónde están**. Quien busca en Google «mantenimiento de e
 - *Dónde iría*: portada, contacto y datos para Google.
 
 **B2. Fotos reales de su trabajo [CONFIRMAR CON CÉSAR]**
-Las fotos de hoy son de bancos de imágenes. Las fotos reales generan más confianza que cualquier texto. Sugerencias:
+Desde el 11 de septiembre de 2026 la página usa **cinco fotos que hoy ya están en su web actual**:
+- en la portada, el técnico con casco y chaleco revisando una batería de freidoras (la misma foto de la portada de su web actual);
+- en la sección «Nuestro trabajo», una vitrina caliente con el tablero eléctrico abierto, dos técnicos dando mantenimiento a un horno, dos freidoras de presión y los mantenedores de calor de una línea de despacho.
+
+Las recortamos para que no se vean caras ni letreros o logos de clientes.
+- *Qué necesito*:
+  1. **Que confirme que esas fotos son suyas** y que ningún cliente se opone a que se vean sus cocinas.
+  2. **Que confirme que el técnico de la portada es de su personal** (no se le ve la cara). Su descripción para lectores de pantalla dice «Técnico de INDUSTEC revisando una batería de freidoras…».
+  3. **El archivo original de la foto de la portada** (IMG_6213, tal como salió del teléfono). La copia que guarda su web actual mide solo 712 píxeles de ancho: se ve algo blanda y el casco queda cortado arriba.
+  4. **Una o dos fotos de un técnico trabajando en un mantenedor de calor o en una freidora de presión**, en la cocina de una cadena y **sin logos del cliente a la vista**. Es la única manera de mostrar el mantenedor de calor con una foto real en la portada.
+
+Las fotos reales generan más confianza que cualquier texto. Otras sugerencias para completar la galería:
 1. Un técnico trabajando en un equipo (de cerca: manos y herramientas).
 2. Un antes y después de una limpieza profunda.
 3. Un técnico con el uniforme de INDUSTEC.
@@ -102,8 +133,8 @@ Las fotos de hoy son de bancos de imágenes. Las fotos reales generan más confi
 - ¿Cuál es el horario de oficina, para consultas que no son urgentes?
 
 **B4. Tipos de equipos que atienden [CONFIRMAR CON CÉSAR]**
-Hoy solo se deduce de las marcas. Nombrarlos ayuda en Google y deja claro qué hacen. Marque los que correspondan:
-[ ] Cocción (cocinas, hornos, planchas) · [ ] Freidoras · [ ] Refrigeración y cámaras de frío · [ ] Máquinas de hielo · [ ] Bebidas, café y helados · [ ] Campanas y extracción · [ ] Lavado de vajilla · [ ] Otros: ______
+Hoy solo se deduce de las marcas. Nombrarlos ayuda en Google y deja claro qué hacen. **Freidoras y mantenedores de calor ya están en la página** (los mencionó Andrés el 11 de septiembre de 2026). Marque los demás que correspondan:
+[ ] Cocción (cocinas, hornos, planchas) · [ ] Refrigeración y cámaras de frío · [ ] Máquinas de hielo · [ ] Bebidas, café y helados · [ ] Campanas y extracción · [ ] Lavado de vajilla · [ ] Otros: ______
 
 ### Prioridad media: dan confianza
 
@@ -149,11 +180,26 @@ El formulario de la nueva web **no guarda nada**: solo arma el mensaje para What
 
 *Qué necesito*: razón social y dirección para completarlo.
 
+### Nuevo (11 de septiembre de 2026): confirme un matiz de lo que ya está en la página
+
+**B15. A quién atienden [CONFIRMAR CON CÉSAR]**
+Siguiendo lo que usted le dijo a Andrés, la página dice ahora, en la portada y en contacto:
+
+> «Atendemos a empresas y cadenas, bajo contrato de servicio. No reparamos equipos domésticos ni atendemos a particulares.»
+
+Y el formulario pide, como dato obligatorio, el nombre de la **empresa o cadena**.
+- *Qué necesito*: ¿atienden también, de forma puntual, a una **empresa sin contrato** (por ejemplo, un hotel o una cafetería que les escribe por primera vez con una emergencia)? ¿El servicio de emergencia 24/7 es solo para clientes con contrato? (se une a la B3)
+- *Si la respuesta es sí*, cambiamos la línea por «Atendemos a empresas y cadenas del sector. No reparamos equipos domésticos ni atendemos a particulares.», para no cerrarle la puerta a una empresa que llega por primera vez.
+- *Si es no*, la dejamos como está.
+
 ---
 
 ## C. Lo que ya incluye la nueva página (para que lo tenga presente)
 
 - **Portada clara**: en la primera pantalla dice qué hacen, para quién y cómo contactarlos, con los botones WhatsApp y Llamar.
+- **Enfoque en empresas y cadenas** (11 de septiembre de 2026): la sección «A quién servimos» (cadenas de comida rápida, restaurantes, hoteles, bares y cafeterías, catering), la línea que aclara que no reparan equipos domésticos, y el campo «Empresa o cadena» del formulario, que llega en cada mensaje.
+- **Portada con una foto real de su equipo técnico** (11 de septiembre de 2026), en lugar del dibujo de cocina que se leía como cocina de casa. Debajo de la foto van tres distintivos: «Freidoras y mantenedores de calor», «Mantenimiento preventivo, predictivo y correctivo» y «Servicio para cadenas de restaurantes». Los logos de sus clientes quedan justo después de «A quién servimos», y la sección «Nuestro trabajo» muestra cuatro fotos de trabajos (ver B2).
+- **Imagen para compartir en WhatsApp y redes** con la misma foto, el logo y el titular «Mantenimiento de cocinas profesionales para cadenas de restaurantes y hoteles».
 - **WhatsApp a un toque** en todas las páginas, con el mensaje ya escrito según el servicio.
 - **Guía «¿Qué servicio necesitas?»**: el cliente elige su situación («un equipo ya falló», «la falla se repite»…) y llega al servicio correcto.
 - **Acceso del personal**: página `/acceso/` con los botones «Ingresar al sistema» y «Abrir la app del técnico». No aparece en Google.
@@ -184,7 +230,7 @@ El formulario de la nueva web **no guarda nada**: solo arma el mensaje para What
 4. Cambiar al dominio definitivo las URL absolutas de `og:url`, `og:image` y los datos estructurados (`contenido.md`, sección 9.3).
 5. Comprobar que las direcciones viejas de Zyro sigan funcionando: `/nosotros` debe llevar a `/nosotros/` (Apache lo hace solo, sin `.htaccess`).
 6. **Correo**: al mover el dominio desde Zyro, **conservar los registros MX, SPF y DKIM** de `industec.me` para que servicioalcliente@industec.me no deje de recibir correos.
-7. **Antes de dar de baja Zyro**: descargar logos de clientes y marcas y las imágenes de «Nuestro trabajo» (ver A6).
+7. **Antes de dar de baja Zyro**: descargar el resto de las fotos de «Nuestro trabajo» (24 de 33), si se quieren conservar. Los logos y las fotos que usa la página nueva ya están respaldados (ver A6).
 8. Registrar el sitio en Google Search Console a nombre de César (se verifica por DNS; no añade scripts a la página) y, si se aprueba B11, crear el Perfil de Empresa en Google.
 
 ---
