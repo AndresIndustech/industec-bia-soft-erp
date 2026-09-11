@@ -298,6 +298,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 |---|---|---|---|
 | T2.5 · Captura — formulario único, v1 para revisión | Conversación "app captura v1" | 2026-09-08 | Solo `desarrollo/sistema_ots/app/publico/` (código nuevo). No toca base ni árbol canónico |
 | Auditoría completa y sus correcciones | Conversación desde el PC de Andrés — rama `pc/auditoria-2026-09-10` en GitHub | 2026-09-10 | Corrigió código en `app/publico/` (**no** tocó `casos.php`, `ordenes.php`, `Ui.php`, `estilo.css` ni `busqueda.js`), en la 007 y en `t2_6`, `t2_9` y `t2_10`. En el servidor subió `catalogos.php` y `cronograma.php` (la fuga) y, con aprobación de Andrés, `sw.js` v4, `pdf.php`, `nucleo/Reconciliar.php`, `nucleo/Auth.php` y los dos `.htaccess`; pasó a NUEVO las 2 filas huérfanas (bitácora 937). **Sigue anotada hasta que la estación fusione la rama**: quien despliegue antes pisa esas correcciones. Detalle en [`AUDITORIA_2026-09-10.md`](AUDITORIA_2026-09-10.md) |
+| T2.12.1 y T2.12.3 · aplicar la 007 y desplegar el rediseño en el sitio de pruebas | Conversación desde el PC de Andrés — rama `pc/auditoria-2026-09-10` | 2026-09-10 (noche) | Decisión de Andrés de esa noche: el sitio de pruebas no lo usa nadie de INDUSTEC y se puede cambiar lo que haga falta; solo quedan vedados la información de la administradora en el Google Drive y el sistema de órdenes de producción (`yellow-elephant`). **Mientras esta fila siga aquí, la estación no aplica la 007 ni despliega**: al fusionar la rama verá el resultado. |
 
 ### 5.2 Qué choca con qué
 
