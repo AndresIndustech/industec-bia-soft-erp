@@ -618,7 +618,23 @@
     $('#clear').addEventListener('click', function () { strokes = []; current = []; redraw(); });
     $('#undo').addEventListener('click', function () { strokes.pop(); redraw(); });
     window.addEventListener('resize', resize); resize();
-    return { tieneTinta: function () { return strokes.some(function (s) { return s.length > 1; }); } };
+    return {
+      tieneTinta: function () { return strokes.some(function (s) { return s.length > 1; }); },
+      /* La firma como imagen, para el PDF (T2.13, la 008). Se reduce a 600 px
+         de ancho: en el PDF sale a 250, y el lienzo de un celular moderno pesa
+         varias veces eso sin ganar nada. */
+      png: function () {
+        var k = Math.min(1, 600 / canvas.width);
+        if (k >= 1) { return canvas.toDataURL('image/png'); }
+        var c = document.createElement('canvas');
+        c.width = Math.round(canvas.width * k);
+        c.height = Math.round(canvas.height * k);
+        var x = c.getContext('2d');
+        x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+        x.drawImage(canvas, 0, 0, c.width, c.height);
+        return c.toDataURL('image/png');
+      }
+    };
   }
 
   /* ---------- Fotos ---------- */
@@ -646,6 +662,39 @@
     }
     $('#fileCamera').addEventListener('change', function (e) { agregar(e.target.files); });
     $('#fileGallery').addEventListener('change', function (e) { agregar(e.target.files); });
+  }
+
+  /* Reduce una foto a 1.600 px por el lado mayor y la vuelve JPEG (T2.13, la
+     008): una de 4 MB queda en ~300 KB, que es lo que sube con datos móviles y
+     cabe en el celular mientras no hay señal. El servidor la deja después en
+     1.200 px, como producción, y le quita el EXIF. Si el navegador no puede
+     decodificarla, va tal cual y el servidor decide si sirve. */
+  function reducirFoto(file) {
+    var LADO = 1600;
+    var cargar = window.createImageBitmap
+      ? createImageBitmap(file)
+      : new Promise(function (ok, mal) {
+          var img = new Image(), url = URL.createObjectURL(file);
+          img.onload = function () { URL.revokeObjectURL(url); ok(img); };
+          img.onerror = function () { URL.revokeObjectURL(url); mal(new Error('no se pudo leer')); };
+          img.src = url;
+        });
+    return cargar.then(function (img) {
+      var k = Math.min(1, LADO / Math.max(img.width, img.height));
+      var c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * k));
+      c.height = Math.max(1, Math.round(img.height * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      if (img.close) { img.close(); }
+      return new Promise(function (ok) { c.toBlob(function (b) { ok(b || file); }, 'image/jpeg', 0.8); });
+    }).catch(function () { return file; });
+  }
+
+  /** Las fotos de la orden, listas para la cola: cada una con su UUID. */
+  function prepararFotos(lista) {
+    return Promise.all(lista.map(reducirFoto)).then(function (blobs) {
+      return blobs.map(function (b) { return { uuid: Cola.uuid(), blob: b }; });
+    });
   }
 
   /* ---------- Satisfacción ---------- */
@@ -678,9 +727,20 @@
       var sel = b.querySelector('.eq-sel');
       var opt = sel.selectedOptions[0];
       var val = sel.value;
-      if (val && val.indexOf('TIPO:') === 0) return { tipo: val.slice(5) };
-      if (val) return { equipo_sap: val, tipo: (opt && opt.dataset.tipo) || '' };
-      return {};
+      var eq;
+      if (val && val.indexOf('TIPO:') === 0) eq = { tipo: val.slice(5) };
+      else if (val) eq = { equipo_sap: val, tipo: (opt && opt.dataset.tipo) || '' };
+      else return {};
+      /* Lo que va al PDF de cada equipo (T2.13, la 008): su estado y lo que el
+         técnico escribió de él. Marca, modelo y serie no están en el maestro. */
+      var on = b.querySelector('[data-eq-estado-seg] button.on');
+      var txt = function (s) { var el = b.querySelector(s); return el ? (el.value || '').trim() : ''; };
+      eq.estado = on ? on.dataset.v : null;
+      eq.obs = txt('[data-eq-obs]') || null;
+      eq.marca = txt('[data-eq-marca]') || null;
+      eq.modelo = txt('[data-eq-modelo]') || null;
+      eq.serie = txt('[data-eq-serie]') || null;
+      return eq;
     });
 
     var resp = tecnicoSesion();
@@ -708,7 +768,16 @@
       inicio: $('#inicio').value || null,
       fin: $('#fin').value || null,
       actividades: $('#actividades').value.trim(),
+      /* Lo que el PDF necesita y el formulario ya pedía, pero no viajaba
+         (T2.13, la 008): quién firma por el local, las observaciones, el
+         estado de la orden, la satisfacción y la firma misma. */
+      admin: $('#admin').value.trim(),
+      observaciones: $('#observaciones').value.trim(),
+      estado_ot: $('#estado_ot').value || null,
+      atiempo: $('#atiempo').value || null,
+      satisfaccion: $('#satisfaccion').value ? +$('#satisfaccion').value : null,
       firma_presente: firma.tieneTinta(),
+      firma_png: firma.tieneTinta() ? firma.png() : null,
       fotos_cantidad: fotos.length,
       tecnico: nombres.join(', '),
       /* La cadena viaja con la orden aunque se derive del maestro. Es lo que
@@ -873,10 +942,9 @@
      es cosa del programa a partir de ahí: sale solo cuando vuelve la señal,
      aunque el técnico cierre la aplicación.
 
-     EL RECIBO DICE LA VERDAD. Mientras la migración 003 no esté aplicada, el
-     servidor guarda la orden pero NO genera el PDF ni manda el correo. Poner
-     «enviada correctamente» haría que el técnico lo diera por hecho y que el
-     local nunca reciba su informe (I-7).
+     EL RECIBO DICE LA VERDAD. El servidor devuelve el número de la orden y
+     dónde quedó su PDF; en el sitio de pruebas, además, que el correo al local
+     no salió. Nada de «enviada correctamente» a secas (I-7).
      --------------------------------------------------------------------- */
   function alEnviar(e) {
     e.preventDefault();
@@ -903,9 +971,12 @@
         return;
       }
 
-      // La orden queda ligada a quien la llenó: en un celular compartido, el
-      // servidor no la acepta con la sesión de otro.
-      Cola.encolar(o, YO ? YO.id : null).then(function () {
+      // Las fotos se reducen antes de guardarlas con la orden. La orden queda
+      // ligada a quien la llenó: en un celular compartido, el servidor no la
+      // acepta con la sesión de otro.
+      prepararFotos(fotos).then(function (listas) {
+        return Cola.encolar(o, YO ? YO.id : null, listas);
+      }).then(function () {
         window.dispatchEvent(new CustomEvent('orden-encolada'));
         mostrarRecibo(o);
       }).catch(function () {

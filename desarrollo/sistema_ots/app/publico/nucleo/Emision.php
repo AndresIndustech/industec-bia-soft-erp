@@ -1,0 +1,333 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/Catalogo.php';
+
+/**
+ * Emision.php — Convierte una orden recibida en una orden de trabajo: su número,
+ * su PDF y su correo (T2.13, la migración 008).
+ *
+ * ============================================================================
+ * EL ORDEN IMPORTA (DISENO_APP_OTS.md §3)
+ *
+ *   la orden ya está guardada (envio.php) -> el número -> el PDF -> el correo
+ *
+ * El número se reserva recién aquí, con la orden validada y guardada: un
+ * formulario abandonado no quema correlativos, como los 87 envíos en blanco de
+ * producción. Como la orden ya es una fila, el PDF es una representación que se
+ * puede volver a generar, y un SMTP caído no hace desaparecer una orden: el
+ * correo queda en la cola.
+ *
+ * `emitir()` se puede llamar las veces que haga falta y no repite lo hecho: el
+ * número se reserva una sola vez por orden, el PDF se genera solo si falta y el
+ * correo tiene clave única por orden.
+ *
+ * ============================================================================
+ * EN EL SITIO DE PRUEBAS —modo PRUEBA, el que rige mientras config.php no diga
+ * 'emision_modo' => 'PRODUCCION'—:
+ *
+ *   - las series arrancan en 9000: una OT de prueba no puede llevar un número
+ *     que exista o vaya a existir pronto en producción (UIO va por el 2.4xx);
+ *   - el PDF lleva una franja «DOCUMENTO DE PRUEBA»;
+ *   - el correo queda RETENIDO y no sale nunca. Producción manda cada orden al
+ *     local, a Grupo KFC y al buzón de la administradora, que se lee de forma
+ *     automática: un correo de prueba llegaría como una orden real.
+ *
+ * AL PASAR A PRODUCCION hay que cargar a mano, con la emisión detenida, los
+ * contadores reales (`counter_{zona}.txt` de cada módulo) en `correlativos`, y
+ * los destinatarios fijos y por zona en config.php (`correo_fijos`,
+ * `correo_por_zona`): no se escriben en el código porque son personas. En modo
+ * PRODUCCION una serie sin contador no se inventa: la emisión se detiene y lo dice.
+ * ============================================================================
+ */
+final class Emision
+{
+    public const SERIE_PRUEBA = 9000;
+    private const ZONAS = ['UIO', 'LARB', 'CNLJ'];
+
+    private static ?array $cat = null;
+
+    public static function modo(): string
+    {
+        return ((Db::config()['emision_modo'] ?? '') === 'PRODUCCION') ? 'PRODUCCION' : 'PRUEBA';
+    }
+
+    /** Donde quedan los PDF. Los sirve pdf.php, con sesión y alcance. */
+    public static function dirPdf(): string
+    {
+        return dirname(__DIR__) . '/ordenes_pdf';
+    }
+
+    /** Donde quedan las fotos, recodificadas. No se sirven por web. */
+    public static function dirFotos(): string
+    {
+        return dirname(__DIR__) . '/ordenes_fotos';
+    }
+
+    /**
+     * El siguiente número de la serie, en una sola sentencia atómica.
+     *
+     * Nada de leer y después escribir: con dos envíos a la vez los dos leen el
+     * mismo valor, que es como producción entrega números repetidos. El UPDATE
+     * con LAST_INSERT_ID(expr) suma y deja el valor en la conexión en el mismo
+     * paso, con la fila bloqueada hasta que termine la transacción.
+     */
+    public static function reservar(string $serie): int
+    {
+        if (self::modo() === 'PRUEBA') {
+            Db::ejecutar('INSERT INTO correlativos (serie, ultimo, nota) VALUES (?, ?, ?)
+                          ON DUPLICATE KEY UPDATE serie = serie',
+                         [$serie, self::SERIE_PRUEBA,
+                          'sitio de pruebas: serie desde ' . self::SERIE_PRUEBA . ', no se cruza con la de producción']);
+        }
+        if (Db::ejecutar('UPDATE correlativos SET ultimo = LAST_INSERT_ID(ultimo + 1) WHERE serie = ?',
+                         [$serie]) !== 1) {
+            throw new RuntimeException("la serie $serie no tiene contador: hay que cargarle el de producción");
+        }
+        return (int) Db::uno('SELECT LAST_INSERT_ID() AS n')['n'];
+    }
+
+    /** El nombre canónico de la orden (PLAN, invariantes): OT-{n:4}-{LOCAL}[-{AVISO}][-D{día}]-{ZONA}. */
+    public static function idIndustec(int $n, string $local, ?string $aviso, ?int $dia, string $zona): string
+    {
+        return 'OT-' . str_pad((string) $n, 4, '0', STR_PAD_LEFT) . '-' . $local
+             . ($aviso !== null && $aviso !== '' ? '-' . $aviso : '')
+             . ($dia ? '-D' . $dia : '') . '-' . $zona;
+    }
+
+    /**
+     * Número, PDF y correo de la orden recibida.
+     *
+     * @return array{id_industec:?string, pdf:bool, correo:?string, error:?string}
+     */
+    public static function emitir(int $capturaId): array
+    {
+        $r = ['id_industec' => null, 'pdf' => false, 'correo' => null, 'error' => null];
+        $c = Db::uno('SELECT * FROM ot_capturadas WHERE captura_id = ?', [$capturaId]);
+        if ($c === null) { $r['error'] = 'la orden no existe'; return $r; }
+        $orden  = json_decode((string) $c['carga'], true) ?: [];
+        $zona   = (string) ($c['zona'] ?? '');
+        $local  = (string) ($c['local_codigo'] ?? '');
+        $modulo = (string) ($c['modulo'] ?? '');
+        $aviso  = (string) ($c['aviso'] ?? '');
+        $dia    = $modulo === 'PREVENTIVO' ? (int) ($orden['dia_intervencion'] ?? 0) : 0;
+
+        // 1. El número, una sola vez por orden.
+        $id = $c['id_industec'];
+        if ($id === null) {
+            if (!in_array($zona, self::ZONAS, true) || $local === ''
+                || !in_array($modulo, ['CORRECTIVO', 'PREVENTIVO'], true)) {
+                return self::falla($capturaId, $r, 'sin zona, local o tipo de trabajo válidos no se le puede dar número');
+            }
+            $pdo = Db::conn();
+            try {
+                $pdo->beginTransaction();
+                // FOR UPDATE: dos reintentos del mismo envío a la vez no sacan dos números.
+                $id = Db::uno('SELECT id_industec FROM ot_capturadas WHERE captura_id = ? FOR UPDATE',
+                              [$capturaId])['id_industec'] ?? null;
+                if ($id === null) {
+                    $id = self::idIndustec(self::reservar($modulo . ':' . $zona), $local,
+                                           $aviso !== '' ? $aviso : null, $dia ?: null, $zona);
+                    Db::ejecutar('UPDATE ot_capturadas SET id_industec = ? WHERE captura_id = ?', [$id, $capturaId]);
+                }
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) { $pdo->rollBack(); }
+                return self::falla($capturaId, $r, 'no se pudo reservar el número: ' . $e->getMessage());
+            }
+        }
+        $r['id_industec'] = $id;
+
+        // 2. El PDF. Se genera si falta: la fila es el registro y el PDF, su representación.
+        $ruta = self::dirPdf() . '/' . $id . '.pdf';
+        if ($c['emitida_en'] === null || !is_file($ruta)) {
+            try {
+                $pdf = self::pdf($c, $orden, $id);
+                if (!is_dir(self::dirPdf())) { mkdir(self::dirPdf(), 0755, true); }
+                $tmp = $ruta . '.tmp';
+                if (file_put_contents($tmp, $pdf) !== strlen($pdf) || !rename($tmp, $ruta)) {
+                    throw new RuntimeException('no se pudo escribir el archivo');
+                }
+                Db::ejecutar("UPDATE ot_capturadas SET emitida_en = COALESCE(emitida_en, NOW()), pdf_sha256 = ?,
+                                     estado = 'PROCESADA', emision_error = NULL
+                               WHERE captura_id = ?", [hash('sha256', $pdf), $capturaId]);
+            } catch (Throwable $e) {
+                return self::falla($capturaId, $r, 'no se pudo generar el PDF: ' . $e->getMessage());
+            }
+        }
+        $r['pdf'] = true;
+
+        // 3. El correo, a la cola. En el sitio de pruebas queda retenido.
+        try {
+            $r['correo'] = self::encolar($c, $orden, $id);
+        } catch (Throwable $e) {
+            return self::falla($capturaId, $r, 'no se pudo encolar el correo: ' . $e->getMessage());
+        }
+        return $r;
+    }
+
+    /** Anota por qué no salió, para que se vea y se reintente. La orden sigue guardada. */
+    private static function falla(int $capturaId, array $r, string $motivo): array
+    {
+        error_log('Emision, captura ' . $capturaId . ': ' . $motivo);
+        try {
+            Db::ejecutar('UPDATE ot_capturadas SET emision_error = ? WHERE captura_id = ?',
+                         [mb_substr($motivo, 0, 300), $capturaId]);
+        } catch (Throwable $e) {
+            // Sin la 008 no hay dónde anotarlo; queda el registro de errores.
+        }
+        $r['error'] = $motivo;
+        return $r;
+    }
+
+    /** @return string el estado en que quedó el correo */
+    private static function encolar(array $c, array $orden, string $id): string
+    {
+        $local = self::local((string) ($c['local_codigo'] ?? ''));
+        $zona  = (string) ($c['zona'] ?? '');
+        $cfg   = Db::config();
+        $para  = [];
+        foreach (array_merge([$local['correo_local'] ?? '', $local['correo_jefe_op'] ?? ''],
+                             (array) ($cfg['correo_por_zona'][$zona] ?? []),
+                             (array) ($cfg['correo_fijos'] ?? [])) as $m) {
+            $m = trim((string) $m);
+            if ($m !== '' && filter_var($m, FILTER_VALIDATE_EMAIL) && !in_array($m, $para, true)) { $para[] = $m; }
+        }
+        $prueba = self::modo() === 'PRUEBA';
+        $cuerpo = "Se ha generado una nueva OT: $id\nZona: $zona\nLocal: " . ($c['local_codigo'] ?? '')
+                . "\nORDEN SAP: " . ($c['aviso'] ?? 'sin aviso')
+                . "\nTipo de Trabajo: " . ucfirst(strtolower((string) $c['modulo']))
+                . "\nEstado de OT: " . ($orden['estado_ot'] ?? '') . "\nTécnico: " . ($orden['tecnico'] ?? '');
+        Db::ejecutar("INSERT INTO email_queue (captura_id, id_industec, tipo, para, asunto, cuerpo, adjunto, estado, motivo)
+                      VALUES (?, ?, 'EMISION', ?, ?, ?, ?, ?, ?)
+                      ON DUPLICATE KEY UPDATE correo_id = correo_id",
+                     [(int) $c['captura_id'], $id, json_encode($para, JSON_UNESCAPED_UNICODE),
+                      'ORDEN DE TRABAJO INDUSTEC - ' . $id, $cuerpo, $id . '.pdf',
+                      $prueba ? 'RETENIDO' : 'PENDIENTE',
+                      $prueba ? 'sitio de pruebas: los correos no salen (irían al local, a Grupo KFC y al buzón de la administradora)'
+                              : null]);
+        return (string) Db::uno("SELECT estado FROM email_queue WHERE id_industec = ? AND tipo = 'EMISION'", [$id])['estado'];
+    }
+
+    /** El PDF, con dompdf y la plantilla de producción. */
+    public static function pdf(array $c, array $orden, string $id): string
+    {
+        self::cargarDompdf();
+        $opt = new \Dompdf\Options();
+        // Nada remoto: el logo, las fotos y la firma van embebidos. Producción lo
+        // tiene encendido, que es la puerta a que un PDF pida archivos de afuera.
+        $opt->set('isRemoteEnabled', false);
+        $opt->set('isHtml5ParserEnabled', true);
+        $opt->set('defaultFont', 'DejaVu Sans');
+        $opt->set('dpi', 96);
+        $d = new \Dompdf\Dompdf($opt);
+        $d->loadHtml(self::html($c, $orden, $id), 'UTF-8');
+        $d->setPaper('A4', 'portrait');
+        $d->render();
+        return (string) $d->output();
+    }
+
+    /** El HTML de la orden: los datos que pinta plantilla_ot.php. */
+    public static function html(array $c, array $orden, string $id): string
+    {
+        $codLocal = (string) ($c['local_codigo'] ?? '');
+        $local = self::local($codLocal);
+        $delLocal = [];
+        foreach ((self::catalogo()['equipos'][$codLocal] ?? []) as $e) {
+            $delLocal[(string) ($e['equipo_sap'] ?? '')] = $e;
+        }
+        $equipos = [];
+        foreach ((array) ($orden['equipos'] ?? []) as $eq) {
+            if (!is_array($eq)) { continue; }
+            $cat = isset($eq['equipo_sap']) ? ($delLocal[(string) $eq['equipo_sap']] ?? []) : [];
+            $equipos[] = [
+                'tipo'          => (string) ($eq['tipo'] ?? '') ?: (string) ($cat['tipo'] ?? ''),
+                'clase'         => $cat['clase'] ?? null,
+                'equipo_sap'    => $eq['equipo_sap'] ?? null,
+                'codigo_activo' => $cat['codigo_activo'] ?? null,
+                'ubicacion'     => $cat['ubicacion_tecnica'] ?? null,
+                // El maestro no los trae: salen solo si el técnico los escribió.
+                'marca'         => $eq['marca'] ?? null,
+                'modelo'        => $eq['modelo'] ?? null,
+                'serie'         => $eq['serie'] ?? null,
+                'estado'        => $eq['estado'] ?? null,
+                'obs'           => $eq['obs'] ?? null,
+            ];
+        }
+        $fotos = [];
+        foreach (Db::todos('SELECT ruta FROM ot_fotos WHERE envio_uuid = ? ORDER BY orden_n, foto_id',
+                           [(string) $c['envio_uuid']]) as $f) {
+            $p = self::dirFotos() . '/' . $f['ruta'];
+            if (is_file($p)) { $fotos[] = 'data:image/jpeg;base64,' . base64_encode((string) file_get_contents($p)); }
+        }
+        $logo = __DIR__ . '/logo-industec.png';
+        $d = [
+            'id'              => $id,
+            'prueba'          => self::modo() === 'PRUEBA',
+            'logo'            => is_file($logo) ? 'data:image/png;base64,' . base64_encode((string) file_get_contents($logo)) : '',
+            'aviso'           => (string) ($c['aviso'] ?? ''),
+            'modulo'          => (string) ($c['modulo'] ?? ''),
+            'dia'             => $orden['dia_intervencion'] ?? null,
+            'fecha'           => $orden['fecha_atencion'] ?? '',
+            'cliente'         => (string) ($local['cadena'] ?? ($c['cadena'] ?? '')),
+            'local'           => trim($codLocal . ' · ' . ($local['nombre'] ?? ''), ' ·'),
+            'tecnico'         => (string) ($orden['tecnico'] ?? ''),
+            'admin'           => (string) ($orden['admin'] ?? ''),
+            'correo_local'    => (string) ($local['correo_local'] ?? ''),
+            'correo_jefe_op'  => (string) ($local['correo_jefe_op'] ?? ''),
+            'equipos'         => $equipos,
+            'inicio'          => $orden['inicio'] ?? null,
+            'fin'             => $orden['fin'] ?? null,
+            'actividades'     => (string) ($orden['actividades'] ?? ''),
+            'repuestos'       => !empty($orden['uso_repuesto']) ? (string) ($orden['repuestos'] ?? '') : 'No se usaron repuestos.',
+            'observaciones'   => (string) ($orden['observaciones'] ?? ''),
+            'estado_ot'       => (string) ($orden['estado_ot'] ?? ''),
+            'atiempo'         => (string) ($orden['atiempo'] ?? ''),
+            'satisfaccion'    => max(0, min(10, (int) ($orden['satisfaccion'] ?? 0))),
+            'fotos'           => $fotos,
+            'fotos_esperadas' => count((array) ($orden['fotos'] ?? [])),
+            'firma'           => self::firmaValida((string) ($orden['firma_png'] ?? '')),
+            'emitida'         => date('Y-m-d H:i'),
+        ];
+        ob_start();
+        include __DIR__ . '/plantilla_ot.php';
+        return (string) ob_get_clean();
+    }
+
+    /** La firma, solo si de verdad es una imagen PNG de tamaño razonable: va dentro del PDF. */
+    private static function firmaValida(string $uri): string
+    {
+        $pre = 'data:image/png;base64,';
+        if (!str_starts_with($uri, $pre) || strlen($uri) > 400000) { return ''; }
+        $bin = base64_decode(substr($uri, strlen($pre)), true);
+        return ($bin !== false && @getimagesizefromstring($bin) !== false) ? $uri : '';
+    }
+
+    private static function catalogo(): array
+    {
+        return self::$cat ??= (Catalogo::cargar() ?? ['locales' => [], 'equipos' => []]);
+    }
+
+    private static function local(string $codigo): array
+    {
+        foreach (self::catalogo()['locales'] as $l) {
+            if (($l['codigo'] ?? null) === $codigo) { return $l; }
+        }
+        return [];
+    }
+
+    /** dompdf vive fuera de la carpeta web (app/lib/LEEME.md). */
+    private static function cargarDompdf(): void
+    {
+        if (class_exists(\Dompdf\Dompdf::class)) { return; }
+        $cfg = Db::config();
+        foreach (array_filter([
+            $cfg['dompdf_autoload'] ?? null,
+            dirname(__DIR__, 5) . '/lib/ot/vendor/autoload.php',   // Hostinger: ~/lib/ot, fuera de public_html
+            dirname(__DIR__, 2) . '/lib/vendor/autoload.php',      // estación: app/lib
+        ]) as $a) {
+            if (is_file($a)) { require_once $a; return; }
+        }
+        throw new RuntimeException('falta dompdf: hay que instalarlo (app/lib/LEEME.md)');
+    }
+}

@@ -114,6 +114,21 @@ if ($firma !== '' && $exp > 0) {
        zona. Al técnico se le niega: no hay forma de comprobar que sea suya.
        Hasta el 2026-09-10 el corte alcanzaba solo al técnico, y un jefe abría
        los PDF de cualquier zona, con la firma del administrador del local. */
+    // Las que emite la app (T2.13, la 008): son de quien la llenó y de la zona
+    // de su local, que es lo que la orden guardó al recibirse.
+    if (!$encontrada) {
+        try {
+            $cap = Db::uno('SELECT usuario_id, zona FROM ot_capturadas WHERE id_industec = ?', [$ot]);
+        } catch (Throwable $ex) {
+            $cap = null;                                   // sin la 008
+        }
+        if ($cap !== null) {
+            $encontrada = true;
+            $mio = $u['rol'] === 'TECNICO'
+                 ? ((int) $cap['usuario_id'] === (int) $u['usuario_id'])
+                 : ($za === null || (($cap['zona'] ?? null) ?: $zonaOt) === $za);
+        }
+    }
     if (!$encontrada) {
         $mio = $u['rol'] !== 'TECNICO' && ($za === null || $zonaOt === $za);
     }

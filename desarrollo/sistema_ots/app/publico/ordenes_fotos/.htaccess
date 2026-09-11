@@ -1,0 +1,13 @@
+# Las fotos de las órdenes: equipos y cocinas de locales de Grupo KFC. NUNCA se
+# sirven como archivo: van dentro del PDF, que sale por pdf.php con sesión y
+# alcance, o por un enlace firmado con caducidad (T2.13, la 008).
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
+
+Options -Indexes

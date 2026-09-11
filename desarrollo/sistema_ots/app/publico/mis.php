@@ -462,16 +462,21 @@ $misPend = Pendientes::disponible() ? Pendientes::lista(['grupo' => 'abiertos'])
 $pendPorAviso = [];
 foreach ($misPend as $p) { $pendPorAviso[(string) $p['aviso']][] = $p; }
 
-/* Las órdenes que mandó desde la app, para su historial (T2.13.3). Todavía no
-   generan PDF —eso llega con la emisión, la 008— y la pantalla lo dice. La
-   tabla es de la misma migración que la de pendientes. */
+/* Las órdenes que mandó desde la app, para su historial (T2.13.3). Desde la
+   008 cada una trae su número y su PDF; las de antes, o las que no se pudieron
+   emitir, lo dicen. La tabla es de la misma migración que la de pendientes. */
+require_once __DIR__ . '/nucleo/Emision.php';
+$prueba = Emision::modo() === 'PRUEBA';
 $capturas = [];
 if ($esTecnico && Pendientes::disponible()) {
-    $capturas = Db::todos(
-        'SELECT aviso, local_codigo, capturada_en, estado, motivo_rechazo
-           FROM ot_capturadas WHERE usuario_id = ? ORDER BY capturada_en DESC LIMIT 60',
-        [(int) $u['usuario_id']]
-    );
+    $sqlCap = 'SELECT aviso, local_codigo, capturada_en, estado, motivo_rechazo, id_industec, %s
+                 FROM ot_capturadas WHERE usuario_id = ? ORDER BY capturada_en DESC LIMIT 60';
+    try {
+        $capturas = Db::todos(sprintf($sqlCap, 'emitida_en, emision_error'), [(int) $u['usuario_id']]);
+    } catch (Throwable $ex) {
+        // Sin la 008 no hay emisión que mostrar.
+        $capturas = Db::todos(sprintf($sqlCap, 'NULL AS emitida_en, NULL AS emision_error'), [(int) $u['usuario_id']]);
+    }
 }
 $enviadas  = array_count_values(array_filter(array_map(fn($k) => (string) ($k['aviso'] ?? ''), $capturas)));
 $misAvisos = array_flip(array_map(fn($c) => (string) ($c['aviso'] ?? ''), $mios));
@@ -713,9 +718,19 @@ if (!$lista && !$verCapturas):
               <a class="btn sm" href="?ver=<?= rawurlencode($avk) ?>">Ver el caso</a>
             <?php endif; ?>
           </div>
-          <div class="nota"><?= $k['estado'] === 'RECHAZADA'
-              ? $e('Motivo: ' . ($k['motivo_rechazo'] ?? 'sin dato'))
-              : 'El PDF de esta orden todavía no se genera desde la app.' ?></div>
+          <div class="nota">
+            <?php if ($k['estado'] === 'RECHAZADA'): ?>
+              <?= $e('Motivo: ' . ($k['motivo_rechazo'] ?? 'sin dato')) ?>
+            <?php elseif (!empty($k['emitida_en'])): ?>
+              Orden <b><?= $e($k['id_industec']) ?></b> ·
+              <a href="pdf.php?ot=<?= rawurlencode((string) $k['id_industec']) ?>" target="_blank" rel="noopener">Ver PDF</a><?=
+                $prueba ? ' · es de prueba: no se envió a nadie' : '' ?>
+            <?php elseif (!empty($k['emision_error'])): ?>
+              El PDF no se pudo generar todavía: se reintenta la próxima vez que se envíe.
+            <?php else: ?>
+              El PDF de esta orden todavía no se genera desde la app.
+            <?php endif; ?>
+          </div>
         </div>
       <?php endforeach; ?>
     </div>

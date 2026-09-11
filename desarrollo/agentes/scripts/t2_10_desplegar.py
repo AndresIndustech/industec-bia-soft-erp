@@ -99,11 +99,15 @@ ARCHIVOS = [
     "nucleo/Novedades.php", "nucleo/Reconciliar.php", "nucleo/Catalogo.php",
     # `Avisos.php` arma el buzón del técnico (T2.13.5): lo cargan mis.php y novedades.php.
     "nucleo/Avisos.php",
+    # La emisión (T2.13, la 008): número, PDF y cola de correo. El logo va dentro del PDF.
+    "nucleo/Emision.php", "nucleo/plantilla_ot.php", "nucleo/logo-industec.png",
 
     # --- La app del técnico. `cola.js` es lo que evita perder una orden
     #     llenada sin señal: si falta, el botón de enviar no guarda nada. -----
     "index.html", "app.js", "reglas.js", "offline.js", "cola.js", "guia.js",
     "sw.js", "manifest.json", "mis.php", "envio.php", "yo.php",
+    # `foto.php` recibe las fotos de una en una, antes que la orden (T2.13, la 008).
+    "foto.php",
 
     # --- La mesa de servicio -------------------------------------------------
     "login.php", "salir.php", "clave.php", "panel.php", "usuarios.php",
@@ -124,6 +128,7 @@ ARCHIVOS = [
     # El .htaccess de la raíz y el de ordenes_pdf/ vivían solo en el servidor
     # hasta el 2026-09-10: un sitio subido desde cero quedaba sin ellos.
     ".htaccess", "nucleo/.htaccess", "catalogos/.htaccess", "ordenes_pdf/.htaccess",
+    "ordenes_fotos/.htaccess",
     "iconos/icono-192.png", "iconos/icono-512.png",
 ]
 

@@ -31,8 +31,11 @@
      cualquier PDF, y se devolvia ignorando la direccion: abrir el PDF de una
      orden podia mostrar el de otra. Ahora solo pasan por aqui el armazon y los
      datos, y un 401 o una redireccion al ingreso ya no se confunden con falta
-     de senal. Subir la version purga lo que guardaron las anteriores. */
-const VERSION = 'ot-industec-v4';
+     de senal. Subir la version purga lo que guardaron las anteriores.
+     v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
+     recibe el numero de la orden. Con el armazon viejo el celular seguiria
+     mandando la orden sin ellas. */
+const VERSION = 'ot-industec-v5';
 const ARMAZON = `${VERSION}-armazon`;
 const DATOS   = `${VERSION}-datos`;
 

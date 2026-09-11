@@ -24,9 +24,24 @@ $ids = array_values(array_map('intval', $d['cuentas'] ?? []));
 if (!$ids) { fwrite(STDERR, "El registro no trae las cuentas.\n"); exit(1); }
 $en = implode(',', array_fill(0, count($ids), '?'));
 
+// Lo que emitieron (la 008): sus PDF y sus fotos están en disco, y se borran
+// después de confirmar la base. Sin la 008 no hay nada de esto.
+$hay008 = Db::uno("SHOW TABLES LIKE 'ot_fotos'") !== null;
+$archivos = [];
+if ($hay008) {
+    foreach (Db::todos("SELECT id_industec FROM ot_capturadas WHERE usuario_id IN ($en) AND id_industec IS NOT NULL", $ids) as $r) {
+        $archivos[] = 'ordenes_pdf/' . $r['id_industec'] . '.pdf';
+    }
+    foreach (Db::todos("SELECT ruta FROM ot_fotos WHERE usuario_id IN ($en)", $ids) as $r) {
+        $archivos[] = 'ordenes_fotos/' . $r['ruta'];
+    }
+}
+
 $pdo = Db::conn();
 $pdo->beginTransaction();
 try {
+    // La cola de correo de esas órdenes se va con ellas (ON DELETE CASCADE).
+    $nf = $hay008 ? Db::ejecutar("DELETE FROM ot_fotos WHERE usuario_id IN ($en)", $ids) : 0;
     $n1 = Db::ejecutar("DELETE FROM ot_capturadas WHERE usuario_id IN ($en)", $ids);
     $n2 = Db::ejecutar("DELETE FROM pendientes WHERE abierto_por IN ($en) OR activo_fijo LIKE 'PRUEBA-%'", $ids);
     $n3 = Db::ejecutar("DELETE FROM novedades WHERE reportada_por IN ($en) OR novedad_uuid LIKE '99990000-%'", $ids);
@@ -53,13 +68,21 @@ try {
     Db::ejecutar("INSERT INTO bitacora (accion, entidad, referencia, estado_despues, exito, detalle, datos, ip, equipo)
                   VALUES ('PRUEBA_DESHACER', 'prueba', 'T2.12.4-6', 'REVERTIDA', 1, ?, ?, '', 'CLI por SSH (PC de Andrés)')",
                  ['Se revirtieron las cuentas y los datos de prueba del alcance por rol',
-                  json_encode(compact('n1', 'n2', 'n3', 'nc', 'ns', 'nu'))]);
+                  json_encode(compact('n1', 'nf', 'n2', 'n3', 'nc', 'ns', 'nu'))]);
     $pdo->commit();
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }
     fwrite(STDERR, 'SIN CAMBIOS en la base: ' . $e->getMessage() . "\n");
     exit(1);
 }
+
+$borrados = 0;
+foreach ($archivos as $a) {
+    if (is_file($a) && unlink($a)) { $borrados++; }
+    $dir = dirname($a);
+    if (str_starts_with($dir, 'ordenes_fotos/') && is_dir($dir) && count(scandir($dir)) === 2) { rmdir($dir); }
+}
+echo "PDF y fotos de prueba borrados del disco: $borrados\n";
 
 if (!empty($d['tecnicos_json']) && is_file($d['tecnicos_json'])) {
     copy($d['tecnicos_json'], 'catalogos/tecnicos.json.tmp');

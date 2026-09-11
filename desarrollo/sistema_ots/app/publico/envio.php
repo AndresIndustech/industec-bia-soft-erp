@@ -6,6 +6,7 @@ require_once __DIR__ . '/nucleo/Validacion.php';
 require_once __DIR__ . '/nucleo/Pendientes.php';
 require_once __DIR__ . '/nucleo/Novedades.php';
 require_once __DIR__ . '/nucleo/Catalogo.php';
+require_once __DIR__ . '/nucleo/Emision.php';
 
 /**
  * envio.php — Donde aterriza la orden que el técnico llenó, con señal o sin ella.
@@ -52,15 +53,15 @@ require_once __DIR__ . '/nucleo/Catalogo.php';
  * Se valida contra el mismo catálogo que ve el formulario: `Catalogo::cargar()`.
  *
  * ============================================================================
- * LO QUE ESTE ARCHIVO NO HACE, Y SE DICE CLARO (I-7)
+ * LA EMISION VA DESPUES DE GUARDAR (T2.13, la 008)
  *
- * No reserva el correlativo, no genera el PDF y no manda el correo. Eso
- * necesita una migración NUEVA de app/sql —correlativos con reserva atómica y
- * cola de correo— que todavía no está escrita: la «003» que citaban los
- * documentos es de la base de la estación. Tampoco llegan todavía las fotos ni
- * la imagen de la firma, así que la app nueva NO reemplaza aún al formulario
- * que genera el PDF. La orden queda a salvo en `ot_capturadas` y el recibo lo
- * dice con esas palabras.
+ * Primero la orden queda a salvo en `ot_capturadas`; recién después
+ * `Emision::emitir()` le da su número, genera el PDF —con las fotos, que
+ * subieron antes por foto.php, y la firma— y encola el correo. Va fuera de la
+ * transacción de la orden a propósito: si el PDF falla, la orden no se pierde,
+ * y el siguiente reintento del celular vuelve a intentarlo sin repetir lo hecho.
+ * En el sitio de pruebas el correo queda retenido y no sale nunca, y el recibo
+ * lo dice con esas palabras (I-7).
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -349,16 +350,36 @@ Auth::bitacora('ENVIO_RECIBIDO', 'ot', $uuid,
                 'demora_min'   => round((time() - $t) / 60),
                 'reintento'    => !$nueva]);
 
+/* -------------------------------------------------------------------------
+   LA EMISION: número, PDF y correo. Lo ya hecho no se repite, así que el
+   reintento de una orden emitida devuelve el mismo número.
+   ------------------------------------------------------------------------- */
+$em = Emision::emitir((int) ($fila['captura_id'] ?? 0));
+$prueba = Emision::modo() === 'PRUEBA';
+if ($em['error'] !== null) {
+    Auth::bitacora('EMISION_FALLIDA', 'ot', $uuid, mb_substr((string) $em['error'], 0, 150),
+                   null, null, ['captura_id' => $fila['captura_id'] ?? null], false);
+} elseif ($nueva) {
+    Auth::bitacora('EMISION', 'ot', (string) $em['id_industec'],
+                   'PDF generado · correo ' . strtolower((string) $em['correo']), null, 'PROCESADA',
+                   ['captura_id' => $fila['captura_id'] ?? null, 'modo' => Emision::modo()]);
+}
+
 responder(200, [
     'ok'     => true,
     'recibo' => [
-        'numero'     => (int) ($fila['captura_id'] ?? 0),
-        'recibida'   => $fila['recibida_en'] ?? null,
-        // Se dice exactamente en qué quedó. Nada de «enviada correctamente»
-        // cuando el informe al local todavía sale por el camino de siempre.
-        'estado'     => 'RECIBIDA',
-        'que_sigue'  => 'La orden quedó guardada en el sistema. El PDF y el correo al local '
-                      . 'todavía se emiten por el camino actual.',
+        'numero'      => (int) ($fila['captura_id'] ?? 0),
+        'recibida'    => $fila['recibida_en'] ?? null,
+        // Se dice exactamente en qué quedó: emitida con su número, o guardada
+        // y sin PDF todavía. Nada de «enviada correctamente» a secas.
+        'estado'      => $em['pdf'] ? 'EMITIDA' : 'RECIBIDA',
+        'id_industec' => $em['id_industec'],
+        'correo'      => $em['correo'],
+        'que_sigue'   => $em['pdf']
+            ? 'Orden ' . $em['id_industec'] . ' emitida: el PDF está en tu historial. '
+              . ($prueba ? 'Es el sistema en pruebas: el correo no se envió a nadie.'
+                         : 'El correo al local sale de la cola.')
+            : 'La orden quedó guardada. El PDF no se pudo generar todavía: se reintenta en el próximo envío.',
         // Qué pasó con el equipo trabado, las novedades y las observaciones.
         // Va aparte de la orden porque son hechos distintos con destinos distintos.
         'anexos'     => $anexos,

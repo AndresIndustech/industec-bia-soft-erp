@@ -50,15 +50,18 @@
 
    - No envía con la aplicación cerrada: no hay Background Sync. Sale cuando se
      vuelve a abrir la app con señal, y la pantalla lo dice así.
-   - El servidor guarda la orden, pero no genera el PDF ni manda el correo, y
-     todavía no recibe las fotos ni la imagen de la firma. El informe al local
-     sigue saliendo por el camino de hoy (I-7).
+   - Las fotos suben ANTES que la orden, de una en una (foto.php, T2.13). Si
+     una no sube por falta de señal, la orden espera; si el servidor la rechaza
+     —no es una imagen, pesa demasiado—, la orden sale sin ella y el PDF dice
+     que falta. En el sitio de pruebas el correo al local no sale: queda
+     retenido en el servidor, y el recibo lo dice (I-7).
    ========================================================================= */
 (function (global) {
   'use strict';
 
   var BD = 'ot-industec', TIENDA = 'cola', VERSION = 1;
   var ENDPOINT = 'envio.php';
+  var ENDPOINT_FOTO = 'foto.php';
   var bd = null;
 
   // Los motivos que la pantalla reconoce para elegir la etiqueta de cada fila.
@@ -116,7 +119,10 @@
    * Devuelve el UUID en cuanto está a salvo en el disco del celular. El envío
    * arranca después y no bloquea: el técnico ya puede cerrar la pantalla.
    */
-  Cola.encolar = function (orden, usuarioId) {
+  Cola.encolar = function (orden, usuarioId, fotos) {
+    fotos = fotos || [];
+    // La orden solo lleva los identificadores de sus fotos; ellas van aparte.
+    orden.fotos = fotos.map(function (f) { return f.uuid; });
     var fila = {
       uuid: uuid(),
       creado: new Date().toISOString(),
@@ -129,7 +135,10 @@
         aviso: orden.aviso || '',
         caso: orden.caso || ''
       },
-      orden: orden
+      orden: orden,
+      /* Las fotos, cada una con su UUID. Se marcan al subir: si la señal se
+         corta a mitad, las que ya llegaron no se vuelven a mandar. */
+      fotos: fotos.map(function (f, i) { return { uuid: f.uuid, n: i, blob: f.blob, subida: false }; })
     };
     return tx('readwrite', function (t) { t.put(fila); })
       .then(function () {
@@ -182,84 +191,141 @@
   }
 
   function enviarUna(fila) {
-    return fetch(ENDPOINT, {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        envio_uuid: fila.uuid,
-        capturada_en: fila.creado,
-        usuario_captura: fila.usuario_id || null,
-        orden: fila.orden
-      })
-    })
-      .then(function (r) {
-        return r.json().catch(function () { return { ok: false, motivo: 'respuesta ilegible' }; })
-          .then(function (j) { return { http: r.status, cuerpo: j || {} }; });
-      })
-      .then(function (res) {
-        var err = res.cuerpo.error || '';
-        if (res.http === 200 && res.cuerpo.ok) {
-          fila.estado = 'ENVIADA';
-          fila.recibo = res.cuerpo.recibo || null;
-          // Recibida: en el celular queda el recibo, no la orden con el nombre
-          // y la firma del administrador del local.
-          fila.orden = null;
-          var anexos = (fila.recibo && fila.recibo.anexos) || [];
-          return guardar(fila).then(function () {
-            if (global.UI) {
-              UI.toast('Orden de ' + (fila.resumen.local || 'el local') + ' enviada.', 'ok');
-              if (anexos.length) { UI.toast(anexos.join(' '), 'warn', { vida: 12000 }); }
-            }
-          });
-        }
-        if (res.http === 409 && res.cuerpo.ajena) {
-          // De otro usuario de este celular: espera a que entre él.
-          fila.ultimo_error = AJENA;
-          return guardar(fila);
-        }
-        if (res.http === 401 || (res.http === 403 && err === 'debe_cambiar_clave')) {
-          /* LA SESION SE CAYO, o falta cambiar la clave provisional. Es un 4xx,
-             pero NO es «la orden no sirve»: la orden está perfecta y lo único
-             que falta es volver a entrar. Tratarlo como rechazo la marcaría
-             como inválida y no se reintentaría nunca. */
-          fila.intentos++;
-          fila.ultimo_error = FALTA_ENTRAR;
-          return guardar(fila).then(function () {
-            if (global.UI) {
-              UI.toast('Tu sesión se cerró. Vuelve a entrar y la orden se envía sola.', 'warn',
-                       { vida: 9000 });
-            }
-          });
-        }
-        if (res.http === 403) {
-          /* Sin permiso NO es sesión caída: decirle «vuelve a entrar» lo
-             mandaba a un callejón sin salida. Se queda en la cola hasta que la
-             administración le dé el permiso. */
-          fila.intentos++;
-          fila.ultimo_error = SIN_PERMISO;
-          return guardar(fila);
-        }
-        if (res.http >= 400 && res.http < 500) {
-          /* El servidor la recibió y la rechazó por lo que trae. Reintentar no
-             la arregla, así que se marca y se le dice al técnico qué pasó. */
-          fila.estado = 'RECHAZADA';
-          fila.ultimo_error = res.cuerpo.motivo || ('el servidor la rechazó (' + res.http + ')');
-          return guardar(fila).then(function () {
-            if (global.UI) { UI.toast('Una orden no se pudo enviar: ' + fila.ultimo_error, 'err'); }
-          });
-        }
-        // 5xx o error de red: es del servidor o del camino, y eso sí se
-        // reintenta. Se cuenta el intento para poder avisar si no cede.
-        fila.intentos++;
-        fila.ultimo_error = 'no se pudo enviar todavía';
-        return guardar(fila);
+    return subirFotos(fila)
+      .then(function (seguir) {
+        if (!seguir) { return null; }
+        return fetch(ENDPOINT, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            envio_uuid: fila.uuid,
+            capturada_en: fila.creado,
+            usuario_captura: fila.usuario_id || null,
+            orden: fila.orden
+          })
+        })
+          .then(leerRespuesta)
+          .then(function (res) { return tratarRespuesta(fila, res); });
       })
       .catch(function () {
         fila.intentos++;
         fila.ultimo_error = 'sin conexión';
         return guardar(fila);
       });
+  }
+
+  function leerRespuesta(r) {
+    return r.json().catch(function () { return { ok: false, motivo: 'respuesta ilegible' }; })
+      .then(function (j) { return { http: r.status, cuerpo: j || {} }; });
+  }
+
+  /* --- Las fotos, antes que la orden -------------------------------------
+     De una en una, como las órdenes: con señal mala, varias a la vez se
+     estorban y fallan todas. Devuelve si se puede mandar ya la orden: todas
+     subieron, o las que el servidor rechazó quedaron fuera. */
+  function subirFotos(fila) {
+    var faltan = (fila.fotos || []).filter(function (f) { return !f.subida && !f.descartada; });
+    var parar = function () { return guardar(fila).then(function () { return false; }); };
+    return faltan.reduce(function (p, f) {
+      return p.then(function (seguir) {
+        if (!seguir) { return false; }
+        var datos = new FormData();
+        datos.append('envio_uuid', fila.uuid);
+        datos.append('foto_uuid', f.uuid);
+        datos.append('n', String(f.n));
+        datos.append('foto', f.blob, f.uuid + '.jpg');
+        return fetch(ENDPOINT_FOTO, { method: 'POST', credentials: 'same-origin', body: datos })
+          .then(leerRespuesta)
+          .then(function (res) {
+            if (res.http === 200 && res.cuerpo.ok) {
+              // Subida: se suelta la imagen, que es lo que ocupa el celular.
+              f.subida = true;
+              f.blob = null;
+              return guardar(fila).then(function () { return true; });
+            }
+            if (res.http === 409 && res.cuerpo.ajena) { fila.ultimo_error = AJENA; return parar(); }
+            if (res.http === 401 || (res.http === 403 && res.cuerpo.error === 'debe_cambiar_clave')) {
+              fila.intentos++;
+              fila.ultimo_error = FALTA_ENTRAR;
+              return parar();
+            }
+            if (res.http === 403) { fila.intentos++; fila.ultimo_error = SIN_PERMISO; return parar(); }
+            if (res.http >= 400 && res.http < 500) {
+              // La foto no sirve: la orden sale sin ella, y el PDF dice que falta.
+              f.descartada = true;
+              f.error = res.cuerpo.motivo || ('el servidor la rechazó (' + res.http + ')');
+              f.blob = null;
+              return guardar(fila).then(function () { return true; });
+            }
+            fila.intentos++;
+            fila.ultimo_error = 'no se pudieron subir las fotos todavía';
+            return parar();
+          });
+      });
+    }, Promise.resolve(true));
+  }
+
+  function tratarRespuesta(fila, res) {
+    var err = res.cuerpo.error || '';
+    if (res.http === 200 && res.cuerpo.ok) {
+      fila.estado = 'ENVIADA';
+      fila.recibo = res.cuerpo.recibo || null;
+      // Recibida: en el celular queda el recibo, no la orden con el nombre y
+      // la firma del administrador del local, ni sus fotos.
+      fila.orden = null;
+      fila.fotos = null;
+      var anexos = (fila.recibo && fila.recibo.anexos) || [];
+      var id = fila.recibo && fila.recibo.id_industec;
+      return guardar(fila).then(function () {
+        if (global.UI) {
+          UI.toast(id ? 'Orden ' + id + ' emitida. El PDF está en tu historial.'
+                      : 'Orden de ' + (fila.resumen.local || 'el local') + ' enviada.', 'ok');
+          if (anexos.length) { UI.toast(anexos.join(' '), 'warn', { vida: 12000 }); }
+        }
+      });
+    }
+    if (res.http === 409 && res.cuerpo.ajena) {
+      // De otro usuario de este celular: espera a que entre él.
+      fila.ultimo_error = AJENA;
+      return guardar(fila);
+    }
+    if (res.http === 401 || (res.http === 403 && err === 'debe_cambiar_clave')) {
+      /* LA SESION SE CAYO, o falta cambiar la clave provisional. Es un 4xx,
+         pero NO es «la orden no sirve»: la orden está perfecta y lo único
+         que falta es volver a entrar. Tratarlo como rechazo la marcaría
+         como inválida y no se reintentaría nunca. */
+      fila.intentos++;
+      fila.ultimo_error = FALTA_ENTRAR;
+      return guardar(fila).then(function () {
+        if (global.UI) {
+          UI.toast('Tu sesión se cerró. Vuelve a entrar y la orden se envía sola.', 'warn',
+                   { vida: 9000 });
+        }
+      });
+    }
+    if (res.http === 403) {
+      /* Sin permiso NO es sesión caída: decirle «vuelve a entrar» lo
+         mandaba a un callejón sin salida. Se queda en la cola hasta que la
+         administración le dé el permiso. */
+      fila.intentos++;
+      fila.ultimo_error = SIN_PERMISO;
+      return guardar(fila);
+    }
+    if (res.http >= 400 && res.http < 500) {
+      /* El servidor la recibió y la rechazó por lo que trae. Reintentar no
+         la arregla, así que se marca y se le dice al técnico qué pasó. */
+      fila.estado = 'RECHAZADA';
+      fila.ultimo_error = res.cuerpo.motivo || ('el servidor la rechazó (' + res.http + ')');
+      return guardar(fila).then(function () {
+        if (global.UI) { UI.toast('Una orden no se pudo enviar: ' + fila.ultimo_error, 'err'); }
+      });
+    }
+    // 5xx: es del servidor o del camino, y eso sí se reintenta. Se cuenta el
+    // intento para poder avisar si no cede.
+    fila.intentos++;
+    fila.ultimo_error = 'no se pudo enviar todavía';
+    return guardar(fila);
   }
 
   /* --- Lo que ve el técnico ---------------------------------------------
@@ -379,5 +445,6 @@
 
   Cola.enviarTodo = enviarTodo;
   Cola.pintar = pintar;
+  Cola.uuid = uuid;
   global.Cola = Cola;
 })(window);
