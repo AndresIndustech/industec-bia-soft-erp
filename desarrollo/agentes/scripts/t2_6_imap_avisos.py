@@ -62,6 +62,7 @@ import imaplib
 import json
 import re
 import sys
+import time
 import unicodedata
 from datetime import date, datetime, timedelta
 from email.header import decode_header, make_header
@@ -377,6 +378,10 @@ def leer(env, dias):
             lote = b",".join(ids[i:i + 50])
             # BODY.PEEK[] es lo unico que lee sin encender \Seen.
             ok, d = M.fetch(lote, "(BODY.PEEK[])")
+            # Un NO del servidor no lanza excepción en imaplib: sin esta línea
+            # un lote de 50 correos se perdía en silencio y el catálogo salía corto.
+            if ok != "OK":
+                raise RuntimeError(f"FETCH respondió {ok} en el lote que empieza en {i}")
             for item in d:
                 if isinstance(item, tuple):
                     mensajes.append(email.message_from_bytes(item[1]))
@@ -489,10 +494,35 @@ def main():
         "datos": datos,
     }
 
+    # Compuerta: si menos del 95% resuelve local, el maestro de alias tiene un
+    # hueco y la bandeja mostraria casos sin zona ni destinatario. Va ANTES de
+    # escribir: evaluada despues, el archivo malo ya habia reemplazado al bueno
+    # y el vigilante lo empujaba igual.
+    if datos:
+        ok = sum(1 for c in datos if c["local"])
+        if ok / len(datos) < 0.95:
+            print(f"\nABORTA: solo {ok}/{len(datos)} casos resuelven local (<95%). "
+                  "No se toca el catalogo anterior.", file=sys.stderr)
+            sys.exit(1)
+
     SALIDA.mkdir(parents=True, exist_ok=True)
     destino = SALIDA / "catalogos" / "casos_sap.json"
     destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text(json.dumps(salida, ensure_ascii=False, indent=1), encoding="utf-8")
+    # A un temporal y despues se reemplaza: quien lea a mitad de la escritura
+    # (el vigilante, el empuje) nunca ve un JSON cortado.
+    temporal = destino.with_name(destino.name + ".tmp")
+    temporal.write_text(json.dumps(salida, ensure_ascii=False, indent=1), encoding="utf-8")
+    # En Windows el reemplazo falla si en ese instante otro proceso tiene el
+    # archivo abierto (el empuje lo lee). Son lecturas de milisegundos: se
+    # reintenta un momento antes de rendirse, en vez de perder el barrido.
+    for intento in range(10):
+        try:
+            temporal.replace(destino)
+            break
+        except PermissionError:
+            if intento == 9:
+                raise
+            time.sleep(0.5)
 
     print(f"\ncasos vigentes       : {len(datos)}")
     print(f"ordenes eliminadas   : {len(eliminadas)} (excluidas)")
@@ -515,14 +545,6 @@ def main():
     if sin_aviso:
         print(f"\nSIN AVISO LEGIBLE    : {len(sin_aviso)}")
     print(f"\n-> {destino}")
-
-    # Compuerta: si menos del 95% resuelve local, el maestro de alias tiene un
-    # hueco y la bandeja mostraria casos sin zona ni destinatario.
-    if datos:
-        ok = sum(1 for c in datos if c["local"])
-        if ok / len(datos) < 0.95:
-            print(f"\nABORTA: solo {ok}/{len(datos)} casos resuelven local (<95%).", file=sys.stderr)
-            sys.exit(1)
 
 
 if __name__ == "__main__":

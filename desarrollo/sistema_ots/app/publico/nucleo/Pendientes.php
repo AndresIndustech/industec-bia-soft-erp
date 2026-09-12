@@ -42,7 +42,7 @@ require_once __DIR__ . '/Ui.php';
  *
  * ============================================================================
  * EL ALCANCE SE FILTRA EN EL SERVIDOR, igual que en el buzón:
- *   TECNICO    -> los que él abrió
+ *   TECNICO    -> los que él abrió y los de los casos que tiene asignados
  *   JEFE_ZONA  -> los de su zona
  *   ADMIN/SUPER-> los tres
  * Y en la cláusula WHERE, no escondiendo filas al dibujar: las que no
@@ -92,6 +92,15 @@ final class Pendientes
                              'EN_TALLER', 'DEVUELTO_TALLER', 'GARANTIA_RECLAMADA',
                              'GARANTIA_APROBADA', 'GARANTIA_NEGADA', 'BAJA_PROPUESTA', 'BAJA_APROBADA'];
 
+    /* Las horas del reloj las calcula MySQL, con sus propias fechas: restar
+       strtotime() contra time() solo cuadra si la base y el PHP de la web
+       corren en la misma zona. Desde T2.13.7 las dos van en hora de Ecuador
+       porque las fija Db.php; antes las fijaba el hosting (UTC en Hostinger),
+       y calcularlo aquí sigue sin depender de eso. */
+    private const MINUTOS =
+        'TIMESTAMPDIFF(MINUTE, COALESCE(p.plazo_desde, p.abierto_en), NOW()) AS min_plazo,
+         TIMESTAMPDIFF(MINUTE, COALESCE(p.plazo_desde, p.abierto_en), p.veredicto_en) AS min_veredicto';
+
     private static function lista_(array $x): string { return "'" . implode("','", $x) . "'"; }
 
     /**
@@ -140,13 +149,21 @@ final class Pendientes
         $u = Auth::actual();
         if (!$u) { return ['1=0', []]; }
         if ($u['rol'] === 'TECNICO') {
-            // El técnico ve lo que él abrió. No los de su zona: ver el
-            // inventario de pendientes de sus compañeros no le ayuda a atender
-            // lo suyo, y es información del local que no necesita.
-            return ['p.abierto_por = ?', [(int) $u['usuario_id']]];
+            // El técnico ve lo que él abrió y lo de sus casos asignados: si le
+            // reasignan un caso, hereda el equipo trabado (antes no lo veía, se
+            // le ofrecía «No pude concluir» y pisaba el diagnóstico de otro).
+            // No los de su zona: el inventario de sus compañeros no le ayuda.
+            return ['(p.abierto_por = ? OR p.aviso IN (SELECT aviso FROM casos_gestion WHERE asignado_a = ?))',
+                    [(int) $u['usuario_id'], (int) $u['usuario_id']]];
         }
+        // La zona que vale es la del caso, no la que tenía al abrirse: derivar un
+        // caso cambia `casos_gestion.zona`, y el pendiente tiene que irse con él.
+        // Antes el jefe de la zona vieja lo seguía viendo y podía dar el
+        // veredicto, y el de la nueva no se enteraba. Igual que Casos::enAlcance.
         $zona = Auth::zonaAlcance();
-        if ($zona !== null) { return ['p.zona = ?', [$zona]]; }
+        if ($zona !== null) {
+            return ['COALESCE((SELECT g.zona FROM casos_gestion g WHERE g.aviso = p.aviso), p.zona) = ?', [$zona]];
+        }
         return ['1=1', []];
     }
 
@@ -174,7 +191,7 @@ final class Pendientes
             // de la pantalla salgan del mismo sitio y no puedan discrepar.
             $donde .= " AND p.via = 'SIN_VEREDICTO' AND p.deshabilitado = 1
                         AND p.estado NOT IN ('RESUELTO','CANCELADO')
-                        AND p.abierto_en < DATE_SUB(NOW(), INTERVAL 48 HOUR)";
+                        AND COALESCE(p.plazo_desde, p.abierto_en) < DATE_SUB(NOW(), INTERVAL 48 HOUR)";
         }
 
         if (!empty($f['via']) && isset(self::VIAS[$f['via']])) {
@@ -191,7 +208,7 @@ final class Pendientes
 
         $filas = Db::todos(
             "SELECT p.*, a.nombre AS abrio, a.usuario AS abrio_usuario,
-                    v.nombre AS decidio, g.nombre AS gestor
+                    v.nombre AS decidio, g.nombre AS gestor, " . self::MINUTOS . "
                FROM pendientes p
                JOIN usuarios a ON a.usuario_id = p.abierto_por
           LEFT JOIN usuarios v ON v.usuario_id = p.veredicto_por
@@ -226,9 +243,7 @@ final class Pendientes
         if (!in_array($p['estado'], self::ABIERTOS, true)) { return null; }
         if (($p['via'] ?? 'SIN_VEREDICTO') !== 'SIN_VEREDICTO') {
             // Ya hay veredicto: el plazo se cumplió, y se guarda cómo se cumplió.
-            $h = $p['veredicto_en']
-               ? (strtotime((string) $p['veredicto_en']) - strtotime((string) $p['abierto_en'])) / 3600
-               : null;
+            $h = ($p['min_veredicto'] ?? null) !== null ? (int) $p['min_veredicto'] / 60 : null;
             return $h === null ? null : [
                 'clase'   => $h <= 48 ? 'edad edad-hoy' : 'edad edad-viejo',
                 'texto'   => $h <= 48 ? 'decidido en ' . round($h) . ' h'
@@ -236,7 +251,12 @@ final class Pendientes
                 'vencido' => $h > 48, 'horas' => $h, 'cerrado' => true,
             ];
         }
-        $r = Ui::reloj48((string) $p['abierto_en']);
+        // Ui::reloj48 resta contra time(): se le da un instante del reloj de PHP
+        // que ya lleva dentro los minutos que midió MySQL.
+        $desde = ($p['min_plazo'] ?? null) !== null
+               ? date('Y-m-d H:i:s', time() - (int) $p['min_plazo'] * 60)
+               : (string) $p['abierto_en'];
+        $r = Ui::reloj48($desde);
         $r['cerrado'] = false;
         return $r;
     }
@@ -248,7 +268,7 @@ final class Pendientes
         [$donde, $par] = self::alcance();
         array_unshift($par, $id);
         $p = Db::uno(
-            "SELECT p.*, a.nombre AS abrio, v.nombre AS decidio
+            "SELECT p.*, a.nombre AS abrio, v.nombre AS decidio, " . self::MINUTOS . "
                FROM pendientes p
                JOIN usuarios a ON a.usuario_id = p.abierto_por
           LEFT JOIN usuarios v ON v.usuario_id = p.veredicto_por
@@ -303,6 +323,13 @@ final class Pendientes
         if (!self::disponible()) {
             return [false, 'El módulo de pendientes todavía no está instalado en la base.', null];
         }
+        // El permiso se comprueba aquí y no solo escondiendo el botón: mis.php y
+        // envio.php llegaban hasta este punto sin mirarlo.
+        if (!Auth::puede('repuestos.pedir')) {
+            Auth::bitacora('DENEGADO', 'pendiente', (string) ($d['aviso'] ?? ''), 'abrir sin permiso',
+                           null, null, [], false);
+            return [false, 'No tienes permiso para registrar equipos sin concluir.', null];
+        }
         $u = Auth::actual();
         $aviso = trim((string) ($d['aviso'] ?? ''));
         $diag  = trim((string) ($d['diagnostico'] ?? ''));
@@ -324,41 +351,109 @@ final class Pendientes
         }
 
         $parado = !empty($d['deshabilitado']) ? 1 : 0;
-        $activo = mb_substr(trim((string) ($d['activo_fijo'] ?? $caso['activo_fijo'] ?? '')), 0, 60);
+        // Vacío no es «sin dato»: si la orden no trae el equipo, vale el del
+        // caso. Con `??` el '' que manda la app nunca caía al del caso, y el
+        // mismo equipo reportado por la app y por la bandeja abría dos relojes.
+        $activo = trim((string) ($d['activo_fijo'] ?? ''));
+        if ($activo === '') { $activo = trim((string) ($caso['activo_fijo'] ?? '')); }
+        $activo = mb_substr($activo, 0, 60);
+        // El reloj arranca cuando el técnico lo reportó en el celular, acotado a
+        // las últimas 72 h: a un reloj de teléfono no se le cree sin límite.
+        $ts = isset($d['abierto_ts']) ? (int) $d['abierto_ts'] : null;
+        if ($ts !== null && $ts > time()) { $ts = null; }
+        // Para compararlo con un cierre vale la hora del reporte aunque sea
+        // vieja (envio.php ya la acota a 7 días); para arrancar el reloj, no.
+        $tsReporte = $ts;
+        if ($ts !== null && $ts < time() - 72 * 3600) { $ts = null; }
+        $parte    = ($d['parte'] ?? '') !== '' ? mb_substr(trim((string) $d['parte']), 0, 160) : null;
+        $desc     = mb_substr(trim((string) ($d['equipo_desc'] ?? '')), 0, 160);
+        $cantidad = max(1, (int) ($d['cantidad'] ?? 1));
 
-        Db::ejecutar(
-            'INSERT INTO pendientes
-                (aviso, zona, local_codigo, cadena, activo_fijo, equipo_desc,
-                 deshabilitado, diagnostico, parte, cantidad, abierto_por)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?)
-             ON DUPLICATE KEY UPDATE
-                /* Reabrir no duplica: agrava. Si ahora está parado y antes no,
-                   el reloj tiene que encenderse. */
-                deshabilitado = GREATEST(deshabilitado, VALUES(deshabilitado)),
-                diagnostico   = VALUES(diagnostico),
-                parte         = COALESCE(VALUES(parte), parte),
-                cantidad      = GREATEST(cantidad, VALUES(cantidad)),
-                estado        = CASE WHEN estado = "CANCELADO" THEN "SIN_VEREDICTO" ELSE estado END,
-                via           = CASE WHEN estado = "CANCELADO" THEN "SIN_VEREDICTO" ELSE via END',
-            [$aviso, $caso['zona'] ?? null, $caso['local'] ?? null, $caso['cadena'] ?? null,
-             $activo, mb_substr(trim((string) ($d['equipo_desc'] ?? '')), 0, 160),
-             $parado, mb_substr($diag, 0, 600),
-             ($d['parte'] ?? '') !== '' ? mb_substr(trim((string) $d['parte']), 0, 160) : null,
-             max(1, (int) ($d['cantidad'] ?? 1)), (int) $u['usuario_id']]
-        );
+        $previo = Db::uno('SELECT pendiente_id, estado, diagnostico FROM pendientes
+                            WHERE aviso = ? AND activo_fijo = ?', [$aviso, $activo]);
+        $reabre = false;
+        $tardio = false;
+        if ($previo === null) {
+            Db::ejecutar(
+                'INSERT INTO pendientes
+                    (aviso, zona, local_codigo, cadena, activo_fijo, equipo_desc,
+                     deshabilitado, diagnostico, parte, cantidad, abierto_por, abierto_en)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?, COALESCE(FROM_UNIXTIME(?), NOW()))
+                 ON DUPLICATE KEY UPDATE deshabilitado = GREATEST(deshabilitado, VALUES(deshabilitado))',
+                [$aviso, $caso['zona'] ?? null, $caso['local'] ?? null, $caso['cadena'] ?? null,
+                 $activo, $desc, $parado, mb_substr($diag, 0, 600), $parte, $cantidad,
+                 (int) $u['usuario_id'], $ts]
+            );
+        } elseif (in_array($previo['estado'], self::ABIERTOS, true)) {
+            // El mismo episodio: agrava si ahora está parado, y el diagnóstico
+            // nuevo va al hilo en vez de pisar el que sostiene el veredicto.
+            Db::ejecutar(
+                'UPDATE pendientes SET deshabilitado = GREATEST(deshabilitado, ?),
+                        parte = COALESCE(?, parte), cantidad = GREATEST(cantidad, ?)
+                  WHERE pendiente_id = ?',
+                [$parado, $parte, $cantidad, (int) $previo['pendiente_id']]
+            );
+        } else {
+            // Cerrado. Si el reporte es posterior al cierre, el equipo volvió a
+            // fallar: episodio nuevo, con su propio reloj, y el diagnóstico
+            // anterior queda en el hilo (antes el upsert lo dejaba RESUELTO y
+            // parado sin reloj). Si es ANTERIOR —una orden que esperó sin señal
+            // mientras alguien lo resolvía—, no se reabre nada: nacería vencido.
+            // La comparación la hace MySQL, en su propio reloj.
+            $posterior = Db::uno('SELECT (cerrado_en IS NULL
+                                          OR cerrado_en < COALESCE(FROM_UNIXTIME(?), NOW())) AS p
+                                    FROM pendientes WHERE pendiente_id = ?',
+                                 [$tsReporte, (int) $previo['pendiente_id']]);
+            if (!(int) ($posterior['p'] ?? 1)) {
+                $tardio = true;
+            } else {
+                $reabre = true;
+                self::anotar((int) $previo['pendiente_id'], 'DIAGNOSTICO',
+                             'Episodio anterior (' . self::etiquetaEstado($previo['estado']) . '): '
+                             . $previo['diagnostico'], false);
+                Db::ejecutar(
+                    "UPDATE pendientes
+                        SET via = 'SIN_VEREDICTO', estado = 'SIN_VEREDICTO', deshabilitado = ?,
+                            diagnostico = ?, parte = ?, cantidad = ?,
+                            equipo_desc = COALESCE(NULLIF(?, ''), equipo_desc),
+                            abierto_por = ?, abierto_en = COALESCE(FROM_UNIXTIME(?), NOW()),
+                            plazo_desde = NULL, veredicto_por = NULL, veredicto_en = NULL,
+                            veredicto_nota = NULL, prometido_para = NULL,
+                            gestionado_por = NULL, gestionado_en = NULL,
+                            cerrado_en = NULL, nota_cierre = NULL, insistencias = 0
+                      WHERE pendiente_id = ?",
+                    [$parado, mb_substr($diag, 0, 600), $parte, $cantidad, $desc,
+                     (int) $u['usuario_id'], $ts, (int) $previo['pendiente_id']]
+                );
+            }
+        }
 
         $fila = Db::uno('SELECT pendiente_id FROM pendientes WHERE aviso = ? AND activo_fijo = ?',
                         [$aviso, $activo]);
         $id = (int) ($fila['pendiente_id'] ?? 0);
+        if ($previo !== null && !$reabre) {
+            self::anotar($id, 'DIAGNOSTICO',
+                         ($tardio ? 'Llegó después del cierre (se capturó antes): ' : '') . $diag, false);
+        }
+        if ($tardio) {
+            Auth::bitacora('PENDIENTE_REPORTE_TARDIO', 'pendiente', (string) $id,
+                           mb_substr($diag, 0, 120), $previo['estado'], $previo['estado'],
+                           ['aviso' => $aviso, 'equipo' => $activo]);
+            return [true, 'Ese equipo ya se había resuelto después de este reporte: quedó anotado '
+                        . 'en su historial, sin reabrirlo.', $id];
+        }
 
         // El caso pasa a ESPERA_REPUESTO. No es un limbo: dice que el técnico
         // fue, diagnosticó, y el equipo depende de algo. `Reconciliar` trata
         // ese estado como intocable, así que no lo cierra por falta de atención
         // ni lo marca ATENDIDO antes de que el equipo vuelva a operar.
+        // También si ya estaba ATENDIDO o cerrado por falta de atención: un
+        // equipo parado manda sobre una orden emitida. Si no, la pantalla le
+        // pedía a la administradora cerrarlo en SAP con el equipo parado.
         Casos::asegurar($aviso, $caso['zona'] ?? null);
         Db::ejecutar(
             "UPDATE casos_gestion SET estado = 'ESPERA_REPUESTO'
-              WHERE aviso = ? AND estado IN ('NUEVO','ASIGNADO','EN_REVISION')",
+              WHERE aviso = ? AND estado IN ('NUEVO','ASIGNADO','EN_REVISION','ATENDIDO','CERRADO_SIN_ATENCION')",
             [$aviso]
         );
 
@@ -372,9 +467,10 @@ final class Pendientes
                        ['aviso' => $aviso, 'equipo' => $activo, 'parado' => $parado,
                         'zona' => $caso['zona'] ?? null]);
 
-        return [true, $parado
-            ? 'Registrado. El equipo consta como deshabilitado: hay 48 horas para el veredicto.'
-            : 'Registrado. El equipo sigue operando, así que no corre el plazo de 48 horas.', $id];
+        $inicio = $reabre ? 'Reabierto: el equipo volvió a quedar sin concluir. ' : 'Registrado. ';
+        return [true, $inicio . ($parado
+            ? 'El equipo consta como deshabilitado: hay 48 horas para el veredicto.'
+            : 'El equipo sigue operando, así que no corre el plazo de 48 horas.'), $id];
     }
 
     /**
@@ -393,8 +489,18 @@ final class Pendientes
             return [false, 'No tienes permiso para dar el veredicto.'];
         }
         $p = self::uno($id);
-        if ($p === null) { return [false, 'Ese pendiente no existe o no está en tu alcance.']; }
+        if ($p === null) {
+            // El rechazo por alcance deja rastro igual que el de permiso: un POST
+            // fabricado contra otra zona tiene que quedar en la bitácora (T2.12.5).
+            Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
+                           null, null, [], false);
+            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+        }
         if (!isset(self::VIAS[$via])) { return [false, 'Esa no es una de las cuatro vías.']; }
+        if (!$p['abierto'] || $p['via'] !== 'SIN_VEREDICTO') {
+            // Un POST repetido no reescribe un veredicto ya dado ni el indicador.
+            return [false, 'Ese pendiente ya tiene veredicto o está cerrado.'];
+        }
 
         // Dar de baja un activo del cliente y negar una garantía son decisiones
         // que se le explican a Grupo KFC. Sin motivo escrito no se sostienen.
@@ -411,7 +517,7 @@ final class Pendientes
 
         $u = Auth::actual();
         $nuevo = self::VIAS[$via][2];
-        $horas = (time() - strtotime((string) $p['abierto_en'])) / 3600;
+        $horas = (int) ($p['min_plazo'] ?? 0) / 60;
 
         Db::ejecutar(
             'UPDATE pendientes
@@ -419,7 +525,7 @@ final class Pendientes
                     veredicto_nota = NULLIF(?, ""),
                     prometido_para = COALESCE(?, prometido_para),
                     tercero = COALESCE(NULLIF(?, ""), tercero)
-              WHERE pendiente_id = ?',
+              WHERE pendiente_id = ? AND via = "SIN_VEREDICTO"',
             [$via, $nuevo, (int) $u['usuario_id'], mb_substr(trim($nota), 0, 600),
              $fecha, '', $id]
         );
@@ -457,9 +563,16 @@ final class Pendientes
             return [false, 'No tienes permiso para gestionar pendientes.'];
         }
         $p = self::uno($id);
-        if ($p === null) { return [false, 'Ese pendiente no existe o no está en tu alcance.']; }
+        if ($p === null) {
+            // El rechazo por alcance deja rastro igual que el de permiso: un POST
+            // fabricado contra otra zona tiene que quedar en la bitácora (T2.12.5).
+            Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
+                           null, null, [], false);
+            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+        }
         if (!isset(self::ESTADOS[$nuevo])) { return [false, 'Estado no válido.']; }
         if ($nuevo === $p['estado']) { return [false, 'El pendiente ya está en ese estado.']; }
+        if (!$p['abierto']) { return [false, 'El pendiente ya está cerrado.']; }
 
         $via = (string) $p['via'];
         if ($via === 'SIN_VEREDICTO' && $nuevo !== 'CANCELADO') {
@@ -502,7 +615,12 @@ final class Pendientes
         // que volver a decidir entre comprar, reparar o dar de baja, y el reloj
         // vuelve a tener sentido porque el equipo sigue parado.
         if ($nuevo === 'GARANTIA_NEGADA') {
-            Db::ejecutar("UPDATE pendientes SET via = 'SIN_VEREDICTO' WHERE pendiente_id = ?", [$id]);
+            // El plazo se reinicia desde la negativa, y el veredicto anterior sale
+            // de la cuenta de a tiempo/tarde: el mismo equipo contaba a la vez
+            // como a tiempo y como vencido. Sus horas quedan en la bitácora.
+            Db::ejecutar("UPDATE pendientes SET via = 'SIN_VEREDICTO', plazo_desde = NOW(),
+                                 veredicto_por = NULL, veredicto_en = NULL
+                           WHERE pendiente_id = ?", [$id]);
         }
 
         // El caso vuelve a la corriente cuando ya no queda nada esperando.
@@ -513,9 +631,14 @@ final class Pendientes
                 [$p['aviso']]
             );
             if ((int) ($otros['c'] ?? 0) === 0) {
+                // Si el caso ya tenía orden de cierre vuelve a ATENDIDO, no a la
+                // bandeja como trabajo abierto: `abrir` lo pasa a ESPERA_REPUESTO
+                // también desde ATENDIDO.
                 Db::ejecutar(
                     "UPDATE casos_gestion
-                        SET estado = CASE WHEN asignado_a IS NULL THEN 'NUEVO' ELSE 'ASIGNADO' END
+                        SET estado = CASE WHEN ot_cierre IS NOT NULL THEN 'ATENDIDO'
+                                          WHEN asignado_a IS NULL THEN 'NUEVO'
+                                          ELSE 'ASIGNADO' END
                       WHERE aviso = ? AND estado = 'ESPERA_REPUESTO'",
                     [$p['aviso']]
                 );
@@ -545,7 +668,13 @@ final class Pendientes
             return [false, 'No tienes permiso para escribir aquí.'];
         }
         $p = self::uno($id);
-        if ($p === null) { return [false, 'Ese pendiente no existe o no está en tu alcance.']; }
+        if ($p === null) {
+            // El rechazo por alcance deja rastro igual que el de permiso: un POST
+            // fabricado contra otra zona tiene que quedar en la bitácora (T2.12.5).
+            Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
+                           null, null, [], false);
+            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+        }
 
         $texto = trim($texto);
         if ($texto === '') { return [false, 'Escribe qué quieres decirle a la administración.']; }
@@ -576,7 +705,13 @@ final class Pendientes
             return [false, 'No tienes permiso para responder aquí.'];
         }
         $p = self::uno($id);
-        if ($p === null) { return [false, 'Ese pendiente no existe o no está en tu alcance.']; }
+        if ($p === null) {
+            // El rechazo por alcance deja rastro igual que el de permiso: un POST
+            // fabricado contra otra zona tiene que quedar en la bitácora (T2.12.5).
+            Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
+                           null, null, [], false);
+            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+        }
         if (trim($texto) === '') { return [false, 'Escribe la respuesta.']; }
 
         self::anotar($id, 'RESPUESTA', $texto, false);
@@ -618,7 +753,7 @@ final class Pendientes
                 SUM(p.estado IN ($ab) AND p.deshabilitado = 1)                AS parados,
                 SUM(p.estado IN ($ab) AND p.via = 'SIN_VEREDICTO')            AS sin_veredicto,
                 SUM(p.estado IN ($ab) AND p.via = 'SIN_VEREDICTO' AND p.deshabilitado = 1
-                    AND p.abierto_en < DATE_SUB(NOW(), INTERVAL 48 HOUR))     AS vencidos,
+                    AND COALESCE(p.plazo_desde, p.abierto_en) < DATE_SUB(NOW(), INTERVAL 48 HOUR)) AS vencidos,
                 SUM(p.estado IN ($ab) AND p.insistencias >= 2)                AS insistidos,
                 SUM(p.estado IN ('RESUELTO','CANCELADO')
                     AND p.cerrado_en > DATE_SUB(NOW(), INTERVAL 7 DAY))       AS cerrados_semana
@@ -643,15 +778,15 @@ final class Pendientes
         $f = Db::uno(
             "SELECT
                SUM(p.veredicto_en IS NOT NULL
-                   AND TIMESTAMPDIFF(HOUR, p.abierto_en, p.veredicto_en) <= 48) AS a_tiempo,
+                   AND TIMESTAMPDIFF(HOUR, COALESCE(p.plazo_desde, p.abierto_en), p.veredicto_en) <= 48) AS a_tiempo,
                SUM(p.veredicto_en IS NOT NULL
-                   AND TIMESTAMPDIFF(HOUR, p.abierto_en, p.veredicto_en) >  48) AS tarde,
+                   AND TIMESTAMPDIFF(HOUR, COALESCE(p.plazo_desde, p.abierto_en), p.veredicto_en) >  48) AS tarde,
                SUM(p.via = 'SIN_VEREDICTO' AND p.deshabilitado = 1
                    AND p.estado NOT IN ('RESUELTO','CANCELADO')
-                   AND p.abierto_en >= DATE_SUB(NOW(), INTERVAL 48 HOUR))       AS corriendo,
+                   AND COALESCE(p.plazo_desde, p.abierto_en) >= DATE_SUB(NOW(), INTERVAL 48 HOUR)) AS corriendo,
                SUM(p.via = 'SIN_VEREDICTO' AND p.deshabilitado = 1
                    AND p.estado NOT IN ('RESUELTO','CANCELADO')
-                   AND p.abierto_en <  DATE_SUB(NOW(), INTERVAL 48 HOUR))       AS vencidos
+                   AND COALESCE(p.plazo_desde, p.abierto_en) <  DATE_SUB(NOW(), INTERVAL 48 HOUR)) AS vencidos
               FROM pendientes p
              WHERE $donde AND p.deshabilitado = 1", $par
         );

@@ -1,0 +1,1013 @@
+{
+ "alto_px": 96,
+ "compacto_si_proporcion_menor_que": 1.6,
+ "clientes": [
+  {
+   "origen": "kfc_logo-Yle6pDoWl4fZgWlq.png",
+   "caja_origen": [
+    0,
+    0,
+    1696,
+    1459
+   ],
+   "contenido_origen": [
+    1696,
+    1459
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.066,
+   "fondo": "blanco",
+   "color_fondo": [
+    255,
+    255,
+    255
+   ],
+   "nombre": "KFC",
+   "archivo": "clientes/kfc.webp",
+   "ancho": 112,
+   "alto": 96,
+   "bytes": 4384,
+   "codificacion": "q92",
+   "modo": "RGB",
+   "compacto": true
+  },
+  {
+   "origen": "logo_american-m5K26pXLqPI4vqn6.png",
+   "caja_origen": [
+    2,
+    2,
+    258,
+    81
+   ],
+   "contenido_origen": [
+    256,
+    79
+   ],
+   "relleno_px_origen": 0,
+   "factor": 1.215,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "American Deli",
+   "archivo": "clientes/american-deli.webp",
+   "ancho": 311,
+   "alto": 96,
+   "bytes": 16170,
+   "codificacion": "q92",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "logo-YD0DMyLBVqCoDwO5.png",
+   "caja_origen": [
+    8,
+    4,
+    177,
+    88
+   ],
+   "contenido_origen": [
+    169,
+    84
+   ],
+   "relleno_px_origen": 0,
+   "factor": 1.143,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Ali's Parrilladas & Pizzería",
+   "archivo": "clientes/alis.webp",
+   "ancho": 193,
+   "alto": 96,
+   "bytes": 10330,
+   "codificacion": "q92",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "logoarrayanes-Yg2apOoqDWIoR8ow.png",
+   "caja_origen": [
+    0,
+    0,
+    176,
+    69
+   ],
+   "contenido_origen": [
+    176,
+    69
+   ],
+   "relleno_px_origen": 0,
+   "factor": 1.391,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Arrayanes",
+   "archivo": "clientes/arrayanes.webp",
+   "ancho": 245,
+   "alto": 96,
+   "bytes": 25956,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "tropiburguer-logo-d953wW21vkT5wv4Q.png",
+   "caja_origen": [
+    0,
+    1,
+    386,
+    459
+   ],
+   "contenido_origen": [
+    386,
+    458
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.21,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "TropiBurger",
+   "archivo": "clientes/tropi-burger.webp",
+   "ancho": 81,
+   "alto": 96,
+   "bytes": 7638,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": true
+  },
+  {
+   "origen": "logocinnabon-AGB3eLEne5C6MB2O.png",
+   "caja_origen": [
+    20,
+    26,
+    306,
+    133
+   ],
+   "contenido_origen": [
+    286,
+    107
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.897,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Cinnabon",
+   "archivo": "clientes/cinnabon.webp",
+   "ancho": 257,
+   "alto": 96,
+   "bytes": 11476,
+   "codificacion": "q92",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "logo-naturissimo-ALpOx0NeB3cB1oZA.png",
+   "caja_origen": [
+    8,
+    3,
+    495,
+    108
+   ],
+   "contenido_origen": [
+    487,
+    105
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.914,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Naturíssimo",
+   "archivo": "clientes/naturissimo.webp",
+   "ancho": 445,
+   "alto": 96,
+   "bytes": 17410,
+   "codificacion": "q92",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "logo_yanbal-AzG8pEB32xFkXw33.png",
+   "caja_origen": [
+    0,
+    0,
+    400,
+    77
+   ],
+   "contenido_origen": [
+    400,
+    77
+   ],
+   "relleno_px_origen": 0,
+   "factor": 1.247,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Yanbal",
+   "archivo": "clientes/yanbal.webp",
+   "ancho": 499,
+   "alto": 96,
+   "bytes": 12886,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "logo_header-dJoBaEz5XjTB7VJ7.png",
+   "caja_origen": [
+    2,
+    1,
+    127,
+    122
+   ],
+   "contenido_origen": [
+    125,
+    121
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.793,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "El Español",
+   "archivo": "clientes/el-espanol.webp",
+   "ancho": 99,
+   "alto": 96,
+   "bytes": 6234,
+   "codificacion": "q92",
+   "modo": "RGBA",
+   "compacto": true
+  },
+  {
+   "origen": "loggus-copia1-mk3yp2oqRvtq24qL.png",
+   "caja_origen": [
+    3,
+    2,
+    158,
+    108
+   ],
+   "contenido_origen": [
+    155,
+    106
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.906,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Gus",
+   "archivo": "clientes/gus.webp",
+   "ancho": 140,
+   "alto": 96,
+   "bytes": 5484,
+   "codificacion": "q92",
+   "modo": "RGBA",
+   "compacto": true
+  },
+  {
+   "origen": "tevcol_f269a7e466de3bab4db837ef7f4dcd9c-AR07v5XLZMTpK2o4.jpg",
+   "caja_origen": [
+    39,
+    3,
+    181,
+    144
+   ],
+   "contenido_origen": [
+    142,
+    141
+   ],
+   "relleno_px_origen": 8,
+   "factor": 0.611,
+   "fondo": "blanco",
+   "color_fondo": [
+    255,
+    255,
+    255
+   ],
+   "nombre": "TEVCOL",
+   "archivo": "clientes/tevcol.webp",
+   "ancho": 97,
+   "alto": 96,
+   "bytes": 2238,
+   "codificacion": "q92",
+   "modo": "RGB",
+   "compacto": true
+  },
+  {
+   "origen": "logo-gpf-dOq75rJ8GGhBnO1Z.png",
+   "caja_origen": [
+    5,
+    3,
+    315,
+    90
+   ],
+   "contenido_origen": [
+    310,
+    87
+   ],
+   "relleno_px_origen": 0,
+   "factor": 1.103,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Corporación GPF",
+   "archivo": "clientes/gpf.webp",
+   "ancho": 342,
+   "alto": 96,
+   "bytes": 24864,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "menestras_del_negro_edited-YX4XJWol84u6y3Zr.png",
+   "caja_origen": [
+    4,
+    6,
+    195,
+    62
+   ],
+   "contenido_origen": [
+    191,
+    56
+   ],
+   "relleno_px_origen": 3,
+   "factor": 1.548,
+   "fondo": "blanco",
+   "color_fondo": [
+    255,
+    255,
+    255
+   ],
+   "recorte_origen": [
+    0,
+    0,
+    198,
+    62
+   ],
+   "nombre": "Menestras del Negro",
+   "archivo": "clientes/menestras-del-negro.webp",
+   "ancho": 305,
+   "alto": 96,
+   "bytes": 5226,
+   "codificacion": "q92",
+   "modo": "RGB",
+   "compacto": false,
+   "nota": "Sin el lema «Como preparado en casa.»: se conservan la carita, el nombre y la línea de debajo (pedido de César: nada que se lea como servicio para el hogar). NOTAS, A6."
+  },
+  {
+   "origen": "juan_valdez_cafa-c-YbNZpOkqKKSbgxng.png",
+   "caja_origen": [
+    4,
+    45,
+    429,
+    207
+   ],
+   "contenido_origen": [
+    425,
+    162
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.593,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Juan Valdez Café",
+   "archivo": "clientes/juan-valdez-cafe.webp",
+   "ancho": 252,
+   "alto": 96,
+   "bytes": 10226,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "logo-v-v-Aq26p1Pq46IRzrw3.jpg",
+   "caja_origen": [
+    0,
+    0,
+    200,
+    257
+   ],
+   "contenido_origen": [
+    200,
+    257
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.374,
+   "fondo": "blanco",
+   "color_fondo": [
+    255,
+    255,
+    255
+   ],
+   "nombre": "Vaco y Vaca",
+   "archivo": "clientes/vaco-y-vaca.webp",
+   "ancho": 75,
+   "alto": 96,
+   "bytes": 3936,
+   "codificacion": "q92",
+   "modo": "RGB",
+   "compacto": true
+  },
+  {
+   "origen": "el-bodegon-logo-300x300-m6LDWqljBXTlQ3P1.jpg",
+   "caja_origen": [
+    6,
+    108,
+    297,
+    196
+   ],
+   "contenido_origen": [
+    291,
+    88
+   ],
+   "relleno_px_origen": 11,
+   "factor": 0.873,
+   "fondo": "fondo",
+   "color_fondo": [
+    255,
+    203,
+    6
+   ],
+   "nombre": "El Bodegón",
+   "archivo": "clientes/el-bodegon.webp",
+   "ancho": 273,
+   "alto": 96,
+   "bytes": 5108,
+   "codificacion": "q92",
+   "modo": "RGB",
+   "compacto": false
+  },
+  {
+   "origen": "baskin_robbins.svg-meP1pOoxXqi4e5v4.png",
+   "caja_origen": [
+    1,
+    0,
+    1280,
+    365
+   ],
+   "contenido_origen": [
+    1279,
+    365
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.263,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Baskin Robbins",
+   "archivo": "clientes/baskin-robbins.webp",
+   "ancho": 336,
+   "alto": 96,
+   "bytes": 16356,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "descarga-AQE47QwDr9U5295K.jpg",
+   "caja_origen": [
+    11,
+    33,
+    137,
+    98
+   ],
+   "contenido_origen": [
+    126,
+    65
+   ],
+   "relleno_px_origen": 0,
+   "factor": 1.477,
+   "fondo": "tinta",
+   "color_fondo": null,
+   "recorte_origen": [
+    0,
+    0,
+    144,
+    110
+   ],
+   "nombre": "Il Cappo di Mangi",
+   "archivo": "clientes/il-cappo-di-mangi.webp",
+   "ancho": 186,
+   "alto": 96,
+   "bytes": 6622,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false,
+   "nota": "Sin la franja con la bandera de Italia ni el fondo beige: tinta negra sobre transparente. El original mide 144 × 144 px: se ve algo blando (NOTAS, A6)."
+  },
+  {
+   "origen": "san-felipemesa-de-trabajo-1ldpi-2-mv04pkZW9EURQP7n.png",
+   "caja_origen": [
+    53,
+    170,
+    755,
+    761
+   ],
+   "contenido_origen": [
+    702,
+    591
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.162,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "tenido": "#333333",
+   "nombre": "San Felipe",
+   "archivo": "clientes/san-felipe.webp",
+   "ancho": 114,
+   "alto": 96,
+   "bytes": 2986,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": true,
+   "nota": "Su único archivo es blanco sobre transparente: en la web va en gris oscuro #333333 para verse sobre la tarjeta blanca. El blanco original queda en alternativas/san-felipe-blanco.webp."
+  },
+  {
+   "origen": "decameron-pgn-Y4L8NowDypt901Mn.png",
+   "caja_origen": [
+    0,
+    0,
+    199,
+    63
+   ],
+   "contenido_origen": [
+    199,
+    63
+   ],
+   "relleno_px_origen": 0,
+   "factor": 1.524,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Decameron",
+   "archivo": "clientes/decameron.webp",
+   "ancho": 303,
+   "alto": 96,
+   "bytes": 23486,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  }
+ ],
+ "marcas": [
+  {
+   "origen": "frymaster-mP47Ew4bp6iy31JP.png",
+   "caja_origen": [
+    0,
+    0,
+    1817,
+    430
+   ],
+   "contenido_origen": [
+    1817,
+    430
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.223,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Frymaster",
+   "archivo": "marcas/frymaster.webp",
+   "ancho": 406,
+   "alto": 96,
+   "bytes": 12180,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "henny-penny-mk3yp23olliDR9ZB.png",
+   "caja_origen": [
+    23,
+    0,
+    899,
+    236
+   ],
+   "contenido_origen": [
+    876,
+    236
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.407,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Henny Penny",
+   "archivo": "marcas/henny-penny.webp",
+   "ancho": 356,
+   "alto": 96,
+   "bytes": 14548,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "deanlogo-YBg8nLgW3MC10nGm.png",
+   "caja_origen": [
+    0,
+    0,
+    415,
+    135
+   ],
+   "contenido_origen": [
+    415,
+    135
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.711,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Dean",
+   "archivo": "marcas/dean.webp",
+   "ancho": 295,
+   "alto": 96,
+   "bytes": 11716,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "hobart_logo.svg-YyvPpEv1Qlt5BWJO.png",
+   "caja_origen": [
+    0,
+    1,
+    1273,
+    290
+   ],
+   "contenido_origen": [
+    1273,
+    289
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.332,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Hobart",
+   "archivo": "marcas/hobart.webp",
+   "ancho": 423,
+   "alto": 96,
+   "bytes": 4608,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "garland-logo-mnl6pZlozoFOj5Dl.png",
+   "caja_origen": [
+    88,
+    25,
+    777,
+    186
+   ],
+   "contenido_origen": [
+    689,
+    161
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.596,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Garland",
+   "archivo": "marcas/garland.webp",
+   "ancho": 411,
+   "alto": 96,
+   "bytes": 15494,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "taylor-logo-mxBlpEBNRNH5GLq7.png",
+   "caja_origen": [
+    14,
+    17,
+    226,
+    202
+   ],
+   "contenido_origen": [
+    212,
+    185
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.519,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Taylor",
+   "archivo": "marcas/taylor.webp",
+   "ancho": 110,
+   "alto": 96,
+   "bytes": 6756,
+   "codificacion": "q92",
+   "modo": "RGBA",
+   "compacto": true
+  },
+  {
+   "origen": "manitowoc-logo-mjEQp8Eeakh3oK4v.gif",
+   "caja_origen": [
+    27,
+    10,
+    485,
+    102
+   ],
+   "contenido_origen": [
+    458,
+    92
+   ],
+   "relleno_px_origen": 0,
+   "factor": 1.043,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Manitowoc",
+   "archivo": "marcas/manitowoc.webp",
+   "ancho": 478,
+   "alto": 96,
+   "bytes": 17462,
+   "codificacion": "q92",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "vollrath-YD0DMy0bVJUQlLkB.png",
+   "caja_origen": [
+    11,
+    3,
+    454,
+    161
+   ],
+   "contenido_origen": [
+    443,
+    158
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.608,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Vollrath",
+   "archivo": "marcas/vollrath.webp",
+   "ancho": 269,
+   "alto": 96,
+   "bytes": 15604,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "bunn_logo-AE0MZ50wBQSylrEG.png",
+   "caja_origen": [
+    3,
+    3,
+    596,
+    174
+   ],
+   "contenido_origen": [
+    593,
+    171
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.561,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Bunn",
+   "archivo": "marcas/bunn.webp",
+   "ancho": 333,
+   "alto": 96,
+   "bytes": 5116,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "vitamix-logo-A3QPqoQ1eNtZaoZ1.png",
+   "caja_origen": [
+    18,
+    18,
+    1004,
+    234
+   ],
+   "contenido_origen": [
+    986,
+    216
+   ],
+   "relleno_px_origen": 13,
+   "factor": 0.397,
+   "fondo": "blanco",
+   "color_fondo": [
+    255,
+    255,
+    255
+   ],
+   "nombre": "Vitamix",
+   "archivo": "marcas/vitamix.webp",
+   "ancho": 401,
+   "alto": 96,
+   "bytes": 5980,
+   "codificacion": "q92",
+   "modo": "RGB",
+   "compacto": false
+  },
+  {
+   "origen": "copeland-logo-AGB3eLBPkQI39G3p.png",
+   "caja_origen": [
+    0,
+    0,
+    1024,
+    186
+   ],
+   "contenido_origen": [
+    1024,
+    186
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.516,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Copeland",
+   "archivo": "marcas/copeland.webp",
+   "ancho": 529,
+   "alto": 96,
+   "bytes": 13126,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "tecumseh_products_logo.svg-meP1pOPoPLfEDQMl.png",
+   "caja_origen": [
+    3,
+    3,
+    925,
+    1021
+   ],
+   "contenido_origen": [
+    922,
+    1018
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.094,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Tecumseh",
+   "archivo": "marcas/tecumseh.webp",
+   "ancho": 87,
+   "alto": 96,
+   "bytes": 5866,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": true
+  },
+  {
+   "origen": "1024px-danfoss.svg-AwvJpEv3ZGs7GaJo.png",
+   "caja_origen": [
+    20,
+    20,
+    1004,
+    402
+   ],
+   "contenido_origen": [
+    984,
+    382
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.251,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Danfoss",
+   "archivo": "marcas/danfoss.webp",
+   "ancho": 247,
+   "alto": 96,
+   "bytes": 11372,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "greenheck-logo-YyvPpEv1qvhwL9g2.png",
+   "caja_origen": [
+    0,
+    0,
+    892,
+    217
+   ],
+   "contenido_origen": [
+    892,
+    217
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.442,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Greenheck",
+   "archivo": "marcas/greenheck.webp",
+   "ancho": 395,
+   "alto": 96,
+   "bytes": 16806,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  },
+  {
+   "origen": "logo_torrey-AzG8pEGBnJFJ4l1E.png",
+   "caja_origen": [
+    24,
+    24,
+    777,
+    219
+   ],
+   "contenido_origen": [
+    753,
+    195
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.492,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Torrey",
+   "archivo": "marcas/torrey.webp",
+   "ancho": 371,
+   "alto": 96,
+   "bytes": 11714,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false
+  }
+ ],
+ "alternativas": [
+  {
+   "nombre": "San Felipe (original blanco, para fondo oscuro)",
+   "archivo": "alternativas/san-felipe-blanco.webp",
+   "ancho": 114,
+   "alto": 96,
+   "bytes": 2984,
+   "codificacion": "lossless"
+  }
+ ],
+ "retenidas": [
+  {
+   "origen": "samsung_logo.svg-Yle6pDeB8MC6jrl3.png",
+   "caja_origen": [
+    0,
+    0,
+    2000,
+    659
+   ],
+   "contenido_origen": [
+    2000,
+    659
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.146,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Samsung",
+   "archivo": "retenidas/samsung.webp",
+   "ancho": 291,
+   "alto": 96,
+   "bytes": 9404,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false,
+   "nota": "No se publica: marca de consumo, pendiente de que César confirme que es refrigeración o climatización comercial (NOTAS, A6)."
+  },
+  {
+   "origen": "lg_logo.svg-mnl6pZlokyIpLkaJ.png",
+   "caja_origen": [
+    0,
+    4,
+    2000,
+    948
+   ],
+   "contenido_origen": [
+    2000,
+    944
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.102,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "LG",
+   "archivo": "retenidas/lg.webp",
+   "ancho": 203,
+   "alto": 96,
+   "bytes": 6420,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false,
+   "nota": "No se publica: marca de consumo, pendiente de que César confirme que es refrigeración o climatización comercial (NOTAS, A6)."
+  },
+  {
+   "origen": "westinghouse_electric_company_logo.svg-YZ97wW9zqDhXl0eD.png",
+   "caja_origen": [
+    0,
+    0,
+    1278,
+    360
+   ],
+   "contenido_origen": [
+    1278,
+    360
+   ],
+   "relleno_px_origen": 0,
+   "factor": 0.267,
+   "fondo": "alpha",
+   "color_fondo": null,
+   "nombre": "Westinghouse",
+   "archivo": "retenidas/westinghouse.webp",
+   "ancho": 341,
+   "alto": 96,
+   "bytes": 14098,
+   "codificacion": "lossless",
+   "modo": "RGBA",
+   "compacto": false,
+   "nota": "No se publica: marca de consumo, pendiente de que César confirme que es refrigeración o climatización comercial (NOTAS, A6)."
+  }
+ ]
+}

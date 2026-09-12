@@ -13,8 +13,9 @@
    Lo único que nace sin aviso es la emergencia atendida en sitio, y esa queda
    marcada como tarea pendiente de la administración (PLAN §6.4b).
 
-   Esta es una v1 PARA REVISIÓN: valida y arma el resumen; todavía no persiste,
-   no genera PDF y no envía correo.
+   Guarda la orden en el celular (cola.js) y la entrega a envio.php, que la
+   valida y la guarda. Todavía NO genera el PDF ni manda el correo, y no envía
+   las fotos ni la imagen de la firma: no reemplaza aún al formulario viejo.
    ========================================================================= */
 
 (function () {
@@ -224,9 +225,9 @@
     comboAviso = crearCombo({
       wrap: '#avisoCombo', input: '#avisoBusca', lista: '#avisoLista',
       hidden: '#aviso', clear: '#avisoClear',
-      vacio: 'No hay órdenes abiertas para tu zona en el catálogo.',
+      vacio: 'No tienes casos asignados. Si atendiste algo sin caso, elige «Sin orden asignada».',
       clave: function (a) { return a.aviso; },
-      etiqueta: function (a) { return a.aviso + ' · ' + (a.local || a.centro_coste_sap) + ' · ' + (a.caso || 'sin tipo'); },
+      etiqueta: function (a) { return a.aviso + ' · ' + (a.local || a.centro_coste_sap || 'sin dato en el catálogo') + ' · ' + (a.caso || 'sin tipo'); },
       buscarEn: function (a) {
         return [a.aviso, a.local, a.local_nombre, a.caso, a.cadena, a.zona,
                 a.equipo_denominacion, a.centro_coste_sap].join(' ');
@@ -234,7 +235,7 @@
       grupo: function (a) { return a.caso || 'Sin tipo de trabajo'; },
       fila: function (a) {
         return '<span class="cod">' + esc(a.aviso) + '</span> · ' +
-               esc(a.local || a.centro_coste_sap) + ' ' +
+               esc(a.local || a.centro_coste_sap || 'sin dato en el catálogo') + ' ' +
                '<span class="cad">' + esc(a.local_nombre || '') + '</span>' +
                (a.fecha_notificacion ? ' <span class="cad">— ' + esc(fechaCorta(a.fecha_notificacion)) + '</span>' : '');
       },
@@ -243,24 +244,27 @@
     });
   }
 
-  /* Los avisos que se le ofrecen al técnico.
-     HOY se filtran por la ZONA del técnico, porque la asignación por persona
-     todavía no existe en ningún lado: `avisos_sap` no tiene columna de técnico.
-     Cuando exista la tabla de asignaciones, aquí se cambia el filtro y la
-     pantalla no se toca. La interfaz dice cuál de los dos está usando (I-7). */
+  /* Los avisos que se le ofrecen: los que el servidor ya recortó a su alcance
+     (catalogos.php aplica Casos::enAlcance; al técnico, sus casos abiertos según
+     la base, con Casos::delTecnico, estén o no en el catálogo del buzón).
+     Aquí no se vuelve a filtrar por zona: un caso de otra zona que le asignaron
+     para apoyar también es suyo, y el filtro viejo lo escondía. */
   function refrescarAvisos() {
-    var tec = tecnicoSesion();
-    var lista = AVISOS.datos;
+    comboAviso.cargar(AVISOS.datos);
+    pintarCobertura();
+  }
+
+  /* El texto de debajo del combo. Va aparte porque la identidad (yo.php) puede
+     llegar después que el catálogo, y recargar el combo borraría el caso que ya
+     se precargó desde la ficha. */
+  function pintarCobertura() {
     var nota = $('#avisoCobertura');
-    if (tec && tec.zona) {
-      lista = lista.filter(function (a) { return a.zona === tec.zona; });
-    }
-    comboAviso.cargar(lista);
+    if (!nota) return;
+    var n = AVISOS.datos.length;
     var cob = AVISOS.cobertura || {};
-    var partes = [];
-    partes.push(tec ? ('Mostrando las ' + lista.length + ' órdenes de la zona ' + tec.zona + '.')
-                    : ('Elige tu nombre para ver tus órdenes (' + AVISOS.datos.length + ' en total).'));
-    partes.push('Todavía nadie te las asignó una por una: por ahora se filtran por zona.');
+    var partes = [(YO && YO.rol === 'TECNICO')
+      ? (n === 1 ? 'Tienes 1 caso asignado.' : 'Tienes ' + n + ' casos asignados.')
+      : (n === 1 ? '1 caso en tu alcance.' : n + ' casos en tu alcance.')];
     if (cob.advertencia) partes.push(cob.advertencia);
     else if (cob.hasta) partes.push('Catálogo SAP al corte del ' + fechaCorta(cob.hasta) + ', no en vivo.');
     nota.textContent = partes.join(' ');
@@ -329,8 +333,8 @@
     $('#tecSesion').value = t ? String(t.id) : '';
     nota.textContent = (t && t.del_padron)
       ? 'Sale de tu sesión: no se elige y queda como firma de la orden.'
-      : 'Sale de tu sesión. Tu nombre no calza con ninguno del padrón de técnicos, '
-      + 'así que la orden queda marcada para que la administración lo revise.';
+      : 'Sale de tu sesión. Tu nombre no está en el padrón de técnicos vigentes: el sistema '
+      + 'no va a aceptar la orden hasta que la administración te agregue.';
   }
 
   function alElegirAviso(a) {
@@ -342,8 +346,11 @@
       $('#localNota').textContent = 'Viene de la orden ' + a.aviso + '. Si el trabajo fue en otro local, elige “Sin orden asignada”.';
     } else {
       comboLocal.bloquear(false);
-      $('#localNota').textContent = 'El centro de coste ' + (a.centro_coste_sap || '?') +
-        ' de esta orden no resuelve contra el maestro. Elige el local a mano.';
+      // Un caso que no está en el catálogo del buzón solo trae su número (T2.13.3).
+      $('#localNota').textContent = a.sin_catalogo
+        ? 'Este caso no está en el listado del buzón: elige el local a mano.'
+        : 'El centro de coste ' + (a.centro_coste_sap || '?') +
+          ' de esta orden no resuelve contra el maestro. Elige el local a mano.';
     }
     // El tipo se deriva del caso de SAP, y se puede corregir.
     var caso = baja(a.caso || '');
@@ -382,7 +389,8 @@
       '</div>' +
       '<dl>' +
         '<dt>Trabajo</dt><dd>' + (a.caso ? esc(a.caso) : sd) + '</dd>' +
-        '<dt>Local</dt><dd>' + esc(a.local || a.centro_coste_sap) + ' · ' + esc(a.local_nombre || '') + '</dd>' +
+        '<dt>Local</dt><dd>' + (a.local || a.centro_coste_sap
+          ? esc(a.local || a.centro_coste_sap) + ' · ' + esc(a.local_nombre || '') : sd) + '</dd>' +
         '<dt>Notificado</dt><dd>' + (a.fecha_notificacion ? esc(fechaCorta(a.fecha_notificacion)) : sd) + '</dd>' +
         '<dt>Comprometido</dt><dd>' + (a.fecha_estimada ? esc(fechaCorta(a.fecha_estimada)) : sd) + '</dd>' +
         '<dt>Activo</dt><dd>' + (a.equipo_denominacion ? esc(limpiarTipo(a.equipo_denominacion)) : sd) + '</dd>' +
@@ -571,6 +579,11 @@
     var asignada = (v === 'ASIGNADA');
     $('#wrapAsignada').hidden = !asignada;
     $('#wrapSinAsignar').hidden = asignada;
+    // Con poca señal el catálogo tarda en llegar, y el técnico puede tocar el
+    // selector antes: el combo todavía no existe y solo se cambia el panel.
+    if (!comboAviso) return;
+    // El aviso que vino precargado de la ficha se suelta al cambiar de origen.
+    comboAviso.bloquear(false);
     if (asignada) {
       refrescarAvisos();
     } else {
@@ -605,7 +618,23 @@
     $('#clear').addEventListener('click', function () { strokes = []; current = []; redraw(); });
     $('#undo').addEventListener('click', function () { strokes.pop(); redraw(); });
     window.addEventListener('resize', resize); resize();
-    return { tieneTinta: function () { return strokes.some(function (s) { return s.length > 1; }); } };
+    return {
+      tieneTinta: function () { return strokes.some(function (s) { return s.length > 1; }); },
+      /* La firma como imagen, para el PDF (T2.13, la 008). Se reduce a 600 px
+         de ancho: en el PDF sale a 250, y el lienzo de un celular moderno pesa
+         varias veces eso sin ganar nada. */
+      png: function () {
+        var k = Math.min(1, 600 / canvas.width);
+        if (k >= 1) { return canvas.toDataURL('image/png'); }
+        var c = document.createElement('canvas');
+        c.width = Math.round(canvas.width * k);
+        c.height = Math.round(canvas.height * k);
+        var x = c.getContext('2d');
+        x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+        x.drawImage(canvas, 0, 0, c.width, c.height);
+        return c.toDataURL('image/png');
+      }
+    };
   }
 
   /* ---------- Fotos ---------- */
@@ -633,6 +662,39 @@
     }
     $('#fileCamera').addEventListener('change', function (e) { agregar(e.target.files); });
     $('#fileGallery').addEventListener('change', function (e) { agregar(e.target.files); });
+  }
+
+  /* Reduce una foto a 1.600 px por el lado mayor y la vuelve JPEG (T2.13, la
+     008): una de 4 MB queda en ~300 KB, que es lo que sube con datos móviles y
+     cabe en el celular mientras no hay señal. El servidor la deja después en
+     1.200 px, como producción, y le quita el EXIF. Si el navegador no puede
+     decodificarla, va tal cual y el servidor decide si sirve. */
+  function reducirFoto(file) {
+    var LADO = 1600;
+    var cargar = window.createImageBitmap
+      ? createImageBitmap(file)
+      : new Promise(function (ok, mal) {
+          var img = new Image(), url = URL.createObjectURL(file);
+          img.onload = function () { URL.revokeObjectURL(url); ok(img); };
+          img.onerror = function () { URL.revokeObjectURL(url); mal(new Error('no se pudo leer')); };
+          img.src = url;
+        });
+    return cargar.then(function (img) {
+      var k = Math.min(1, LADO / Math.max(img.width, img.height));
+      var c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * k));
+      c.height = Math.max(1, Math.round(img.height * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      if (img.close) { img.close(); }
+      return new Promise(function (ok) { c.toBlob(function (b) { ok(b || file); }, 'image/jpeg', 0.8); });
+    }).catch(function () { return file; });
+  }
+
+  /** Las fotos de la orden, listas para la cola: cada una con su UUID. */
+  function prepararFotos(lista) {
+    return Promise.all(lista.map(reducirFoto)).then(function (blobs) {
+      return blobs.map(function (b) { return { uuid: Cola.uuid(), blob: b }; });
+    });
   }
 
   /* ---------- Satisfacción ---------- */
@@ -665,9 +727,20 @@
       var sel = b.querySelector('.eq-sel');
       var opt = sel.selectedOptions[0];
       var val = sel.value;
-      if (val && val.indexOf('TIPO:') === 0) return { tipo: val.slice(5) };
-      if (val) return { equipo_sap: val, tipo: (opt && opt.dataset.tipo) || '' };
-      return {};
+      var eq;
+      if (val && val.indexOf('TIPO:') === 0) eq = { tipo: val.slice(5) };
+      else if (val) eq = { equipo_sap: val, tipo: (opt && opt.dataset.tipo) || '' };
+      else return {};
+      /* Lo que va al PDF de cada equipo (T2.13, la 008): su estado y lo que el
+         técnico escribió de él. Marca, modelo y serie no están en el maestro. */
+      var on = b.querySelector('[data-eq-estado-seg] button.on');
+      var txt = function (s) { var el = b.querySelector(s); return el ? (el.value || '').trim() : ''; };
+      eq.estado = on ? on.dataset.v : null;
+      eq.obs = txt('[data-eq-obs]') || null;
+      eq.marca = txt('[data-eq-marca]') || null;
+      eq.modelo = txt('[data-eq-modelo]') || null;
+      eq.serie = txt('[data-eq-serie]') || null;
+      return eq;
     });
 
     var resp = tecnicoSesion();
@@ -695,7 +768,16 @@
       inicio: $('#inicio').value || null,
       fin: $('#fin').value || null,
       actividades: $('#actividades').value.trim(),
+      /* Lo que el PDF necesita y el formulario ya pedía, pero no viajaba
+         (T2.13, la 008): quién firma por el local, las observaciones, el
+         estado de la orden, la satisfacción y la firma misma. */
+      admin: $('#admin').value.trim(),
+      observaciones: $('#observaciones').value.trim(),
+      estado_ot: $('#estado_ot').value || null,
+      atiempo: $('#atiempo').value || null,
+      satisfaccion: $('#satisfaccion').value ? +$('#satisfaccion').value : null,
       firma_presente: firma.tieneTinta(),
+      firma_png: firma.tieneTinta() ? firma.png() : null,
       fotos_cantidad: fotos.length,
       tecnico: nombres.join(', '),
       /* La cadena viaja con la orden aunque se derive del maestro. Es lo que
@@ -707,7 +789,7 @@
       concluida: $('#concluida').value === '1',
       pendiente: pendienteDeLaOrden(),
       novedades: novedadesDeLaOrden(),
-      _hoy: isoLocal(HOY)
+      _hoy: isoLocal(new Date())
     };
   }
 
@@ -722,6 +804,9 @@
   function pendienteDeLaOrden() {
     if ($('#concluida').value === '1') return null;
     return {
+      /* El equipo concreto: sin él, dos equipos trabados del mismo caso caían
+         en la misma fila y el segundo se fundía con el primero. */
+      activo_fijo: activoDelTrabado(),
       diagnostico: ($('#pen_diagnostico').value || '').trim(),
       equipo_desc: ($('#pen_equipo').value || '').trim(),
       parte: ($('#pen_parte').value || '').trim(),
@@ -729,9 +814,25 @@
     };
   }
 
+  /* El código de activo del equipo trabado: el único bloque marcado
+     «Deshabilitado», o el único equipo de la orden. Si es ambiguo va vacío y el
+     servidor usa el equipo del caso, en vez de adivinar. */
+  function activoDelTrabado() {
+    var bloques = $$('#equipos .bloque');
+    var parados = bloques.filter(function (b) {
+      var on = b.querySelector('[data-eq-estado-seg] button.on');
+      return on && on.dataset.v === 'Deshabilitado';
+    });
+    var b = parados.length === 1 ? parados[0] : (bloques.length === 1 ? bloques[0] : null);
+    var cod = b ? b.querySelector('[data-eq-cod]') : null;
+    return cod ? String(cod.value || '').trim() : '';
+  }
+
   /** Lo que se vio en el local y no era la orden. Cero o varias. */
   function novedadesDeLaOrden() {
-    return $$('#novedades .bloque').map(function (b) {
+    /* `#novedadesVisita`, el contenedor que arma guia.js. Leía `#novedades` —el
+       nombre de antes del cambio— y ninguna novedad salía nunca con la orden. */
+    return $$('#novedadesVisita .bloque').map(function (b) {
       var d = b.querySelector('.nov-desc');
       if (!d || !d.value.trim()) return null;
       return {
@@ -841,10 +942,9 @@
      es cosa del programa a partir de ahí: sale solo cuando vuelve la señal,
      aunque el técnico cierre la aplicación.
 
-     EL RECIBO DICE LA VERDAD. Mientras la migración 003 no esté aplicada, el
-     servidor guarda la orden pero NO genera el PDF ni manda el correo. Poner
-     «enviada correctamente» haría que el técnico lo diera por hecho y que el
-     local nunca reciba su informe (I-7).
+     EL RECIBO DICE LA VERDAD. El servidor devuelve el número de la orden y
+     dónde quedó su PDF; en el sitio de pruebas, además, que el correo al local
+     no salió. Nada de «enviada correctamente» a secas (I-7).
      --------------------------------------------------------------------- */
   function alEnviar(e) {
     e.preventDefault();
@@ -871,7 +971,13 @@
         return;
       }
 
-      Cola.encolar(o).then(function () {
+      // Las fotos se reducen antes de guardarlas con la orden. La orden queda
+      // ligada a quien la llenó: en un celular compartido, el servidor no la
+      // acepta con la sesión de otro.
+      prepararFotos(fotos).then(function (listas) {
+        return Cola.encolar(o, YO ? YO.id : null, listas);
+      }).then(function () {
+        window.dispatchEvent(new CustomEvent('orden-encolada'));
         mostrarRecibo(o);
       }).catch(function () {
         btn.disabled = false;
@@ -911,18 +1017,18 @@
     $('#rEstado').className = 'aviso ' + (conSenal ? 'info' : 'warn');
     $('#rEstadoTxt').innerHTML = conSenal
       ? '<b>Orden guardada y en camino.</b> Se está enviando ahora. Si la señal se corta, '
-      + 'sale sola en cuanto vuelva — no hace falta que la llenes otra vez.'
+      + 'sale sola cuando vuelva, con la aplicación abierta — no hace falta que la llenes otra vez.'
       : '<b>Orden guardada en este celular.</b> No hay señal, así que todavía no salió. '
-      + 'Se envía sola en cuanto vuelva la cobertura, <b>aunque cierres la aplicación</b>. '
+      + 'Sale sola cuando vuelvas a abrir la aplicación con señal. '
       + 'Puedes seguir llenando las siguientes.';
 
     var extra = [];
     if (o.pendiente) {
       extra.push(o.pendiente.deshabilitado
-        ? 'El equipo quedó registrado como deshabilitado: desde ahora corren las 48 horas '
-        + 'para que se decida la vía —repuesto, reparación, garantía o baja—.'
-        : 'El equipo quedó registrado como trabado. No corre el plazo de 48 horas porque '
-        + 'el local todavía lo puede usar.');
+        ? 'El equipo va como deshabilitado. Cuando la orden llegue al sistema se abre el plazo '
+        + 'de 48 horas para decidir la vía —repuesto, reparación, garantía o baja—, contado desde ahora.'
+        : 'El equipo va como trabado. No corre el plazo de 48 horas porque el local todavía '
+        + 'lo puede usar.');
     }
     if (o.novedades && o.novedades.length) {
       extra.push('Reportaste ' + o.novedades.length + ' novedad'
@@ -989,7 +1095,7 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { if (d && d.ok) { YO = d; } })
       .catch(function () { /* sin senal: se resuelve con lo cacheado o se avisa */ })
-      .then(function () { pintarYo(); });
+      .then(function () { pintarYo(); if (CAT) { pintarCobertura(); } });
 
     cargarCatalogo().then(function (cat) {
       CAT = normalizar(cat);
@@ -1006,7 +1112,23 @@
       bloqueEquipo();
       refrescarAvisos();
 
-      var pedido = new URLSearchParams(location.search).get('local') || window.PRESELECT;
+      var params = new URLSearchParams(location.search);
+      /* Viene de «Emitir la orden de este caso» en la bandeja: el caso ya está
+         asignado y entra puesto, sin buscarlo ni teclearlo. Hasta el 2026-09-10
+         el enlace mandaba ?aviso= y aquí solo se leía ?local=. */
+      var avisoPedido = params.get('aviso');
+      if (avisoPedido) {
+        fijarOrigen('ASIGNADA');
+        $$('#segOrigen button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === 'ASIGNADA'); });
+        if (comboAviso.elegirPorClave(avisoPedido)) {
+          comboAviso.bloquear(true);
+        } else {
+          $('#avisoCobertura').textContent = 'El caso ' + avisoPedido + ' no está entre los casos '
+            + 'guardados en este celular. Si te lo acaban de asignar, abre la app con señal para actualizarla.';
+        }
+      }
+
+      var pedido = params.get('local') || window.PRESELECT;
       if (pedido && localesPorCodigo[pedido]) {
         fijarOrigen('SIN_ASIGNAR');
         $$('#segOrigen button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === 'SIN_ASIGNAR'); });

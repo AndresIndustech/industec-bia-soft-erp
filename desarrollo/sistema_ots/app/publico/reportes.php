@@ -137,14 +137,22 @@ $reincidentes = array_filter($porLocal, fn($n) => $n >= 5);
    tienen todavía no se sabe si concluyeron. Contarlos como «no concluidos»
    haría que el número empeorara solo por tener trabajo reciente.
    ------------------------------------------------------------------------- */
+/* Sin la 007 no hay de dónde saber qué quedó trabado: el número es «sin dato»,
+   no 100 % en verde. Y se restan solo los casos de ESTA población —con informe
+   y en el alcance de quien mira—, no la tabla entera de pendientes. */
 $conPendiente = 0;
-if (Pendientes::disponible()) {
-    $f = Db::uno('SELECT COUNT(DISTINCT aviso) c FROM pendientes'
-               . ($zonaAlc !== null ? ' WHERE zona = ?' : ''), $zonaAlc !== null ? [$zonaAlc] : []);
-    $conPendiente = (int) ($f['c'] ?? 0);
+$concluyeUna = 0;
+$pctConcluye = null;
+if (Pendientes::disponible() && $conInforme > 0) {
+    $trabados = array_flip(array_column(
+        Db::todos("SELECT DISTINCT aviso FROM pendientes WHERE estado <> 'CANCELADO'"), 'aviso'));
+    foreach ($casos as $c) {
+        $av = (string) ($c['aviso'] ?? '');
+        if (isset($aten[$av], $trabados[$av])) { $conPendiente++; }
+    }
+    $concluyeUna = max(0, $conInforme - $conPendiente);
+    $pctConcluye = round($concluyeUna * 100 / $conInforme);
 }
-$concluyeUna = $conInforme > 0 ? max(0, $conInforme - $conPendiente) : 0;
-$pctConcluye = $conInforme > 0 ? round($concluyeUna * 100 / $conInforme) : null;
 
 $c48 = Pendientes::cumplimiento48();
 $novC = Novedades::contadores();
@@ -210,7 +218,8 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
   <div class="titulo entra">
     <h1>Tablero de servicio</h1>
     <p class="sub">
-      <?= $zonaAlc ? 'Zona <b>' . $e($zonaAlc) . '</b>. ' : 'Las tres zonas. ' ?>
+      <?= $zonaAlc === null ? 'Las tres zonas. '
+            : ($zonaAlc !== '' ? 'Zona <b>' . $e($zonaAlc) . '</b>. ' : 'Tu cuenta no tiene zona asignada. ') ?>
       Todo lo de esta pantalla sale de la ventana de <b>90 días</b> del correo de
       SAP<?= $generado !== '' ? ', barrida por última vez el <b>' . $e(substr($generado, 0, 10)) . '</b>' : '' ?>,
       cruzada con los informes de orden que llegan al mismo buzón. El histórico

@@ -59,7 +59,27 @@ $e = fn(?string $s): string => Ui::e($s);
 $fuente  = Casos::catalogo();
 $gestion = Casos::gestion();
 $aten    = Casos::atenciones();
-$mios    = Casos::enAlcance($fuente['datos'] ?? [], $gestion);
+/* Al técnico, sus casos salen de la base y no del catálogo del buzón (T2.13.3):
+   el catálogo es una ventana que la estación reescribe entera, y un caso
+   asignado que quedaba fuera de ella desaparecía de su bandeja sin aviso. */
+$esTecnico = $u['rol'] === 'TECNICO';
+$mios    = $esTecnico
+         ? Casos::delTecnico((int) $u['usuario_id'],
+                             array_merge(Casos::ABIERTOS_TECNICO, Casos::CERRADOS_TECNICO), $gestion)
+         : Casos::enAlcance($fuente['datos'] ?? [], $gestion);
+
+/* Los avisos del técnico (T2.13.5): lo que le pasó en las dos últimas semanas y
+   qué es nuevo desde su visita anterior. «Visto» se lee ANTES de anotar esta
+   consulta en la bitácora, porque es justo esa anotación la que lo mueve. */
+$avisos = [];
+$vistoAntes = null;
+if ($esTecnico) {
+    require_once __DIR__ . '/nucleo/Avisos.php';
+    $vistoAntes = Avisos::visto((int) $u['usuario_id']);
+    $avisos = Avisos::delTecnico((int) $u['usuario_id'], date('Y-m-d H:i:s', time() - 14 * 86400));
+}
+$esNuevo = fn(array $a): bool => $vistoAntes === null || $a['cuando'] > $vistoAntes;
+$nuevos  = count(array_filter($avisos, $esNuevo));
 
 Auth::bitacora('CONSULTAR', 'bandeja', 'mis', 'visibles=' . count($mios));
 
@@ -134,6 +154,9 @@ if (isset($_GET['ver'])) {
     $g   = $gestion[$avisoVer] ?? [];
     $est = $g['estado'] ?? 'NUEVO';
     $a   = $aten[$avisoVer] ?? null;
+    $sinCat = !empty($caso['sin_catalogo']);
+    // Lo cerrado es historial: se consulta, pero no se vuelve a emitir ni a reportar.
+    $abierto = !$esTecnico || in_array($est, Casos::ABIERTOS_TECNICO, true);
     $pendCaso = Pendientes::disponible()
         ? array_values(array_filter(Pendientes::lista(['grupo' => 'abiertos']),
                                     fn($p) => (string) $p['aviso'] === $avisoVer))
@@ -156,10 +179,12 @@ if (isset($_GET['ver'])) {
 
 <header class="mov-cab">
   <div class="fila">
-    <a class="btn sm" href="mis.php" aria-label="Volver a la bandeja">←</a>
+    <a class="btn sm" href="mis.php<?= $abierto ? '' : '?t=atendidas' ?>"
+       aria-label="<?= $abierto ? 'Volver a la bandeja' : 'Volver al historial' ?>">←</a>
     <div style="flex:1;min-width:0">
-      <div class="hola"><?= $e($caso['local'] ?? '—') ?></div>
-      <div class="quien"><?= $e($caso['local_nombre'] ?? $caso['restaurante_sap'] ?? '') ?></div>
+      <div class="hola"><?= $sinCat ? 'Aviso ' . $e($avisoVer) : $e($caso['local'] ?? '—') ?></div>
+      <div class="quien"><?= $sinCat ? 'sin dato en el catálogo'
+                                     : $e($caso['local_nombre'] ?? $caso['restaurante_sap'] ?? '') ?></div>
     </div>
   </div>
 </header>
@@ -176,6 +201,14 @@ if (isset($_GET['ver'])) {
     <?= Ui::edad($caso['fecha_creacion'] ?? null) ?>
   </div>
 
+  <?php if ($sinCat): ?>
+    <div style="margin-top:12px">
+      <?= Ui::aviso('info', '<b>Este caso no está en el listado del buzón.</b>'
+        . '<p>Solo se conoce su número de aviso: el local, el equipo y el pedido no llegaron por '
+        . 'correo o ya salieron de la ventana del buzón. Si te falta un dato, pregúntale a tu jefe de zona.</p>') ?>
+    </div>
+  <?php endif; ?>
+
   <?php if (!empty($caso['descripcion_trabajo'])): ?>
     <div class="ficha" style="margin-top:12px">
       <div class="cita" style="margin-top:0"><?= $e($caso['descripcion_trabajo']) ?></div>
@@ -187,6 +220,9 @@ if (isset($_GET['ver'])) {
       <dt>Equipo</dt><dd><?= $e($caso['activo_fijo']) ?></dd>
     <?php endif; ?>
     <dt>Creado</dt><dd class="mono"><?= $e($caso['fecha_creacion'] ?? '—') ?></dd>
+    <?php if (!empty($g['asignado_en'])): ?>
+      <dt>Asignado</dt><dd class="mono"><?= $e(substr((string) $g['asignado_en'], 0, 16)) ?></dd>
+    <?php endif; ?>
     <dt>Comprometido</dt>
     <dd class="mono">
       <?= $e($caso['fecha_estimada'] ?? '—') ?>
@@ -272,19 +308,46 @@ if (isset($_GET['ver'])) {
   </div>
 <?php endif; ?>
 
-<div class="mov-acciones">
-  <a class="btn primary" href="index.html?aviso=<?= rawurlencode($avisoVer) ?>">
-    Emitir la orden de este caso
-  </a>
+<?php /* La orden que cerró el caso, de la base (T2.13.3). Si ya salió arriba entre
+         las del informe no se repite; si no hay, se dice en vez de callarlo (I-7). */ ?>
+<?php if (!$abierto && !in_array($g['ot_cierre'] ?? null, array_column($a['ots'] ?? [], 'ot'), true)): ?>
+  <div style="padding:14px 14px 0">
+    <?php if (!empty($g['ot_cierre'])): ?>
+      <div class="rep atendido">
+        <div class="cab">
+          <div><div class="que">Orden de cierre <?= $e($g['ot_cierre']) ?></div>
+            <div class="meta"><?= $e(substr((string) ($g['atendido_en'] ?? ''), 0, 10)) ?> ·
+              <?= $e(Casos::etiquetaEstado($est)) ?></div></div>
+          <?php if (Auth::puede('ots.pdf')): ?>
+            <a class="btn sm" href="pdf.php?ot=<?= rawurlencode((string) $g['ot_cierre']) ?>"
+               target="_blank" rel="noopener">Ver PDF</a>
+          <?php endif; ?>
+        </div>
+      </div>
+    <?php else: ?>
+      <?= Ui::aviso('info', '<b>No hay PDF de cierre registrado para este caso.</b>'
+        . '<p>Quedó como «' . $e(Casos::etiquetaEstado($est)) . '» sin una orden de cierre asociada.</p>') ?>
+    <?php endif; ?>
+  </div>
+<?php endif; ?>
 
-  <?php if (Auth::puede('repuestos.pedir') && !$pendCaso): ?>
+<div class="mov-acciones">
+  <?php if ($abierto): ?>
+    <a class="btn primary" href="index.html?aviso=<?= rawurlencode($avisoVer) ?>">
+      Emitir la orden de este caso
+    </a>
+  <?php else: ?>
+    <p class="sub" style="margin:0;text-align:center">Este caso ya está cerrado: queda aquí para consultarlo.</p>
+  <?php endif; ?>
+
+  <?php if ($abierto && Auth::puede('repuestos.pedir') && !$pendCaso): ?>
     <button class="btn ghost" type="button" onclick="document.getElementById('dlgTrabado').showModal()">
       No pude concluir: el equipo quedó trabado
     </button>
   <?php endif; ?>
 </div>
 
-<?php if (Auth::puede('repuestos.pedir') && !$pendCaso): ?>
+<?php if ($abierto && Auth::puede('repuestos.pedir') && !$pendCaso): ?>
 <dialog id="dlgTrabado">
   <form method="post">
     <input type="hidden" name="accion" value="no_concluye">
@@ -339,7 +402,8 @@ if (isset($_GET['ver'])) {
 <?php endif; ?>
 
 <nav class="nav-abajo" aria-label="Principal">
-  <a href="mis.php" class="on"><span class="ic">▤</span>Bandeja</a>
+  <a href="mis.php" class="<?= $abierto ? 'on' : '' ?>"><span class="ic">▤</span>Bandeja</a>
+  <a href="mis.php?t=atendidas" class="<?= $abierto ? '' : 'on' ?>"><span class="ic">✓</span>Historial</a>
   <a href="index.html"><span class="ic">✎</span>Emitir</a>
   <a href="pendientes.php"><span class="ic">◷</span>Repuestos</a>
   <a href="cronograma.html"><span class="ic">▦</span>Preventivos</a>
@@ -367,7 +431,10 @@ foreach ($mios as $c) {
 
     if ($estado === 'ESPERA_REPUESTO') {
         $grupos['esperando'][] = $c;
-    } elseif (in_array($estado, ['ATENDIDO', 'RESUELTO', 'NO_COMPETE'], true) || isset($aten[$aviso])) {
+    } elseif (in_array($estado, Casos::CERRADOS_TECNICO, true)
+              // Al técnico lo reparte el estado de la base: un caso ASIGNADO con
+              // una orden todavía abierta sigue siendo trabajo suyo (T2.13.3).
+              || (!$esTecnico && isset($aten[$aviso]))) {
         $grupos['atendidas'][] = $c;
     } else {
         $grupos['pendientes'][] = $c;
@@ -383,22 +450,43 @@ usort($grupos['pendientes'], function ($a, $b) use ($ordPrio) {
     if ($pa !== $pb) { return $pa <=> $pb; }
     return strcmp((string) ($a['fecha_creacion'] ?? ''), (string) ($b['fecha_creacion'] ?? ''));
 });
-usort($grupos['atendidas'], fn($a, $b) =>
-    strcmp((string) ($b['fecha_creacion'] ?? ''), (string) ($a['fecha_creacion'] ?? '')));
+// El historial, de lo último que se atendió hacia atrás.
+$cuandoCerro = fn(array $c): string => (string) ($c['_gestion']['atendido_en'] ?? $c['fecha_creacion'] ?? '');
+usort($grupos['atendidas'], fn($a, $b) => strcmp($cuandoCerro($b), $cuandoCerro($a)));
 
 $tab = (string) ($_GET['t'] ?? 'pendientes');
-if (!isset($grupos[$tab])) { $tab = 'pendientes'; }
+if (!isset($grupos[$tab]) && !($tab === 'avisos' && $esTecnico)) { $tab = 'pendientes'; }
 
 /* Los pendientes de equipo que él abrió, para la pestaña «Esperando». */
 $misPend = Pendientes::disponible() ? Pendientes::lista(['grupo' => 'abiertos']) : [];
 $pendPorAviso = [];
 foreach ($misPend as $p) { $pendPorAviso[(string) $p['aviso']][] = $p; }
 
+/* Las órdenes que mandó desde la app, para su historial (T2.13.3). Desde la
+   008 cada una trae su número y su PDF; las de antes, o las que no se pudieron
+   emitir, lo dicen. La tabla es de la misma migración que la de pendientes. */
+require_once __DIR__ . '/nucleo/Emision.php';
+$prueba = Emision::modo() === 'PRUEBA';
+$capturas = [];
+if ($esTecnico && Pendientes::disponible()) {
+    $sqlCap = 'SELECT aviso, local_codigo, capturada_en, estado, motivo_rechazo, id_industec, %s
+                 FROM ot_capturadas WHERE usuario_id = ? ORDER BY capturada_en DESC LIMIT 60';
+    try {
+        $capturas = Db::todos(sprintf($sqlCap, 'emitida_en, emision_error'), [(int) $u['usuario_id']]);
+    } catch (Throwable $ex) {
+        // Sin la 008 no hay emisión que mostrar.
+        $capturas = Db::todos(sprintf($sqlCap, 'NULL AS emitida_en, NULL AS emision_error'), [(int) $u['usuario_id']]);
+    }
+}
+$enviadas  = array_count_values(array_filter(array_map(fn($k) => (string) ($k['aviso'] ?? ''), $capturas)));
+$misAvisos = array_flip(array_map(fn($c) => (string) ($c['aviso'] ?? ''), $mios));
+
 $errFlash = Ui::errorFlash();
 $okFlash  = $_SESSION['flash']['ok'] ?? null;
 unset($_SESSION['flash']);
 
-$ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' => 'Atendidas'];
+$ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' => 'Atendidas']
+      + ($esTecnico ? ['avisos' => 'Avisos'] : []);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -434,7 +522,8 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
   <nav class="mov-tabs" aria-label="Mis órdenes">
     <?php foreach ($ETIQ as $k => $et): ?>
       <?php
-      $cn = count($grupos[$k]);
+      // En «Avisos» el globo cuenta solo lo nuevo: es lo que todavía no vio.
+      $cn = $k === 'avisos' ? $nuevos : count($grupos[$k]) + ($k === 'atendidas' ? count($capturas) : 0);
       // El globo de «Esperando» se pone rojo si alguno de sus equipos pasó de
       // las 48 h sin veredicto: es lo único de esta pantalla que corre contra
       // reloj, y el técnico es quien puede empujarlo insistiendo.
@@ -469,6 +558,14 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
          sí llegan dos PDFs a Grupo KFC. */ ?>
 <div id="cola" hidden></div>
 
+<?php if ($esTecnico): ?>
+  <?php /* La barra de avisos: novedades.php le cuenta al técnico SUS avisos nuevos y
+           ui.js la muestra sin recargarle la pantalla (T2.13.5). */ ?>
+  <div id="novedades" hidden><span class="vivo"></span><span id="nov-txt">Tienes avisos nuevos</span>
+    <button class="btn primary" type="button" id="nov-ver">Ver</button>
+    <button class="btn" type="button" id="nov-no" title="Se vuelve a avisar en el próximo cambio">Ahora no</button></div>
+<?php endif; ?>
+
 <?php if (!$fuente): ?>
   <div style="padding:14px">
     <?= Ui::aviso('warn',
@@ -479,10 +576,45 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
 <?php endif; ?>
 
 <main>
+<?php if ($tab === 'avisos'): ?>
+  <?php /* Los avisos (T2.13.5): lo de las dos últimas semanas, con lo nuevo desde su
+           visita anterior marcado. Sale de lo que el sistema ya registra. */ ?>
+  <?php if (!$avisos): ?>
+    <div class="vacio" style="padding:44px 24px">
+      <span class="icono">✓</span>
+      <b style="display:block;font-size:15px;color:var(--ink);margin-bottom:6px">No tienes avisos</b>
+      <span style="display:block;max-width:44ch;margin:0 auto;line-height:1.55">Aquí te avisamos cuando te
+        asignen o te quiten un caso, cuando respondan sobre un equipo que quedó trabado y cuando resuelvan
+        una novedad que reportaste.</span>
+    </div>
+  <?php else: ?>
+    <div style="padding:14px">
+      <?php foreach ($avisos as $av): ?>
+        <?php $nuevo = $esNuevo($av);
+              $suyo  = $av['aviso'] !== null && isset($misAvisos[$av['aviso']]); ?>
+        <div class="rep <?= $av['tipo'] === 'QUITADO' ? '' : 'atendido' ?>"
+             style="margin-bottom:10px<?= $nuevo ? ';border-left:4px solid var(--accent)' : '' ?>">
+          <div class="cab">
+            <div style="min-width:0">
+              <div class="que"><?= $e($av['titulo']) ?><?= $nuevo ? ' <span class="chip">nuevo</span>' : '' ?></div>
+              <div class="meta"><?= $av['aviso'] !== null ? 'Aviso ' . $e($av['aviso']) . ' · ' : '' ?><span
+                   data-hace="<?= $e($av['cuando']) ?>"><?= $e(substr($av['cuando'], 0, 16)) ?></span></div>
+            </div>
+            <?php if ($suyo): ?>
+              <a class="btn sm" href="?ver=<?= rawurlencode($av['aviso']) ?>">Ver el caso</a>
+            <?php endif; ?>
+          </div>
+          <?php if ($av['texto'] !== ''): ?><div class="nota"><?= $e($av['texto']) ?></div><?php endif; ?>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+<?php else: ?>
 <?php
 $lista = $grupos[$tab];
+$verCapturas = $tab === 'atendidas' && $capturas;
 
-if (!$lista):
+if (!$lista && !$verCapturas):
     /* El vacío también informa. Cada pestaña vacía significa algo distinto y
        decir «no hay nada» en las tres sería desperdiciar el único momento en
        que el técnico tiene toda la pantalla para leer. */
@@ -514,12 +646,15 @@ if (!$lista):
     </div>
   <?php endif; ?>
 
+  <?php if ($lista): ?>
   <ul class="bandeja">
     <?php foreach ($lista as $i => $c): ?>
       <?php
       $aviso = (string) ($c['aviso'] ?? '');
       $prio  = strtolower((string) ($c['prioridad'] ?? '')) ?: 'sd';
-      $dias  = Ui::dias($c['fecha_creacion'] ?? null);
+      $sinCat = !empty($c['sin_catalogo']);
+      // Sin fecha del catálogo, la edad se cuenta desde que se lo asignaron.
+      $dias  = Ui::dias($c['fecha_creacion'] ?? ($c['_gestion']['asignado_en'] ?? null));
       $pendCaso = $pendPorAviso[$aviso] ?? [];
       // «Nuevo» = asignado y sin abrir todavía. Es el punto azul del correo, y
       // se apoya en el estado, no en una marca de lectura que habría que
@@ -531,11 +666,11 @@ if (!$lista):
           <span class="marca"><?php if ($sinAbrir): ?><i class="nuevo"></i><?php endif; ?></span>
           <span class="cuerpo">
             <span class="lin1">
-              <span class="local"><?= $e($c['local'] ?? '—') ?> ·
-                <?= $e($c['local_nombre'] ?? $c['restaurante_sap'] ?? '') ?></span>
+              <span class="local"><?php if ($sinCat): ?>Aviso <?= $e($aviso) ?> · sin dato en el catálogo<?php else: ?><?= $e($c['local'] ?? '—') ?> ·
+                <?= $e($c['local_nombre'] ?? $c['restaurante_sap'] ?? '') ?><?php endif; ?></span>
               <span class="cuando"><?= $dias === null ? '' : ($dias <= 0 ? 'hoy' : ($dias === 1 ? 'ayer' : $dias . ' d')) ?></span>
             </span>
-            <span class="asunto"><?= $e($c['caso'] ?? 'Sin descripción') ?></span>
+            <span class="asunto"><?= $e($c['caso'] ?? ($sinCat ? 'No está en el listado del buzón' : 'Sin descripción')) ?></span>
             <?php if (!empty($c['descripcion_trabajo'])): ?>
               <span class="vista"><?= $e($c['descripcion_trabajo']) ?></span>
             <?php endif; ?>
@@ -555,13 +690,53 @@ if (!$lista):
               <?php if ($tab === 'atendidas' && !empty($c['_aten']['ots'])): ?>
                 <span class="chip cerrada"><?= count($c['_aten']['ots']) ?> orden<?= count($c['_aten']['ots']) === 1 ? '' : 'es' ?></span>
               <?php endif; ?>
+              <?php if ($tab !== 'atendidas' && !empty($enviadas[$aviso])): ?>
+                <span class="chip">enviaste una orden</span>
+              <?php endif; ?>
             </span>
           </span>
         </a>
       </li>
     <?php endforeach; ?>
   </ul>
+  <?php endif; ?>
+
+  <?php if ($verCapturas): ?>
+    <?php $ETIQ_CAP = ['RECIBIDA' => 'recibida en la oficina', 'PROCESADA' => 'procesada', 'RECHAZADA' => 'rechazada']; ?>
+    <div style="padding:14px">
+      <h2 style="font-size:14px;margin:0 0 10px;color:var(--ink)">Órdenes que enviaste desde la app</h2>
+      <?php foreach ($capturas as $k): ?>
+        <?php $avk = (string) ($k['aviso'] ?? ''); ?>
+        <div class="rep atendido" style="margin-bottom:10px">
+          <div class="cab">
+            <div style="min-width:0">
+              <div class="que"><?= $avk !== '' ? 'Aviso ' . $e($avk) : 'Sin aviso' ?> · <?= $e($k['local_codigo'] ?? '—') ?></div>
+              <div class="meta">llenada el <?= $e(substr((string) $k['capturada_en'], 0, 16)) ?> ·
+                <?= $e($ETIQ_CAP[$k['estado']] ?? strtolower((string) $k['estado'])) ?></div>
+            </div>
+            <?php if ($avk !== '' && isset($misAvisos[$avk])): ?>
+              <a class="btn sm" href="?ver=<?= rawurlencode($avk) ?>">Ver el caso</a>
+            <?php endif; ?>
+          </div>
+          <div class="nota">
+            <?php if ($k['estado'] === 'RECHAZADA'): ?>
+              <?= $e('Motivo: ' . ($k['motivo_rechazo'] ?? 'sin dato')) ?>
+            <?php elseif (!empty($k['emitida_en'])): ?>
+              Orden <b><?= $e($k['id_industec']) ?></b> ·
+              <a href="pdf.php?ot=<?= rawurlencode((string) $k['id_industec']) ?>" target="_blank" rel="noopener">Ver PDF</a><?=
+                $prueba ? ' · es de prueba: no se envió a nadie' : '' ?>
+            <?php elseif (!empty($k['emision_error'])): ?>
+              El PDF no se pudo generar todavía: se reintenta la próxima vez que se envíe.
+            <?php else: ?>
+              El PDF de esta orden todavía no se genera desde la app.
+            <?php endif; ?>
+          </div>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
 <?php endif; ?>
+<?php endif; /* avisos */ ?>
 </main>
 
 <?php /* El botón flotante. Emitir una orden es LA acción del técnico y tiene que
@@ -569,11 +744,14 @@ if (!$lista):
 <a class="fab" href="index.html" aria-label="Emitir una orden de trabajo" title="Emitir una orden">+</a>
 
 <nav class="nav-abajo" aria-label="Principal">
-  <a href="mis.php" class="on"><span class="ic">▤</span>Bandeja
+  <a href="mis.php" class="<?= $tab === 'atendidas' ? '' : 'on' ?>"><span class="ic">▤</span>Bandeja
     <?php if (count($grupos['pendientes'])): ?>
       <span class="globo"><?= count($grupos['pendientes']) ?></span>
     <?php endif; ?>
   </a>
+  <?php /* El historial es la pestaña «Atendidas»; va en la barra porque es lo
+           segundo que busca el técnico: la orden que ya mandó (T2.13.3). */ ?>
+  <a href="mis.php?t=atendidas" class="<?= $tab === 'atendidas' ? 'on' : '' ?>"><span class="ic">✓</span>Historial</a>
   <a href="index.html"><span class="ic">✎</span>Emitir</a>
   <a href="pendientes.php"><span class="ic">◷</span>Repuestos
     <?php $pc = Pendientes::contadores(); if ($pc['abiertos']): ?>

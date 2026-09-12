@@ -27,9 +27,9 @@
  *    incrementa el contador, genera un PDF en blanco y lo manda por correo. Se
  *    puede contar cuantas veces paso: los contadores de zona vacia
  *    (contadores/counter_.txt) marcan 27 en UIO, 31 en LARB, 14 en CNLJ y 15 en
- *    mantenimiento = 87 envios vacios. Los de UIO y LARB llevan destinatario fijo
- *    miguel.vasquez@kfc.com.ec, o sea que 58 correos en blanco ya llegaron al
- *    Jefe Tecnico de Mantenimiento de Grupo KFC. Ademas cada uno quema un
+ *    mantenimiento = 87 envios vacios. Los de UIO y LARB llevan como destinatario
+ *    fijo el correo del Jefe Tecnico de Mantenimiento de Grupo KFC, o sea que 58
+ *    correos en blanco ya le llegaron. Ademas cada uno quema un
  *    correlativo, lo que explica huecos en la numeracion.
  *
  * 2. LISTA BLANCA DE ZONA.

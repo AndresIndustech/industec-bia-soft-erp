@@ -33,7 +33,16 @@
     tono = tono || 'info';
     opciones = opciones || {};
     var caja = document.getElementById('toasts');
-    if (!caja) { return null; }
+    if (!caja) {
+      // Las pantallas PHP lo traen de Ui::cabecera; el formulario del técnico
+      // (index.html) no, y ahí se perdían en silencio el «no se pudo guardar la
+      // orden en este celular» y los avisos del recibo. Se crea donde falte.
+      caja = document.createElement('div');
+      caja.id = 'toasts';
+      caja.setAttribute('role', 'status');
+      caja.setAttribute('aria-live', 'polite');
+      document.body.appendChild(caja);
+    }
 
     var t = document.createElement('div');
     t.className = 'toast ' + tono;
@@ -118,8 +127,10 @@
 
   /* --- Tiempo relativo ---------------------------------------------------
      «hace 3 h» se entiende de un vistazo; «2026-09-09 11:20» hay que restarlo
-     mentalmente. Se calcula en el navegador para no arrastrar la zona horaria
-     del servidor, que en Hostinger no es la de Ecuador. */
+     mentalmente. Las fechas llegan del servidor en hora de Ecuador (Db.php
+     fija la zona de la base y la de PHP) y sin zona escrita, así que el
+     navegador las lee como hora local: cuadra en un celular de Ecuador. Hasta
+     el 2026-09-11 llegaban en UTC y esto salía corrido cinco horas. */
   UI.hace = function (iso) {
     var t = Date.parse((iso || '').replace(' ', 'T'));
     if (isNaN(t)) { return ''; }
@@ -130,6 +141,26 @@
     var d = Math.floor(s / 86400);
     if (d < 30) { return 'hace ' + d + (d === 1 ? ' día' : ' días'); }
     return new Date(t).toLocaleDateString('es-EC');
+  };
+
+  /* --- La barra de abajo del técnico -------------------------------------
+     La misma que mis.php pinta en el servidor, para las pantallas estáticas
+     —cronograma.html— que no pueden llamar a PHP (T2.13.4). Es una función
+     pura para poder probarla sin navegador, y prueba_barra_tecnico.mjs la
+     compara con la de mis.php: si cambia una y no la otra, falla. */
+  UI.BARRA_TECNICO = [
+    ['bandeja',     'mis.php',             '▤', 'Bandeja'],
+    ['historial',   'mis.php?t=atendidas', '✓', 'Historial'],
+    ['emitir',      'index.html',          '✎', 'Emitir'],
+    ['repuestos',   'pendientes.php',      '◷', 'Repuestos'],
+    ['preventivos', 'cronograma.html',     '▦', 'Preventivos']
+  ];
+  UI.barraTecnico = function (activa) {
+    return '<nav class="nav-abajo" aria-label="Principal">' +
+      UI.BARRA_TECNICO.map(function (b) {
+        return '<a href="' + b[1] + '"' + (b[0] === activa ? ' class="on" aria-current="page"' : '') +
+               '><span class="ic">' + b[2] + '</span>' + b[3] + '</a>';
+      }).join('') + '</nav>';
   };
 
   /* --- Barra de novedades ------------------------------------------------
@@ -157,10 +188,18 @@
           if (!d || !d.hay) { return; }
           if (base === null) { base = d.version; return; }     // primera lectura
           if (d.version === base || d.version === visto) { caja.hidden = true; return; }
-          var n = (typeof d.total === 'number') ? d.total : null;
-          txt.textContent = n === null
-            ? 'El buzón se actualizó'
-            : 'El buzón se actualizó — ahora hay ' + n + (n === 1 ? ' caso' : ' casos');
+          if (typeof d.avisos === 'number') {
+            // Al técnico no le cuenta el buzón sino SUS avisos (T2.13.5), y «Ver»
+            // lo lleva a ellos en vez de recargar la pantalla en la que está.
+            if (d.avisos === 0) { caja.hidden = true; return; }
+            txt.textContent = d.avisos === 1 ? 'Tienes 1 aviso nuevo' : 'Tienes ' + d.avisos + ' avisos nuevos';
+          } else {
+            var n = (typeof d.total === 'number') ? d.total : null;
+            txt.textContent = n === null
+              ? 'El buzón se actualizó'
+              : 'El buzón se actualizó — ahora hay ' + n + (n === 1 ? ' caso' : ' casos');
+          }
+          caja.dataset.ir = d.ir || '';
           caja.dataset.version = d.version;
           caja.hidden = false;
         })
@@ -169,7 +208,11 @@
 
     var ver = document.getElementById('nov-ver');
     var no  = document.getElementById('nov-no');
-    if (ver) { ver.addEventListener('click', function () { location.reload(); }); }
+    if (ver) {
+      ver.addEventListener('click', function () {
+        if (caja.dataset.ir) { location.href = caja.dataset.ir; } else { location.reload(); }
+      });
+    }
     if (no) {
       no.addEventListener('click', function () {
         visto = Number(caja.dataset.version) || null;

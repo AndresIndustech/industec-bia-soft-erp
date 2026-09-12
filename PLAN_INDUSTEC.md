@@ -459,8 +459,8 @@ Aquí sí se toca: está contemplado en la cotización y el sistema es de desarr
 | **T2.1.2** | Selector de local desde el maestro, en vez de texto libre | Las 121 variantes y la zona cruzada, de raíz | Enviar con cada código de `locales`; ninguno debe poder escribirse fuera del maestro |
 | **T2.1.3** | Validación del aviso (8 dígitos, contra avisos conocidos) | Los typos que rompen el cruce | Enviar un aviso de 7 y uno de 9 dígitos: ambos rechazados con mensaje claro al técnico |
 | **T2.1.4** | Correos del local autocompletados desde el maestro | Rebotes por direcciones mal escritas | El correo de destino de una orden de prueba coincide con `locales.correo`, sin campo editable |
-| **T2.1.5** | Bloqueo del contador (transacción con `SELECT ... FOR UPDATE` o `UNIQUE KEY` sobre el correlativo) | Números duplicados por envíos simultáneos | Disparar 10 envíos concurrentes de prueba; 10 correlativos distintos, cero colisiones |
-| **T2.1.6** | Cola de reintento de correo (se integra con T2.3 en el punto de envío) | 82 fallos en que la orden no llegó a nadie | Un envío con SMTP caído a propósito: el job queda en `email_queue`, no se pierde |
+| **T2.1.5** | ✅ **Hecho el 2026-09-11 en la app nueva** (la 008, sitio de pruebas): reserva con `UPDATE ... LAST_INSERT_ID(ultimo + 1)`, `FOR UPDATE` sobre la orden y `UNIQUE KEY` en `id_industec`; 10 reservas simultáneas dieron 10 números seguidos · Bloqueo del contador (transacción con `SELECT ... FOR UPDATE` o `UNIQUE KEY` sobre el correlativo) | Números duplicados por envíos simultáneos | Disparar 10 envíos concurrentes de prueba; 10 correlativos distintos, cero colisiones |
+| **T2.1.6** | 🟡 **La cola existe desde el 2026-09-11** (`email_queue`, la 008): la orden queda guardada y su correo espera ahí; en el sitio de pruebas, RETENIDO. Falta el despachador con PHPMailer, que se prueba en el corte con el SMTP real · Cola de reintento de correo (se integra con T2.3 en el punto de envío) | 82 fallos en que la orden no llegó a nadie | Un envío con SMTP caído a propósito: el job queda en `email_queue`, no se pierde |
 
 **Regla no negociable de esta tarea — criterio único de cierre:** el campo canónico de estado de una OT es **`estatus_general`** (SAP, `CERRADO`/`TRATAMIENTO`/`ABIERTO`), el mismo que ya rige en la base de Fase 1. Cualquier señal interna del sistema (p. ej. existe una segunda orden de cierre) puede mostrarse como información complementaria, pero **nunca** como criterio de backlog, SLA o notificación — es el error real que sobre-contó el backlog 8× en T1.11 (I-10, I-12). Prueba de aceptación: para una muestra de OTs con estado SAP conocido, el sistema en producción reproduce ese estado exactamente.
 
@@ -561,16 +561,16 @@ cliente.
 
 | # | Subtarea | Qué ataca | Verificación exacta |
 |---|---|---|---|
-| **T2.12.1** | 🚦 Aplicar `sql/007_pendientes_y_captura.sql` | Sin las tablas, el control de 48 h, las novedades y la recepción de órdenes no existen | Correr **los dos bloques de verificación** del propio archivo y **pegar su salida literal**: las 7 consultas numeradas del pie, y el bloque aparte «VERIFICACION de las novedades» que está antes (fácil de saltar, porque no está al final). Las tres que no se negocian: `SHOW CREATE TABLE pendientes\G` muestra `UNIQUE KEY uq_pendiente (aviso, activo_fijo)`; `SHOW CREATE TABLE ot_capturadas\G` muestra `UNIQUE KEY uq_captura_envio (envio_uuid)`; `SHOW COLUMNS FROM casos_gestion LIKE 'estado'` termina en `,'ESPERA_REPUESTO')` |
-| **T2.12.2** | Idempotencia de la migración | Una segunda corrida que duplique deja el tablero contando doble | Correr la 007 **dos veces seguidas**. `SELECT COUNT(*) FROM permisos WHERE codigo LIKE 'repuestos%' OR codigo LIKE 'novedades%'` → 7 en las dos corridas. Y la prueba de inserción doble del pie del archivo → `COUNT(*) = 1` |
-| **T2.12.3** | Desplegar a **UIO solamente** (I-8) | Un defecto en tres zonas a la vez | `t2_10_desplegar.py`, que verifica por hash. Abrir las 13 pantallas con un usuario de cada rol y **que ninguna dé error de PHP ni quede en blanco** |
-| **T2.12.4** | 🚦 Verificar el alcance por zona **con los tres roles** | Que un jefe de zona vea datos de otra zona. Es la comprobación más importante de toda la tarea | Entrar como administradora, jefe de UIO y jefe de CNLJ y **contar filas** en `casos.php`, `pendientes.php`, `novedades_visita.php`, `ordenes.php`, `reportes.php` y `cronograma.html`. Las cifras de los dos jefes deben sumar sin solaparse y ser menores que la de la administradora. Pedir otra zona por la URL (`?zona=CNLJ` siendo jefe de UIO) → **0 filas y ninguna fuga** |
-| **T2.12.5** | Verificar el alcance con un **POST fabricado a mano** | Que esconder un botón se confunda con proteger | `curl` un POST a `pendientes.php` con `pendiente_id` de otra zona y a `novedades_visita.php` con `novedad_id` de otra zona, con la cookie de un jefe de zona → **rechazado en el servidor**, y la fila queda en `bitacora` con `exito = 0` |
-| **T2.12.6** | Verificar los dos extremos que se cerraron el 10-sep | Que un despliegue los reabra por descuido | `curl` sin cookie a `catalogos.php` y a `cronograma.php` → **401 en JSON**, no un catálogo. Con cookie de jefe de zona a `cronograma.php` → solo su zona |
-| **T2.12.7** | 🚦 Prueba de captura **sin señal**, de punta a punta | Que una orden se pierda, o que llegue dos veces | **Apagar el servidor de verdad** — no cortar la red con el depurador, que no reproduce el caso: el trabajador de servicio tiene su propio contexto de red. Abrir el formulario, llenar una orden completa, comprobar que la cola dice «guardada, esperando señal». Encender el servidor. La orden sale sola y **`SELECT COUNT(*) FROM ot_capturadas WHERE envio_uuid = '<el uuid>'` da 1**, no 2 |
-| **T2.12.8** | Reintento con sesión caducada | Que un 401 marque como inválida una orden que está perfecta | Con órdenes en la cola, cerrar la sesión desde otro navegador (sesión única). El siguiente intento debe dejarlas en «falta entrar», **no** en «rechazada». Volver a entrar → salen solas |
-| **T2.12.9** | Verificar el reloj de 48 h contra datos reales | Que la cifra del globo de navegación y la de la pantalla discrepen | Abrir un pendiente con equipo deshabilitado. Comprobar que el globo de «Repuestos y equipos», la tarjeta «Fuera de plazo» y la lista filtrada con `?g=vencidos` **dan el mismo número**. Contrastar con la consulta 6 del pie de la 007 |
-| **T2.12.10** | Verificar el ciclo completo de un caso | Que la reconciliación pise un estado que puso una persona | Recorrer un caso de prueba: asignar → el técnico lo deja trabado → veredicto → avanzar la vía → resolver. Después correr `reconciliar_cli.php` y comprobar con la consulta 5 del pie de la 007 que **da 0 filas** |
+| **T2.12.1** | ✅ **Hecho el 2026-09-11** · Aplicar `sql/007_pendientes_y_captura.sql` | Sin las tablas, el control de 48 h, las novedades y la recepción de órdenes no existen | Correr **los dos bloques de verificación** del propio archivo y **pegar su salida literal**: las 7 consultas numeradas del pie, y el bloque aparte «VERIFICACION de las novedades» que está antes (fácil de saltar, porque no está al final). Las tres que no se negocian: `SHOW CREATE TABLE pendientes\G` muestra `UNIQUE KEY uq_pendiente (aviso, activo_fijo)`; `SHOW CREATE TABLE ot_capturadas\G` muestra `UNIQUE KEY uq_captura_envio (envio_uuid)`; `SHOW COLUMNS FROM casos_gestion LIKE 'estado'` termina en `,'ESPERA_REPUESTO')` |
+| **T2.12.2** | ✅ **Hecho el 2026-09-11** · Idempotencia de la migración | Una segunda corrida que duplique deja el tablero contando doble | Correr la 007 **dos veces seguidas**. `SELECT COUNT(*) FROM permisos WHERE codigo LIKE 'repuestos%' OR codigo LIKE 'novedades%'` → 7 en las dos corridas. Y la prueba de inserción doble del pie del archivo → `COUNT(*) = 1` |
+| **T2.12.3** | ✅ **Desplegado entero el 2026-09-11**: nadie usa el sitio de pruebas, así que el piloto por zona queda para cuando empiece el uso real · Desplegar a **UIO solamente** (I-8) | Un defecto en tres zonas a la vez | `t2_10_desplegar.py`, que verifica por hash. Abrir las 13 pantallas con un usuario de cada rol y **que ninguna dé error de PHP ni quede en blanco**. ⚠️ **Corregido el 2026-09-10:** hay **un solo sitio para las tres zonas**, así que «desplegar solo a UIO» no existe: el piloto se hace dejando activas solo las cuentas de UIO (baja temporal de las de LARB y CNLJ desde `usuarios.php`, con bitácora) o con una compuerta `zonas_habilitadas` en `nucleo/config.php`. **La vía la elige Andrés** antes de este paso |
+| **T2.12.4** | ✅ **Hecho el 2026-09-11** · 🚦 Verificar el alcance por zona **con los tres roles** | Que un jefe de zona vea datos de otra zona. Es la comprobación más importante de toda la tarea | Entrar como administradora, jefe de UIO y jefe de CNLJ y **contar filas** en `casos.php`, `pendientes.php`, `novedades_visita.php`, `ordenes.php`, `reportes.php` y `cronograma.html`. Las cifras de los dos jefes deben sumar sin solaparse y ser menores que la de la administradora. Pedir otra zona por la URL (`?zona=CNLJ` siendo jefe de UIO) → **0 filas y ninguna fuga** |
+| **T2.12.5** | ✅ **Hecho el 2026-09-11** · Verificar el alcance con un **POST fabricado a mano** | Que esconder un botón se confunda con proteger | `curl` un POST a `pendientes.php` con `pendiente_id` de otra zona y a `novedades_visita.php` con `novedad_id` de otra zona, con la cookie de un jefe de zona → **rechazado en el servidor**, y la fila queda en `bitacora` con `exito = 0` |
+| **T2.12.6** | ✅ **Hecho el 2026-09-11** · Verificar los dos extremos que se cerraron el 10-sep | Que un despliegue los reabra por descuido | `curl` sin cookie a `catalogos.php` y a `cronograma.php` → **401 en JSON**, no un catálogo (**comprobado el 2026-09-10 tras subirlos**). Con cookie de jefe de zona a `cronograma.php` → solo su zona. **Con cookie de un técnico** a `catalogos.php` → `avisos` = exactamente sus casos asignados; ninguna prueba de T2.12 entraba como técnico |
+| **T2.12.7** | ✅ **Hecho el 2026-09-11** con un navegador de verdad contra el servidor (`prueba_cola_vivo.mjs`): el servidor «caído» se simula desviando el dominio, porque Hostinger no se puede apagar · 🚦 Prueba de captura **sin señal**, de punta a punta | Que una orden se pierda, o que llegue dos veces | **Apagar el servidor de verdad** — no cortar la red con el depurador, que no reproduce el caso: el trabajador de servicio tiene su propio contexto de red. Abrir el formulario, llenar una orden completa, comprobar que la cola dice «guardada, esperando señal». Encender el servidor. La orden sale sola y **`SELECT COUNT(*) FROM ot_capturadas WHERE envio_uuid = '<el uuid>'` da 1**, no 2 |
+| **T2.12.8** | ✅ **Hecho el 2026-09-11** (`prueba_cola_vivo.mjs`) · Reintento con sesión caducada | Que un 401 marque como inválida una orden que está perfecta | Con órdenes en la cola, cerrar la sesión desde otro navegador (sesión única). El siguiente intento debe dejarlas en «falta entrar», **no** en «rechazada». Volver a entrar → salen solas |
+| **T2.12.9** | ✅ **Hecho el 2026-09-11** · Verificar el reloj de 48 h contra datos reales | Que la cifra del globo de navegación y la de la pantalla discrepen | Abrir un pendiente con equipo deshabilitado. Comprobar que el globo de «Repuestos y equipos», la tarjeta «Fuera de plazo» y la lista filtrada con `?g=vencidos` **dan el mismo número**. Contrastar con la consulta 6 del pie de la 007 |
+| **T2.12.10** | ✅ **Hecho el 2026-09-11** · Verificar el ciclo completo de un caso | Que la reconciliación pise un estado que puso una persona | Recorrer un caso de prueba: asignar → el técnico lo deja trabado → veredicto → avanzar la vía → resolver. Después correr `reconciliar_cli.php` y comprobar con la consulta 5 del pie de la 007 que **da 0 filas** |
 | **T2.12.11** | Esperar **48 horas** y extender a LARB y CNLJ | Desplegar a las tres zonas un defecto que se ve al segundo día | Que en 48 h no haya entrado ninguna incidencia del personal de UIO. Recién entonces `t2_10_desplegar.py` al resto |
 | **T2.12.12** | Capacitación mínima, **una hoja por rol** | Que la interfaz nueva se aprenda por prueba y error delante del cliente | Tres hojas en `SALIDAS IA\OTS\`: técnico (bandeja, cómo se llena sin señal, cómo se insiste), jefe de zona (repartir, los cuatro veredictos, el reloj), administración (confirmar cierre en SAP, novedades, reportes). Cada una con capturas del sistema ya desplegado |
 
@@ -615,6 +615,57 @@ sí y con la consulta de la migración.
 sigue con una advertencia (I-10). Y si un dato real contradice lo que dice este
 plan, **gana el dato**: se anota y se consulta, no se improvisa una
 interpretación.
+
+---
+
+### T2.13 · La app del técnico que pidió Andrés (2026-09-10)
+
+Pedido literal en `entrada/desarrollador/INDUSTEC/REQUERIMIENTO.md` del repo de agentes:
+que el técnico no pueda equivocarse en lo que el sistema ya sabe. Estado de cada
+requisito después de la auditoría del 2026-09-10 (código local, sin desplegar salvo
+lo que se dice):
+
+| # | Requisito | Estado | Qué falta |
+|---|---|---|---|
+| 1 | El aviso SAP se pone solo, porque el caso ya fue asignado | ✅ en código | Desplegar. «Emitir la orden de este caso» precarga y bloquea el aviso; el combo trae solo lo asignado |
+| 2 | El nombre del técnico se pone solo | ✅ en código | Desplegar. El servidor pone primero a quien tiene la sesión, diga lo que diga el celular |
+| 3 | Solo ve sus casos | ✅ en el servidor desde el 10-sep (`catalogos.php`, `cronograma.php`) y en código (`mis.php`, pendientes) | T2.13.2: que el combo no ofrezca casos ya atendidos o cerrados |
+| 4 | Historial de lo que atendió | ⚠️ parcial: «Atendidas» depende de la ventana de 90 días del buzón | T2.13.3 |
+| 5 | Cronogramas | ⚠️ parcial: ve el de su zona, con la barra de escritorio | T2.13.4. «Mis preventivos» exige registrar quién va a cada ingreso (decisión 5) |
+| 6 | Buzón de alertas y notificaciones internas | ❌ | T2.13.5. Comunicados escritos por personas, solo si Andrés los quiere (decisión 3) |
+
+**Lo que decide si esto se usa (decisión 1 de Andrés).** Hoy la app nueva guarda la
+orden, pero no genera el PDF ni manda el correo, y no lleva fotos ni la imagen de la
+firma. Mientras sea así, el técnico sigue en el formulario de producción y los
+requisitos 1 y 2 no le llegan. Dos caminos: **(a)** terminar la emisión en la app
+nueva — migración nueva `app/sql/008` con correlativos y cola de correo, y fotos y
+firma como dato —; **(b)** un puente: que «Emitir» abra el formulario de producción
+con el aviso y el técnico precargados. **Andrés eligió (a) el 2026-09-10**: la emisión
+se termina en la app nueva y producción no se toca. **Hecho el 2026-09-11 en el sitio de pruebas** con la
+migración `008_emision.sql`: número, PDF y correo en cola, con las fotos y la firma como dato (ver
+ESTADO §1). Para producción falta el despachador de la cola y cargar los contadores reales.
+
+| # | Subtarea | Verificación exacta |
+|---|---|---|
+| **T2.13.0** | ✅ **Hecho el 2026-09-11** con dos casos reales de UIO (reversibles con `deshacer_prueba.php`), porque los sintéticos no se ven hasta T2.13.3 · 🚦 Personas y casos de prueba (**requiere aprobación**) | Crear `tec_prueba_uio_a`, `tec_prueba_uio_b` y un jefe de prueba, y 3 avisos sintéticos `9999xxxx` con su limpieza al final. `SELECT COUNT(*) FROM usuarios WHERE usuario LIKE 'tec_prueba%'` = 2. Sin esto ningún criterio de abajo se puede correr: asignar o cerrar casos reales para probar está prohibido |
+| **T2.13.1** | ✅ **Hecho el 2026-09-11** · Probar en el servidor lo corregido el 10-sep (tras T2.12.1 y el despliegue) | Con la cookie de `tec_prueba_uio_a`: `catalogos.php` → sus avisos y ninguno más; POST a `envio.php` con una orden válida → 200 y `SELECT COUNT(*) FROM ot_capturadas WHERE envio_uuid='<uuid>'` = 1; el mismo POST otra vez → sigue en 1; el mismo cuerpo con `usuario_captura` de B → 409 |
+| **T2.13.2** | ✅ **Hecho el 2026-09-11**: `catalogos.php` le da al técnico sus casos ASIGNADO o ESPERA_REPUESTO desde la base (`Casos::delTecnico`); probado con un aviso sintético que, al pasar a ATENDIDO, sale de su lista (`verificar_bandeja.py`) · El combo no ofrece casos ya atendidos o cerrados | `catalogos.php`, solo para TECNICO: casos en ASIGNADO o ESPERA_REPUESTO. Given un aviso sintético asignado a A, When pasa a ATENDIDO, Then desaparece del `curl` de `catalogos.php` de A. Coordinar con quien tenga `catalogos.php` en curso |
+| **T2.13.3** | ✅ **Hecho el 2026-09-11**: `mis.php` arma bandeja e historial desde `casos_gestion` y suma las órdenes enviadas desde la app; un caso fuera del catálogo sale con «sin dato en el catálogo» y se puede reportar trabado y emitir (`Casos::alcanzaAviso` se lo reconoce al técnico); la ficha de un caso cerrado muestra su orden de cierre o dice que no hay; «Historial» en la barra. 19 comprobaciones con avisos sintéticos · Historial **y bandeja** desde la base, no desde la ventana de 90 días | «Mis casos» = `casos_gestion` asignado a mí en ASIGNADO o ESPERA_REPUESTO, esté o no en el catálogo: el 2026-09-10 había 4 casos ASIGNADO fuera del catálogo que sus 3 técnicos no veían. «Atendidas» = `casos_gestion` (asignado a mí, ATENDIDO/RESUELTO/NO_COMPETE) ∪ `ot_capturadas` (mías); el PDF sale de `casos_gestion.ot_cierre` y, si falta, se dice (I-7). Enlace «Historial» en la barra del técnico. Criterio: un aviso sintético ATENDIDO que no está en `casos_sap.json` aparece con «sin dato en el catálogo» |
+| **T2.13.4** | ✅ **Hecho el 2026-09-11**: `cronograma.php` no le manda al técnico `tecnicos` y le da `locales` vacío; `cronograma.html` le pinta la barra de abajo con `UI.barraTecnico()` y le esconde «agendar un local». La barra se prueba como función pura en `pruebas/prueba_barra_tecnico.mjs` —aparte de `prueba_contratos.mjs`, que tiene trabajo en curso de otra conversación— y se compara con la de `mis.php` · Cronograma móvil del técnico | `cronograma.php` deja de mandar `tecnicos` (la pantalla no lo usa) y `locales` al técnico; `cronograma.html` le pinta la barra móvil. Criterio: `curl -b a.txt $B/cronograma.php` → sin clave `tecnicos` y `locales` vacío; la barra se prueba con una función pura en `prueba_contratos.mjs` |
+| **T2.13.5** | ✅ **Hecho el 2026-09-11**: `nucleo/Avisos.php` arma los avisos desde `casos_gestion`, `pendiente_notas`, `novedades` y la bitácora; `novedades.php` le cuenta al técnico los suyos; pestaña «Avisos» con globo y barra en `mis.php`. Probado con el jefe de prueba pasándole un caso de A a B y devolviéndoselo, una respuesta en el hilo y una novedad resuelta (`verificar_bandeja.py`). Límite: «te quitaron» solo se ve si la asignación anterior pasó por `casos.php` · Buzón de avisos del técnico, **sin tabla nueva** | `novedades.php` (rama TECNICO) devuelve total y versión propios desde lo que ya se registra: asignaciones (`casos_gestion.asignado_en`), respuestas y veredictos del hilo (`pendiente_notas`), veredictos de sus novedades y «te quitaron el caso» (bitácora). «Visto hasta» = su último `CONSULTAR bandeja` en la bitácora. Pestaña «Avisos» en `mis.php` con globo. Criterio: el jefe de prueba asigna un aviso sintético a A → total de A = 1 y de B = 0; A abre la bandeja → total 0 |
+| **T2.13.6** | Comunicados de zona (**solo si Andrés los aprueba**) | Tabla `comunicados` con `UNIQUE (comunicado_uuid)`, zona forzada en el servidor y «visto por X de Y». Condicionado a que el piloto muestre uso real: un comunicado que nadie abre le hace creer al jefe que avisó |
+| **T2.13.7** | ✅ **Hecho el 2026-09-11**: `Db.php` fija las dos zonas (`time_zone = '-05:00'` por desfase, porque Hostinger no tiene cargadas las zonas con nombre —error 1298—, y `date_default_timezone_set` al cargarse, que es por donde pasa todo lo que toca la base) y `hora_ecuador.php` corrió −5 h las `DATETIME` del reloj del servidor, salvo `atendido_en`, que llega del informe en hora local. Verificado en el servidor: `NOW()` y `date()` dan la misma hora de Ecuador, ninguna fecha queda en el futuro, el recibo de la orden sale con la hora local y las 87 comprobaciones por rol siguen pasando · La hora de Ecuador en todo el sistema | Hoy la base y el PHP corren en UTC y el negocio en UTC−5 (medido el 2026-09-10; ver AUDITORIA §6). **Opción elegida: una sola zona para todo.** `Db::conn()` ejecuta `SET time_zone = '-05:00'` (Ecuador no cambia de hora) y un arranque común fija `date_default_timezone_set('America/Guayaquil')`; las filas ya guardadas se corren −5 h una sola vez, en el sitio de pruebas (en `casos_gestion.tocado_en`, que lleva `ON UPDATE`, el `UPDATE` tiene que fijarla explícita o se pisa con `NOW()`). Descartada: guardar en UTC y convertir al mostrar, porque obliga a tocar cada pantalla y cada comparación con las fechas del catálogo de SAP, que llegan en hora local. Criterio: a las 20:00 de Ecuador, `SELECT NOW()` y `date('Y-m-d H:i')` dan la hora de Ecuador; un caso con `fecha_estimada` = hoy **no** sale vencido; la hora de `recibida_en` que ve el técnico en su recibo es la de su reloj |
+
+| Autónomo | Requiere aprobación humana | Prohibido |
+|---|---|---|
+| Código local, pruebas locales, `php -l` por SSH, `SELECT` de verificación en el sitio de pruebas | T2.13.0; aplicar migraciones; desplegar; T2.13.6 | Tocar producción; asignar o cerrar casos reales para probar; servir datos sin sesión; WhatsApp o servicios de pago; editar `casos.php`, `ordenes.php`, `Ui.php`, `estilo.css` o `busqueda.js` sin coordinar con su conversación |
+
+**Decisiones de Andrés que esta tarea necesita:** (1) ~~cómo salen el PDF y el correo~~
+→ **(a), decidida el 2026-09-10**; (2) ~~aprobar la 007~~ → **la aplica la estación
+después de fusionar la rama** (T2.12.1); (3) notificaciones: solo automáticas, o también
+comunicados escritos; (4) el arranque con personas en UIO — 14 de 16 técnicos y 2 de
+los 3 jefes nunca entraron (medido la noche del 2026-09-10), y la bandeja solo se llena si el jefe asigna en el sistema;
+(5) cronograma por técnico: `t2_7` no genera quién va a cada ingreso.
 
 ---
 
@@ -795,23 +846,57 @@ está escrito, probado en local y sin desplegar.**
 
 ### La siguiente acción, concreta
 
-> **⚠ Corregido el 2026-09-12 — no empieces por aquí.** Lo que sigue en esta
-> sección (aplicar la 007, desplegar el rediseño) **ya está hecho** en
-> `origin/pc/auditoria-2026-09-10`, que está **29 commits por delante de
-> `master`** con `master` como ancestro. Se comprobó con
-> `git log --oneline master..origin/pc/auditoria-2026-09-10`.
+> **Paso 0 CUMPLIDO el 2026-09-12: la rama ya está fusionada en `master`.**
+> No hace falta el `stash` que menciona abajo: se comprobó antes con `comm -12`
+> que la rama no tocaba ninguno de los archivos con cambios locales, así que la
+> fusión no tuvo que pisar nada. Los tres conflictos fueron de documentación
+> (`.gitignore`, `ESTADO.md`, este archivo). Respaldo en la rama
+> `respaldo/pre-fusion-2026-09-12`. Método completo en §5.2b de
+> [`ESTADO.md`](ESTADO.md).
 >
-> **La siguiente acción real es el avance rápido de `master` a esa rama**
-> (`git merge --ff-only`), que es de la conversación «fusión auditoría PC».
-> Mientras no ocurra, cada commit en `master` convierte ese avance rápido en una
-> fusión a tres bandas con conflictos en este archivo y en `ESTADO.md`.
-> Lee **§5.2b de [`ESTADO.md`](ESTADO.md)** antes de tocar git.
->
-> El procedimiento de abajo se conserva porque documenta *cómo* se aplica una
-> migración, no porque quede pendiente.
+> Lo de abajo se conserva como registro de lo que traía la rama.
+
+**0. Fusionar en la estación la rama `pc/auditoria-2026-09-10`** del remoto privado
+(`git fetch origin && git merge origin/pc/auditoria-2026-09-10`; si `git merge` se niega
+por cambios locales en `ESTADO.md` u otro archivo, se apartan antes con
+`git stash push -- <archivo>` y se devuelven con `git stash pop`) y **reiniciar la tarea
+programada del vigilante**, que así toma el IDLE de 9 minutos. Esa rama trae las
+correcciones de la auditoría del 2026-09-10 ([`AUDITORIA_2026-09-10.md`](AUDITORIA_2026-09-10.md)):
+desplegar desde la estación sin fusionarla pisa en el servidor lo que ya se corrigió: desde
+el 2026-09-10 el sitio de pruebas tiene `sw.js` v4, `pdf.php`, `nucleo/Reconciliar.php`,
+`nucleo/Auth.php` y los dos `.htaccess` de esa rama.
+
+**Actualización del 2026-09-11 (desde el PC, por decisión de Andrés: el sitio de pruebas no lo
+usa nadie de INDUSTEC).** T2.12.1, T2.12.2 y T2.12.3 **están hechos**: la 007 se aplicó dos
+veces sin duplicar (`verificar_esquema.php` «permisos (con la 007)» y TODO OK; pasan las 20
+comprobaciones de los dos bloques del pie) y los 48 archivos confirmados del rediseño están en el
+servidor, verificados por hash. Herramientas y respaldo previo en `~/respaldos/` del servidor
+(`verificar_007.php`, `revertir_007.php`). **No se vuelve a aplicar ni a desplegar desde la
+estación sin fusionar antes la rama.** Lo que sigue: T2.12.4 a T2.12.6 (alcance por rol, con
+cuentas de prueba) y después T2.13 por el camino (a).
+
+**Y la verificación por rol, el mismo 2026-09-11:** T2.12.3 a T2.12.6, T2.12.9, T2.12.10, T2.13.0 y
+T2.13.1 pasan (87 comprobaciones con ingreso real; herramientas en `desarrollo/sistema_ots/app/pruebas/servidor/`,
+con su LEEME). T2.12.7 y T2.12.8 también pasan, con un navegador de verdad (`prueba_cola_vivo.mjs`).
+Falta T2.12.12 (hojas de capacitación).
+
+**T2.13.7, la hora de Ecuador, también el 2026-09-11:** `Db.php` fija la zona de la base y la de PHP,
+y las fechas que el servidor había guardado en UTC se corrieron una sola vez (`hora_ecuador.php`, con
+respaldo previo en `~/respaldos/`). T2.13.2 y T2.13.3, el mismo día:
+la bandeja, el historial y el formulario del técnico salen de la base (`verificar_bandeja.py`). T2.13.5
+(el buzón de avisos del técnico) y T2.13.4 (su cronograma), también. Y la 008, la emisión: la orden sale de la
+app con su número, su PDF y su correo en cola (`verificar_emision.py`). Con eso T2.13 queda hecha en el
+sitio de pruebas; lo que sigue es el piloto en UIO cuando empiece el uso real (I-8) y, para el
+corte, el despachador de la cola y los contadores reales.
+
+**La web corporativa de INDUSTEC** quedó publicada ese mismo día en la raíz del sitio de pruebas, con
+`/acceso/` como puerta de entrada al sistema (`desarrollo/web_corporativa/LEEME.md`, §8).
 
 **T2.12.1 — aplicar la migración 007.** Requiere aprobación de Andrés porque
-cambia el esquema: pídesela antes de correr nada.
+cambia el esquema: pídesela antes de correr nada. Desde el 2026-09-10 la 007 trae
+además `pendientes.plazo_desde` y la nota `DIAGNOSTICO`, y `verificar_esquema.php`
+ya sabe comprobarla: después de aplicarla tiene que decir «permisos (con la 007)»
+26/25/17/9 y terminar en «TODO OK».
 
 El archivo y el comando exactos, que es lo que faltaba escribir:
 
@@ -918,12 +1003,13 @@ sobre-contó el backlog 8× en T1.11.
 | Bloqueado | Lo desbloquea |
 |---|---|
 | Aplicar la 007 y la 003 | **Andrés** — cambian el esquema |
-| Desplegar a UIO, y 48 h después a LARB y CNLJ | **Andrés** (I-8) |
-| Que el PDF y el correo salgan del sistema nuevo | La migración `003` (`correlativos` con reserva atómica y `email_queue`) |
+| Desplegar a UIO, y 48 h después a LARB y CNLJ | **Andrés** (I-8). El 2026-09-11 el rediseño se subió entero al sitio de pruebas porque nadie lo usa; el piloto por zona se decide cuando empiece el uso real |
+| ~~Que el PDF y el correo salgan del sistema nuevo~~ | ✅ **El PDF, desde el 2026-09-11** (la 008, en el sitio de pruebas). El correo queda en `email_queue`; falta el despachador y los datos reales del corte: contadores de `counter_{zona}.txt` y destinatarios en `config.php` |
 | El 36% del correctivo que el buzón no trae | Confirmar la causa — ver `SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md` |
 | Respaldo TrueNAS (T1.9) | Acceso físico al equipo |
 | Metas reales de SLA (T2.2) | El anexo de niveles de servicio del contrato con KFC |
-| ~~Sacar el proyecto del único disco~~ | **Desbloqueado el 2026-09-12.** `origin` apunta a `github.com:AndresIndustech/industec-bia-soft-erp` y `ssh -T git@github.com` autentica. Lo que queda es el avance rápido de `master`, no el acceso |
+| ~~Sacar el proyecto del único disco~~ | ✅ **Hecho el 2026-09-10:** remoto privado `AndresIndustech/industec-bia-soft-erp`. La base y el árbol canónico siguen en un solo disco hasta el TrueNAS |
+| ~~Desplegar los arreglos que ya afectan al sitio en uso y corregir las 2 filas «ASIGNADO» sin técnico~~ | ✅ **Hecho el 2026-09-10** con aprobación de Andrés: `sw.js` v4, `pdf.php`, `nucleo/Reconciliar.php`, `nucleo/Auth.php` y los dos `.htaccess`; huérfanas a NUEVO. `login.php` y `usuarios.php` suben con T2.12.3 porque necesitan el `Ui.php` y el `estilo.css` del rediseño. Ver [`AUDITORIA_2026-09-10.md`](AUDITORIA_2026-09-10.md) §3 |
 | Delegado de protección de datos ante la SPDP | Trámite: gratis, en línea, guía en `TRAMITE_DELEGADO_DATOS.md`. **El plazo venció hace más de 8 meses** |
 
 ### Entorno
@@ -968,23 +1054,48 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
 8. **Poner la protección en el `.json` y olvidar el `.php` que lo sirve.** Pasó
    dos veces: `catalogos.php` y `cronograma.php` entregaban locales, correos del
    cliente y nombres del personal sin ninguna sesión.
-9. **Llevar los estilos a la hoja común y olvidar las clases de una pantalla.**
-   El rediseño del 2026-09-10 recogió en `estilo.css` lo que cada página tenía
-   en su `<style>`, y se quedaron fuera `.equipo`, `.persona`, `.cifras` y
-   `.asignar` (toda la pantalla de asignación) y `.clave` (la contraseña
-   temporal de `usuarios.php`). **Eso no da un error:** da el HTML intacto, las
-   pruebas en verde y la pantalla en texto plano. Se descubre mirando, no
-   ejecutando. La comprobación es cruzar las clases usadas contra las definidas
-   — y **hazla completa**: la primera pasada se hizo mal y concluyó «era la
-   única», cuando eran dos. La segunda cayó justo en la cadena que una persona
-   copia a mano y que solo se muestra una vez.
-10. **Dar por cierto el estado del sistema mirando solo tu árbol de trabajo.**
-   Se escribió en este plan que `sw.js` «sigue en v3» y que aplicar la 007 era
-   la siguiente acción. Las dos cosas eran falsas: `master` estaba **29 commits
-   por detrás** de `origin/pc/auditoria-2026-09-10`, donde la 007 ya estaba
-   aplicada, el rediseño desplegado y `sw.js` en v5. Un `git log --oneline
-   master..origin/<rama>` lo habría dicho en un segundo. **El disco local no es
-   el estado del proyecto.**
+9. **Dar por cerrado lo que solo está cerrado en el código.** Esos mismos dos
+   extremos figuraron como «CERRADOS» mientras seguían entregando 909 casos de KFC
+   sin sesión: el arreglo nunca se había desplegado. «Cerrado» se afirma con un
+   `curl` contra el servidor, no con un diff.
+10. **Leer un archivo con otras claves que las que escribe su generador.**
+    `envio.php` buscaba `locales.json['locales']` y `equipos.json`; `t2_5` escribe
+    `{'datos': …}` y `equipos_por_local.json`. Habría rechazado el 100 % de las
+    órdenes. Un solo lector para todos: `nucleo/Catalogo.php`.
+11. **Restar fechas en PHP que guardó MySQL.** Que coincidan lo decide la configuración del
+    hosting, no el código (el 2026-09-10 la base y el PHP de la web corren los dos en UTC): el
+    reloj de 48 h y el bloqueo por intentos se calculan en SQL. La hora del negocio, la de
+    Ecuador, es otro asunto: T2.13.7, hecha el 2026-09-11 (`Db.php` fija las dos zonas).
+12. **Probar solo contra la base de la estación.** En Hostinger la intercalación del servidor
+    (`utf8mb4_unicode_ci`) chocaba con la que MariaDB les da a los parámetros de las preparadas
+    nativas, y `NULLIF(?, '')` tumbaba con error 500 el veredicto, los cierres y las novedades; en la
+    estación no se veía. Lo que se despliega se prueba contra el servidor, con cuentas de prueba.
+13. **Dar por desplegado lo que quedó en el disco del servidor.** El CDN de Hostinger guarda una
+    copia por dirección y por compresión, y marcaba el js y el css para 7 días: horas después de subir
+    el `sw.js` v4 y el `estilo.css` nuevo, los navegadores —que piden comprimido— seguían recibiendo
+    los viejos, mientras el hash del disco cuadraba y un `curl` sin compresión daba lo nuevo. El
+    `.htaccess` pide revalidar el código, una purga limpió lo guardado, y `t2_10` compara al final lo
+    que entrega la web en sus dos variantes. Las imágenes no se comparan: el CDN las recomprime.
+14. **Llevar los estilos a la hoja común y olvidar las clases de una pantalla.**
+    El rediseño del 2026-09-10 recogió en `estilo.css` lo que cada página tenía
+    en su `<style>`, y se quedaron fuera `.equipo`, `.persona`, `.cifras` y
+    `.asignar` (toda la pantalla de asignación) y `.clave` (la contraseña
+    temporal de `usuarios.php`). **Eso no da un error:** da el HTML intacto, las
+    pruebas en verde y la pantalla en texto plano. Se descubre mirando, no
+    ejecutando. La comprobación es cruzar las clases usadas contra las definidas
+    — y **hazla completa**: la primera pasada se hizo mal y concluyó «era la
+    única», cuando eran dos. La segunda cayó justo en la cadena que una persona
+    copia a mano y que solo se muestra una vez: la contraseña temporal.
+15. **Dar por cierto el estado del proyecto mirando solo tu árbol de trabajo.**
+    Se escribió en este plan que `sw.js` «sigue en v3» y que aplicar la 007 era
+    la siguiente acción. Las dos cosas eran falsas: `master` estaba **29 commits
+    por detrás** de `pc/auditoria-2026-09-10`, donde la 007 ya estaba aplicada,
+    el rediseño desplegado y `sw.js` en v5. Un `git log --oneline
+    master..origin/<rama>` lo habría dicho en un segundo, y un
+    `git merge-base --is-ancestor` habría dicho además que todavía se podía
+    avanzar sin fusionar. **El disco local no es el estado del proyecto**, y
+    escribir el plan sin mirar las ramas manda a la siguiente conversación a
+    repetir trabajo hecho.
 
 ### Lo que no se toca, nunca
 

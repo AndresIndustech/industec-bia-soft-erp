@@ -18,11 +18,17 @@ require_once __DIR__ . '/Db.php';
  *    distingue lo que hay que repartir hoy de lo que hay que explicarle a KFC.
  *
  * LO QUE NO HACEN, Y ES DELIBERADO
- * Ninguna de las dos toca un caso que una persona ya resolvió. Si la
- * administradora dio un veredicto, o mandó algo a revisión, eso manda sobre lo
- * que deduzca el sistema. La regla del proyecto es que las señales automáticas
- * alertan y la administradora decide; aquí eso se hace cumplir con un `WHERE`,
- * no con buena voluntad.
+ * Ninguna de las dos pisa lo que decidió una persona: ni un veredicto, ni una
+ * revisión, ni una asignación, ni una derivación a otra zona. La regla del
+ * proyecto es que las señales automáticas alertan y la administradora decide;
+ * aquí eso se hace cumplir dentro del SQL, no con una foto previa en PHP que
+ * puede quedar vieja entre la lectura y la escritura.
+ *
+ * Hasta el 2026-09-10 el upsert reescribía `asignado_a` con el firmante del
+ * informe en cada corrida: el caso que un jefe reasignaba volvía solo, cada
+ * 3 horas, al técnico anterior. Y una orden abierta sin firma reconocible
+ * fabricaba un «ASIGNADO» sin nadie asignado: así nacieron las 2 filas
+ * huérfanas del 2026-09-09.
  *
  * Todo queda en la bitácora con `usuario = 'sistema'`, para que al minar el
  * registro se distinga lo que hizo una persona de lo que dedujo el programa.
@@ -38,6 +44,9 @@ final class Reconciliar
      * cuanto viera la orden. La administradora lo daría por listo y lo cerraría
      * en SAP con el equipo todavía parado esperando la resistencia. Sale de
      * aquí cuando la pieza se instala, no cuando llega el informe que la pidió.
+     *
+     * La misma lista va escrita en el SQL de `atenciones()`: cambiar una obliga
+     * a cambiar la otra.
      */
     private const INTOCABLES = ['RESUELTO', 'NO_COMPETE', 'EN_REVISION', 'ESPERA_REPUESTO'];
 
@@ -98,24 +107,34 @@ final class Reconciliar
             }
             if ($idt === null) { $sinTecnico++; }
 
-            // Con orden de cierre, el trabajo termino. Sin ella, hay una orden
-            // abierta: alguien fue, y sigue en curso -- tipicamente esperando un
-            // repuesto. Las dos cosas tienen tecnico conocido.
+            // Con orden de cierre, el trabajo terminó. Sin ella hay una orden
+            // abierta: alguien fue y sigue en curso, típicamente esperando un
+            // repuesto. Pero si esa orden abierta no trae una firma que se
+            // reconozca, no hay a quién asignarla: se deja como está en vez de
+            // fabricar un «asignado» sin nadie, que ninguna bandeja muestra.
+            if (!$cerrada && $idt === null) { continue; }
             $nuevo = $cerrada ? 'ATENDIDO' : 'ASIGNADO';
 
+            // El orden del SET importa: MariaDB evalúa de izquierda a derecha y
+            // cada columna ve el valor ya escrito de las anteriores. `estado` va
+            // al final porque mira el `asignado_a` que quedó.
             Db::ejecutar(
                 "INSERT INTO casos_gestion (aviso, estado, ot_cierre, atendido_en,
                                             asignado_a, tecnico_auto)
                  VALUES (?,?,?,?,?,?)
                  ON DUPLICATE KEY UPDATE
-                     estado       = VALUES(estado),
-                     ot_cierre    = VALUES(ot_cierre),
-                     atendido_en  = VALUES(atendido_en),
-                     -- No se pisa un tecnico que puso una persona: si ya hay
-                     -- asignado y este viene vacio, se conserva el que habia.
-                     asignado_a   = COALESCE(VALUES(asignado_a), asignado_a),
-                     tecnico_auto = CASE WHEN asignado_a IS NULL THEN VALUES(tecnico_auto)
-                                         ELSE tecnico_auto END",
+                     ot_cierre    = COALESCE(VALUES(ot_cierre), ot_cierre),
+                     atendido_en  = COALESCE(VALUES(atendido_en), atendido_en),
+                     -- El firmante solo se pone si ninguna persona asignó ni
+                     -- derivó el caso. Lo que decidió una persona no se pisa.
+                     asignado_a   = IF(asignado_por IS NULL AND derivado_en IS NULL,
+                                       COALESCE(VALUES(asignado_a), asignado_a), asignado_a),
+                     tecnico_auto = IF(asignado_por IS NULL AND derivado_en IS NULL
+                                       AND asignado_a IS NOT NULL, 1, tecnico_auto),
+                     estado       = CASE
+                         WHEN estado IN ('RESUELTO','NO_COMPETE','EN_REVISION','ESPERA_REPUESTO') THEN estado
+                         WHEN VALUES(estado) = 'ASIGNADO' AND asignado_a IS NULL THEN estado
+                         ELSE VALUES(estado) END",
                 [$aviso, $nuevo, $ot, $fecha ? substr((string) $fecha, 0, 19) : null,
                  $idt, $idt === null ? 0 : 1]
             );

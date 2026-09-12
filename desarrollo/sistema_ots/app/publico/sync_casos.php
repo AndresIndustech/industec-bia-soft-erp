@@ -38,6 +38,9 @@ declare(strict_types=1);
  * pregunta por qué el buzón está desactualizado.
  */
 
+// Primero, para que el registro y la reconciliación vayan en hora de Ecuador.
+require_once __DIR__ . '/nucleo/Db.php';
+
 const MAX_BYTES   = 12 * 1024 * 1024;   // el catálogo pesa ~1 MB; 12 sobra
 const TOLERANCIA  = 300;                // ±5 min de diferencia de reloj
 const REGISTRO    = __DIR__ . '/catalogos/sync.log';

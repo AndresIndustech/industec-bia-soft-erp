@@ -1,0 +1,55 @@
+# App de OTs de INDUSTEC -- raíz del sitio.
+#
+# Hasta el 2026-09-10 este archivo existía solo en el servidor, fuera del
+# repositorio: un despliegue desde cero lo habría perdido. Ahora se versiona y
+# viaja en la lista blanca de t2_10_desplegar.py.
+#
+# Ningún archivo de datos se sirve directo. Los catálogos solo salen por
+# catalogos.php y cronograma.php, que exigen sesión.
+
+<FilesMatch "\.(json|log|txt|csv|bak|sql|md|mjs|env|previo)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# EXCEPCION: manifest.json es público a propósito. Sin él, el celular no puede
+# instalar la app -- y si no se instala, no hay modo sin conexión. No lleva
+# ningún dato: solo el nombre, los colores y los iconos.
+<Files "manifest.json">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Allow from all
+    </IfModule>
+</Files>
+
+# Cabeceras que el servidor no ponía: sin ellas cualquier sitio podía enmarcar
+# las pantallas, y el navegador adivinaba el tipo de lo que recibía.
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "same-origin"
+    Header always set Strict-Transport-Security "max-age=31536000"
+</IfModule>
+
+# El CDN de Hostinger (hcdn) guardaba 7 días lo que el servidor marca como
+# estático (Cache-Control: public, max-age=604800). El 2026-09-11 seguía
+# sirviendo el sw.js v2 horas después de subir el v4, y cualquier despliegue
+# habría tardado hasta una semana en llegar a los celulares. El código se
+# revalida en cada pedido (con ETag, cuesta un 304); el trabajador de servicio
+# ya guarda su copia para el modo sin señal. Los íconos siguen con caché larga.
+<IfModule mod_headers.c>
+    <FilesMatch "\.(js|css|html|json)$">
+        Header set Cache-Control "no-cache"
+        Header unset Expires
+    </FilesMatch>
+</IfModule>
+
+Options -Indexes

@@ -22,9 +22,19 @@ INDUSTEC factura hoy. Una cuenta SSH ve TODAS las carpetas del plan, así que un
 Por eso `RUTA_DESTINO` se verifica carácter por carácter antes de conectar, y
 cualquier otra ruta corta la ejecución. No alcanza con "acordarse".
 
+Y LA RUTA DE CADA ARCHIVO TAMBIEN PASA POR LA COMPUERTA. Hasta el 2026-09-10
+no se normalizaba: `--borrar ../../../yellow-elephant…/algo` llegaba a
+producción, y `./nucleo/config.php` se saltaba la lista de prohibidos.
+
 TAMPOCO SE HACE NADA QUE CUESTE DINERO. Si algún día SSH deja de funcionar
 porque el plan no lo incluye, este script reporta y se detiene. Subir de plan lo
 decide y lo ejecuta Andrés.
+
+CADA EQUIPO CON SU LLAVE
+Las rutas salen de la ubicación de este archivo, así que corre igual en la
+estación que en otra copia del proyecto. La estación usa config/clave_hostinger;
+otro equipo declara la suya en INDUSTEC_LLAVE_SSH, para que cada llave se pueda
+revocar por separado en hPanel.
 
 Uso:
     .venv/Scripts/python.exe scripts/t2_10_desplegar.py --probar
@@ -34,14 +44,20 @@ Uso:
 """
 
 import argparse
+import gzip
 import hashlib
+import os
+import posixpath
+import shlex
+import ssl
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
-BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
-ORIGEN = Path(r"D:\INDUSTECH IA\desarrollo\sistema_ots\app\publico")
-LLAVE = BASE / "config" / "clave_hostinger"
+BASE = Path(__file__).resolve().parents[1]
+ORIGEN = BASE.parent / "sistema_ots" / "app" / "publico"
+LLAVE = Path(os.environ.get("INDUSTEC_LLAVE_SSH") or (BASE / "config" / "clave_hostinger"))
 ENV_PATH = BASE / "config" / ".env"
 
 # --- La compuerta. Cambiar esto a mano es cambiar de sitio de destino. -------
@@ -76,14 +92,22 @@ SSH_HOST, SSH_PUERTO = "82.25.73.181", 65002
 ARCHIVOS = [
     # --- Armazón compartido: de aquí sale la barra y los avisos de todas -----
     "estilo.css", "ui.js", "graficos.js",
+    # `busqueda.js` lo cargan casos.php y ordenes.php desde el 2026-09-10.
+    "busqueda.js",
     "nucleo/Auth.php", "nucleo/Db.php", "nucleo/Validacion.php",
     "nucleo/Ui.php", "nucleo/Casos.php", "nucleo/Pendientes.php",
-    "nucleo/Novedades.php", "nucleo/Reconciliar.php",
+    "nucleo/Novedades.php", "nucleo/Reconciliar.php", "nucleo/Catalogo.php",
+    # `Avisos.php` arma el buzón del técnico (T2.13.5): lo cargan mis.php y novedades.php.
+    "nucleo/Avisos.php",
+    # La emisión (T2.13, la 008): número, PDF y cola de correo. El logo va dentro del PDF.
+    "nucleo/Emision.php", "nucleo/plantilla_ot.php", "nucleo/logo-industec.png",
 
     # --- La app del técnico. `cola.js` es lo que evita perder una orden
     #     llenada sin señal: si falta, el botón de enviar no guarda nada. -----
     "index.html", "app.js", "reglas.js", "offline.js", "cola.js", "guia.js",
     "sw.js", "manifest.json", "mis.php", "envio.php", "yo.php",
+    # `foto.php` recibe las fotos de una en una, antes que la orden (T2.13, la 008).
+    "foto.php",
 
     # --- La mesa de servicio -------------------------------------------------
     "login.php", "salir.php", "clave.php", "panel.php", "usuarios.php",
@@ -101,7 +125,10 @@ ARCHIVOS = [
     "cronograma.html", "cronograma.css", "cronograma.js",
 
     # --- Lo que cierra el acceso directo a los datos -------------------------
-    "nucleo/.htaccess", "catalogos/.htaccess",
+    # El .htaccess de la raíz y el de ordenes_pdf/ vivían solo en el servidor
+    # hasta el 2026-09-10: un sitio subido desde cero quedaba sin ellos.
+    ".htaccess", "nucleo/.htaccess", "catalogos/.htaccess", "ordenes_pdf/.htaccess",
+    "ordenes_fotos/.htaccess",
     "iconos/icono-192.png", "iconos/icono-512.png",
 ]
 
@@ -150,6 +177,16 @@ def compuerta() -> None:
                  f"Genérala y autoriza la pública en hPanel > Avanzado > Acceso SSH.")
 
 
+def normalizar(rel: str) -> str:
+    """La ruta de un archivo, dentro del sitio de pruebas o nada."""
+    r = posixpath.normpath(rel.replace("\\", "/"))
+    if r in ("", ".", "..") or r.startswith("/") or r.startswith("../") or ":" in r:
+        sys.exit(f"ABORTADO: {rel!r} sale del sitio de pruebas")
+    if not (ORIGEN / r).resolve().is_relative_to(ORIGEN.resolve()):
+        sys.exit(f"ABORTADO: {rel!r} sale de {ORIGEN}")
+    return r
+
+
 def usuario() -> str:
     env = {}
     if ENV_PATH.is_file():
@@ -158,7 +195,7 @@ def usuario() -> str:
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
                 env[k.strip()] = v.strip()
-    u = env.get("SSH_USER", "").strip()
+    u = (os.environ.get("INDUSTEC_SSH_USER") or env.get("SSH_USER", "")).strip()
     if not u:
         sys.exit("Falta SSH_USER en config/.env (lo da hPanel > Avanzado > Acceso SSH)")
     return u
@@ -173,19 +210,20 @@ def ssh(u: str, comando: str, *, texto: bool = True):
         capture_output=True, text=texto, timeout=120)
 
 
-def subir(u: str, rel: str) -> bool:
+def subir(u: str, crudo: str) -> bool:
     """Sube un archivo y comprueba por hash que llegó igual."""
+    rel = normalizar(crudo)
     local = ORIGEN / rel
+    if rel in PROHIBIDOS:
+        print(f"  {rel:<28} PROHIBIDO subir por esta vía")
+        return False
     if not local.is_file():
         print(f"  {rel:<28} NO EXISTE en {ORIGEN}")
-        return False
-    if rel.replace("\\", "/") in PROHIBIDOS:
-        print(f"  {rel:<28} PROHIBIDO subir por esta vía")
         return False
 
     remoto = f"{RUTA_DESTINO}/{rel}"
     carpeta = remoto.rsplit("/", 1)[0]
-    ssh(u, f"mkdir -p {carpeta!r}")
+    ssh(u, f"mkdir -p {shlex.quote(carpeta)}")
     r = subprocess.run(
         ["scp", "-i", str(LLAVE), "-P", str(SSH_PUERTO),
          "-o", "StrictHostKeyChecking=accept-new", "-o", "BatchMode=yes",
@@ -197,7 +235,7 @@ def subir(u: str, rel: str) -> bool:
 
     # Verificar, no confiar: el scp puede devolver 0 y dejar el archivo corto.
     esperado = hashlib.sha256(local.read_bytes()).hexdigest()
-    v = ssh(u, f"sha256sum {remoto!r} 2>/dev/null | cut -d' ' -f1")
+    v = ssh(u, f"sha256sum {shlex.quote(remoto)} 2>/dev/null | cut -d' ' -f1")
     obtenido = (v.stdout or "").strip()
     if obtenido != esperado:
         print(f"  {rel:<28} NO COINCIDE el hash tras subirlo")
@@ -206,11 +244,77 @@ def subir(u: str, rel: str) -> bool:
     return True
 
 
+def borrar(u: str, crudo: str) -> bool:
+    """Borra un archivo del sitio de pruebas y comprueba que ya no está.
+    `rm -f` sale con 0 aunque el archivo no exista: no sirve como prueba."""
+    rel = normalizar(crudo)
+    if rel in PROHIBIDOS:
+        print(f"  {rel:<28} no se borra por esta vía")
+        return False
+    q = shlex.quote(f"{RUTA_DESTINO}/{rel}")
+    d = ssh(u, f"if [ -e {q} ]; then rm -- {q} && [ ! -e {q} ] && echo BORRADO; "
+               f"else echo NO_EXISTIA; fi")
+    salida = (d.stdout or "").strip()
+    print(f"  {rel:<28} {salida or 'ERROR ' + (d.stderr or '').strip()[:100]}")
+    return salida in ("BORRADO", "NO_EXISTIA")
+
+
+def verificar_web(lista: list[str]) -> list[str]:
+    """Lo que entrega la WEB, no solo lo que quedó en el disco del servidor.
+
+    El 2026-09-11 el CDN de Hostinger siguió sirviendo el sw.js v2 horas después
+    de subir el v4: el hash en el disco cuadraba y los celulares recibían el
+    viejo. Aquí se pide cada archivo público tal como lo pide un navegador, sin
+    esquivar el CDN, y se compara con lo que se subió.
+    """
+    host = RUTA_DESTINO.split("/")[1]
+    ctx = ssl.create_default_context()
+    # Un antivirus que inspecciona HTTPS (Avast en el PC de Andrés) presenta una
+    # raíz propia que Python 3.13+ rechaza por VERIFY_X509_STRICT. Se sigue
+    # verificando la cadena y el nombre; solo se quita esa rigidez.
+    ctx.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    viejos = []
+    for crudo in lista:
+        rel = normalizar(crudo)
+        # Solo el código. Las imágenes las recomprime el CDN al vuelo (nodos
+        # «imm-edge»): el ícono de 1149 B llega de 1341 B aunque se esquive la
+        # caché, así que su hash nunca cuadra y no dice nada (medido el 2026-09-11).
+        if not (rel.endswith((".js", ".css", ".html")) or rel == "manifest.json"):
+            continue
+        local = hashlib.sha256((ORIGEN / rel).read_bytes()).hexdigest()
+        # El CDN guarda una copia por cada forma de pedirlo: sin comprimir (curl)
+        # y comprimida (todo navegador). El 2026-09-11 la comprimida del sw.js
+        # siguió vieja cuando la otra ya se había renovado: hay que mirar las dos.
+        for enc in ("identity", "gzip"):
+            pedido = urllib.request.Request(f"https://{host}/ot/{rel}", headers={
+                "Accept-Encoding": enc, "User-Agent": "t2_10_desplegar (comprobacion)"})
+            try:
+                with urllib.request.urlopen(pedido, timeout=30, context=ctx) as r:
+                    cuerpo = r.read()
+                    if (r.headers.get("Content-Encoding") or "").lower() == "gzip":
+                        cuerpo = gzip.decompress(cuerpo)
+            except Exception as e:
+                print(f"  {rel:<28} no se pudo leer por la web ({enc}): {e}")
+                viejos.append(f"{rel} ({enc})")
+                continue
+            if hashlib.sha256(cuerpo).hexdigest() != local:
+                viejos.append(f"{rel} ({'comprimida' if enc == 'gzip' else 'sin comprimir'})")
+    if viejos:
+        print("\nATENCIÓN: la web todavía entrega una copia VIEJA de: " + ", ".join(viejos))
+        print("Es el CDN de Hostinger. Purga su caché en hPanel (sitio → Rendimiento → CDN)")
+        print("y vuelve a comprobar con --comprobar-web.")
+    else:
+        print("la web entrega exactamente lo que se subió")
+    return viejos
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("archivos", nargs="*", help="rutas relativas a publico/")
     ap.add_argument("--todo", action="store_true", help="sube la lista blanca completa")
     ap.add_argument("--probar", action="store_true", help="solo comprueba la conexión")
+    ap.add_argument("--comprobar-web", nargs="+", metavar="ARCHIVO",
+                    help="solo compara lo que entrega la web (con su CDN) con lo local")
     ap.add_argument("--borrar", nargs="+", metavar="ARCHIVO",
                     help="borra archivos del sitio de pruebas")
     args = ap.parse_args()
@@ -219,7 +323,7 @@ def main() -> None:
     u = usuario()
     print(f"destino: {u}@{SSH_HOST}:{SSH_PUERTO}  {RUTA_DESTINO}\n")
 
-    r = ssh(u, f"pwd && ls -d {RUTA_DESTINO!r} 2>/dev/null && echo CARPETA_OK")
+    r = ssh(u, f"pwd && ls -d {shlex.quote(RUTA_DESTINO)} 2>/dev/null && echo CARPETA_OK")
     if r.returncode != 0:
         sys.exit("No se pudo conectar por SSH.\n"
                  f"  {(r.stderr or '').strip()[:300]}\n\n"
@@ -232,22 +336,21 @@ def main() -> None:
     if args.probar:
         return
 
+    if args.comprobar_web:
+        sys.exit(1 if verificar_web(args.comprobar_web) else 0)
+
     if args.borrar:
-        for rel in args.borrar:
-            if rel.replace("\\", "/") in PROHIBIDOS or "/" not in RUTA_DESTINO:
-                print(f"  {rel:<28} no se borra por esta vía")
-                continue
-            d = ssh(u, f"rm -f {RUTA_DESTINO + '/' + rel!r}")
-            print(f"  {rel:<28} {'borrado' if d.returncode == 0 else 'ERROR'}")
-        return
+        ok = sum(borrar(u, rel) for rel in args.borrar)
+        sys.exit(0 if ok == len(args.borrar) else 1)
 
     lista = ARCHIVOS if args.todo else args.archivos
     if not lista:
         sys.exit("Dime qué archivos subir, o usa --todo.")
 
-    ok = sum(subir(u, rel.replace("\\", "/")) for rel in lista)
+    ok = sum(subir(u, rel) for rel in lista)
     print(f"\n{ok} de {len(lista)} archivos en el sitio de pruebas")
-    sys.exit(0 if ok == len(lista) else 1)
+    viejos = verificar_web(lista)
+    sys.exit(0 if ok == len(lista) and not viejos else 1)
 
 
 if __name__ == "__main__":

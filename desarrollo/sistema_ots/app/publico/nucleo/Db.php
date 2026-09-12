@@ -10,6 +10,18 @@ declare(strict_types=1);
  * esto es lo contrario de eso.
  */
 
+/*
+ * LA HORA DEL NEGOCIO ES LA DE ECUADOR, en la base y en PHP a la vez.
+ *
+ * Hostinger corre MariaDB y PHP en UTC. Con eso una orden de las 19:30 caía
+ * «mañana», los reportes cortaban el día a las 19:00 y el «hace 3 h» de las
+ * pantallas salía corrido cinco horas (T2.13.7, medido el 2026-09-11). Se fija
+ * aquí porque todo lo que toca la base pasa por este archivo, en la web y en la
+ * consola. Lo que el servidor guardó antes en UTC se corrió una sola vez con
+ * `pruebas/servidor/hora_ecuador.php`.
+ */
+date_default_timezone_set('America/Guayaquil');
+
 final class Db
 {
     private static ?PDO $pdo = null;
@@ -33,6 +45,17 @@ final class Db
             // Consultas preparadas de verdad, no emuladas: es lo que impide la
             // inyección de SQL aunque alguien concatene por descuido.
             PDO::ATTR_EMULATE_PREPARES   => false,
+            // La intercalación de la conexión, fijada a la de las tablas. Con
+            // preparadas nativas, MariaDB le da a cada parámetro la intercalación
+            // por defecto del juego (utf8mb4_general_ci) y a los literales la del
+            // servidor (utf8mb4_unicode_ci en Hostinger): `NULLIF(?, '')` fallaba
+            // con «Illegal mix of collations» y tumbaba el veredicto, el cierre de
+            // un pendiente y la resolución de novedades (medido el 2026-09-11).
+            // Y la zona de la conexión, la misma que la de PHP (arriba): NOW(),
+            // CURRENT_TIMESTAMP y FROM_UNIXTIME salen en hora de Ecuador. Va el
+            // desfase y no el nombre porque Hostinger no tiene cargadas las
+            // zonas con nombre (error 1298); Ecuador no cambia de hora en el año.
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci, time_zone = '-05:00'",
         ]);
         return self::$pdo;
     }

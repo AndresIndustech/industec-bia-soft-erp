@@ -33,12 +33,16 @@ if ($archivo === '' || !is_file($archivo)) {
 }
 
 $cfg = require __DIR__ . '/nucleo/config.php';
+date_default_timezone_set('America/Guayaquil');
 $db = new PDO(
     sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
             $cfg['db_host'], $cfg['db_port'], $cfg['db_name']),
     $cfg['db_user'], $cfg['db_pass'],
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+     // La misma sesión que Db.php: sin la zona, lo que una migración siembre
+     // con NOW() o CURRENT_TIMESTAMP quedaría en UTC y el resto en hora de Ecuador.
+     PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci, time_zone = '-05:00'"]
 );
 
 $sql = (string) file_get_contents($archivo);

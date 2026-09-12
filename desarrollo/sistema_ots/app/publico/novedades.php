@@ -35,6 +35,24 @@ const RESUMEN  = __DIR__ . '/catalogos/casos_resumen.json';
 $zona = Auth::zonaAlcance();
 $rol  = (string) $u['rol'];
 
+/* Al técnico no se le cuenta el buzón —ese volumen es de la empresa y no se le
+   informa por una vía lateral— sino LO SUYO (T2.13.5): cuántos avisos tiene
+   desde la última vez que abrió su bandeja. La barra le ofrece ir a verlos. */
+if ($rol === 'TECNICO') {
+    require_once __DIR__ . '/nucleo/Avisos.php';
+    $uid   = (int) $u['usuario_id'];
+    $visto = Avisos::visto($uid) ?? date('Y-m-d H:i:s', time() - 7 * 86400);
+    $ev    = Avisos::delTecnico($uid, $visto);
+    echo json_encode([
+        'hay'     => true,
+        // Cambia cuando le llega un aviso nuevo y cuando abre la bandeja.
+        'version' => (int) strtotime($ev ? $ev[0]['cuando'] : $visto),
+        'avisos'  => count($ev),
+        'ir'      => 'mis.php?t=avisos',
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 $mtime = is_file(CATALOGO) ? (int) filemtime(CATALOGO) : 0;
 if ($mtime === 0) {
     echo json_encode(['hay' => false, 'motivo' => 'sin catálogo']);
@@ -44,11 +62,7 @@ if ($mtime === 0) {
 $r = is_file(RESUMEN) ? json_decode((string) file_get_contents(RESUMEN), true) : null;
 $total = null;
 if (is_array($r)) {
-    if ($rol === 'TECNICO') {
-        // El técnico ve lo suyo, y todavía no hay asignación. No se le informa
-        // del volumen de la empresa por una vía lateral.
-        $total = 0;
-    } elseif ($zona === null) {
+    if ($zona === null) {
         $total = (int) ($r['total'] ?? 0);
     } else {
         $total = (int) ($r['por_zona'][$zona] ?? 0);

@@ -13,7 +13,9 @@ $sesionAbierta = null;
 $usuario = '';
 $destino = $_GET['r'] ?? 'panel.php';
 // Nunca redirigir a donde diga el parámetro sin más: eso es un open redirect.
-if (!preg_match('#^[a-z0-9_./-]+\.php(\?.*)?$#i', $destino) || str_contains($destino, '..')) {
+// `//otro-sitio/x.php` pasaba la expresión: el navegador lo toma como otro dominio.
+if (!preg_match('#^[a-z0-9_./-]+\.php(\?.*)?$#i', $destino) || str_contains($destino, '..')
+    || str_starts_with($destino, '//')) {
     $destino = 'panel.php';
 }
 

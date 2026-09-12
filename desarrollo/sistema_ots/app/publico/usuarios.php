@@ -19,7 +19,7 @@ require_once __DIR__ . '/nucleo/Auth.php';
 
 $u = Auth::exigir();
 if (!Auth::puede('usuarios.gestionar') && !Auth::puede('usuarios.operativos')) {
-    Auth::bitacora('DENEGADO', 'permiso', 'usuarios');
+    Auth::bitacora('DENEGADO', 'permiso', 'usuarios', null, null, null, [], false);
     http_response_code(403);
     exit('<p style="font-family:system-ui;padding:24px">No tienes permiso para esta sección.</p>');
 }
@@ -47,7 +47,8 @@ function objetivo(int $id): array
 {
     $o = Db::uno('SELECT * FROM usuarios WHERE usuario_id = ?', [$id]);
     if (!$o || !Auth::puedeGestionarA($o)) {
-        Auth::bitacora('DENEGADO', 'usuario', (string) $id, 'fuera de su rango o alcance');
+        Auth::bitacora('DENEGADO', 'usuario', (string) $id, 'fuera de su rango o alcance',
+                       null, null, [], false);
         http_response_code(403);
         exit('<p style="font-family:system-ui;padding:24px">No puedes gestionar a ese usuario.</p>');
     }
@@ -119,6 +120,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             [$activo, $activo ? null : date('Y-m-d'), $o['usuario_id']]
         );
         Auth::bitacora($activo ? 'ACTIVAR_USUARIO' : 'DESACTIVAR_USUARIO', 'usuario', $o['usuario']);
+        if (!$activo) {
+            // Sus casos abiertos vuelven a repartir. Asignados a alguien que ya
+            // no entra, no aparecían en ninguna bandeja ni en «Por repartir».
+            $n = Db::ejecutar(
+                "UPDATE casos_gestion SET asignado_a = NULL, asignado_por = NULL, asignado_en = NULL,
+                        tecnico_auto = 0, estado = 'NUEVO'
+                  WHERE asignado_a = ? AND estado = 'ASIGNADO'", [$o['usuario_id']]);
+            if ($n > 0) {
+                Auth::bitacora('LIBERAR_CASOS', 'usuario', $o['usuario'], "$n casos vuelven a repartir",
+                               'ASIGNADO', 'NUEVO', ['casos' => $n]);
+            }
+        }
         $aviso = ($activo ? 'Se reactivó a ' : 'Se dio de baja a ') . $o['nombre']
                . '. Su historial queda intacto.';
 
@@ -279,7 +292,7 @@ Ui::cabecera($u, 'usuarios.php', [], ['titulo' => 'Usuarios y permisos']);
                 <span class="sub">—</span>
               <?php else: ?>
                 <div class="acciones">
-                  <form method="post" onsubmit="return confirm('¿Generar una contraseña nueva para <?= e($x['nombre']) ?>? La actual deja de servir.')">
+                  <form method="post" data-confirma="<?= e('¿Generar una contraseña nueva para ' . $x['nombre'] . '? La actual deja de servir.') ?>" onsubmit="return confirm(this.dataset.confirma)">
                     <input type="hidden" name="accion" value="clave">
                     <input type="hidden" name="id" value="<?= (int) $x['usuario_id'] ?>">
                     <button class="btn" type="submit">Nueva clave</button>
@@ -291,7 +304,7 @@ Ui::cabecera($u, 'usuarios.php', [], ['titulo' => 'Usuarios y permisos']);
                       <button class="btn" type="submit">Cerrar sesión</button>
                     </form>
                   <?php endif; ?>
-                  <form method="post" onsubmit="return confirm('<?= $x['activo'] ? '¿Dar de baja a ' . e($x['nombre']) . '? No podrá entrar, pero su historial queda intacto.' : '¿Reactivar a ' . e($x['nombre']) . '?' ?>')">
+                  <form method="post" data-confirma="<?= e($x['activo'] ? '¿Dar de baja a ' . $x['nombre'] . '? No podrá entrar, pero su historial queda intacto.' : '¿Reactivar a ' . $x['nombre'] . '?') ?>" onsubmit="return confirm(this.dataset.confirma)">
                     <input type="hidden" name="accion" value="<?= $x['activo'] ? 'desactivar' : 'activar' ?>">
                     <input type="hidden" name="id" value="<?= (int) $x['usuario_id'] ?>">
                     <button class="btn <?= $x['activo'] ? 'danger' : 'secondary' ?>" type="submit">

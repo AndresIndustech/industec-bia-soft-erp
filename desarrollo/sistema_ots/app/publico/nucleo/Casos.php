@@ -27,6 +27,11 @@ final class Casos
     private static ?array $catalogo = null;
     private static ?array $atenciones = null;
 
+    /** Lo que sigue siendo trabajo del técnico: su bandeja y su formulario (T2.13.2). */
+    public const ABIERTOS_TECNICO = ['ASIGNADO', 'ESPERA_REPUESTO'];
+    /** Lo que ya cerró, o se resolvió por otra vía: su historial (T2.13.3). */
+    public const CERRADOS_TECNICO = ['ATENDIDO', 'RESUELTO', 'NO_COMPETE'];
+
     private static function leerJson(string $nombre, string $clave): array
     {
         $candidatos = [
@@ -68,6 +73,20 @@ final class Casos
         $u = Auth::actual();
         if ($u === null) { return []; }
 
+        /* La zona que vale es la de la gestión: un caso derivado ya no es de la
+           zona del catálogo. Se reescribe aquí, una vez, para que el filtro, los
+           contadores, los pendientes y la propia derivación usen la misma. Antes
+           solo el filtro la respetaba: derivar de vuelta un caso se rechazaba
+           para siempre con «ya está en esa zona». */
+        $casos = array_map(static function (array $c) use ($gestion): array {
+            $zg = $gestion[$c['aviso'] ?? '']['zona'] ?? null;
+            if ($zg !== null && $zg !== '' && $zg !== ($c['zona'] ?? null)) {
+                $c['zona_catalogo'] = $c['zona'] ?? null;
+                $c['zona'] = $zg;
+            }
+            return $c;
+        }, $casos);
+
         if ($u['rol'] === 'TECNICO') {
             $mios = array_keys(array_filter(
                 $gestion,
@@ -80,13 +99,9 @@ final class Casos
         $zona = Auth::zonaAlcance();
         if ($zona === null) { return $casos; }        // administración: las tres
 
-        /* Un caso derivado sale de la zona vieja y entra a la nueva: manda lo
-           que diga la gestión, no lo que trae el catálogo. Si no, el jefe que lo
-           derivó lo seguiría viendo y el que lo recibió no lo vería nunca. */
-        return array_values(array_filter($casos, function ($c) use ($zona, $gestion) {
-            $z = $gestion[$c['aviso'] ?? '']['zona'] ?? ($c['zona'] ?? null);
-            return $z === $zona;
-        }));
+        // Un caso derivado sale de la zona vieja y entra a la nueva (arriba ya
+        // lleva la zona de la gestión): el jefe que lo derivó deja de verlo.
+        return array_values(array_filter($casos, fn($c) => ($c['zona'] ?? null) === $zona));
     }
 
     /** La gestión de todos los casos, indexada por aviso. */
@@ -104,6 +119,35 @@ final class Casos
         );
         $out = [];
         foreach ($filas as $f) { $out[$f['aviso']] = $f; }
+        return $out;
+    }
+
+    /**
+     * Los casos de un técnico en esos estados, desde la base y no desde el catálogo.
+     *
+     * El catálogo del buzón es una ventana que la estación reescribe entera: el
+     * 2026-09-10 había 4 casos ASIGNADO fuera de él y sus 3 técnicos no los veían
+     * ni en la bandeja ni en el formulario (T2.13.3). La lista la manda
+     * `casos_gestion`, que es lo que decidimos y persiste; el catálogo solo la
+     * completa. Lo que no está en él va con `sin_catalogo` y sin inventar nada (I-7).
+     *
+     * @param string[] $estados
+     * @return array<int,array<string,mixed>> filas con la forma del catálogo
+     */
+    public static function delTecnico(int $usuarioId, array $estados, array $gestion): array
+    {
+        $cat = [];
+        foreach (self::catalogo()['datos'] ?? [] as $c) { $cat[(string) ($c['aviso'] ?? '')] = $c; }
+        $out = [];
+        foreach ($gestion as $aviso => $g) {
+            $aviso = (string) $aviso;   // un aviso numérico llega como clave int
+            if ((int) ($g['asignado_a'] ?? 0) !== $usuarioId || !in_array($g['estado'], $estados, true)) {
+                continue;
+            }
+            $c = $cat[$aviso] ?? ['aviso' => $aviso, 'sin_catalogo' => true];
+            if (($g['zona'] ?? '') !== '') { $c['zona'] = $g['zona']; }   // la de la gestión manda
+            $out[] = $c;
+        }
         return $out;
     }
 
@@ -141,7 +185,7 @@ final class Casos
         );
     }
 
-    /** ¿Existe ese aviso en el catálogo, y lo alcanza este usuario? */
+    /** ¿Existe ese aviso —en el catálogo o, para el técnico, asignado a él— y lo alcanza este usuario? */
     public static function alcanzaAviso(string $aviso, array $gestion): ?array
     {
         foreach (self::catalogo()['datos'] ?? [] as $c) {
@@ -149,6 +193,17 @@ final class Casos
                 $vis = self::enAlcance([$c], $gestion);
                 return $vis === [] ? null : $vis[0];
             }
+        }
+        /* Fuera del catálogo, al técnico le alcanza lo que tiene asignado en la
+           base: si no, el caso que ve en su bandeja (delTecnico) no se podía
+           reportar trabado y su orden salía marcada «fuera de alcance». Sin zona
+           en la gestión vale la del técnico, que es la del jefe que decide. */
+        $u = Auth::actual();
+        $g = $gestion[$aviso] ?? null;
+        if ($u !== null && $u['rol'] === 'TECNICO' && $g !== null
+            && (int) ($g['asignado_a'] ?? 0) === (int) $u['usuario_id']) {
+            return ['aviso' => $aviso, 'sin_catalogo' => true,
+                    'zona' => ($g['zona'] ?? '') !== '' ? $g['zona'] : ($u['zona'] ?? null)];
         }
         return null;
     }
