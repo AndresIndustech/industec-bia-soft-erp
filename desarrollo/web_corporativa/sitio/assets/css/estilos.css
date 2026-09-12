@@ -99,8 +99,12 @@ main:focus { outline: none; }
 .ico-cerrar { --i: url("/assets/img/iconos/cerrar.svg"); }
 .ico-rayo { --i: url("/assets/img/iconos/emergencia.svg"); }
 .ico-info { --i: url("/assets/img/iconos/info.svg"); }
-.ico-freidora { --i: url("/assets/img/iconos/freidora-canastillas.svg"); }
+.ico-lineas { --i: url("/assets/img/iconos/termometro.svg"); }
 .ico-preventivo { --i: url("/assets/img/iconos/preventivo.svg"); }
+.ico-asesoria { --i: url("/assets/img/iconos/asesoria.svg"); }
+.ico-predictivo { --i: url("/assets/img/iconos/predictivo.svg"); }
+.ico-correctivo { --i: url("/assets/img/iconos/correctivo.svg"); }
+.ico-planificacion { --i: url("/assets/img/iconos/planificacion.svg"); }
 .ico-locales { --i: url("/assets/img/iconos/locales.svg"); }
 
 /* ---------- Botones ---------- */
@@ -229,8 +233,8 @@ main:focus { outline: none; }
 .cabeza-pagina .aviso-filtro { margin-top: 4px; }
 .cabeza-pagina .acciones + .aviso-filtro { margin-top: 18px; }
 
-/* Foto real de un trabajo, con los distintivos en una placa oscura pegada debajo.
-   El original mide 712 px de ancho: va en tarjeta (640 y 712 en srcset), nunca a todo el ancho.
+/* Ilustración de la cocina de un local de cadena (SVG de 712 x 536 que genera herramientas/gen_ilustracion.py),
+   con los distintivos en una placa oscura pegada debajo. Va en tarjeta, nunca a todo el ancho.
    En el celular va primero, para que lo primero que se vea sea la cocina profesional.
    Sin animación de entrada: es el elemento principal de la carga (LCP). */
 .portada__visual {
@@ -238,7 +242,7 @@ main:focus { outline: none; }
   width: 100%; max-width: 640px; margin-inline: auto;
   border-radius: 18px; box-shadow: var(--sombra);
 }
-/* Trama de puntos detrás de la esquina de la foto: solo en escritorio, donde tiene margen para verse entera. */
+/* Trama de puntos detrás de la esquina de la tarjeta: solo en escritorio, donde tiene margen para verse entera. */
 .portada__visual::before {
   content: ""; position: absolute; z-index: 0; display: none;
   top: -22px; right: -22px; width: 55%; height: 60%;
@@ -249,9 +253,17 @@ main:focus { outline: none; }
 .portada__foto {
   position: relative; z-index: 1;
   border-radius: 18px 18px 0 0; overflow: hidden;
-  background: #2A3042; /* mientras carga la foto: nada de hueco blanco */
+  /* Fondo de espera en el tono de la pared dibujada: mientras pinta la ilustración no aparece un hueco blanco
+     ni un rectángulo oscuro. */
+  background: #E6EAF2;
 }
-/* En el celular, 16:10 para que el texto suba; el encuadre conserva el casco y los tableros de las freidoras. */
+/* Filo interior de 1 px: la pared clara del dibujo no se funde con el fondo claro de la portada. */
+.portada__foto--ilustracion::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(72, 83, 126, .16); pointer-events: none;
+}
+/* En el celular, 16:10 para que el texto suba. El recorte (50 % 25 %) deja dentro el borde superior de la
+   campana, el casco del técnico y sus botas; solo quedan fuera el piso de adelante y la rejilla de desagüe. */
 .portada__foto img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: 50% 25%; }
 .sellos {
   position: relative; z-index: 1;
@@ -276,9 +288,9 @@ main:focus { outline: none; }
   .sellos { padding: 6px 22px; }
   .sellos li { font-size: 1rem; }
 }
-/* En el celular (menos de 600 px) la placa de distintivos pasa debajo del texto: así la foto y el título
+/* En el celular (menos de 600 px) la placa de distintivos pasa debajo del texto: así la ilustración y el título
    completo entran juntos en la primera pantalla, también en un teléfono de 667 px de alto.
-   display: contents saca la foto y la placa de su contenedor para ordenarlas por separado. */
+   display: contents saca la ilustración y la placa de su contenedor para ordenarlas por separado. */
 @media (max-width: 599px) {
   .portada__visual { display: contents; }
   .portada__foto { order: -1; border-radius: 18px; box-shadow: var(--sombra); }
@@ -372,7 +384,7 @@ main:focus { outline: none; }
   font-size: .8125rem; font-weight: 800; letter-spacing: .03em;
 }
 
-/* ---------- Rejilla de íconos (beneficios, valores, ten a mano) ---------- */
+/* ---------- Rejilla de íconos (beneficios, valores) ---------- */
 .iconos-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin: 0; padding: 0; list-style: none; }
 .iconos-grid > li {
   padding: 22px 14px; text-align: center;
@@ -592,26 +604,78 @@ body.con-barra { padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); 
 @media (min-width: 768px) { .banda { grid-template-columns: 1fr auto; padding: 36px 40px; } }
 
 /* ---------- Servicios ---------- */
-.guia { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
-.ficha {
-  display: flex; flex-direction: column; gap: 10px; height: 100%;
-  padding: 18px 18px 16px;
-  background: #fff; border: 1px solid var(--borde); border-radius: 14px;
-  color: var(--texto); text-decoration: none;
-  transition: transform .2s, box-shadow .2s, border-color .2s;
+/* Guía «¿Qué servicio necesitas?»: lista de decisiones dentro de una tarjeta. Cada fila es un enlace:
+   la situación (pregunta) a la izquierda y el servicio a la derecha; en el celular se apilan.
+   El ratón y el teclado ven lo mismo: todo lo de :hover va también en :focus-visible.
+   Desde 768 px todas las filas miden lo mismo aunque una pregunta ocupe dos líneas.
+   51rem: desde 960 px la pregunta tiene 414 px; solo la más larga pasa a dos líneas, equilibradas. */
+.decisiones {
+  --col-servicio: 20.5rem;
+  --tinte: #FDF7F6;            /* fila al pasar o enfocar: tinte cálido, no el gris de la sección */
+  --tinte-urgente: #F9E5E3;
+  max-width: 51rem; margin-inline: auto; overflow: hidden;
+  background: #fff; border: 1px solid var(--borde); border-radius: var(--radio);
+  box-shadow: 0 1px 2px rgba(30, 36, 56, .05), 0 8px 24px rgba(30, 36, 56, .06);
 }
-.ficha:hover { transform: translateY(-2px); box-shadow: var(--sombra); border-color: var(--rojo); color: var(--texto); }
-.ficha__situacion {
-  position: relative; align-self: flex-start;
-  padding: 10px 14px; border-radius: 14px 14px 14px 4px;
-  background: var(--fondo-suave); color: var(--tinta); font-weight: 600; line-height: 1.35;
+.decisiones__cabeza { display: none; }
+.decisiones__lista { margin: 0; padding: 0; list-style: none; }
+.decisiones__lista > li + li { border-top: 1px solid var(--borde); }
+.decision {
+  display: grid; gap: 12px; padding: 18px;
+  color: var(--tinta); text-decoration: none;
+  transition: background-color .2s;
 }
-.ficha__sirve { margin-top: auto; color: var(--texto-suave); font-size: .75rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.ficha__servicio { display: flex; align-items: center; gap: .4em; color: var(--rojo-texto); font-size: 1.05rem; font-weight: 800; line-height: 1.25; }
-.ficha--urgente { background: var(--rojo-suave); border-color: var(--rojo-borde); }
-.ficha--urgente .ficha__situacion { background: #fff; }
-@media (min-width: 640px) { .guia { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 1100px) { .guia { grid-template-columns: repeat(5, 1fr); gap: 16px; } }
+.decision:hover, .decision:focus-visible { background: var(--tinte); color: var(--tinta); }
+.decision:focus-visible { outline-offset: -5px; }
+.decision__situacion { font-size: 1.0625rem; font-weight: 600; line-height: 1.35; text-wrap: balance; }
+/* Sello compacto junto a «¿Un equipo ya falló?»: rayo + «24/7»; «Emergencias» va en texto oculto. */
+.decision__sello {
+  display: inline-flex; align-items: center; gap: .3em;
+  margin-left: .35em; padding: .25em .6em .25em .5em; border-radius: 999px;
+  background: var(--rojo-texto); color: #fff; vertical-align: middle;
+  font-size: .75rem; font-weight: 800; letter-spacing: .03em; line-height: 1.2; white-space: nowrap;
+}
+.decision__sello .ico { width: 1.1em; height: 1.1em; }
+.decision__servicio { display: flex; align-items: center; gap: 12px; }
+.decision__icono {
+  display: grid; place-items: center; flex: none;
+  width: 40px; height: 40px; border-radius: 12px;
+  background: var(--rojo-suave); color: var(--rojo);
+}
+.decision__icono .ico { width: 24px; height: 24px; }
+.decision__nombre { color: var(--rojo-texto); font-size: 1rem; font-weight: 800; line-height: 1.25; transition: color .2s; }
+.decision:hover .decision__nombre, .decision:focus-visible .decision__nombre { color: var(--rojo-oscuro); }
+.decision__flecha {
+  display: grid; place-items: center; flex: none;
+  width: 32px; height: 32px; margin-left: auto; border-radius: 50%;
+  background: var(--rojo-suave); color: var(--rojo-texto);
+  transition: background-color .2s, color .2s, transform .2s;
+}
+.decision__flecha .ico { width: 18px; height: 18px; }
+.decision:hover .decision__flecha, .decision:focus-visible .decision__flecha { background: var(--rojo-texto); color: #fff; }
+.decision--urgente { background: var(--rojo-suave); box-shadow: inset 4px 0 0 var(--rojo); }
+.decision--urgente:hover, .decision--urgente:focus-visible { background: var(--tinte-urgente); }
+.decision--urgente:focus-visible { box-shadow: none; }   /* la barra roja no asoma fuera del contorno de foco */
+.decision--urgente .decision__icono { background: var(--rojo-texto); color: #fff; }
+.decision--urgente .decision__flecha { background: #fff; }
+@media (prefers-reduced-motion: no-preference) {
+  .decision:hover .decision__flecha, .decision:focus-visible .decision__flecha { transform: translateX(3px); }
+}
+@media (min-width: 768px) {
+  .decisiones__cabeza, .decision { grid-template-columns: minmax(0, 1fr) var(--col-servicio); column-gap: 24px; padding-inline: 24px; }
+  .decisiones__cabeza {
+    display: grid; margin: 0; padding-block: 14px 12px;
+    color: var(--texto-suave); font-size: .75rem; font-weight: 800; line-height: 1.4;
+    letter-spacing: .08em; text-transform: uppercase;
+  }
+  /* La rejilla iguala todas las filas a la más alta; cada fila trae su propia línea de arriba. */
+  .decisiones__lista { display: grid; grid-auto-rows: 1fr; }
+  .decisiones__lista > li { display: grid; border-top: 1px solid var(--borde); }
+  .decision { align-items: center; padding-block: 18px; }
+  .decision__situacion { font-size: 1.125rem; }
+  .decision__icono { width: 44px; height: 44px; }
+  .decision__nombre { font-size: 1.0625rem; white-space: nowrap; }
+}
 
 .servicio { padding: 56px 0; }
 .servicio__grid { display: grid; gap: 26px; }
@@ -657,16 +721,7 @@ body.con-barra { padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); 
 }
 
 /* ---------- Contacto ---------- */
-.contacto-tarjetas { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
-.contacto-tarjeta { display: flex; flex-direction: column; gap: 8px; height: 100%; padding: 26px 24px; background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); }
-.contacto-tarjeta h3 { margin: 6px 0 0; font-size: 1.3rem; }
-.contacto-tarjeta__dato { margin: 0; color: var(--tinta); font-size: 1.3rem; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
-.contacto-tarjeta__dato--correo { font-size: 1.05rem; }
-.contacto-tarjeta p { margin: 0; }
-.contacto-tarjeta .boton { margin-top: auto; }
-.contacto-tarjeta__texto { padding-bottom: 12px; color: var(--texto-suave); }
-@media (min-width: 900px) { .contacto-tarjetas { grid-template-columns: repeat(3, 1fr); gap: 24px; } }
-
+/* Los canales, el saludo y la vista previa de WhatsApp están en el bloque «Contacto · Conversación», al final. */
 .franja-urgente {
   --foco: #fff;
   display: grid; gap: 18px; align-items: center;
@@ -701,24 +756,15 @@ body.con-barra { padding-bottom: calc(70px + env(safe-area-inset-bottom, 0px)); 
 .nota-privacidad .ico { width: 1.2em; height: 1.2em; margin-top: .15em; color: var(--azul); }
 .aviso-urgente { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--rojo-suave); border: 1px solid var(--rojo-borde); color: var(--tinta); font-weight: 700; }
 .aviso-urgente a { font-weight: 800; }
-.vista-previa { align-self: start; padding: 20px; border-radius: 18px; background: #EDE8E1; border: 1px solid #E0D9CF; }
-.vista-previa__titulo { margin: 0 0 12px; color: var(--tinta); font-size: .8125rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-.vista-previa__burbuja {
-  margin: 0; padding: 14px 16px; border-radius: 14px 14px 4px 14px;
-  background: #DCF7D0; color: #102015;
-  font: inherit; font-size: .975rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, .08);
-}
-.vista-previa__nota { margin: 12px 0 0; color: #4E4A44; font-size: .875rem; }
 .form-final { display: grid; gap: 14px; }
 html:not(.js) .form-grid { display: none; }
 @media (min-width: 960px) {
   .form-grid { grid-template-columns: 1.1fr .9fr; gap: 24px 40px; align-items: start; }
   .formulario, .form-final { grid-column: 1; }
-  .vista-previa { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: calc(var(--alto-cabecera) + 20px); }
+  /* Sticky a 96 px del borde (68 de la cabecera + 28): acompaña a los campos mientras se escribe. */
+  .vista-previa { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: calc(var(--alto-cabecera) + 28px); }
 }
 .seccion--sin-arriba { padding-top: 0 !important; }
-.iconos-grid__etiqueta { margin: 0; color: var(--tinta); font-weight: 700; line-height: 1.4; }
 .servicio--urgente .sello-247 { color: var(--rojo-texto); }
 
 /* ---------- Acceso del personal ---------- */
@@ -761,7 +807,7 @@ html:not(.js) .form-grid { display: none; }
   .portada__texto > :nth-child(2), .cabeza-pagina__grid > div > :nth-child(2), .acceso__caja > :nth-child(2) { animation-delay: .06s; }
   .portada__texto > :nth-child(3), .cabeza-pagina__grid > div > :nth-child(3), .acceso__caja > :nth-child(3) { animation-delay: .12s; }
   .portada__texto > :nth-child(n+4), .cabeza-pagina__grid > div > :nth-child(n+4), .acceso__caja > :nth-child(n+4) { animation-delay: .18s; }
-  /* La foto de la portada no se anima: es el elemento principal de la carga (LCP). */
+  /* La ilustración de la portada no se anima: es el elemento principal de la carga (LCP). */
 }
 @keyframes subir { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
@@ -774,3 +820,185 @@ html:not(.js) .form-grid { display: none; }
   body.con-barra { padding-bottom: 0; }
   .cierre, .servicio--urgente, .franja-urgente, .destacado { background: #fff !important; color: #000 !important; }
 }
+
+/* ==========================================================================
+   Contacto · Conversación (11-sep-2026)
+   La página se lee como una conversación con INDUSTEC: un saludo en burbujas con la voz
+   de la empresa (solo mensajes de INDUSTEC: nada que parezca un cliente, un testimonio ni
+   una respuesta del equipo), una foto real del equipo enviada como mensaje con foto, los
+   canales con WhatsApp como botón principal y el formulario con su vista previa como un chat.
+   Reutiliza .cabeza-pagina, .aviso-filtro, .sellos, .franja-urgente, .pasos, .boton y .banda.
+   ========================================================================== */
+.ico-consultoria { --i: url("/assets/img/iconos/consultoria.svg"); }
+
+/* Encabezado: título, línea de filtro justo debajo (se ve sin desplazarse a 1366 x 768 y a 390 x 844)
+   y el saludo. En escritorio, a la derecha, la foto del equipo con la placa oscura de la portada. */
+.charla-portada { --ancho-burbuja: 30rem; padding: 20px 0 36px; }
+.charla-portada__grid { display: grid; gap: 24px; align-items: start; }
+.charla-portada .etiqueta { margin-bottom: 10px; }
+.charla-portada h1 { margin-bottom: .3em; }
+.charla-portada .aviso-filtro { margin: 0 0 18px; }
+
+/* Hilo de mensajes: quién escribe (avatar y nombre) y sus burbujas debajo. */
+.charla__cabeza { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.charla__avatar {
+  flex: none; width: 40px; height: 40px; border-radius: 50%;
+  box-shadow: 0 0 0 3px #fff, 0 3px 10px rgba(30, 36, 56, .18);
+}
+.charla__remitente { display: grid; margin: 0; color: var(--texto-suave); font-size: .9rem; line-height: 1.3; }
+.charla__remitente strong { color: var(--tinta); font-size: 1rem; font-weight: 800; letter-spacing: .02em; }
+.charla__mensajes { display: grid; justify-items: start; gap: 8px; min-width: 0; }
+.burbuja {
+  max-width: var(--ancho-burbuja, 30rem); margin: 0; padding: 10px 15px 11px;
+  background: #fff; border: 1px solid var(--borde); border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(30, 36, 56, .07);
+  color: var(--tinta); font-size: 1rem; line-height: 1.45;
+}
+.burbuja--primera { border-top-left-radius: 5px; }
+.burbuja strong { font-weight: 800; }
+@media (min-width: 600px) {
+  .charla__avatar { width: 44px; height: 44px; }
+  .charla__mensajes { padding-left: 56px; }
+}
+
+/* Foto real del equipo como mensaje con foto, después de la segunda burbuja (celular y tableta):
+   así la primera pantalla del celular muestra personas. En escritorio la foto va a la derecha. */
+.burbuja--foto { width: 100%; padding: 4px; }
+.burbuja--foto img { width: 100%; height: 190px; object-fit: cover; object-position: 50% 78%; border-radius: 14px; background: #2A3042; }
+.burbuja--foto figcaption { padding: 7px 10px 5px; color: var(--tinta); font-size: .875rem; font-weight: 600; line-height: 1.4; }
+
+/* Pregunta con los canales, del mismo ancho máximo que las burbujas: WhatsApp como botón principal
+   (rojo del sitio, a todo el ancho) con su nota, y la llamada y el correo como filas secundarias. */
+.burbuja--botones { width: 100%; padding: 0; overflow: hidden; }
+.burbuja__pregunta { margin: 0; padding: 12px 16px 10px; color: var(--tinta); font-size: 1rem; font-weight: 700; line-height: 1.4; letter-spacing: 0; }
+.charla-principal { display: grid; gap: 8px; padding: 2px 16px 14px; }
+.charla-principal .boton { width: 100%; }
+.charla-principal__nota { margin: 0; color: var(--texto-suave); font-size: .875rem; line-height: 1.45; text-align: center; }
+.charla-botones { margin: 0; padding: 0; list-style: none; }
+.charla-botones li { border-top: 1px solid var(--borde); }
+.charla-boton {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 60px; padding: 9px 16px;
+  color: var(--tinta); text-decoration: none;
+  transition: background-color .2s;
+}
+.charla-boton:hover { background: var(--fondo-suave); color: var(--tinta); }
+.charla-boton:focus-visible { outline-offset: -4px; border-radius: 0; }
+.charla-boton__icono {
+  display: grid; place-items: center; flex: none;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--rojo-suave); color: var(--rojo-texto);
+}
+.charla-boton__icono .ico { width: 21px; height: 21px; }
+.charla-boton__texto { display: grid; flex: 1; min-width: 0; line-height: 1.3; }
+.charla-boton__canal { font-weight: 800; }
+.charla-boton__dato { color: var(--texto-suave); font-size: .9rem; overflow-wrap: anywhere; }
+.charla-boton > .ico-flecha { width: 20px; height: 20px; color: var(--rojo-texto); transition: transform .2s; }
+.charla-boton:hover > .ico-flecha { transform: translateX(3px); }
+
+/* Columna derecha, solo desde 960 px: foto del equipo y, pegada debajo, la placa oscura de la portada (.sellos).
+   Por debajo no se muestra: la foto ya va dentro de la charla, y la placa repetía «Servicio de emergencia 24/7»
+   justo antes de la franja roja de emergencia (revisión del 11-sep-2026). */
+.charla-lado { display: none; position: relative; width: 100%; }
+@media (min-width: 960px) {
+  .charla-portada { padding: 44px 0 64px; }
+  .charla-portada__grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 56px; }
+  .burbuja--foto { display: none; }
+  .charla-lado { display: block; border-radius: 18px; box-shadow: var(--sombra); }
+  /* La misma trama de puntos de la portada, detrás de la esquina de la foto. */
+  .charla-lado::before {
+    content: ""; position: absolute; z-index: 0;
+    top: -22px; right: -22px; width: 55%; height: 60%;
+    border-radius: 18px;
+    background-image: radial-gradient(rgba(72, 83, 126, .30) 1.5px, transparent 1.7px);
+    background-size: 14px 14px;
+  }
+  .charla-lado__foto { display: block; position: relative; z-index: 1; overflow: hidden; border-radius: 18px 18px 0 0; background: #2A3042; }
+  .charla-lado__foto img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; object-position: 38% 50%; }
+  .charla-lado .sellos { border-radius: 0 0 18px 18px; padding: 6px 22px; }
+}
+
+/* Emergencia 24/7: la misma franja roja, con menos aire alrededor para que el formulario llegue antes. */
+.charla-urgencia { padding: 32px 0; }
+@media (min-width: 960px) { .charla-urgencia { padding: 48px 0; } }
+
+/* Formulario: el título a la izquierda y el consejo de INDUSTEC a la derecha,
+   en las mismas columnas que los campos y la vista previa. */
+.charla-form__intro { display: grid; gap: 24px; margin-bottom: 28px; }
+.charla-form__cabeza h2 { margin-bottom: .35em; }
+.charla-form__cabeza p { max-width: 34em; margin: 0; color: var(--texto-suave); }
+/* El consejo lleva el avatar al lado y el nombre dentro de la burbuja, como en un chat de grupo. */
+.charla--consejo { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; align-items: start; }
+.charla--consejo .charla__avatar { width: 36px; height: 36px; }
+.burbuja__autor { margin: 0 0 4px; color: var(--rojo-texto); font-size: .8125rem; font-weight: 800; letter-spacing: .04em; }
+.consejo { max-width: 34rem; padding: 12px 16px 16px; }
+.consejo__titulo { margin: 0 0 10px; color: var(--tinta); font-size: 1rem; font-weight: 800; line-height: 1.35; letter-spacing: 0; }
+.consejo__lista { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.consejo__lista li { display: flex; align-items: center; gap: 10px; font-size: .975rem; line-height: 1.35; }
+.consejo__lista img { flex: none; width: 22px; height: 22px; }
+.charla-form .formulario { padding: 22px 18px; background: #fff; border: 1px solid var(--borde); border-radius: 20px; }
+@media (min-width: 600px) {
+  .charla--consejo { grid-template-columns: 44px minmax(0, 1fr); gap: 12px; }
+  .charla--consejo .charla__avatar { width: 44px; height: 44px; }
+  .consejo__lista { grid-template-columns: 1fr 1fr; gap: 10px 18px; }
+  .charla-form .formulario { padding: 28px; }
+}
+@media (min-width: 960px) {
+  .charla-form__intro { grid-template-columns: 1.1fr .9fr; gap: 24px 40px; align-items: center; margin-bottom: 32px; }
+  .consejo__lista { grid-template-columns: 1fr; gap: 8px; }
+}
+
+/* Vista previa: el mensaje de quien escribe, como se verá en su chat con INDUSTEC. Cabecera azul marino
+   y burbuja blanca: el verde, solo en el ícono de WhatsApp. En escritorio acompaña a los campos mientras
+   se escribe (sticky en .form-grid); en el celular va en su lugar, sin sticky. */
+.vista-previa { align-self: start; }
+.vista-previa__titulo { margin: 0 0 10px; color: var(--tinta); font-size: .8125rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.vista-previa__chat { overflow: hidden; background: #EDE8E1; border: 1px solid #DCD4C8; border-radius: 20px; box-shadow: var(--sombra); }
+.vista-previa__cabeza { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--fondo-oscuro); color: #fff; }
+.vista-previa__cabeza img { flex: none; width: 40px; height: 40px; border-radius: 50%; }
+.vista-previa__contacto { display: grid; min-width: 0; margin: 0; line-height: 1.3; }
+.vista-previa__contacto strong { color: #fff; font-weight: 800; }
+.vista-previa__contacto span { color: #DDE1EC; font-size: .875rem; }
+.vista-previa__wa { display: grid; place-items: center; flex: none; width: 34px; height: 34px; margin-left: auto; border-radius: 50%; background: var(--verde-wa); color: #fff; }
+.vista-previa__wa .ico { width: 20px; height: 20px; }
+.vista-previa__fondo {
+  padding: 18px 14px 22px;
+  background-image: radial-gradient(rgba(78, 64, 48, .08) 1px, transparent 1.4px);
+  background-size: 16px 16px;
+}
+.vista-previa__burbuja {
+  width: fit-content; max-width: 94%; margin: 0 0 0 auto; padding: 12px 14px;
+  border-radius: 14px 4px 14px 14px;
+  background: #fff; color: var(--tinta);
+  font: inherit; font-size: .975rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, .08);
+}
+.vista-previa__nota { margin: 10px 0 0; color: var(--texto-suave); font-size: .875rem; }
+
+/* «Así te atendemos»: los pasos de Nosotros (.pasos) en columna, junto a una foto real del equipo
+   (a la izquierda en escritorio; debajo de los pasos en el celular). Sin plazos. */
+.atencion { display: grid; gap: 32px; align-items: center; }
+.atencion h2 { margin-bottom: .3em; }
+.atencion__intro { max-width: 34em; margin-bottom: 28px; color: var(--texto-suave); }
+.atencion .pasos li:last-child { padding-bottom: 0; }
+.atencion__foto img {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover; object-position: 50% 30%;
+  border-radius: 18px; background: #D5D9E2; box-shadow: var(--sombra);
+}
+@media (min-width: 960px) {
+  .atencion { grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 64px; }
+  .atencion__foto { order: -1; }
+  .pasos--columna { grid-template-columns: none; gap: 0; }
+  .pasos--columna li { padding: 0 0 26px 74px; }
+  .pasos--columna li::before { left: 25px; right: auto; top: 52px; bottom: 0; width: 2px; height: auto; }
+  .pasos--columna h3 { margin-top: 10px; }
+}
+
+/* Entrada del saludo: solo las tres burbujas de texto, una tras otra, en 300 ms en total.
+   La foto, la pregunta y los canales se ven desde el inicio. Nada si se pidió reducir el movimiento. */
+@media screen and (prefers-reduced-motion: no-preference) {
+  .charla-portada p.burbuja { animation: burbuja .18s cubic-bezier(.2, .8, .3, 1) both; transform-origin: 0 0; }
+  .charla-portada p.burbuja:nth-of-type(2) { animation-delay: .06s; }
+  .charla-portada p.burbuja:nth-of-type(3) { animation-delay: .12s; }
+}
+@keyframes burbuja { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }

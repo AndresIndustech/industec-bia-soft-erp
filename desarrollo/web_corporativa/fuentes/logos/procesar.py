@@ -13,9 +13,9 @@ Uso (desde web_corporativa/):   python fuentes/logos/procesar.py
 
 Orden: el de las galerías de www.industec.me. Las marcas son la excepción: abren con los fabricantes de
 cocina profesional y siguen refrigeración y extracción, por el pedido de César del 11-sep-2026 (que la web
-no se lea como servicio para el hogar). Las de consumo (Samsung, LG, Westinghouse) están en RETENIDAS: se
-procesan en retenidas/, que no se copia al sitio, hasta que César diga si son refrigeración comercial
-(NOTAS, A6), y el verificador falla si alguna aparece en sitio/. Reponer una = pasarla al final de MARCAS.
+no se lea como servicio para el hogar). Al final, las de consumo (Samsung, LG, Westinghouse): se retiraron
+unas horas el 11-sep-2026 y Andrés pidió reponerlas ese mismo día. RETENIDAS queda para una marca que no deba
+publicarse: se procesa en retenidas/, que no se copia al sitio, y el verificador falla si aparece en sitio/.
 SilverChef, que está en la galería de marcas de Zyro, no entra: es una financiera de equipos, no un
 fabricante (fuentes/zyro/descartadas/).
 """
@@ -87,14 +87,14 @@ MARCAS = [
     ("danfoss", "Danfoss", "1024px-danfoss.svg-AwvJpEv3ZGs7GaJo.png", "alpha", 0.0),
     ("greenheck", "Greenheck", "greenheck-logo-YyvPpEv1qvhwL9g2.png", "alpha", 0.0),
     ("torrey", "Torrey", "logo_torrey-AzG8pEGBnJFJ4l1E.png", "alpha", 0.0),
-]
-# Las que el público asocia con electrodomésticos: están en www.industec.me, pero no se publican mientras César
-# no confirme que son equipos de refrigeración o climatización comercial (NOTAS, A6; retiradas el 11-sep-2026).
-RETENIDAS = [
+    # 3. Al final, las que el público asocia con electrodomésticos. Se retiraron unas horas el 11-sep-2026 y Andrés
+    #    pidió reponerlas ese mismo día («para que quede todo completo»).
     ("samsung", "Samsung", "samsung_logo.svg-Yle6pDeB8MC6jrl3.png", "alpha", 0.0),
     ("lg", "LG", "lg_logo.svg-mnl6pZlokyIpLkaJ.png", "alpha", 0.0),
     ("westinghouse", "Westinghouse", "westinghouse_electric_company_logo.svg-YZ97wW9zqDhXl0eD.png", "alpha", 0.0),
 ]
+# Marcas que no deben publicarse (hoy ninguna): se procesan en retenidas/, que no se copia al sitio.
+RETENIDAS = []
 
 
 def abrir(archivo):

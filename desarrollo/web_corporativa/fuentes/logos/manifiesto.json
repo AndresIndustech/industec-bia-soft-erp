@@ -918,19 +918,7 @@
    "codificacion": "lossless",
    "modo": "RGBA",
    "compacto": false
-  }
- ],
- "alternativas": [
-  {
-   "nombre": "San Felipe (original blanco, para fondo oscuro)",
-   "archivo": "alternativas/san-felipe-blanco.webp",
-   "ancho": 114,
-   "alto": 96,
-   "bytes": 2984,
-   "codificacion": "lossless"
-  }
- ],
- "retenidas": [
+  },
   {
    "origen": "samsung_logo.svg-Yle6pDeB8MC6jrl3.png",
    "caja_origen": [
@@ -948,14 +936,13 @@
    "fondo": "alpha",
    "color_fondo": null,
    "nombre": "Samsung",
-   "archivo": "retenidas/samsung.webp",
+   "archivo": "marcas/samsung.webp",
    "ancho": 291,
    "alto": 96,
    "bytes": 9404,
    "codificacion": "lossless",
    "modo": "RGBA",
-   "compacto": false,
-   "nota": "No se publica: marca de consumo, pendiente de que César confirme que es refrigeración o climatización comercial (NOTAS, A6)."
+   "compacto": false
   },
   {
    "origen": "lg_logo.svg-mnl6pZlokyIpLkaJ.png",
@@ -974,14 +961,13 @@
    "fondo": "alpha",
    "color_fondo": null,
    "nombre": "LG",
-   "archivo": "retenidas/lg.webp",
+   "archivo": "marcas/lg.webp",
    "ancho": 203,
    "alto": 96,
    "bytes": 6420,
    "codificacion": "lossless",
    "modo": "RGBA",
-   "compacto": false,
-   "nota": "No se publica: marca de consumo, pendiente de que César confirme que es refrigeración o climatización comercial (NOTAS, A6)."
+   "compacto": false
   },
   {
    "origen": "westinghouse_electric_company_logo.svg-YZ97wW9zqDhXl0eD.png",
@@ -1000,14 +986,24 @@
    "fondo": "alpha",
    "color_fondo": null,
    "nombre": "Westinghouse",
-   "archivo": "retenidas/westinghouse.webp",
+   "archivo": "marcas/westinghouse.webp",
    "ancho": 341,
    "alto": 96,
    "bytes": 14098,
    "codificacion": "lossless",
    "modo": "RGBA",
-   "compacto": false,
-   "nota": "No se publica: marca de consumo, pendiente de que César confirme que es refrigeración o climatización comercial (NOTAS, A6)."
+   "compacto": false
   }
- ]
+ ],
+ "alternativas": [
+  {
+   "nombre": "San Felipe (original blanco, para fondo oscuro)",
+   "archivo": "alternativas/san-felipe-blanco.webp",
+   "ancho": 114,
+   "alto": 96,
+   "bytes": 2984,
+   "codificacion": "lossless"
+  }
+ ],
+ "retenidas": []
 }
