@@ -389,4 +389,104 @@ final class Ui
         $p = preg_split('/\s+/', trim($nombre)) ?: [];
         return $p[0] ?? $nombre;
     }
+
+    /* --- Búsqueda por coincidencia parcial -------------------------------
+       El buscador de casos y de órdenes tiene que encontrar `OT-2466-V093-...`
+       tecleando solo `2466`, o `v093`, o el aviso con o sin los ceros de SAP.
+       Para eso, servidor y navegador reducen cada texto a la MISMA forma:
+       minúsculas, sin tildes y sin nada que no sea letra o dígito. Así los
+       guiones y los espacios dejan de estorbar.
+
+       El gemelo en JavaScript es `Busqueda.normalizar()` en `busqueda.js`.
+       Cambiar uno obliga a cambiar el otro; `prueba_contratos.mjs` lo vigila. */
+    /* La tabla la GENERO un script en tiempo de desarrollo a partir de la misma
+       descomposicion NFD que usa `Busqueda.normalizar()` en JavaScript, no a
+       mano. Por eso los dos lados coinciden por construccion.
+
+       POR QUE NO SE USA `Normalizer` EN EJECUCION
+       Necesita la extension `intl`, y no esta garantizada en el PHP de
+       Hostinger. Si faltara, la busqueda del lado servidor se comportaria
+       distinto que la del navegador SOLO en el servidor — el peor modo de
+       fallar: imposible de reproducir en la estacion. Con la tabla escrita, el
+       resultado no depende de ninguna extension.
+
+       QUE PASABA ANTES: la tabla estaba escrita a mano con 16 entradas y no
+       cubria â ê î ô û ã õ ç. Esas letras no se transliteraban: las borraba el
+       filtro final. `Sâo` daba `so` en el servidor y `sao` en el navegador,
+       y `Francois` con cedilla daba `franois` y `francois`. El sintoma en la
+       mesa de servicio era el peor posible: escribes y salen tres resultados;
+       recargas, y salen otros. */
+    private const SIN_TILDE = [
+            'à' => 'a', 'á' => 'a', 'â' => 'a', 'ã' => 'a', 'ä' => 'a', 'å' => 'a',
+            'ç' => 'c', 'è' => 'e', 'é' => 'e', 'ê' => 'e', 'ë' => 'e', 'ì' => 'i',
+            'í' => 'i', 'î' => 'i', 'ï' => 'i', 'ñ' => 'n', 'ò' => 'o', 'ó' => 'o',
+            'ô' => 'o', 'õ' => 'o', 'ö' => 'o', 'ù' => 'u', 'ú' => 'u', 'û' => 'u',
+            'ü' => 'u', 'ý' => 'y', 'ÿ' => 'y', 'ā' => 'a', 'ă' => 'a', 'ą' => 'a',
+            'ć' => 'c', 'ĉ' => 'c', 'ċ' => 'c', 'č' => 'c', 'ď' => 'd', 'ē' => 'e',
+            'ĕ' => 'e', 'ė' => 'e', 'ę' => 'e', 'ě' => 'e', 'ĝ' => 'g', 'ğ' => 'g',
+            'ġ' => 'g', 'ģ' => 'g', 'ĥ' => 'h', 'ĩ' => 'i', 'ī' => 'i', 'ĭ' => 'i',
+            'į' => 'i', 'i̇' => 'i', 'ĵ' => 'j', 'ķ' => 'k', 'ĺ' => 'l', 'ļ' => 'l',
+            'ľ' => 'l', 'ń' => 'n', 'ņ' => 'n', 'ň' => 'n', 'ō' => 'o', 'ŏ' => 'o',
+            'ő' => 'o', 'ŕ' => 'r', 'ŗ' => 'r', 'ř' => 'r', 'ś' => 's', 'ŝ' => 's',
+            'ş' => 's', 'š' => 's', 'ţ' => 't', 'ť' => 't', 'ũ' => 'u', 'ū' => 'u',
+            'ŭ' => 'u', 'ů' => 'u', 'ű' => 'u', 'ų' => 'u', 'ŵ' => 'w', 'ŷ' => 'y',
+            'ź' => 'z', 'ż' => 'z', 'ž' => 'z', 'ơ' => 'o', 'ư' => 'u', 'ǎ' => 'a',
+            'ǐ' => 'i', 'ǒ' => 'o', 'ǔ' => 'u', 'ǖ' => 'u', 'ǘ' => 'u', 'ǚ' => 'u',
+            'ǜ' => 'u', 'ǟ' => 'a', 'ǡ' => 'a', 'ǧ' => 'g', 'ǩ' => 'k', 'ǫ' => 'o',
+            'ǭ' => 'o', 'ǰ' => 'j', 'ǵ' => 'g', 'ǹ' => 'n', 'ǻ' => 'a', 'ȁ' => 'a',
+            'ȃ' => 'a', 'ȅ' => 'e', 'ȇ' => 'e', 'ȉ' => 'i', 'ȋ' => 'i', 'ȍ' => 'o',
+            'ȏ' => 'o', 'ȑ' => 'r', 'ȓ' => 'r', 'ȕ' => 'u', 'ȗ' => 'u', 'ș' => 's',
+            'ț' => 't', 'ȟ' => 'h', 'ȧ' => 'a', 'ȩ' => 'e', 'ȫ' => 'o', 'ȭ' => 'o',
+            'ȯ' => 'o', 'ȱ' => 'o', 'ȳ' => 'y',
+    ];
+
+    public static function normalizarBusqueda(?string $s): string
+    {
+        $s = mb_strtolower((string) $s, 'UTF-8');
+        $s = strtr($s, self::SIN_TILDE);
+        return preg_replace('/[^a-z0-9]+/', '', $s) ?? '';
+    }
+
+    /** '000010352936' y '10352936' son el mismo aviso: se quita el cero inicial
+        de cada grupo de dígitos para poder buscar cualquiera de las dos formas. */
+    public static function busquedaSinCeros(string $s): string
+    {
+        return preg_replace('/0+(\d)/', '$1', $s) ?? $s;
+    }
+
+    /**
+     * ¿El texto de esta fila contiene todas las palabras del término?
+     *
+     * `$campos` son los valores crudos de la fila (aviso, orden, local, equipo,
+     * lo que sea). Se buscan como subcadena, no como palabra completa: por eso
+     * `2466` encuentra la orden 2466.
+     */
+    public static function coincide(array $campos, string $termino): bool
+    {
+        $termino = trim($termino);
+        if ($termino === '') {
+            return true;
+        }
+        $heno  = self::normalizarBusqueda(implode(' ', $campos));
+        $pajar = $heno . ' ' . self::busquedaSinCeros($heno);
+        foreach (preg_split('/\s+/', $termino) ?: [] as $parte) {
+            $p = self::normalizarBusqueda($parte);
+            if ($p === '') {
+                continue;
+            }
+            if (mb_strpos($pajar, $p) === false
+                && mb_strpos($pajar, self::busquedaSinCeros($p)) === false) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** El texto que va en `data-b` de cada fila: lo mismo sobre lo que buscó el
+        servidor, ya normalizado, para que el filtro en vivo del navegador dé el
+        mismo resultado sin volver a pedir la página. */
+    public static function claveFila(array $campos): string
+    {
+        return self::e(self::normalizarBusqueda(implode(' ', $campos)));
+    }
 }

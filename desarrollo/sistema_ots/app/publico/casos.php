@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Casos.php';
+require_once __DIR__ . '/nucleo/Ui.php';   // Ui::coincide() se usa al filtrar, antes de pintar
 
 /**
  * casos.php — Buzón de casos: lo que KFC pide por el correo de SAP.
@@ -284,12 +285,14 @@ $vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, 
     if ($fPrio !== '' && ($c['prioridad'] ?? '') !== $fPrio) { return false; }
     if ($fVence && !(($c['fecha_estimada'] ?? '') !== '' && $c['fecha_estimada'] < $hoy)) { return false; }
     if ($fTexto !== '') {
-        $heno = mb_strtolower(implode(' ', [
+        // Coincidencia parcial y tolerante a guiones/ceros: `2466` encuentra
+        // `OT-2466-...`, y `10352936` o `000010352936` dan el mismo aviso.
+        // La misma regla la aplica `busqueda.js` en el navegador.
+        if (!Ui::coincide([
             $c['aviso'] ?? '', $c['orden_trabajo'] ?? '', $c['local'] ?? '',
             $c['local_nombre'] ?? '', $c['restaurante_sap'] ?? '', $c['activo_fijo'] ?? '',
             $c['descripcion_trabajo'] ?? '', $c['caso'] ?? '',
-        ]), 'UTF-8');
-        if (mb_strpos($heno, mb_strtolower($fTexto, 'UTF-8')) === false) { return false; }
+        ], $fTexto)) { return false; }
     }
     return true;
 }));
@@ -359,7 +362,6 @@ $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
 $ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar',
                 'SIN_ALERTA' => 'sin alerta'];
 
-require_once __DIR__ . '/nucleo/Ui.php';
 require_once __DIR__ . '/nucleo/Pendientes.php';
 
 $cuentas = ['casos' => $nSinAsignar > 0 ? ['n' => $nSinAsignar] : null];
@@ -552,8 +554,9 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
         </div>
         <div class="campo" style="flex:1;min-width:200px">
           <label for="f-q">Buscar</label>
-          <input type="text" id="f-q" name="q" value="<?= e($fTexto) ?>"
-                 placeholder="aviso, local, equipo o texto del pedido">
+          <input type="search" id="f-q" name="q" value="<?= e($fTexto) ?>"
+                 placeholder="parte del aviso, del local o del equipo"
+                 data-busca="#tabla-casos" data-busca-cuenta="#cuenta-casos">
         </div>
         <div class="campo">
           <label for="f-est">Estado</label>
@@ -598,13 +601,14 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
       </form>
 
       <p class="sub" style="margin:0 0 8px">
-        <b><?= count($vistos) ?></b> de <?= count($todos) ?> casos
+        <b id="cuenta-casos" data-plantilla="{n}"><?= count($vistos) ?></b>
+        de <?= count($todos) ?> casos
         <?= count($vistos) === count($todos) ? '' : '(filtrados)' ?>.
         Primero los que tienen alerta; dentro de cada grupo, el más nuevo arriba.
       </p>
 
       <div class="tabla-wrap">
-        <table>
+        <table id="tabla-casos">
           <thead><tr>
             <th>Aviso</th><th>Local</th><th>Zona</th><th>Caso</th>
             <th>Prioridad</th><th>Atención</th><th>Comprometido</th><th>Acciones</th>
@@ -620,8 +624,15 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
             $conAlerta = ($c['estado_alerta'] ?? '') === 'CON_ALERTA';
             $vencido = ($c['fecha_estimada'] ?? '') !== '' && $c['fecha_estimada'] < $hoy;
             $prio = strtolower((string) ($c['prioridad'] ?? ''));
+            /* data-b: lo que el buscador en vivo compara. Mismos campos que
+               Ui::coincide() arriba, para que filtrar con y sin JS coincida. */
+            $claveFila = Ui::claveFila([
+                $c['aviso'] ?? '', $c['orden_trabajo'] ?? '', $c['local'] ?? '',
+                $c['local_nombre'] ?? '', $c['restaurante_sap'] ?? '', $c['activo_fijo'] ?? '',
+                $c['descripcion_trabajo'] ?? '', $c['caso'] ?? '',
+            ]);
             ?>
-            <tr class="<?= $conAlerta ? 'con-alerta' : '' ?>">
+            <tr class="<?= $conAlerta ? 'con-alerta' : '' ?>" data-b="<?= $claveFila ?>">
               <td>
                 <span class="mono"><?= e($c['aviso'] ?? '—') ?></span>
                 <span class="desc mono" style="font-size:11px"><?= e($c['orden_trabajo'] ?? '') ?></span>
@@ -897,4 +908,4 @@ function abrir(accion, aviso) {
 }
 </script>
 
-<?php Ui::pie(['novedades' => true]); ?>
+<?php Ui::pie(['novedades' => true, 'js' => ['busqueda.js']]); ?>

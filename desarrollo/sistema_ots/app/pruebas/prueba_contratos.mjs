@@ -40,6 +40,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+/* Para ejecutar el gemelo en PHP de verdad, en vez de reimplementarlo aquí. */
+import { execFileSync } from 'node:child_process';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const PUB = join(AQUI, '..', 'publico');
@@ -64,14 +66,14 @@ const PANTALLAS = {
   'index.html':           ['ui.js', 'offline.js', 'cola.js', 'reglas.js', 'app.js', 'guia.js'],
   'mis.php':              ['ui.js', 'offline.js', 'cola.js'],
   'cronograma.html':      ['ui.js', 'reglas.js', 'cronograma.js'],
-  // Las que cierran con Ui::pie() reciben ui.js, y dos de ellas graficos.js.
+  // Las que cierran con Ui::pie() reciben ui.js, y algunas un guion más.
   'panel.php':            ['ui.js', 'graficos.js'],
   'reportes.php':         ['ui.js', 'graficos.js'],
-  'casos.php':            ['ui.js'],
+  'casos.php':            ['ui.js', 'busqueda.js'],
   'asignacion.php':       ['ui.js'],
   'pendientes.php':       ['ui.js'],
   'novedades_visita.php': ['ui.js'],
-  'ordenes.php':          ['ui.js'],
+  'ordenes.php':          ['ui.js', 'busqueda.js'],
   'usuarios.php':         ['ui.js'],
 };
 
@@ -242,6 +244,157 @@ console.log('\n=== Los extremos que sirven datos del cliente exigen sesión ===\
     afirmar(`${f}: 404 fuera de la línea de órdenes`,
             /PHP_SAPI\s*!==\s*'cli'/.test(leer(f)));
   }
+}
+
+console.log('\n=== El buscador: JS y PHP reducen el texto igual ===\n');
+{
+  /* `busqueda.js` filtra en vivo y `Ui::coincide()` filtra en el servidor. Si
+     las dos normalizaciones se separan, escribir `2466` encontraría una fila
+     con JS y otra distinta sin JS. Aquí se cargan las dos y se comparan sobre
+     los mismos casos. */
+  const js = leer('busqueda.js');
+  const php = readFileSync(join(PUB, 'nucleo', 'Ui.php'), 'utf8');
+
+  afirmar('busqueda.js expone Busqueda.normalizar y .calza',
+          /Busqueda\.normalizar\s*=/.test(js) && /Busqueda\.calza\s*=/.test(js));
+  afirmar('Ui.php tiene normalizarBusqueda() y coincide()',
+          /function normalizarBusqueda\(/.test(php) && /function coincide\(/.test(php));
+
+  // No se reimplementa la normalización: se ejecuta la de verdad. `busqueda.js`
+  // es un IIFE que cuelga de `window` y toca `document` al final para
+  // engancharse al arranque; aquí se le da un `document` de mentira.
+  const g = {};
+  const docFalso = { readyState: 'complete', addEventListener() {}, querySelectorAll: () => [] };
+  new Function('window', 'document', js)(g, docFalso);
+  const B = g.Busqueda;
+
+  /* --- El gemelo en PHP: se EJECUTA, no se reimplementa --------------------
+     Hasta el 2026-09-12 esta comprobación reimplementaba la normalización de
+     PHP aquí en JavaScript, con `normalize('NFD')` — que es exactamente lo que
+     hace el JS. Comparaba el JS contra el JS, y por eso daba «ok» mientras la
+     tabla de `Ui.php`, escrita a mano con 16 entradas, no cubría â ê î ô û ã õ
+     ç: `Sâo` daba `sao` en el navegador y `so` en el servidor. Escribes y salen
+     tres resultados; recargas y salen otros.
+
+     Una prueba que reimplementa lo que debe verificar no verifica nada. Ahora
+     se invoca el PHP de verdad y se compara su salida literal. Si no hay PHP
+     alcanzable, esto FALLA en vez de pasar de largo: un «ok» que en realidad
+     fue «no lo pude comprobar» es peor que un fallo (I-7). */
+  const PHP = [process.env.PHP_BIN, 'D:/SOFTWARE/PHP83/php.exe', 'php']
+    .find((c) => c && (c === 'php' || existsSync(c)));
+
+  /* El corpus lleva UNA muestra por cada carácter de la tabla de `Ui.php`, más
+     los que provocaron la divergencia real y los casos límite. Con muestras
+     escogidas a dedo esto se vuelve a escapar. */
+  const ACENTOS = [...new Set((php.match(/'(.)' => '[a-z]'/g) || [])
+    .map((m) => m.charAt(1)))];
+  const MUESTRAS = [
+    'OT-2466-V093-10352936-CNLJ', '000010353510', 'Café Ñoño',
+    'K191  freidora', 'aviso: 10.352.936',
+    'Sâo Paulo', 'François', 'João', 'Peñaherrera', 'Cañar',
+    '', '   ', '---', 'a\u00a0b', 'ÁÉÍÓÚ', 'MAYÚSCULAS Y minúsculas',
+    ...ACENTOS.map((c) => 'x' + c + 'x'),
+  ];
+
+  let phpSalida = null;
+  try {
+    /* Se pasan por stdin como JSON para no pelear con el escapado de la línea
+       de órdenes: hay tildes, espacios duros y guiones en las muestras. */
+    phpSalida = JSON.parse(execFileSync(PHP, [
+      '-r',
+      "require getenv('UI_PHP');" +
+      '$e = json_decode(stream_get_contents(STDIN), true);' +
+      'echo json_encode(array_map([Ui::class, "normalizarBusqueda"], $e));',
+    ], {
+      input: JSON.stringify(MUESTRAS),
+      env: { ...process.env, UI_PHP: join(PUB, 'nucleo', 'Ui.php') },
+      encoding: 'utf8',
+    }));
+  } catch (e) {
+    phpSalida = null;
+    console.log(`  (no se pudo ejecutar PHP: ${String(e.message).split('\n')[0]})`);
+  }
+
+  afirmar(`se ejecutó el PHP de verdad sobre ${MUESTRAS.length} muestras`,
+          Array.isArray(phpSalida) && phpSalida.length === MUESTRAS.length,
+          'sin PHP no hay comprobación: define PHP_BIN');
+
+  const divergen = !Array.isArray(phpSalida) ? ['no se ejecutó PHP']
+    : MUESTRAS.map((m, i) => [m, B.normalizar(m), phpSalida[i]])
+              .filter(([, js, ph]) => js !== ph)
+              .map(([m, js, ph]) => `${JSON.stringify(m)}: JS=${js} PHP=${ph}`);
+
+  afirmar(`JS y PHP normalizan igual las ${MUESTRAS.length} muestras (${ACENTOS.length} acentos)`,
+          divergen.length === 0, divergen.slice(0, 4).join(' · '));
+
+  const CASOS = [
+    ['OT-2466-V093-10352936-CNLJ', '2466', true],
+    ['OT-2466-V093-10352936-CNLJ', 'v093', true],
+    ['OT-2466-V093-10352936-CNLJ', '10352936', true],
+    ['aviso 000010353510 v096', '10353510', true],
+    ['aviso 000010353510 v096', '000010353510', true],
+    ['OT-2466-V093 freidora k191', 'k191 freidora', true],
+    ['OT-2466-V093-10352936-CNLJ', '9999', false],
+  ];
+  let ok = true;
+  for (const [fila, q, esp] of CASOS) {
+    if (B.calza(B.normalizar(fila), q) !== esp) { ok = false; }
+  }
+  afirmar('calza() acierta los 7 casos de coincidencia parcial', ok);
+
+  afirmar('casos.php y ordenes.php marcan las filas con data-b',
+          /data-b="/.test(leer('casos.php')) && /data-b="/.test(leer('ordenes.php')));
+
+  /* --- Los campos del servidor y los del navegador, los MISMOS -------------
+     `Ui::coincide()` filtra en el servidor; `Ui::claveFila()` arma el `data-b`
+     que compara `busqueda.js`. Si las dos listas no llevan los mismos campos,
+     el buscador en vivo encuentra filas que al recargar desaparecen — y la URL
+     compartida, que se filtra en el servidor, no muestra lo que vio quien la
+     mandó.
+
+     El 2026-09-12 `ordenes.php` tenía 6 campos en el servidor y 7 en el
+     `data-b` (le faltaba `caso`), con un comentario que afirmaba justo lo
+     contrario. Se compara el texto de los argumentos de las dos llamadas, que
+     es lo único que de verdad dice si coinciden. */
+  const campos = (txt, fn) => {
+    /* La LLAMADA, no la mención. Las dos pantallas nombran `Ui::coincide()` en
+       un comentario de la cabecera, y un `indexOf` a secas enganchaba ese
+       comentario y devolvía la lista vacía — o sea, una prueba que «fallaba»
+       por su propio error de lectura, que es tan malo como una que pasa sin
+       comprobar. La llamada de verdad va seguida de `([`. */
+    const m = new RegExp(fn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\[')
+      .exec(txt);
+    if (!m) { return null; }
+    const a = txt.indexOf('[', m.index);
+    if (a < 0) { return null; }
+    /* Se busca el corchete que CIERRA, contando profundidad. Cortar en el
+       primer `]` daba vacío: el primero es el de `$c['aviso']`, no el del
+       arreglo. */
+    let prof = 0, b = -1;
+    for (let k = a; k < txt.length; k++) {
+      if (txt[k] === '[') { prof++; }
+      else if (txt[k] === ']') { prof--; if (prof === 0) { b = k; break; } }
+    }
+    if (b < 0) { return null; }
+    /* Cada argumento se reduce a su clave: `$f['local_n']` y
+       `$c['local_nombre'] ?? ''` se comparan por el nombre, no por la sintaxis. */
+    return (txt.slice(a + 1, b).match(/\[\s*'([^']+)'\s*\]/g) || [])
+      .map((m) => m.replace(/.*'([^']+)'.*/, '$1'));
+  };
+
+  for (const pantalla of ['casos.php', 'ordenes.php']) {
+    const txt = leer(pantalla);
+    const srv = campos(txt, 'Ui::coincide(');
+    const cli = campos(txt, 'Ui::claveFila(');
+    const iguales = srv && cli && srv.length > 0 &&
+                    srv.join(',') === cli.join(',');
+    afirmar(`${pantalla}: el filtro del servidor y el data-b comparan los mismos campos`,
+            iguales,
+            srv && cli ? `servidor=[${srv}] data-b=[${cli}]` : 'no pude leer las dos listas');
+  }
+  afirmar('el input de búsqueda apunta a su tabla con data-busca',
+          /data-busca="#tabla-casos"/.test(leer('casos.php'))
+          && /data-busca="#tabla-ordenes"/.test(leer('ordenes.php')));
 }
 
 console.log('\n=== El service worker conoce los archivos nuevos ===\n');

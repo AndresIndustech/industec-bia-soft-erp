@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Casos.php';
 require_once __DIR__ . '/pdf.php';        // solo para enlaceCompartido() y otValida()
+require_once __DIR__ . '/nucleo/Ui.php';  // Ui::coincide() se usa al filtrar, antes de pintar
 
 /**
  * ordenes.php — Las órdenes emitidas, con su informe.
@@ -69,10 +70,18 @@ $fEstado = (string) ($_GET['est'] ?? '');
 if ($fTexto !== '' || $fEstado !== '') {
     $filas = array_values(array_filter($filas, function ($f) use ($fTexto, $fEstado) {
         if ($fEstado !== '' && $f['estado'] !== $fEstado) { return false; }
-        if ($fTexto === '') { return true; }
-        $heno = mb_strtolower(implode(' ', [$f['ot'], $f['aviso'], $f['local'], $f['local_n'],
-                                            $f['equipo'], $f['texto']]), 'UTF-8');
-        return mb_strpos($heno, mb_strtolower($fTexto, 'UTF-8')) !== false;
+        // Coincidencia parcial: `2466` encuentra `OT-2466-...`, el aviso da igual
+        // con o sin los ceros de SAP. La misma regla que aplica busqueda.js.
+        //
+        // Los campos tienen que ser LOS MISMOS que los del `data-b` de la fila,
+        // más abajo. Hasta el 2026-09-12 aquí faltaba `caso` y allí sí estaba:
+        // escribir algo que solo aparece en la descripción lo encontraba el
+        // buscador en vivo, y al recargar —o al abrir la URL compartida, que es
+        // filtrado del servidor— la fila desaparecía. El comentario de allí
+        // afirmaba que las dos listas coincidían. `prueba_contratos.mjs` lo
+        // vigila ahora, para que no vuelva a depender de que alguien se acuerde.
+        return Ui::coincide([$f['ot'], $f['aviso'], $f['local'], $f['local_n'],
+                             $f['equipo'], $f['texto'], $f['caso']], $fTexto);
     }));
 }
 usort($filas, fn($a, $b) => strcmp($b['fecha'], $a['fecha']));   // la más nueva arriba
@@ -83,8 +92,6 @@ $secreto = (string) ($cfg['sync_secreto'] ?? '');
 
 $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
         'JEFE_ZONA' => 'Jefe de zona', 'TECNICO' => 'Técnico'];
-
-require_once __DIR__ . '/nucleo/Ui.php';
 
 Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Órdenes emitidas']);
 ?>
@@ -131,8 +138,9 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Órdenes emitidas']);
         </div>
         <div class="campo" style="flex:1;min-width:200px">
           <label for="f-q">Buscar</label>
-          <input type="text" id="f-q" name="q" value="<?= e($fTexto) ?>"
-                 placeholder="orden, aviso, local o equipo">
+          <input type="search" id="f-q" name="q" value="<?= e($fTexto) ?>"
+                 placeholder="parte de la orden, del aviso, del local o del equipo"
+                 data-busca="#tabla-ordenes" data-busca-cuenta="#cuenta-ordenes">
         </div>
         <div class="campo">
           <label>&nbsp;</label>
@@ -145,8 +153,12 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Órdenes emitidas']);
         <?php endif; ?>
       </form>
 
+      <p class="sub" style="margin:0 0 8px">
+        <b id="cuenta-ordenes" data-plantilla="{n}"><?= count($filas) ?></b> órdenes.
+      </p>
+
       <div class="tabla-wrap">
-        <table>
+        <table id="tabla-ordenes">
           <thead><tr>
             <th>Orden</th><th>Local</th><th>Fecha</th><th>Quién la firmó</th>
             <th>Estado</th><th>Informe</th>
@@ -156,7 +168,10 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Órdenes emitidas']);
             <tr><td colspan="6" class="vacio">Nada con esos filtros. <a href="ordenes.php">Ver todas</a>.</td></tr>
           <?php endif; ?>
           <?php foreach ($filas as $f): ?>
-            <tr>
+            <?php /* data-b: lo que compara el buscador en vivo. Mismos campos que
+                     Ui::coincide() al filtrar en el servidor. */ ?>
+            <tr data-b="<?= Ui::claveFila([$f['ot'], $f['aviso'], $f['local'], $f['local_n'],
+                                           $f['equipo'], $f['texto'], $f['caso']]) ?>">
               <td>
                 <span class="mono"><?= e($f['ot']) ?></span>
                 <span class="desc">aviso <?= e($f['aviso']) ?></span>
@@ -256,4 +271,4 @@ function copiar() {
 }
 </script>
 
-<?php Ui::pie(); ?>
+<?php Ui::pie(['js' => ['busqueda.js']]); ?>
