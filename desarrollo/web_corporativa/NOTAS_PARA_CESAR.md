@@ -6,7 +6,7 @@
 
 César, la nueva página usa **solo lo que hoy ya dice www.industec.me**, mejor ordenado y más fácil de leer en el celular. No agregamos ningún dato de su operación.
 
-**Lo que cambiamos el 11 de septiembre de 2026, por lo que usted le pidió a Andrés**: la página ahora deja claro que INDUSTEC es un proveedor técnico de **empresas y cadenas** (cadenas de comida rápida, restaurantes, hoteles, bares y cafeterías, catering), que trabaja con contrato de servicio y que **no repara equipos domésticos ni atiende a particulares**. La portada muestra la cocina de un local con freidoras y mantenedores de calor, no una cocina de casa, y la página muestra los **logos** de sus clientes y de las marcas de equipos. Solo necesitamos su confirmación en dos puntos: la **A6** (los logos) y la **B15** (a quién atienden).
+**Lo que cambiamos el 11 de septiembre de 2026, por lo que usted le pidió a Andrés**: la página ahora deja claro que INDUSTEC es un proveedor técnico de **empresas y cadenas** (cadenas de comida rápida, restaurantes, hoteles, bares y cafeterías, catering), que trabaja con contrato de servicio y que **no repara equipos domésticos ni atiende a particulares**. La portada muestra un dibujo propio de la cocina de un local de cadena, con freidoras, mantenedor de calor, refrigeración y campana de extracción, no una cocina de casa, y la página habla de **línea caliente, línea fría y ventilación**, no solo de freidoras. También muestra los **logos** de sus clientes y de las marcas de equipos. Solo necesitamos su confirmación en dos puntos: la **A6** (los logos) y la **B15** (a quién atienden), y algunos detalles del dibujo de la portada (ver B2).
 
 Aquí está lo que le propongo **corregir o agregar**. **Nada de esto se publica hasta que usted diga que sí.** Basta con marcar Sí o No en la tabla de abajo y, donde haga falta, mandarnos el dato o la foto.
 
@@ -19,11 +19,11 @@ Aquí está lo que le propongo **corregir o agregar**. **Nada de esto se publica
 | A1–A2 | Quitar las dos citas de estudios internacionales | Solo su aprobación (ya las quitamos del borrador) | [ ] Sí · [ ] No |
 | A3 | Quitar el «previene hasta un 85% de fallas» o respaldarlo con datos suyos | ¿Tiene registros propios? | [ ] Quitar · [ ] Tengo datos |
 | A5 | Tratar al cliente de «tú» en toda la web | Su preferencia | [ ] Tú · [ ] Usted |
-| A6 | Revisar los nombres de clientes **y autorizar que se muestren sus logos** | Confirmar la escritura correcta, que está de acuerdo con los logos y si reponemos Samsung, LG y Westinghouse (por ahora retiradas) | [ ] Revisado |
+| A6 | Revisar los nombres de clientes **y autorizar que se muestren sus logos** | Confirmar la escritura correcta, que está de acuerdo con que se muestren los logos | [ ] Revisado |
 | **B1** | **Decir en qué ciudad están y a dónde van** | Ciudad y zona de cobertura | [ ] Sí · [ ] No |
-| **B2** | **Fotos reales de su trabajo** (la página ya usa 5 fotos de su web actual) | Confirmar que son suyas, el archivo original de la foto de la portada y 1 o 2 fotos de un mantenedor de calor o de una freidora de presión | [ ] Sí · [ ] No |
+| **B2** | **Fotos reales de su trabajo** (la página ya usa 5 fotos de su web actual, más un detalle del dibujo de la portada que confirmar) | Confirmar que son suyas, el archivo original de la foto de las freidoras y 1 o 2 fotos de refrigeración o de una campana de extracción (no hay ninguna todavía) | [ ] Sí · [ ] No |
 | **B3** | **Horario de oficina y confirmar el 24/7** | Horario y número de emergencias | [ ] Sí · [ ] No |
-| **B4** | **Nombrar los demás tipos de equipos que atienden** (freidoras y mantenedores de calor ya están) | Marcar la lista | [ ] Sí · [ ] No |
+| **B4** | **Nombrar los demás tipos de equipos que atienden** (la página ya habla de línea caliente, línea fría y ventilación en general) | Marcar la lista de equipos concretos | [ ] Sí · [ ] No |
 | B5 | Testimonios de clientes | 2 o 3 clientes que acepten, por escrito | [ ] Sí · [ ] No |
 | B6 | Casos de trabajo cortos | 2 o 3 historias | [ ] Sí · [ ] No |
 | B7 | Certificaciones o autorizaciones de marcas | Documento que lo respalde | [ ] Sí · [ ] No |
@@ -89,7 +89,7 @@ Algunos logos tienen un detalle:
 
 Si tiene mejores versiones de cualquiera de estos logos, las cambiamos.
 
-**Marcas de equipos**: la lista abre ahora con los fabricantes de cocina profesional (Frymaster, Henny Penny, Dean, Hobart…) y sigue con refrigeración y extracción. **Samsung, LG y Westinghouse** están en su web actual, pero **las retiramos de la página nueva** mientras usted nos confirma: el público las asocia con electrodomésticos, justo la lectura que usted pidió evitar. ¿Corresponden a equipos de refrigeración o climatización comercial que ustedes atienden? Si es así, las volvemos a poner (ya están preparadas). **SilverChef**, que aparece entre las marcas de su web actual, no pasa a la página nueva: es una empresa que financia equipos, no un fabricante.
+**Marcas de equipos**: la lista abre con los fabricantes de cocina profesional (Frymaster, Henny Penny, Dean, Hobart…), sigue con refrigeración y extracción, y cierra con **Samsung, LG y Westinghouse**, que están en su web actual. Andrés pidió mantener las 18 para que la lista quede completa. **SilverChef**, que aparece entre las marcas de su web actual, no pasa a la página nueva: es una empresa que financia equipos, no un fabricante.
 
 ---
 
@@ -106,15 +106,21 @@ Hoy la web **no dice dónde están**. Quien busca en Google «mantenimiento de e
 
 **B2. Fotos reales de su trabajo [CONFIRMAR CON CÉSAR]**
 Desde el 11 de septiembre de 2026 la página usa **cinco fotos que hoy ya están en su web actual**:
-- en la portada, el técnico con casco y chaleco revisando una batería de freidoras (la misma foto de la portada de su web actual);
-- en la sección «Nuestro trabajo», una vitrina caliente con el tablero eléctrico abierto, dos técnicos dando mantenimiento a un horno, dos freidoras de presión y los mantenedores de calor de una línea de despacho.
+- en la sección «Nuestro trabajo» de la página de inicio y de servicios, y en la de contacto: el técnico con casco y chaleco revisando freidoras (la misma foto de la portada de su web actual, con un tratamiento de color más oscuro y de más contraste), una vitrina caliente con el tablero eléctrico abierto, dos técnicos reparando un horno y los mantenedores de calor de una línea de despacho.
 
 Las recortamos para que no se vean caras ni letreros o logos de clientes.
 - *Qué necesito*:
   1. **Que confirme que esas fotos son suyas** y que ningún cliente se opone a que se vean sus cocinas.
-  2. **Que confirme que el técnico de la portada es de su personal** (no se le ve la cara). Su descripción para lectores de pantalla dice «Técnico de INDUSTEC revisando una batería de freidoras…».
-  3. **El archivo original de la foto de la portada** (IMG_6213, tal como salió del teléfono). La copia que guarda su web actual mide solo 712 píxeles de ancho: se ve algo blanda y el casco queda cortado arriba.
-  4. **Una o dos fotos de un técnico trabajando en un mantenedor de calor o en una freidora de presión**, en la cocina de una cadena y **sin logos del cliente a la vista**. Es la única manera de mostrar el mantenedor de calor con una foto real en la portada.
+  2. **Que confirme que el técnico de las freidoras es de su personal** (no se le ve la cara). Su descripción para lectores de pantalla dice «Técnico de INDUSTEC revisando freidoras…».
+  3. **El archivo original de esa foto** (IMG_6213, tal como salió del teléfono). La copia que guarda su web actual mide solo 712 píxeles de ancho: se ve algo blanda y el casco queda cortado arriba.
+  4. **Que confirme que el tratamiento de color más oscuro (la foto se ve más de noche que de día) se puede publicar así.**
+  5. **Una o dos fotos de refrigeración (una cámara fría o un refrigerador comercial) o de una campana de extracción**, en la cocina de una cadena y **sin logos del cliente a la vista**. Hoy ninguna foto real muestra línea fría ni ventilación: la portada la representa con un dibujo, no con una foto.
+
+La portada ya no lleva esta foto: desde el 11 de septiembre de 2026 (tarde) es un **dibujo propio** de la cocina de un local de cadena, en el mismo estilo del primer borrador que usted vio, pero con freidoras, mantenedor de calor, refrigeración y campana en vez de una cocina de casa. Cuatro detalles del dibujo que también necesitamos que confirme:
+  6. **Los colores del uniforme** del técnico dibujado: casco blanco, overol azul y chaleco naranja reflectivo. ¿Así viste su personal, o prefiere otros colores?
+  7. La pantalla del refrigerador dibujado marca **«3°»**. Es solo un ejemplo, no un dato suyo: dígannos si lo quitamos.
+  8. En la esquina superior izquierda hay una **insignia redonda con una llave**. Si prefiere el dibujo sin ella, ya tenemos lista esa versión.
+  9. El dibujo no incluye una **plancha** ni una **máquina de hielo**, para que el técnico y las freidoras no se vean pequeños. Si prefiere que aparezcan, se puede cambiar la mesa de refrigeración o el mantenedor de calor por una de ellas.
 
 Las fotos reales generan más confianza que cualquier texto. Otras sugerencias para completar la galería:
 1. Un técnico trabajando en un equipo (de cerca: manos y herramientas).
@@ -131,9 +137,11 @@ Las fotos reales generan más confianza que cualquier texto. Otras sugerencias p
 **B3. Horario y emergencias 24/7 [CONFIRMAR CON CÉSAR]**
 - La web promete «servicio de emergencia 24/7». ¿Sigue vigente? ¿Se atiende en el mismo 099 788 7709?
 - ¿Cuál es el horario de oficina, para consultas que no son urgentes?
+- La página de contacto dice ahora «Te atiende nuestro equipo». ¿El WhatsApp, la llamada y el correo los responde su equipo técnico, o otra persona (por ejemplo, recepción o comercial)? Si es el equipo técnico, lo decimos así: «Te atiende nuestro equipo técnico».
+- Esa misma página describe en tres pasos, sin horas ni plazos, cómo se atiende una consulta: 1) nos cuenta qué pasa, 2) conversamos y revisamos el caso, 3) coordinamos la solución (mantenimiento preventivo, predictivo o correctivo, bajo contrato). ¿Así es como trabajan?
 
 **B4. Tipos de equipos que atienden [CONFIRMAR CON CÉSAR]**
-Hoy solo se deduce de las marcas. Nombrarlos ayuda en Google y deja claro qué hacen. **Freidoras y mantenedores de calor ya están en la página** (los mencionó Andrés el 11 de septiembre de 2026). Marque los demás que correspondan:
+Hoy solo se deduce de las marcas y de un dibujo. Nombrarlos ayuda en Google y deja claro qué hacen. **La página ya habla de «línea caliente, línea fría y ventilación»** en general (pedido de Andrés el 11 de septiembre de 2026), pero sin decir cada equipo concreto. Marque los que correspondan:
 [ ] Cocción (cocinas, hornos, planchas) · [ ] Refrigeración y cámaras de frío · [ ] Máquinas de hielo · [ ] Bebidas, café y helados · [ ] Campanas y extracción · [ ] Lavado de vajilla · [ ] Otros: ______
 
 ### Prioridad media: dan confianza
@@ -145,7 +153,7 @@ Dos o tres frases de clientes satisfechos, con nombre, cargo y empresa, y **su a
 Dos o tres historias cortas: problema → qué hicimos → resultado. Sin datos del contrato ni cifras internas, salvo las que usted apruebe.
 
 **B7. Certificaciones y autorizaciones [CONFIRMAR CON CÉSAR]**
-La web habla de «estándares de certificación internacional». ¿Cuáles son? ¿INDUSTEC es servicio técnico autorizado de alguna de las marcas (Hobart, Frymaster, Henny Penny…)? Si es así, es un gran diferenciador, pero **solo se publica con el documento que lo respalde**. Hoy la web no lo afirma, y nosotros tampoco.
+La web actual hablaba de «estándares de certificación internacional», una afirmación que no pudimos respaldar (ver A1–A3): ya la quitamos, en Nosotros y en servicios. ¿INDUSTEC es servicio técnico autorizado de alguna de las marcas (Hobart, Frymaster, Henny Penny…)? Si es así, es un gran diferenciador, pero **solo se publica con el documento que lo respalde**. Hoy la web no lo afirma, y nosotros tampoco.
 
 **B8. Consultoría integral gratuita [CONFIRMAR CON CÉSAR]**
 Es el botón principal de la web actual y lo mantenemos. ¿Sigue vigente? ¿Qué incluye (visita, diagnóstico, informe)? Explicarlo en una línea hace que más gente la pida.
@@ -198,8 +206,8 @@ Y el formulario pide, como dato obligatorio, el nombre de la **empresa o cadena*
 
 - **Portada clara**: en la primera pantalla dice qué hacen, para quién y cómo contactarlos, con los botones WhatsApp y Llamar.
 - **Enfoque en empresas y cadenas** (11 de septiembre de 2026): la sección «A quién servimos» (cadenas de comida rápida, restaurantes, hoteles, bares y cafeterías, catering), la línea que aclara que no reparan equipos domésticos, y el campo «Empresa o cadena» del formulario, que llega en cada mensaje.
-- **Portada con una foto real de su equipo técnico** (11 de septiembre de 2026), en lugar del dibujo de cocina que se leía como cocina de casa. Debajo de la foto van tres distintivos: «Freidoras y mantenedores de calor», «Mantenimiento preventivo, predictivo y correctivo» y «Servicio para cadenas de restaurantes». Los logos de sus clientes quedan justo después de «A quién servimos», y la sección «Nuestro trabajo» muestra cuatro fotos de trabajos (ver B2).
-- **Imagen para compartir en WhatsApp y redes** con la misma foto, el logo y el titular «Mantenimiento de cocinas profesionales para cadenas de restaurantes y hoteles».
+- **Portada con un dibujo propio de la cocina de un local de cadena** (tarde del 11 de septiembre de 2026), con freidoras, mantenedor de calor, refrigeración y campana de extracción, en el estilo del primer borrador pero sin nada que se lea como cocina de casa. Debajo del dibujo van tres distintivos: «Línea caliente, línea fría y ventilación», «Mantenimiento preventivo, predictivo y correctivo» y «Servicio para cadenas de restaurantes». Los logos de sus clientes y de las marcas quedan justo después de «A quién servimos», y la sección «Nuestro trabajo» muestra cuatro fotos de trabajos, entre ellas la foto real del técnico con las freidoras (ver B2).
+- **Imagen para compartir en WhatsApp y redes** con el mismo dibujo, el logo y el titular «Mantenimiento de cocinas profesionales para cadenas de restaurantes y hoteles».
 - **WhatsApp a un toque** en todas las páginas, con el mensaje ya escrito según el servicio.
 - **Guía «¿Qué servicio necesitas?»**: el cliente elige su situación («un equipo ya falló», «la falla se repite»…) y llega al servicio correcto.
 - **Acceso del personal**: página `/acceso/` con los botones «Ingresar al sistema» y «Abrir la app del técnico». No aparece en Google.
