@@ -35,7 +35,7 @@
      v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
      recibe el numero de la orden. Con el armazon viejo el celular seguiria
      mandando la orden sin ellas. */
-const VERSION = 'ot-industec-v5';
+const VERSION = 'ot-industec-v7';
 const ARMAZON = `${VERSION}-armazon`;
 const DATOS   = `${VERSION}-datos`;
 

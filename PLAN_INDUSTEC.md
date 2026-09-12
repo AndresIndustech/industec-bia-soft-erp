@@ -817,44 +817,142 @@ Las tareas T1.9 a T1.11 avanzan en paralelo conforme se desbloqueen sus dependen
 
 ---
 
-## 11b. Arranque para una conversación nueva — al 2026-09-10
+## 11b. Arranque para una conversación nueva — al 2026-09-12
 
 > Esta sección existe para que quien abra una conversación nueva pueda **empezar
 > a ejecutar sin preguntar nada**. Se actualiza cada vez que cambia lo que sigue.
+
+### Lo primero, antes de leer nada
+
+```bash
+cd "D:\INDUSTECH IA"
+git fetch origin && git status --short && git log --oneline -5
+git rev-list --left-right --count master...origin/master     # 0  0 = al día
+```
+
+**No te fíes del disco.** El 2026-09-11 se escribió en este plan que la 007
+estaba pendiente y que `sw.js` iba en v3, cuando existía una rama **29 commits
+por delante** donde las dos cosas ya estaban hechas. Eso mandó trabajo repetido
+y dejó el plan mintiendo dos días (error nº 15). Si `git status` muestra
+archivos sin commitear que no reconoces, mira §5.2b de `ESTADO.md` antes de
+tocarlos: hay cosas dejadas fuera **a propósito**.
 
 ### Qué leer, y en qué orden
 
 | Orden | Documento | Para qué |
 |---|---|---|
 | 1 | [`ESTADO.md`](ESTADO.md) §1 y §1b | Qué funciona hoy, con su cifra verificada |
-| 2 | [`ESTADO.md`](ESTADO.md) §5.1 | **Anótate ahí antes de tocar nada.** Si la tabla tiene filas, hay otra conversación trabajando |
-| 3 | Este plan, **T2.12** | La tarea que sigue, con su criterio de aceptación y su tabla de permisos |
-| 4 | [`SALIDAS IA\OTS\REDISENO_INTERFACES.md`](SALIDAS%20IA/OTS/REDISENO_INTERFACES.md) | Qué se construyó y **qué se rompió al construirlo** (§9b: cuatro defectos y por qué fallaban en silencio) |
+| 2 | [`ESTADO.md`](ESTADO.md) **§5.2b** | Qué quedó **abierto y sin commitear a propósito**, y las dos pruebas rotas |
+| 3 | [`ESTADO.md`](ESTADO.md) §5.1 | **Anótate ahí antes de tocar nada.** Si la tabla tiene filas, hay otra conversación trabajando |
+| 4 | Este plan, la tarea que te toque | Con su criterio de aceptación y su tabla de permisos |
+| 5 | [`AUDITORIA_2026-09-10.md`](AUDITORIA_2026-09-10.md) | Los 70 hallazgos verificados y cómo se cerraron |
 
 No hace falta leer el resto del repositorio. Y la skill **`industec-invariantes`**
 se invoca siempre al empezar, antes de la primera línea.
 
 ### Dónde está parado el proyecto, en un párrafo
 
-La Fase 1 está cerrada: 7.069 órdenes en el árbol canónico y en la base. La
-Fase 2 está avanzada: el buzón de casos opera de verdad (asignar, derivar,
-veredicto, cierre de dos manos), el vigilante IMAP trae los casos en segundos,
-el despliegue va por SSH con verificación por hash, y el 2026-09-10 se terminó
-el rediseño de las trece pantallas más la aplicación móvil del técnico con
-captura sin señal, el control de las 48 horas y el tablero gráfico. **Todo eso
-está escrito, probado en local y sin desplegar.**
+La Fase 1 está cerrada: 7.069 órdenes en el árbol canónico y en la base. **La
+Fase 2 está hecha y funcionando en el sitio de pruebas**, no solo escrita: la
+007 y la 008 aplicadas, el rediseño de las trece pantallas desplegado, la
+aplicación móvil del técnico con captura sin señal, el reloj de 48 horas, los
+reportes gráficos, la emisión de la orden con su número, su PDF y su correo en
+cola, la hora del negocio en hora de Ecuador, y la verificación por rol con
+ingreso real (87 comprobaciones). El buscador por coincidencia parcial y las dos
+pantallas que el rediseño había dejado sin estilos entraron el 2026-09-12,
+desplegadas y verificadas **contra lo que entrega la web**, no contra el disco
+del servidor. El repositorio está en GitHub y `master` sincronizado. **Lo que
+falta ya no es construir: es el piloto real en UIO (I-8), que depende de
+Andrés.**
+
+### Antes de dar nada por verificado
+
+La batería **no está toda en verde**, y hay que saberlo para no leer un «4
+fallos» como si fuera normal:
+
+```bash
+cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas"
+D:/SOFTWARE/PHP83/php.exe prueba_48h.php    # 96 · 4 FALLOS — abierto, ver abajo
+node prueba_graficos.mjs                     # 62 · 0
+node prueba_contratos.mjs                    # 57 · 0
+node prueba_barra_tecnico.mjs                # OK
+```
 
 ### La siguiente acción, concreta
 
-> **Paso 0 CUMPLIDO el 2026-09-12: la rama ya está fusionada en `master`.**
-> No hace falta el `stash` que menciona abajo: se comprobó antes con `comm -12`
-> que la rama no tocaba ninguno de los archivos con cambios locales, así que la
-> fusión no tuvo que pisar nada. Los tres conflictos fueron de documentación
-> (`.gitignore`, `ESTADO.md`, este archivo). Respaldo en la rama
-> `respaldo/pre-fusion-2026-09-12`. Método completo en §5.2b de
-> [`ESTADO.md`](ESTADO.md).
->
-> Lo de abajo se conserva como registro de lo que traía la rama.
+**Escoge por este orden.** Las tres primeras son autónomas y no dependen de
+nadie; la cuarta y la quinta requieren a Andrés.
+
+**A. Las 4 comprobaciones rotas de `prueba_48h.php`** — *autónomo, y hazlo
+primero.* Es lo único que hoy ensucia la señal de la batería, y una batería que
+informa «4 fallos» de forma permanente deja pasar el quinto, que sí será real.
+
+```bash
+cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas"
+D:/SOFTWARE/PHP83/php.exe prueba_48h.php    # los 4 fallos, con su nombre
+```
+
+Los cuatro son del reloj: «veredicto a las 55 h: queda como tarde», «el reloj
+deja de correr», «veredicto a las 10 h: a tiempo» y «garantía de semanas NO
+cuenta como incumplida». **La hipótesis, que hay que confirmar antes de tocar
+nada:** el error nº 11 de la lista de abajo dice que el cálculo de las 48 horas
+se pasó **a SQL** justo porque restar fechas en PHP dependía de la configuración
+del hosting, y esta prueba sigue midiendo la función PHP. Si es así, no hay
+defecto: hay una prueba que quedó midiendo lo que ya no es la implementación.
+*Criterio de aceptación:* o la prueba mide el camino SQL y pasa, o se retira con
+el motivo escrito en su cabecera y las comprobaciones que sí valgan se conservan.
+**No la borres sin dejar dicho por qué.**
+
+**B. `prueba_offline.mjs`, que ni arranca** — *autónomo.* Corta en el primer
+paso con `ERR "[object Object]" is not valid JSON`, antes de comprobar nada.
+Primero averigua si es de entorno (necesita el servidor local encendido) o si
+una respuesta dejó de ser JSON. Mismo criterio que A: arreglada o retirada con
+su motivo, no a medias.
+
+**C. Decidir `desarrollo/sitio_web/` contra `desarrollo/web_corporativa/`** —
+*autónomo hasta la decisión; borrar NO es autónomo.* Hay dos copias del sitio
+corporativo y solo una está versionada y publicada (`web_corporativa`). La otra
+son 215 archivos sin seguimiento con 22 MB de imágenes. **Ninguna se borra sin
+que Andrés lo pida en el momento** (I-2): lo que se puede hacer es comparar,
+decidir cuál queda y escribir la recomendación. Detalle y riesgos en §5.2b de
+[`ESTADO.md`](ESTADO.md) — incluido que `publico/contacto.php:35` redirige a un
+`contacto.html` que no existe.
+
+**D. T2.12.12 — las tres hojas de capacitación** — *autónomo escribirlas;
+agendar la capacitación es de Andrés.* Es lo único de T2.12 que falta. Van en
+`SALIDAS IA\OTS\`, una por rol (administración, jefe de zona, técnico). La
+convención es una carpeta por entrega: mira `paquete_buzon` y
+`paquete_alta_padron` como precedentes.
+
+**E. El piloto real en UIO** — *requiere a Andrés, y es I-8.* Todo está
+desplegado y verificado en el sitio de pruebas, pero el sistema **no lo usa
+todavía nadie de INDUSTEC**. El paso es empezar el uso real en UIO, verificar
+**48 horas**, y solo entonces LARB y CNLJ. Para el corte quedan el despachador
+de la cola de correo y los contadores reales.
+
+Y si vas a **desplegar** algo, el método que hizo seguro el del 2026-09-12:
+
+```bash
+# 1. ¿Tocó alguien más este archivo en otra rama? Si devuelve algo, NO subas.
+git fetch origin
+git diff master origin/<otra-rama> -- desarrollo/sistema_ots/app/publico/<archivo>
+
+# 2. Subir. `t2_10` ya compara lo que entrega la web, no solo el disco.
+cd "D:\INDUSTECH IA\desarrollo\agentes"
+.venv/Scripts/python.exe scripts/t2_10_desplegar.py <archivo> [...]
+
+# 3. Si tocaste algo de la lista PRECARGA de `sw.js` (estilo.css, ui.js, app.js,
+#    cola.js, guia.js, index.html), SUBE `VERSION` en sw.js y despliégalo: se
+#    sirve cache-first y el navegador que ya instaló la app no vería el cambio.
+#    Hoy va en v7, y el repositorio y el servidor coinciden.
+```
+
+---
+
+> **Lo que sigue es el registro de lo ya hecho**, no tareas pendientes. El paso
+> 0 (fusionar la rama del PC) **se cumplió el 2026-09-12**: `master` la contiene
+> y está empujado. Respaldo del `master` previo en la rama local
+> `respaldo/pre-fusion-2026-09-12`. Método en §5.2b de [`ESTADO.md`](ESTADO.md).
 
 **0. Fusionar en la estación la rama `pc/auditoria-2026-09-10`** del remoto privado
 (`git fetch origin && git merge origin/pc/auditoria-2026-09-10`; si `git merge` se niega
@@ -1002,7 +1100,8 @@ sobre-contó el backlog 8× en T1.11.
 
 | Bloqueado | Lo desbloquea |
 |---|---|
-| Aplicar la 007 y la 003 | **Andrés** — cambian el esquema |
+| ~~Aplicar la 007~~ | ✅ **Aplicada el 2026-09-11** en el sitio de pruebas, dos veces sin duplicar. La **003** sigue pendiente y sigue necesitando a **Andrés**: cambia el esquema |
+| **Las 4 comprobaciones rotas de `prueba_48h.php` y `prueba_offline.mjs`** | **Nadie: es autónomo.** Es la acción A de arriba. No están bloqueadas, están sin hacer |
 | Desplegar a UIO, y 48 h después a LARB y CNLJ | **Andrés** (I-8). El 2026-09-11 el rediseño se subió entero al sitio de pruebas porque nadie lo usa; el piloto por zona se decide cuando empiece el uso real |
 | ~~Que el PDF y el correo salgan del sistema nuevo~~ | ✅ **El PDF, desde el 2026-09-11** (la 008, en el sitio de pruebas). El correo queda en `email_queue`; falta el despachador y los datos reales del corte: contadores de `counter_{zona}.txt` y destinatarios en `config.php` |
 | El 36% del correctivo que el buzón no trae | Confirmar la causa — ver `SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md` |
