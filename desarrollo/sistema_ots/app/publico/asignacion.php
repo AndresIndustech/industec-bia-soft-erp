@@ -52,6 +52,25 @@ foreach ($gestion as $g) {
 }
 uasort($carga, fn($a, $b) => [$b['abiertos'], $a['t']['nombre']] <=> [$a['abiertos'], $b['t']['nombre']]);
 
+/* La barra de cada tarjeta se mide contra el MAS cargado del equipo, no contra
+   un tope inventado: lo que hay que ver es cómo está repartido hoy, y un tope
+   fijo de, digamos, 10 pintaría a todo el mundo casi vacío el día flojo y a
+   todo el mundo lleno el día pesado. */
+$topeCarga  = max(1, ...array_map(fn($c) => $c['abiertos'], $carga ?: [['abiertos' => 0]]));
+$libres     = count(array_filter($carga, fn($c) => $c['abiertos'] === 0));
+$cargados   = count(array_filter($carga, fn($c) => $c['abiertos'] >= 8));
+$enManos    = array_sum(array_map(fn($c) => $c['abiertos'], $carga));
+
+/** Las iniciales del avatar: primera palabra y última. Es un ancla visual para
+ *  recorrer veinte tarjetas, no un dato — por eso va `aria-hidden`. */
+function iniciales(string $nombre): string
+{
+    $p = array_values(array_filter(preg_split('/\s+/u', trim($nombre)) ?: []));
+    if (!$p) { return '?'; }
+    return mb_strtoupper(mb_substr($p[0], 0, 1, 'UTF-8')
+         . (count($p) > 1 ? mb_substr($p[count($p) - 1], 0, 1, 'UTF-8') : ''), 'UTF-8');
+}
+
 // --- Lo que falta repartir -------------------------------------------------
 $sinAsignar = [];
 foreach ($mios as $c) {
@@ -97,19 +116,66 @@ Ui::cabecera($u, 'asignacion.php',
            fijo, porque hay que leerlo y corregir algo. */ ?>
   <?php if (!empty($flash['error'])): ?><?= Ui::aviso('err', e($flash['error']), true) ?><?php endif; ?>
 
+    <?php /* Las tres cifras con que se toma la decisión de esta pantalla:
+             cuánto falta repartir, a cuántos les cabe y a cuántos ya no. */ ?>
+    <div class="tiles">
+      <div class="tile <?= $sinAsignar ? 'ambar' : 'verde' ?>">
+        <div class="n"><?= count($sinAsignar) ?></div>
+        <div class="t">Por repartir</div>
+        <div class="pie">sin asignar y sin informe</div>
+      </div>
+      <div class="tile <?= $libres ? 'verde' : '' ?>">
+        <div class="n"><?= $libres ?></div>
+        <div class="t">Sin nada abierto</div>
+        <div class="pie">de <?= count($carga) ?> en el equipo</div>
+      </div>
+      <div class="tile <?= $cargados ? 'ambar' : '' ?>">
+        <div class="n"><?= $cargados ?></div>
+        <div class="t">Con 8 o más</div>
+        <div class="pie">piénsalo antes de darle otro</div>
+      </div>
+      <div class="tile azul">
+        <div class="n"><?= $enManos ?></div>
+        <div class="t">En manos del equipo</div>
+        <div class="pie">asignados y todavía abiertos</div>
+      </div>
+    </div>
+
     <h2>El equipo (<?= count($carga) ?>)</h2>
     <p class="sub" style="margin:0 0 10px">
       «Abiertos» es lo que tiene entre manos. «Atendidos» son las órdenes que ya
-      emitió, contando las que el sistema le reconoció por el informe.
+      emitió, contando las que el sistema le reconoció por el informe. La barra
+      compara contra el más cargado de hoy<?= $topeCarga > 1 ? ', que lleva ' . $topeCarga : '' ?>.
     </p>
-    <div class="equipo">
-      <?php foreach ($carga as $c): ?>
-        <div class="persona <?= $c['abiertos'] >= 8 ? 'cargado' : ($c['abiertos'] === 0 ? 'libre' : '') ?>">
-          <div class="n"><?= e($c['t']['nombre']) ?></div>
-          <div class="u"><?= e($c['t']['usuario']) ?> · <?= e((string) $c['t']['zona']) ?></div>
-          <div class="cifras">
-            <div class="cifra"><b><?= $c['abiertos'] ?></b><span>abiertos</span></div>
-            <div class="cifra"><b><?= $c['atendidos'] ?></b><span>atendidos</span></div>
+    <div class="equipo escalona">
+      <?php foreach (array_values($carga) as $i => $c): ?>
+        <?php $cargadoP = $c['abiertos'] >= 8; $libreP = $c['abiertos'] === 0; ?>
+        <div class="persona <?= $cargadoP ? 'cargado' : ($libreP ? 'libre' : '') ?>" style="--i:<?= $i ?>">
+          <div class="quien">
+            <span class="ini" aria-hidden="true"><?= e(iniciales((string) $c['t']['nombre'])) ?></span>
+            <div class="id">
+              <div class="n"><?= e($c['t']['nombre']) ?></div>
+              <div class="u">
+                <span class="usr"><?= e($c['t']['usuario']) ?></span>
+                <?= Ui::zona($c['t']['zona'] ?? null) ?>
+              </div>
+            </div>
+          </div>
+          <div class="carga">
+            <?php /* `aria-hidden`: la barra repite lo que ya dicen las cifras de
+                     abajo. Un lector de pantalla no debe oír el dato dos veces. */ ?>
+            <div class="barra" aria-hidden="true">
+              <i style="width:<?= round($c['abiertos'] / $topeCarga * 100) ?>%"></i>
+            </div>
+            <div class="pie">
+              <div class="cifras">
+                <div class="cifra"><b><?= $c['abiertos'] ?></b><span><?= $c['abiertos'] === 1 ? 'abierto' : 'abiertos' ?></span></div>
+                <div class="cifra"><b><?= $c['atendidos'] ?></b><span><?= $c['atendidos'] === 1 ? 'atendido' : 'atendidos' ?></span></div>
+              </div>
+              <?php /* La palabra, no solo el color: regla 1 de `estilo.css`. */ ?>
+              <?php if ($cargadoP): ?><span class="chip">cargado</span>
+              <?php elseif ($libreP): ?><span class="chip">libre</span><?php endif; ?>
+            </div>
           </div>
         </div>
       <?php endforeach; ?>
@@ -161,7 +227,7 @@ Ui::cabecera($u, 'asignacion.php',
             </td>
             <td><?= Ui::prioridad($c['prioridad'] ?? null) ?></td>
             <td>
-              <span class="mono"><?= e($c['fecha_creacion'] ?? '—') ?></span>
+              <span class="mono sin-cortar"><?= e($c['fecha_creacion'] ?? '—') ?></span>
               <?php /* La antiguedad al lado de la fecha: a los 7 dias sin
                        informe el caso se cierra solo por falta de atencion, y
                        eso hay que verlo venir, no descubrirlo despues. */ ?>

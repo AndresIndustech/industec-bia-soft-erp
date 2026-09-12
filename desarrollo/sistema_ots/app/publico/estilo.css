@@ -487,6 +487,11 @@ tr.mio td:first-child{ box-shadow:inset 3px 0 0 var(--accent); }
 .vacio{ padding:34px 16px; text-align:center; color:var(--muted); }
 .vacio .icono{ font-size:26px; display:block; margin-bottom:8px; opacity:.5; }
 
+/* El buscador en vivo (`busqueda.js`) esconde filas con el atributo `hidden`.
+   Sobre un `<tr>` el `display:table-row` de la hoja del navegador puede ganarle
+   a `[hidden]`, así que se fuerza — igual que se hace con `#novedades`. */
+tr[hidden]{ display:none !important; }
+
 .acciones-fila,.acc{ display:flex; gap:5px; flex-wrap:wrap; }
 .acc .btn{ padding:5px 10px; font-size:12px; }
 
@@ -1190,3 +1195,153 @@ body.con-nav-abajo{ padding-bottom:calc(var(--nav-abajo) + env(safe-area-inset-b
 .compo{ display:flex; height:26px; border-radius:var(--r-sm); overflow:hidden; background:#f1f5f9; }
 .compo i{ display:block; height:100%; box-shadow:inset -2px 0 0 #fff; }
 .compo i:last-child{ box-shadow:none; }
+
+/* =========================================================================
+   22. ASIGNACION — LA CARGA DEL EQUIPO
+   -------------------------------------------------------------------------
+   POR QUE UNA TARJETA POR PERSONA Y NO OTRA TABLA
+   La pregunta de esta pantalla no es «qué pasa con este caso» —esa es la del
+   buzón, y se responde con una tabla— sino «a quién le cabe uno más». Eso se
+   responde comparando a las 19 personas del padrón de un vistazo, y comparar
+   diecinueve filas de una tabla obliga a leerlas una por una.
+
+   Estas clases faltaban en la hoja. La pantalla ya las usaba, así que salía sin
+   ningún estilo: los nombres en columna, «14abiertos» pegado, y el reparto del
+   trabajo —que es lo único que esta pantalla tiene que mostrar— invisible.
+
+   LA BARRA ES LO QUE HACE LA COMPARACION
+   Se mide contra el más cargado del equipo, no contra un tope inventado: el que
+   está al tope se ve lleno y el que no tiene nada se ve vacío, sin que nadie
+   tenga que restar dos números de cabeza.
+
+   Y LA PALABRA VA SIEMPRE CON EL COLOR (regla 1 de esta hoja). «libre» y
+   «cargado» se leen; no se deducen del verde ni del ámbar. Quien reparte el
+   trabajo es un jefe de zona, y el color no puede ser el único dato.
+   ========================================================================= */
+.equipo{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  gap:10px; margin:0 0 6px;
+}
+
+.persona{
+  background:#fff; border:1px solid var(--border); border-radius:var(--r);
+  padding:12px 13px 11px; box-shadow:var(--sombra-1);
+  position:relative; overflow:hidden;
+  display:flex; flex-direction:column; gap:9px;
+  transition:transform var(--t2) var(--curva), box-shadow var(--t2) var(--curva);
+}
+/* La cinta a la izquierda, igual que en `.tile`: dice el estado sin teñir la
+   tarjeta entera, que con diecinueve seguidas cansa la vista. */
+.persona::before{
+  content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:var(--border-fuerte);
+}
+/* El realce del hover NO puede ser un `transform`. La rejilla lleva `.escalona`,
+   cuya animación de entrada termina en `transform:none` con fill-mode `both`, y
+   una animación gana siempre a una declaración normal: el `translateY` quedaría
+   escrito pero sin efecto. Se realza con sombra y borde, que nadie pisa. */
+.persona:hover{ box-shadow:var(--sombra-2); border-color:var(--border-fuerte); }
+
+/* --- Quién es ----------------------------------------------------------- */
+.persona .quien{ display:flex; align-items:center; gap:9px; min-width:0; }
+.persona .ini{
+  width:32px; height:32px; border-radius:50%; flex-shrink:0;
+  display:inline-flex; align-items:center; justify-content:center;
+  background:var(--marca-cla); color:var(--marca);
+  font-size:11.5px; font-weight:700; letter-spacing:.02em;
+}
+/* Sin `min-width:0` el nombre largo no recorta: empuja la tarjeta y desalinea
+   toda la fila de la rejilla. */
+.persona .quien .id{ min-width:0; }
+.persona .n{
+  font-size:13.5px; font-weight:700; line-height:1.25; color:var(--ink);
+  /* Dos líneas, y después corta. Los nombres del padrón son de cuatro palabras
+     y a una sola línea se pierde el apellido — que es justo lo que distingue a
+     dos técnicos que comparten el nombre de pila. */
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.persona .u{
+  display:flex; align-items:center; gap:6px; margin-top:3px;
+  font-size:11.5px; color:var(--muted); min-width:0;
+}
+.persona .u .usr{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* --- Cuánto lleva -------------------------------------------------------
+   `margin-top:auto` empuja barra y cifras al fondo de la tarjeta. Sin esto,
+   un nombre de dos líneas baja las cifras de ESA tarjeta y las de al lado se
+   quedan arriba: la fila deja de poder leerse de un barrido horizontal, que es
+   justo para lo que sirve esta pantalla. */
+.persona .carga{ margin-top:auto; display:flex; flex-direction:column; gap:9px; }
+.persona .barra{ height:5px; border-radius:var(--r-full); background:#eef2f7; overflow:hidden; }
+.persona .barra i{
+  display:block; height:100%; border-radius:var(--r-full); background:var(--accent);
+  transition:width var(--t3) var(--curva);
+}
+.persona .pie{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.persona .cifras{ display:flex; align-items:baseline; gap:13px; }
+.persona .cifra{ display:flex; align-items:baseline; gap:4px; }
+.persona .cifra b{
+  font-size:18px; font-weight:700; line-height:1; letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;
+}
+.persona .cifra span{
+  font-size:10.5px; color:var(--muted); text-transform:uppercase;
+  letter-spacing:.04em; font-weight:600;
+}
+
+/* --- Los dos extremos, que son los que se buscan ------------------------ */
+.persona.libre{ background:var(--ok-bg); border-color:var(--ok-bd); }
+.persona.libre::before{ background:#22c55e; }
+.persona.libre .cifra b{ color:var(--ok); }
+.persona.libre .chip{ background:#fff; color:var(--ok); border-color:var(--ok-bd); }
+
+.persona.cargado{ background:var(--warn-bg); border-color:var(--warn-bd); }
+.persona.cargado::before{ background:#f59e0b; }
+.persona.cargado .barra i{ background:#f59e0b; }
+.persona.cargado .cifra b{ color:var(--warn); }
+.persona.cargado .chip{ background:#fff; color:var(--warn); border-color:var(--warn-bd); }
+
+/* --- Repartir desde la tabla -------------------------------------------
+   El desplegable y el botón van en una línea. A 100% de ancho —que es lo que
+   trae `select` por omisión— el botón caía debajo y cada fila crecía 44 px:
+   diez casos por repartir eran media pantalla de aire. */
+.asignar{ display:flex; gap:6px; align-items:center; }
+.asignar select{ height:38px; font-size:13.5px; min-width:0; width:auto; flex:1 1 158px; }
+.asignar .btn{ height:38px; flex-shrink:0; }
+
+/* La fecha no se parte. `2026-09-` en una línea y `11` en la otra se lee como
+   dos datos, y en una columna de doce filas obliga a releer cada una. */
+.sin-cortar{ white-space:nowrap; }
+
+@media (max-width:620px){
+  .equipo{ grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); }
+  .asignar{ flex-wrap:wrap; }
+  .asignar select{ flex:1 1 100%; }
+  .asignar .btn{ width:100%; }
+}
+
+/* =========================================================================
+   23. LA CONTRASEÑA QUE SE MUESTRA UNA SOLA VEZ
+   -------------------------------------------------------------------------
+   El segundo cabo suelto del mismo rediseño. `usuarios.php` enseña con
+   `.clave` la contraseña temporal recién generada de un técnico, y esa clase
+   solo existía dentro del `<style>` de `alta_padron.php` e `instalar.php` —
+   `usuarios.php` no tiene `<style>` propio, así que salía en texto corrido.
+
+   POR QUE ESTO NO ES COSMETICO
+   Es la única cadena del sistema que una persona tiene que copiar a mano, y se
+   muestra UNA vez: la base solo guarda el hash. En tipografía normal, `l`, `1`
+   e `I` se dibujan casi iguales, y `O` y `0` también. Monoespaciada y con aire
+   entre letras se distinguen, y `user-select:all` permite seleccionarla entera
+   de un clic en vez de arrastrar sobre ella y perder el último carácter.
+   ========================================================================= */
+.clave{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:19px; font-weight:700; letter-spacing:.06em; color:var(--ink);
+  background:var(--warn-bg); border:1px solid var(--warn-bd); border-radius:var(--r-sm);
+  padding:8px 12px; display:inline-block; margin-top:4px; user-select:all;
+  overflow-wrap:anywhere;
+}

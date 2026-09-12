@@ -46,6 +46,7 @@ del rediseño.
 | **Histórico en formato de planificación** | ✅ | **39 planes mensuales** de correctivo (7.863 filas, 3 zonas × 13 meses) + **seguimiento de preventivos** de 96 locales, reconstruidos desde las OTs y SAP. LOCAL, FECHA DE INICIO y ESTADO al 100%; EQUIPO al 99,5% |
 | Respaldo TrueNAS | 🔒 | Bloqueado: falta acceso físico al equipo |
 | Capacitación de cierre | 🔒 | Bloqueada: falta agendar con el personal |
+| Repositorio git sincronizado con GitHub | ✅ **2026-09-12** | `origin` es `git@github.com:AndresIndustech/industec-bia-soft-erp.git`. **Comprobado:** `ssh -T git@github.com` responde «Hi AndresIndustech! You've successfully authenticated», `git fetch` trae, y `master` tiene upstream `origin/master`. Andrés ya agregó la clave pública, así que el bloqueo del 2026-09-11 está levantado. **Se acabó el proyecto en un solo disco.** Ojo con lo que esto destapa: existe `origin/pc/auditoria-2026-09-10` **29 commits por delante de `master`**, con `master` como ancestro — ver §5.2b |
 
 **Cuadre del corpus, exacto contra los 7.333 PDFs originales:**
 `7.070 (órdenes) + 5 (informes técnicos) + 25 (otros clientes) + 233 (duplicados descartados) = 7.333`
@@ -93,12 +94,16 @@ corre todavía dice por qué.
 | **Novedades del preventivo hacia otras áreas** (`novedades.php`, `nucleo/Novedades.php`) | ✅ **2026-09-10** · ⏸ falta la 007 | Lo que el técnico ve en la visita y no era su orden: el correctivo que se viene, y lo de **otras áreas** —eléctrico, ventilación, desagüe, obra civil— que hace fallar los equipos una y otra vez. El técnico **propone** de quién es; el jefe de zona o la administración **deciden**. Si se le pide el aviso a KFC, el número vuelve aquí: es la prueba de que se avisó y cuándo. El filtro «no es de INDUSTEC» es el que sostiene esa conversación con el cliente |
 | **Formulario guiado y preguntado por pasos** (`guia.js`, `index.html`) | ✅ **2026-09-10** · ⏸ sin desplegar | Doce secciones y 40 campos pasaron a pasos que se abren según lo respondido, y **lo primero que se pregunta es qué va a hacer**, porque de eso depende todo lo demás. El formulario ahora pregunta **si el trabajo quedó concluido** y, si no, exige el diagnóstico. Es **mejora progresiva**: `guia.js` carga después de `app.js` y solo envuelve lo que ya funciona — si no carga, sale el formulario de siempre, entero |
 | **Reportes gráficos** (`reportes.php`, `graficos.js`) | ✅ **2026-09-10** · ⏸ sin desplegar | Barras, columnas, anillo y apilada en **SVG escrito a mano, sin librería**: la política es software libre y lo mínimo, son datos de un cliente, y tiene que dibujarse sin señal. **La paleta pasó las seis comprobaciones** del método (luminosidad, croma, daltonismo protan/deutan/tritán, visión normal y contraste); las zonas contra **todos** los pares, porque conviven en un gráfico. Todo gráfico lleva **su tabla debajo**. Primero el indicador del negocio —**% que se concluye en una visita**— y solo después el volumen |
+| **La pantalla de asignación salía sin estilos** (`asignacion.php`, `estilo.css` §22) | ✅ **2026-09-11** · ⏸ sin desplegar | El rediseño del 2026-09-10 recogió los `<style>` de cada página en `estilo.css` y dejó fuera las clases de esta: `.equipo`, `.persona`, `.cifras`, `.cifra` y `.asignar` **no existían**, así que las 23 personas del equipo salían como una columna de texto plano y «14abiertos» pegado. No daba ningún error. Ahora cada técnico es una tarjeta con su barra de carga —medida **contra el más cargado del día**, no contra un tope inventado— y las dos cifras alineadas al fondo, para que la fila se lea de un barrido. Los dos extremos llevan **la palabra además del color** («libre», «cargado»), que es la regla 1 de la hoja. Arriba, las tres cifras con que se decide: por repartir, sin nada abierto, con 8 o más. **Verificado:** `php -l` limpio, las **212 comprobaciones** de las tres baterías en verde (96 · 62 · 54, 0 fallos), y la pantalla renderizada con datos de prueba a 1400 px y a 400 px sin desborde horizontal. **Desplegado y verificado en la web el 2026-09-12**, no solo en el disco del servidor: `estilo.css` sale con 73.393 bytes y las secciones 22 y 23, comprimido y sin comprimir, con `Cache-Control: no-cache` y el CDN en `MISS` |
+| **La contraseña temporal salía en texto corrido** (`estilo.css` §23) | ✅ **2026-09-12** · desplegado | **No era una sola pantalla: eran dos.** El cruce de clases usadas contra definidas se hizo mal la primera vez y dio un falso «era la única». `usuarios.php:171` muestra con `.clave` la contraseña recién generada de un técnico, y esa clase solo existía dentro del `<style>` de `alta_padron.php` e `instalar.php`; `usuarios.php` no tiene `<style>`, así que salía en tipografía normal. Es la **única cadena del sistema que una persona copia a mano**, se muestra una sola vez —la base solo guarda el hash— y en texto corrido `l`/`1`/`I` y `O`/`0` se confunden. Ahora va monoespaciada, con `letter-spacing` y `user-select:all`. El resto del cruce sí se sostiene: `cronograma.css` cubre el calendario, y `login`, `clave`, `alta_padron` e `instalar` conservan su `<style>`; queda `.proximo` en `casos.php`, un `div` sin consecuencia visual |
+| **El trabajador de servicio servía la hoja vieja** (`sw.js` v5 → **v7**) | ✅ **2026-09-12** · desplegado | `estilo.css` está en `PRECARGA` y se sirve **cache-first**: sin subir `VERSION`, todo navegador con la aplicación instalada seguía pintando la hoja anterior, sin dar ningún error. Se subió **partiendo del `sw.js` de `origin/pc/auditoria-2026-09-10`**, que es byte a byte lo que está desplegado — no del de `master`, que está 29 commits atrás y lo habría revertido. Comprobado antes de subir que `activate` solo borra cachés y **nunca toca IndexedDB**: la cola de envíos del técnico sobrevive. Dos subidas: v6 con la hoja, y **v7** al corregir el `hover` muerto de `.persona`. Verificado contra la web, no contra el disco: `estilo.css` sale con **73.725 bytes y SHA idéntico** al archivo local, y `sw.js` en v7. **Drift consciente:** el servidor va en v7 y la rama dice v5; se cierra al fusionar |
 | 🔴 **Dos endpoints entregaban datos del cliente sin sesión** | ✅ **CERRADOS el 2026-09-10** | `catalogos.php` servía los 100 locales con su correo, los 1.173 activos y **los nombres de los 19 técnicos** a cualquiera con la URL. `cronograma.php`, además, el cronograma completo, el padrón y **los 918 casos vivos con sus alertas** — y **sin filtrar por zona**. El mismo error las dos veces: el `.htaccess` cerró los `.json` y se dio por hecho que el `.php` que los sirve estaba cubierto. Ahora exigen sesión y el cronograma recorta por zona **en el servidor**. Datos personales del personal y correos del cliente: cuenta para el riesgo LOPDP ya registrado. Revisado y **correcto**: `aplicar_sql.php`, `verificar_esquema.php` y `minar.php` cortan con 404 fuera de la línea de órdenes, y `sync_casos.php` tiene su HMAC |
 | **Cuatro defectos propios, encontrados al revisar y corregidos** | ✅ **2026-09-10** | Los cuatro fallaban **en silencio**. (1) La pantalla de novedades **sobrescribió `novedades.php`**, que ya estaba en uso como el extremo que consulta el buzón cada 30 s: `ui.js` recibía HTML donde esperaba JSON y la barra de «el buzón se actualizó» dejó de aparecer. Restaurado desde git; la pantalla pasó a `novedades_visita.php`. (2) `guia.js` se tragaba el **botón de enviar** dentro del último paso plegado: el técnico llenaba la orden y no tenía dónde pulsar. (3) El contenedor de novedades del formulario compartía el id `#novedades` con la barra del buzón, y a los 30 s le ponía `hidden` a lo que el técnico acababa de escribir. (4) Un **401 por sesión caducada** se trataba como «orden inválida» y no se reintentaba — veinte minutos de trabajo perdidos por volver a entrar. Se escribió `pruebas/prueba_contratos.mjs` (48 comprobaciones) para esa clase de defecto |
 | **Tres suites de prueba nuevas** | ✅ **2026-09-10** | `prueba_48h.php` **96 comprobaciones · 0 fallos** (el reloj mide el veredicto y no la reparación; lo vencido cuenta ahora; ningún estado sale en crudo; el rojo de la antigüedad cae en el corte de 7 días). `prueba_graficos.mjs` **62 · 0** (total cero, un dato, negativos, basura, JSON roto, 8 porciones plegadas, el color sigue a la entidad). `prueba_contratos.mjs` **48 · 0** (los acuerdos entre JS y pantallas, y que los extremos con datos del cliente sigan exigiendo sesión). **Nada se abrió contra datos reales**: no hay base levantada en esta máquina, así que la verificación con los tres roles sigue pendiente en el sitio de pruebas |
 | **`Casos::etiquetaEstado()` mostraba estados en crudo** | ✅ **2026-09-10** | Le faltaban `ATENDIDO` y `CERRADO_SIN_ATENCION`, así que esos casos salían como «CERRADO_SIN_ATENCION», en mayúsculas y con guion bajo, en la pantalla que mira la administradora. Ahora hay **una sola lista**, en `Ui::ESTADOS`, con los ocho estados y su explicación |
 | **`ESPERA_REPUESTO` pasa a `Reconciliar::INTOCABLES`** | ✅ **2026-09-10** | Sin esto, la reconciliación habría marcado ATENDIDO al caso que espera una pieza —porque ese caso **sí** tiene informe: el técnico fue y diagnosticó— y la administradora lo habría cerrado en SAP con el equipo todavía parado |
-| ⚠️ **El buzón solo trae el 37% de los casos de SAP** | 🔴 **por confirmar la causa** | El 0% de `Mant. Preventivo` **está explicado**: no se pide por correo, sigue cronograma. Lo que sigue sin causa es el **36% del correctivo**. Ver [`SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md`](SALIDAS%20IA/OTS/HALLAZGO_BUZON_VS_SAP.md) |
+| ⚠️ **El buzón solo trae la mitad de los casos de SAP** | ✅ **causa identificada el 2026-09-10** | Cotejado contra `ORDENES ABIERTAS EN SAP.xlsx`: SAP tiene **62 órdenes abiertas** y el buzón capturó **31**. **Hipótesis principal descartada**: los **213 avisos originales de SIR** desde el 20-ago llevan `servicioalcliente@industec.me` en el destinatario, el **100%**. **La causa (aportada por Andrés y respaldada por los datos): SIR avisa cuando se *crea* una orden, no cuando se *reabre*.** Buena parte de estos 31 son reaperturas —volver a cerrar tras poner el repuesto, o documentar un trabajo hecho—: de los 33 abiertos con OT, en **ninguno** la OT es anterior al aviso (mismo día o +1 a +4). INDUSTEC los trabaja igual: **27 de 31 ya tienen OT emitida**; solo **4 están sueltos de verdad**. El dato compartido **coincide 31 de 31**. El flujo correcto ya existe: el técnico cierra con su informe → el sistema avisa a la administradora para cerrar en SAP. Ver [`SALIDAS IA\OTS\COTEJO_SAP_ABIERTAS_2026-09-10.md`](SALIDAS%20IA/OTS/COTEJO_SAP_ABIERTAS_2026-09-10.md) |
+| **La reconciliación de los 735, validada contra SAP** | ✅ **2026-09-10** | **Cero** de los 735 casos cerrados por falta de atención figura abierto en SAP. La regla de «más de una semana sin ningún informe» no se llevó por delante ningún caso vivo |
 
 **Arquitectura decidida el 2026-09-08:** la **base operativa vive en Hostinger**
 (usuarios, casos abiertos, asignaciones, cronograma vigente) y la **memoria
@@ -218,6 +223,8 @@ que confirmarlo.
 | **Decisión: ¿usuario por técnico o código de zona?** | La etapa de login del sistema nuevo |
 | **Encuadre LOPDP: quién es responsable y quién encargado, y contrato de encargo INDUSTEC↔INDUSTECH** | Nada técnico, pero define quién debe actuar ante la exposición verificada. Ver `SISTEMA_COMPLETO.md` §5b |
 | **Revisar si `cleanup.php` está en algún cron** | Nada, pero es lo más urgente: borra `uploads` y los logs sin verificar copia |
+| **Confirmar con quién generó `ORDENES ABIERTAS EN SAP.xlsx` si el export lleva filtro** | Nada técnico, pero decide cuánto vale el cotejo: las 62 filas son **todas** `Mant. Correctivo` clase `L1` y ninguna anterior al 26-ago. Si el export está completo, los 909 casos que la pantalla muestra como vivos ya están cerrados en SAP |
+| **Export de órdenes abiertas de SAP, periódico** | Que el sistema deje de depender solo del correo. Quedó probado que **la mitad de los casos abiertos no llega por el buzón**, así que esta es la única vía para verlos y la única que cierra casos |
 
 ### Etapa del histórico: cerrada, con estas inquietudes anotadas
 
@@ -297,6 +304,59 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
 | T2.5 · Captura — formulario único, v1 para revisión | Conversación "app captura v1" | 2026-09-08 | Solo `desarrollo/sistema_ots/app/publico/` (código nuevo). No toca base ni árbol canónico |
+| Buscador de órdenes y avisos por coincidencia parcial | Conversación "cotejo SAP" | 2026-09-10 | `app/publico/busqueda.js` (nuevo), y el buscador de `casos.php` y `ordenes.php`. No toca base ni árbol canónico |
+| T2.12 · Revisión a fondo de la interfaz nueva + paquete de despliegue + hojas de capacitación | Conversación "puesta en marcha T2.12" | 2026-09-10 | **Lee** todo `app/publico/`. **Escribe** en `SALIDAS IA\OTS\`. Cualquier corrección de código de `casos.php`/`ordenes.php`/`Ui.php` se coordina con la fila "cotejo SAP" |
+| Conectar el repositorio a GitHub y fusionar la auditoría del PC (`pc/auditoria-2026-09-10`) | Conversación "fusión auditoría PC" | 2026-09-10 | **El índice de git y la rama `master`**: nadie más debe hacer `git add`, `git commit`, `git stash` ni `git merge` mientras esto corra. No toca base, ni árbol canónico, ni el servidor |
+| Sitio web corporativo industec.me | Conversación "web corporativa industec.me" | 2026-09-10 | La **raíz** del sitio de pruebas (`public_html/`), con archivos nuevos. **No toca `public_html/ot/`**, ni la base, ni el árbol canónico. Ojo: un `.htaccess` en la raíz se hereda en `ot/` — ver el aviso de abajo |
+
+> **Aviso del 2026-09-10 — no despliegues a `public_html/ot/`.** Hasta que la
+> fila «fusión auditoría PC» desaparezca de la tabla de arriba, **ningún
+> `t2_10_desplegar.py` ni ningún `scp` hacia `ot/`**. El sitio de pruebas ya
+> tiene puestos desde el PC `sw.js` v4, `pdf.php`, `nucleo/Reconciliar.php`,
+> `nucleo/Auth.php` y los dos `.htaccess` de la rama `pc/auditoria-2026-09-10`.
+> Desplegar con el árbol local de antes de la fusión los devolvería a la versión
+> vieja, y **eso no da un error**: da un sitio a medias, que es exactamente el
+> modo de fallar que ya costó horas el 2026-09-10 con la lista blanca del
+> desplegador.
+>
+> La **raíz** del sitio (`public_html/`) sí se puede tocar: es otra carpeta y hoy
+> está vacía. Pero un `.htaccess` puesto en la raíz **se hereda en `ot/`**, así
+> que un `RewriteRule` de tipo SPA, un `DirectoryIndex` o una cabecera `CSP`
+> globales pueden romper el sistema de OTs sin dar un solo error — la CSP, en
+> particular, deja el service worker sin registrar y la cola de envíos del
+> técnico sin funcionar. Si hay rewrites en la raíz, la primera condición va
+> `RewriteCond %{REQUEST_URI} !^/ot/`. Y después de subir a la raíz se comprueba
+> que `/ot/login.php` siga dando 200 y que `/ot/catalogos/locales.json` siga
+> dando **403**: si ese pasa a 200, la raíz desarmó la protección del padrón.
+
+### 5.2b El repositorio está partido en dos — léelo antes de commitear
+
+**`origin/pc/auditoria-2026-09-10` está 29 commits por delante de `master`, y
+`master` es su ancestro.** Comprobado el 2026-09-12 con
+`git merge-base --is-ancestor master origin/pc/auditoria-2026-09-10`. Es decir:
+**se puede avanzar sin fusionar de verdad** (`--ff-only`), mientras nadie
+commitee en `master` y lo haga divergir.
+
+Lo que esa rama ya tiene y este árbol local no:
+
+| Ya hecho allí | Consecuencia para ti |
+|---|---|
+| La **007 aplicada** y el **rediseño desplegado** (`6b5a5c8`) | La «siguiente acción» de §11b del plan ya está hecha. No la repitas |
+| El **CDN de Hostinger guardaba 7 días** el código (`eec80d2`) | Ya está corregido con `no-cache`; hoy responde `MISS` |
+| `t2_10` comprueba **lo que entrega la web**, no el disco (`18a325c`, `c9cf72f`) | El desplegador de este árbol es el viejo: verifica a mano por `curl` |
+| La **web corporativa** en `desarrollo/web_corporativa/` (`943e522`, `26f6236`) | **No commitees `desarrollo/sitio_web/`**: publicaría el mismo sitio bajo dos rutas, con 22 MB de imágenes que git no suelta nunca |
+| La **008** aplicada (`0850b67`) | El PDF y el correo ya salen del sistema nuevo |
+| `.claude/settings.local.json` ignorado (`564f92d`) | Se pre-aplicó aquí para que la fusión no choque |
+
+**Qué NO tiene esa rama:** el arreglo de la pantalla de asignación ni el de la
+contraseña. Se comprobó con `git diff master origin/pc/... -- estilo.css
+asignacion.php`, que no devuelve nada: la rama **nunca tocó esos dos archivos**.
+Por eso se pudieron desplegar sin revertirle nada a nadie.
+
+**Lo que falta, y es de una sola conversación:** el avance rápido de `master` a
+esa rama. Mientras no ocurra, cada commit nuevo en `master` convierte un avance
+rápido en una fusión a tres bandas con conflictos en `ESTADO.md` y
+`PLAN_INDUSTEC.md`, que son justo los dos archivos que ambas partes editan.
 
 ### 5.2 Qué choca con qué
 
@@ -387,4 +447,5 @@ Cada una lleva la evidencia real de qué se rompió y el comando exacto que comp
 | 2026-09-03 | T1.1 a T1.7: inventario, copia verificada, stack, esquema, maestro, saneamiento e ingesta |
 | 2026-09-04 | Segunda pasada del plan con 26 correcciones e invariantes I-9 a I-13. T1.6b/c/d/e: cuarentena resuelta, fechas recuperadas, otros clientes separados, altas al maestro. Corregidos 4 bugs de datos anteriores (centros de coste perdidos por `max_col`, correo del maestro en columna equivocada, filas duplicadas por renombrado, falsos positivos del auditor) |
 | 2026-09-04 | Proyecto reorganizado: raíz corta y todo lo técnico en `desarrollo/`. Se escribieron el `CLAUDE.md`, este `ESTADO.md` y 6 skills minadas del propio código. Corregida una deriva de esquema que impedía reconstruir la base desde cero |
+| 2026-09-11 | **La pantalla de asignación, que había quedado sin estilos.** Un cabo suelto del rediseño: las clases de esa página no llegaron a `estilo.css` y salía como texto plano, sin dar ningún error. Se añadió la sección 22 de la hoja y se rehízo la tarjeta de cada técnico. Se comprobó que era la **única** pantalla afectada cruzando las clases usadas contra las definidas — detalle y cifras en §1b |
 | 2026-09-10 | **Rediseño completo de las interfaces.** Un solo sistema de diseño para las 13 pantallas (antes, seis copias del mismo `<style>`); navegación por rol en todas; panel convertido en tablero de «lo que te toca ahora»; app del técnico móvil con bandeja tipo correo y **envío en cola que sale solo al recuperar señal**, idempotente por UUID del celular; el técnico **deja de elegir su nombre** y la identidad sale de la sesión; el reloj de **48 h** para equipos deshabilitados con sus cuatro veredictos; insistencias con fecha; novedades del preventivo hacia otras áreas; formulario preguntado por pasos; y reportes gráficos en SVG propio con la paleta validada. Se cerraron **dos endpoints que entregaban datos del cliente sin sesión** y se corrigieron dos defectos reales (`etiquetaEstado` incompleta, `ESPERA_REPUESTO` pisado por la reconciliación). **Nada desplegado**: por I-8 va primero a UIO con 48 h de verificación. Reseña en `SALIDAS IA\OTS\REDISENO_INTERFACES.md` |

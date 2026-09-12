@@ -57,8 +57,22 @@ desarrollo/sistema_ots/app/publico/nucleo/padron.json
 desarrollo/agentes/config/clave_hostinger
 desarrollo/agentes/config/clave_hostinger.pub
 
+# Llave SSH de lectura/escritura del repositorio en GitHub. Es una llave APARTE
+# de la de Hostinger a proposito: si una se revoca o se filtra, la otra sigue
+# sirviendo, y el alcance de cada una se ve de un golpe. Las reglas de arriba
+# nombran el archivo exacto, no la carpeta, asi que una llave nueva NO queda
+# cubierta por ellas: hay que agregarla aqui al crearla.
+desarrollo/agentes/config/clave_github
+desarrollo/agentes/config/clave_github.pub
+
 # Logs del vigilante del buzon: se rotan solos por fecha, no van al repositorio.
 desarrollo/agentes/logs/
 
 # Cache de tecnicos por OT: se rehace sola, no va al repositorio.
 desarrollo/agentes/config/cache_tecnicos.json
+
+# Ajustes locales de Claude Code de cada equipo: son de esa maquina y no viajan
+# en el repositorio. Sin esta regla el archivo sale como `??` en cada
+# `git status`, y cualquier `git add -A` de cualquiera de las conversaciones en
+# paralelo se lo lleva al repositorio sin que nadie lo note.
+.claude/settings.local.json

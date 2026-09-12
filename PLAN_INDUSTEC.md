@@ -586,14 +586,14 @@ incumplimiento. Lo que no puede pasar es que a las 72 horas nadie haya decidido.
 `REDISENO_INTERFACES.md` §13): `php -l` 38/38, `node --check` 9/9, balance de
 etiquetas 13/13, y tres suites de prueba que se corren solas —
 `pruebas/prueba_48h.php` (96 comprobaciones), `pruebas/prueba_graficos.mjs`
-(62) y `pruebas/prueba_contratos.mjs` (48), **206 en total, 0 fallos**. Antes de
+(62) y `pruebas/prueba_contratos.mjs` (54), **212 en total, 0 fallos**. Antes de
 tocar nada, correrlas: si alguna falla, algo se movió.
 
 ```bash
 cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas"
 D:/SOFTWARE/PHP83/php.exe prueba_48h.php     # 96 · 0
 node prueba_graficos.mjs                      # 62 · 0
-node prueba_contratos.mjs                     # 48 · 0
+node prueba_contratos.mjs                     # 54 · 0
 ```
 
 **Lo que NO cubre ninguna de esas pruebas, y por eso existe esta tarea:** nada
@@ -795,6 +795,21 @@ está escrito, probado en local y sin desplegar.**
 
 ### La siguiente acción, concreta
 
+> **⚠ Corregido el 2026-09-12 — no empieces por aquí.** Lo que sigue en esta
+> sección (aplicar la 007, desplegar el rediseño) **ya está hecho** en
+> `origin/pc/auditoria-2026-09-10`, que está **29 commits por delante de
+> `master`** con `master` como ancestro. Se comprobó con
+> `git log --oneline master..origin/pc/auditoria-2026-09-10`.
+>
+> **La siguiente acción real es el avance rápido de `master` a esa rama**
+> (`git merge --ff-only`), que es de la conversación «fusión auditoría PC».
+> Mientras no ocurra, cada commit en `master` convierte ese avance rápido en una
+> fusión a tres bandas con conflictos en este archivo y en `ESTADO.md`.
+> Lee **§5.2b de [`ESTADO.md`](ESTADO.md)** antes de tocar git.
+>
+> El procedimiento de abajo se conserva porque documenta *cómo* se aplica una
+> migración, no porque quede pendiente.
+
 **T2.12.1 — aplicar la migración 007.** Requiere aprobación de Andrés porque
 cambia el esquema: pídesela antes de correr nada.
 
@@ -847,14 +862,28 @@ envíos. Se corrigió a 45 archivos, y el comentario de `ARCHIVOS` en
 `t2_10_desplegar.py` trae el comando que vuelve a comprobarlo.
 **Mantenerla al día es parte de agregar un archivo.**
 
+**Y en el mismo despliegue, subir `VERSION` en `sw.js`.** `estilo.css` va en la
+lista de precarga y se sirve **cache-first**: sin subir la versión, quien ya
+instaló la aplicación se queda con la hoja vieja y no ve nada, sin un solo
+error. La prueba de contratos no lo detecta: solo exige v3 o más.
+
+> **Corrección del 2026-09-12.** Este párrafo decía que `sw.js` «sigue en v3».
+> Era falso: `master` está **29 commits por detrás** de
+> `origin/pc/auditoria-2026-09-10`, donde ya iba en **v5** — y la causa de que
+> el rediseño no se viera no era solo la versión, sino que **el CDN de Hostinger
+> guardaba el código 7 días** (`eec80d2`, ya corregido con `no-cache`). Hoy el
+> servidor va en **v6**. Antes de escribir en el plan algo sobre el estado del
+> sistema desplegado, **mira la rama del PC, no solo este árbol** — ver §5.2b de
+> [`ESTADO.md`](ESTADO.md).
+
 Mientras la aprobación llega, lo que **sí** se puede hacer sin pedir permiso:
 
 ```bash
-# 1. Que nada se haya movido: 206 comprobaciones, 0 fallos
+# 1. Que nada se haya movido: 212 comprobaciones, 0 fallos
 cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas"
 D:/SOFTWARE/PHP83/php.exe prueba_48h.php     # 96 · 0
 node prueba_graficos.mjs                      # 62 · 0
-node prueba_contratos.mjs                     # 48 · 0
+node prueba_contratos.mjs                     # 54 · 0
 
 # 2. Escribir las tres hojas de capacitación (T2.12.12) en SALIDAS IA\OTS\
 # 3. Armar el paquete de despliegue de T2.12.3. La convención del proyecto es
@@ -894,7 +923,7 @@ sobre-contó el backlog 8× en T1.11.
 | El 36% del correctivo que el buzón no trae | Confirmar la causa — ver `SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md` |
 | Respaldo TrueNAS (T1.9) | Acceso físico al equipo |
 | Metas reales de SLA (T2.2) | El anexo de niveles de servicio del contrato con KFC |
-| Sacar el proyecto del único disco | Nada técnico: `git remote -v` no devuelve nada y hay 40+ commits en un solo disco |
+| ~~Sacar el proyecto del único disco~~ | **Desbloqueado el 2026-09-12.** `origin` apunta a `github.com:AndresIndustech/industec-bia-soft-erp` y `ssh -T git@github.com` autentica. Lo que queda es el avance rápido de `master`, no el acceso |
 | Delegado de protección de datos ante la SPDP | Trámite: gratis, en línea, guía en `TRAMITE_DELEGADO_DATOS.md`. **El plazo venció hace más de 8 meses** |
 
 ### Entorno
@@ -939,6 +968,23 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
 8. **Poner la protección en el `.json` y olvidar el `.php` que lo sirve.** Pasó
    dos veces: `catalogos.php` y `cronograma.php` entregaban locales, correos del
    cliente y nombres del personal sin ninguna sesión.
+9. **Llevar los estilos a la hoja común y olvidar las clases de una pantalla.**
+   El rediseño del 2026-09-10 recogió en `estilo.css` lo que cada página tenía
+   en su `<style>`, y se quedaron fuera `.equipo`, `.persona`, `.cifras` y
+   `.asignar` (toda la pantalla de asignación) y `.clave` (la contraseña
+   temporal de `usuarios.php`). **Eso no da un error:** da el HTML intacto, las
+   pruebas en verde y la pantalla en texto plano. Se descubre mirando, no
+   ejecutando. La comprobación es cruzar las clases usadas contra las definidas
+   — y **hazla completa**: la primera pasada se hizo mal y concluyó «era la
+   única», cuando eran dos. La segunda cayó justo en la cadena que una persona
+   copia a mano y que solo se muestra una vez.
+10. **Dar por cierto el estado del sistema mirando solo tu árbol de trabajo.**
+   Se escribió en este plan que `sw.js` «sigue en v3» y que aplicar la 007 era
+   la siguiente acción. Las dos cosas eran falsas: `master` estaba **29 commits
+   por detrás** de `origin/pc/auditoria-2026-09-10`, donde la 007 ya estaba
+   aplicada, el rediseño desplegado y `sw.js` en v5. Un `git log --oneline
+   master..origin/<rama>` lo habría dicho en un segundo. **El disco local no es
+   el estado del proyecto.**
 
 ### Lo que no se toca, nunca
 
