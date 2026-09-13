@@ -375,6 +375,9 @@ final class Emision
             'fin'             => $orden['fin'] ?? null,
             'actividades'     => (string) ($orden['actividades'] ?? ''),
             'repuestos'       => !empty($orden['uso_repuesto']) ? (string) ($orden['repuestos'] ?? '') : 'No se usaron repuestos.',
+            // D10: cuando el trabajo lo hizo otro proveedor, la orden lo dice
+            // con nombre; INDUSTEC registra y acompaña, no lo firma como suyo.
+            'con_proveedor'   => trim((string) ($c['con_proveedor'] ?? ($orden['con_proveedor'] ?? ''))),
             'observaciones'   => (string) ($orden['observaciones'] ?? ''),
             'estado_ot'       => (string) ($orden['estado_ot'] ?? ''),
             'atiempo'         => (string) ($orden['atiempo'] ?? ''),

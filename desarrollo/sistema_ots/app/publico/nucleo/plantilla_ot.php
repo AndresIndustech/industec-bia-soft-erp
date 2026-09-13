@@ -104,6 +104,14 @@ $atiempo = strtoupper(str_replace('Í', 'I', mb_strtoupper(trim($d['atiempo'])))
 <div class="h2">REPUESTOS</div>
 <div class="box"><div class="text"><?= nl2br($e($d['repuestos'])) ?></div></div>
 
+<?php if (($d['con_proveedor'] ?? '') !== ''): ?>
+<div class="h2">TRABAJO CON OTRO PROVEEDOR</div>
+<div class="box"><div class="text">
+  Intervención realizada por <b><?= $e($d['con_proveedor']) ?></b>. INDUSTEC registra y acompaña
+  el trabajo en el local; la garantía de lo ejecutado corresponde a ese proveedor.
+</div></div>
+<?php endif; ?>
+
 <div class="h2">OBSERVACIONES</div>
 <div class="box"><div class="text"><?= nl2br($e($d['observaciones'] !== '' ? $d['observaciones'] : 'Sin observaciones.')) ?></div></div>
 

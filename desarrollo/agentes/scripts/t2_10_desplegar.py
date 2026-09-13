@@ -159,7 +159,9 @@ ARCHIVOS = [
 #   archivo_indexar_cli.php (T2.14.4: llena ot_archivo; lo corre el cron o
 #   t2_15_exportar_archivo.py --empujar),
 #   cronograma_importar_cli.php (T2.14.5: carga cronograma_preventivo.json en
-#   ingresos_preventivos; se corre tras cada publicación del cronograma)
+#   ingresos_preventivos; se corre tras cada publicación del cronograma),
+#   purgar_cli.php (T2.14.6: fotos huérfanas a 30 días y .tmp a 24 h; solo
+#   informa sin --ejecutar; cron semanal)
 #                        herramientas de línea de órdenes. Las que ya están en
 #                        el servidor cortan con 404 por web; el resto no tienen
 #                        por qué llegar. Los dos CLI de T2.14.6 se suben con

@@ -51,3 +51,20 @@ foreach (Db::todos("SELECT CASE WHEN usuario='sistema' THEN 'automatico' ELSE 'p
 echo "\n7. Los datos en JSON son consultables?\n";
 $j = Db::uno("SELECT datos FROM bitacora WHERE accion='ASIGNAR' AND datos IS NOT NULL LIMIT 1");
 echo '   ejemplo: ' . ($j['datos'] ?? '(sin datos)') . "\n";
+
+echo "\n8. Vaciado del archivo: mas de 15 PDF distintos por persona en 10 minutos (SEG-03)\n";
+$v = Db::todos("SELECT usuario, DATE_FORMAT(cuando, '%Y-%m-%d %H:%i') minuto, COUNT(DISTINCT referencia) n
+                  FROM bitacora
+                 WHERE accion IN ('ABRIR_PDF','DESCARGAR_PDF','COMPARTIR_PDF')
+                   AND cuando > DATE_SUB(NOW(), INTERVAL 30 DAY)
+                 GROUP BY usuario, FLOOR(UNIX_TIMESTAMP(cuando) / 600)
+                HAVING n > 15 ORDER BY n DESC LIMIT 20");
+foreach ($v as $r) { printf("   %-14s %s  %d PDF distintos\n", $r['usuario'], $r['minuto'], $r['n']); }
+if (!$v) { echo "   ninguno\n"; }
+
+echo "\n9. Sondeo sin sesion, por direccion (SEG-20)\n";
+$q = Db::todos("SELECT ip, COUNT(*) n, MIN(cuando) desde, MAX(cuando) hasta FROM sesiones_log
+                 WHERE evento = 'SIN_SESION' AND cuando > DATE_SUB(NOW(), INTERVAL 30 DAY)
+                 GROUP BY ip ORDER BY n DESC LIMIT 15");
+foreach ($q as $r) { printf("   %-40s %4d  (%s .. %s)\n", $r['ip'], $r['n'], $r['desde'], $r['hasta']); }
+if (!$q) { echo "   ninguno (o la 010 no esta aplicada)\n"; }

@@ -29,6 +29,11 @@ final class Auth
 {
     /** Minutos sin actividad antes de cerrar la sesión. Los portátiles se prestan. */
     private const INACTIVIDAD_MIN = 120;
+    /** Tope absoluto de una sesión, haya o no actividad (SEG-05): un portátil
+     *  abierto en el buzón se renovaba solo cada 30 s y nunca caducaba. */
+    private const SESION_MAX_MIN  = 12 * 60;
+    /** Los extremos de sondeo: pedirlos no es actividad de una persona. */
+    private const SONDEO          = ['novedades.php', 'yo.php'];
     private const MAX_INTENTOS    = 5;
     private const BLOQUEO_MIN     = 15;
     /** Intentos rechazados desde una misma conexión en 15 minutos antes de cortarla. */
@@ -72,7 +77,8 @@ final class Auth
      *         Si ya hay sesión en otro equipo devuelve ok=false con
      *         `sesion_abierta`, para que la pantalla ofrezca cerrarla.
      */
-    public static function ingresar(string $usuario, string $clave, bool $desplazar = false): array
+    public static function ingresar(string $usuario, string $clave, bool $desplazar = false,
+                                    bool $confiado = false): array
     {
         self::iniciarCookie();
 
@@ -101,22 +107,11 @@ final class Auth
             return ['ok' => false, 'motivo' => self::MSG_FALLO];
         }
 
-        if (!password_verify($clave, $u['clave_hash'])) {
-            /* El bloqueo lo calcula MySQL. Antes salía de date() de PHP: si la
-               web corriera en otra zona que la base, `bloqueado_hasta` quedaría
-               horas en el pasado y el bloqueo no bloquearía (el 2026-09-10 las
-               dos están en UTC, pero eso lo decide el hosting). Un bloqueo
-               vencido tampoco se suma al siguiente: el contador vuelve a cero. */
-            Db::ejecutar('UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL
-                           WHERE usuario_id = ? AND bloqueado_hasta IS NOT NULL
-                             AND bloqueado_hasta <= NOW()', [$u['usuario_id']]);
-            // Izquierda a derecha: el IF ya ve el contador incrementado.
-            Db::ejecutar('UPDATE usuarios
-                             SET intentos_fallidos = intentos_fallidos + 1,
-                                 bloqueado_hasta = IF(intentos_fallidos >= ?,
-                                                      DATE_ADD(NOW(), INTERVAL ? MINUTE), bloqueado_hasta)
-                           WHERE usuario_id = ?',
-                         [self::MAX_INTENTOS, self::BLOQUEO_MIN, $u['usuario_id']]);
+        // `$confiado` solo lo pone login.php cuando la clave se comprobó hace
+        // menos de dos minutos y la persona confirmó cerrar la otra sesión
+        // (SEG-10): así el segundo formulario no vuelve a llevar la clave.
+        if (!$confiado && !password_verify($clave, $u['clave_hash'])) {
+            self::anotarFallo((int) $u['usuario_id']);
             self::registrar((int) $u['usuario_id'], $usuario, 'RECHAZADO', 'clave incorrecta');
             return ['ok' => false, 'motivo' => self::MSG_FALLO];
         }
@@ -201,12 +196,23 @@ final class Auth
         if (self::sesionVencida($u)) {
             Db::ejecutar('UPDATE usuarios SET sesion_token = NULL WHERE usuario_id = ?',
                          [$u['usuario_id']]);
-            self::registrar((int) $u['usuario_id'], $u['usuario'], 'EXPIRADO', 'inactividad');
+            $motivo = $u['minutos_sesion'] !== null && (int) $u['minutos_sesion'] > self::SESION_MAX_MIN
+                    ? 'tope diario' : 'inactividad';
+            self::registrar((int) $u['usuario_id'], $u['usuario'], 'EXPIRADO', $motivo);
             $_SESSION = [];
             return null;
         }
-        Db::ejecutar('UPDATE usuarios SET sesion_ultima = NOW() WHERE usuario_id = ?',
-                     [$u['usuario_id']]);
+        // SEG-05: el sondeo del buzón (cada 30 s) no es actividad de una persona
+        // y no renueva la sesión; lo demás la renueva a lo sumo una vez por
+        // minuto. Antes era un UPDATE a `usuarios` en cada petición y una
+        // sesión eterna en cualquier portátil que quedara abierto en el buzón.
+        $pagina = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+        if (!in_array($pagina, self::SONDEO, true)) {
+            Db::ejecutar('UPDATE usuarios SET sesion_ultima = NOW()
+                           WHERE usuario_id = ?
+                             AND (sesion_ultima IS NULL OR sesion_ultima < DATE_SUB(NOW(), INTERVAL 60 SECOND))',
+                         [$u['usuario_id']]);
+        }
         return self::$usuario = $u;
     }
 
@@ -225,6 +231,7 @@ final class Auth
         return Db::uno(
             'SELECT *,
                     TIMESTAMPDIFF(MINUTE, sesion_ultima, NOW())    AS minutos_inactivo,
+                    TIMESTAMPDIFF(MINUTE, sesion_desde, NOW())     AS minutos_sesion,
                     GREATEST(0, TIMESTAMPDIFF(MINUTE, NOW(), bloqueado_hasta)) AS minutos_bloqueo
                FROM usuarios
               WHERE ' . $donde,
@@ -237,7 +244,39 @@ final class Auth
         if ($u['sesion_ultima'] === null || $u['minutos_inactivo'] === null) {
             return true;
         }
+        if ($u['minutos_sesion'] !== null && (int) $u['minutos_sesion'] > self::SESION_MAX_MIN) {
+            return true;   // tope absoluto: doce horas desde que entró
+        }
         return (int) $u['minutos_inactivo'] > self::INACTIVIDAD_MIN;
+    }
+
+    /**
+     * Un intento fallido más contra la cuenta: cuenta y, al quinto, bloquea.
+     * Lo usan el ingreso y el cambio de contraseña (SEG-11): quien toma un
+     * portátil con sesión abierta no puede probar claves sin límite.
+     *
+     * El bloqueo lo calcula MySQL. Antes salía de date() de PHP: si la web
+     * corriera en otra zona que la base, `bloqueado_hasta` quedaría horas en
+     * el pasado y el bloqueo no bloquearía. Un bloqueo vencido tampoco se suma
+     * al siguiente: el contador vuelve a cero.
+     *
+     * @return array{intentos:int, bloqueado:bool}
+     */
+    public static function anotarFallo(int $usuarioId): array
+    {
+        Db::ejecutar('UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL
+                       WHERE usuario_id = ? AND bloqueado_hasta IS NOT NULL
+                         AND bloqueado_hasta <= NOW()', [$usuarioId]);
+        // Izquierda a derecha: el IF ya ve el contador incrementado.
+        Db::ejecutar('UPDATE usuarios
+                         SET intentos_fallidos = intentos_fallidos + 1,
+                             bloqueado_hasta = IF(intentos_fallidos >= ?,
+                                                  DATE_ADD(NOW(), INTERVAL ? MINUTE), bloqueado_hasta)
+                       WHERE usuario_id = ?',
+                     [self::MAX_INTENTOS, self::BLOQUEO_MIN, $usuarioId]);
+        $f = Db::uno('SELECT intentos_fallidos, GREATEST(0, TIMESTAMPDIFF(MINUTE, NOW(), bloqueado_hasta)) m
+                        FROM usuarios WHERE usuario_id = ?', [$usuarioId]);
+        return ['intentos' => (int) ($f['intentos_fallidos'] ?? 0), 'bloqueado' => (int) ($f['m'] ?? 0) > 0];
     }
 
     // ---------------------------------------------------------------- permisos
@@ -284,6 +323,7 @@ final class Auth
     {
         $u = self::actual();
         if (!$u) {
+            self::sinSesion();
             if ($json) {
                 http_response_code(401);
                 header('Content-Type: application/json; charset=utf-8');
@@ -531,9 +571,67 @@ final class Auth
         );
     }
 
-    private static function ip(): string
+    /**
+     * Una petición sin sesión a algo que la exige queda en `sesiones_log`
+     * (SEG-20): el sondeo anónimo de catalogos.php o envio.php —lo primero que
+     * hace quien prueba el sitio— no aparecía en ningún lado. Una fila por
+     * conexión y minuto, para que un barrido no llene la tabla.
+     */
+    private static function sinSesion(): void
     {
-        return substr((string) ($_SERVER['REMOTE_ADDR'] ?? ''), 0, 45);
+        try {
+            $ip = self::ip();
+            $ya = Db::uno("SELECT 1 FROM sesiones_log
+                            WHERE ip = ? AND evento = 'SIN_SESION'
+                              AND cuando > DATE_SUB(NOW(), INTERVAL 1 MINUTE) LIMIT 1", [$ip]);
+            if ($ya) { return; }
+            Db::ejecutar("INSERT INTO sesiones_log (usuario_id, usuario, evento, motivo, ip, equipo)
+                          VALUES (NULL, '-', 'SIN_SESION', ?, ?, ?)",
+                         [substr(basename((string) ($_SERVER['SCRIPT_NAME'] ?? '')), 0, 120), $ip, self::equipo()]);
+        } catch (Throwable $e) {
+            // Sin la 010 el ENUM no admite SIN_SESION: no se corta la respuesta por eso.
+        }
+    }
+
+    /**
+     * La dirección de quien pide.
+     *
+     * SEG-16: medido el 2026-09-13 en el sitio de pruebas, `REMOTE_ADDR` trae
+     * la dirección real (las filas de sesiones_log llevan IPs distintas), así
+     * que es lo que se usa. Si algún día el CDN se pone por delante y todas
+     * las peticiones llegan con su dirección, se declaran sus rangos en
+     * `cdn_rangos` de config.php y SOLO en ese caso se cree la cabecera
+     * X-Forwarded-For (el primer valor). Fuera del rango, la cabecera no vale:
+     * cualquiera la escribe.
+     */
+    public static function ip(): string
+    {
+        $remota = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        try { $rangos = (array) (Db::config()['cdn_rangos'] ?? []); } catch (Throwable $e) { $rangos = []; }
+        if ($rangos && self::enRango($remota, $rangos)) {
+            $xff = trim(explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''))[0]);
+            if ($xff !== '' && filter_var($xff, FILTER_VALIDATE_IP)) { return substr($xff, 0, 45); }
+        }
+        return substr($remota, 0, 45);
+    }
+
+    /** ¿Está la dirección dentro de alguno de los rangos CIDR (IPv4 o IPv6)? */
+    private static function enRango(string $ip, array $rangos): bool
+    {
+        $bin = @inet_pton($ip);
+        if ($bin === false) { return false; }
+        foreach ($rangos as $r) {
+            [$red, $bits] = array_pad(explode('/', (string) $r, 2), 2, null);
+            $binRed = @inet_pton((string) $red);
+            if ($binRed === false || strlen($binRed) !== strlen($bin)) { continue; }
+            $bits = $bits === null ? strlen($bin) * 8 : (int) $bits;
+            $bytes = intdiv($bits, 8); $resto = $bits % 8;
+            if (substr($bin, 0, $bytes) !== substr($binRed, 0, $bytes)) { continue; }
+            if ($resto === 0) { return true; }
+            $mascara = (0xFF << (8 - $resto)) & 0xFF;
+            if ((ord($bin[$bytes]) & $mascara) === (ord($binRed[$bytes]) & $mascara)) { return true; }
+        }
+        return false;
     }
 
     private static function equipo(): string

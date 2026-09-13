@@ -43,6 +43,8 @@ $hayTabla = static fn(string $t): bool => (int) $db->query(
 $hay007 = $hayTabla('pendientes');
 $hay008 = $hayTabla('correlativos');
 $hay009 = $hayTabla('migraciones');
+// La 010 amplía el ENUM de sesiones_log con SIN_SESION (SEG-20).
+$hay010 = str_contains((string) ($db->query("SHOW COLUMNS FROM sesiones_log LIKE 'evento'")->fetch()['Type'] ?? ''), 'SIN_SESION');
 
 echo "casos_gestion\n";
 $e = $db->query("SHOW COLUMNS FROM casos_gestion LIKE 'estado'")->fetch();
@@ -179,6 +181,8 @@ if ($hay009) {
     comprobar('bitacora protegida contra UPDATE', in_array('bitacora_sin_update', $tr, true) ? 'si' : 'no', 'si');
     comprobar('migraciones anotadas',
               (int) $db->query('SELECT COUNT(*) FROM migraciones')->fetchColumn(), fn($n) => $n >= 9);
+    echo "\nmigracion 010\n";
+    comprobar('sesiones_log.evento admite SIN_SESION', $hay010 ? 'si' : 'no', 'si');
     // La semilla (009_semilla_diagnosticos.sql) va aparte: si no se aplicó, aquí se ve.
     comprobar('familias de equipo (semilla)',
               (int) $db->query('SELECT COUNT(*) FROM familias_equipo')->fetchColumn(), fn($n) => $n >= 20);
