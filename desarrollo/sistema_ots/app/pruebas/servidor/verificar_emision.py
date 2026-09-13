@@ -210,7 +210,7 @@ def main():
     # números se pegaban en una sola línea («90069005») y la prueba fallaba sin
     # que la reserva estuviera mal (flaqueza medida el 2026-09-13).
     salida = ssh(f"cd {D} && rm -f /tmp/conc_uio_* && for i in $(seq 10); do php -r 'require \"nucleo/Emision.php\"; "
-                 f"echo Emision::reservar(\"CONCURRENCIA:UIO\");' > /tmp/conc_uio_$i & done; wait; "
+                 f"echo Emision::reservar(\"CONCURRENCIA:UIO\"), PHP_EOL;' > /tmp/conc_uio_$i & done; wait; "
                  f"cat /tmp/conc_uio_*; echo; rm -f /tmp/conc_uio_*")
     nums = sorted(int(x) for x in salida.split())
     anotar("008", "10 procesos a la vez: 10 números, sin repetir y seguidos",
