@@ -1,5 +1,6 @@
 """verificar_http.py — Pruebas por rol contra el sitio de pruebas, entrando de verdad
-con las cuentas de prueba (T2.12.3, T2.12.4, T2.12.5, T2.12.6, T2.12.9 y T2.13.1).
+con las cuentas de prueba (T2.12.3, T2.12.4, T2.12.5, T2.12.6, T2.12.9, T2.13.1 y
+S2 · T2.14.2 -- asignación, buzón y panel por zona).
 
 Requiere haber corrido antes ~/respaldos/preparar_prueba.php en el servidor. Las
 claves se leen por SSH de ~/respaldos/claves_prueba.json y solo viven en memoria.
@@ -13,6 +14,7 @@ import datetime
 import http.cookiejar
 import json
 import os
+import re
 import ssl
 import subprocess
 import sys
@@ -55,6 +57,13 @@ def ssh(cmd, entrada=None):
     return r.stdout
 
 
+def ejecutar(q, p=None):
+    """Una escritura en la base del sitio de pruebas (solo sobre datos de prueba)."""
+    php = ('require "nucleo/Db.php"; $in = json_decode(stream_get_contents(STDIN), true); '
+           'echo Db::ejecutar($in["q"], $in["p"]);')
+    return int(ssh(f"cd {D} && php -r '{php}'", json.dumps({"q": q, "p": p or []})))
+
+
 def sql(q, p=None):
     php = ('require "nucleo/Db.php"; $in = json_decode(stream_get_contents(STDIN), true); '
            'echo json_encode(Db::todos($in["q"], $in["p"]));')
@@ -82,10 +91,20 @@ class Sesion:
     def pedir(self, ruta, form=None, cuerpo_json=None):
         cab = {"User-Agent": "verificar_http/1.0 (pruebas T2.12 desde el PC)"}
         datos = None
+        # Desde la 009 todo POST lleva el token CSRF (formulario: campo `csrf`;
+        # JSON del celular: cabecera X-Csrf, la que manda cola.js). El arnés lo
+        # pone solo, salvo que la prueba lo mande a propósito (o lo omita para
+        # comprobar el 403: entonces pasa form con "csrf": None).
         if cuerpo_json is not None:
             datos = json.dumps(cuerpo_json).encode("utf-8")
             cab["Content-Type"] = "application/json"
+            if getattr(self, "csrf", ""):
+                cab["X-Csrf"] = self.csrf
         elif form is not None:
+            form = dict(form)
+            if "csrf" not in form and getattr(self, "csrf", ""):
+                form["csrf"] = self.csrf
+            form = {k: v for k, v in form.items() if v is not None}
             datos = urllib.parse.urlencode(form).encode("utf-8")
             cab["Content-Type"] = "application/x-www-form-urlencoded"
         req = urllib.request.Request(BASE + ruta, data=datos, headers=cab)
@@ -97,6 +116,14 @@ class Sesion:
 
     def entrar(self, clave):
         st, cab, _ = self.pedir("login.php", form={"usuario": self.usuario, "clave": clave, "desplazar": "1"})
+        # El token de esta sesión sale de yo.php, como en el celular.
+        self.csrf = ""
+        try:
+            sty, _, cy = self.pedir("yo.php")
+            if sty == 200:
+                self.csrf = (json.loads(cy) or {}).get("csrf", "") or ""
+        except Exception:
+            self.csrf = ""
         return st, cab.get("Location", "")
 
 
@@ -209,6 +236,117 @@ def main():
     anotar("T2.13.1", "el técnico B reusando el uuid de A → 409, no se reasigna", st == 409, f"{st} · {c[:90]}")
     st, _, c = s["tec_prueba_uio_a"].pedir("envio.php")
     anotar("T2.13.1", "GET a envio.php → 405", st == 405, st)
+
+    print("\n== S2 · T2.14.2 · asignación y buzón por zona ==")
+    # yo.php trae el csrf de cada sesión (cacheado por el celular; aquí se pide
+    # una vez por cuenta, igual que haría cola.js).
+    csrf = {}
+    for u in ["admin_prueba", "jefe_prueba_uio"]:
+        _, _, cy = s[u].pedir("yo.php")
+        csrf[u] = (json.loads(cy) if cy else {}).get("csrf", "")
+
+    st, _, c = s["admin_prueba"].pedir("asignacion.php")
+    bloques = len(re.findall(r'zona-bloque zona-(?:uio|larb|cnlj)', c))
+    anotar("S2.ASG07", "admin: asignacion.php tiene un bloque por zona (UIO/LARB/CNLJ)",
+           st == 200 and bloques == 3, f"{st} · bloques={bloques}")
+
+    tecs_uio = {int(r["usuario_id"]) for r in sql(
+        "SELECT usuario_id FROM usuarios WHERE zona = 'UIO' AND rol IN ('TECNICO','JEFE_ZONA') AND activo = 1")}
+    m = re.search(r'id="zona-UIO".*?(?=id="zona-|$)', c, re.S)
+    m2 = re.search(r'<select name="tecnico"[^>]*>(.*?)</select>', m.group(0), re.S) if m else None
+    antes_opt = m2.group(1).split('<optgroup')[0] if m2 else ""
+    ids_antes = {int(x) for x in re.findall(r'<option value="(\d+)"', antes_opt)}
+    anotar("S2.ASG03", "UIO: el <select> de «Asignar a» de una fila solo trae técnicos de UIO antes del optgroup",
+           bool(ids_antes) and ids_antes.issubset(tecs_uio), f"antes_del_optgroup={sorted(ids_antes)}")
+
+    st, _, c = s["admin_prueba"].pedir("panel.php")
+    tarjetas = len(re.findall(r'zona-card zona-(?:uio|larb|cnlj)', c))
+    anotar("S2.ASG09", "admin: panel.php tiene una tarjeta «Por zona» por cada zona",
+           st == 200 and tarjetas == 3, f"{st} · tarjetas={tarjetas}")
+
+    # preparar_prueba.php deja elegidos[0] en ESPERA_REPUESTO, pero verificar_ciclo.py
+    # lo devuelve a ASIGNADO al resolver su pendiente: el estado se fija aquí para
+    # que la comprobación no dependa del orden en que se corran las baterías.
+    caso_espera = elegidos[0]
+    estado_previo = sql("SELECT estado FROM casos_gestion WHERE aviso = ?", [caso_espera])[0]["estado"]
+    ejecutar("UPDATE casos_gestion SET estado = 'ESPERA_REPUESTO' WHERE aviso = ?", [caso_espera])
+    inicio_asg = sql("SELECT NOW() n")[0]["n"]
+    s["admin_prueba"].pedir("casos.php", form={
+        "accion": "veredicto", "aviso": caso_espera, "veredicto": "RESUELTO",
+        "motivo": "", "csrf": csrf["admin_prueba"]})
+    fila = sql("SELECT estado FROM casos_gestion WHERE aviso = ?", [caso_espera])[0]
+    anotar("S2.ASG01", "veredicto RESUELTO sobre un caso en ESPERA_REPUESTO → no cambia de estado",
+           fila["estado"] == "ESPERA_REPUESTO", f"estado={fila['estado']}")
+    den = sql("SELECT accion FROM bitacora WHERE entidad = 'caso' AND referencia = ? AND exito = 0 AND cuando >= ?",
+              [caso_espera, inicio_asg])
+    anotar("S2.ASG01", "queda una fila DENEGADO en la bitácora", any(r["accion"] == "DENEGADO" for r in den), f"{len(den)} filas")
+
+    st, _, c = s["admin_prueba"].pedir(f"casos.php?est=ESPERA_REPUESTO")
+    m = re.search(r'data-aviso="' + re.escape(str(caso_espera)) + r'".*?</tr>', c, re.S)
+    fila_html = m.group(0) if m else ""
+    anotar("S2.ASG01", "en el buzón, ese caso no ofrece «Veredicto» y sí un enlace a Pendientes",
+           bool(fila_html) and 'data-accion="veredicto"' not in fila_html and 'pendientes.php?q=' in fila_html,
+           f"encontrada={bool(fila_html)}")
+
+    st, _, c = s["admin_prueba"].pedir("casos.php", form={
+        "accion": "revision", "aviso": caso_espera, "motivo": "prueba sin csrf (S2)", "csrf": None})
+    anotar("S2.CSRF", "POST a casos.php sin csrf → 403", st == 403, st)
+    ejecutar("UPDATE casos_gestion SET estado = ? WHERE aviso = ?", [estado_previo, caso_espera])
+
+    # La asignación entre zonas (ASG-03, D4) se prueba sobre un aviso sintético
+    # 9999xxxx (regla 8 de CONVENCIONES_T2_14.md): preparar_prueba.php lo deja
+    # ASIGNADO a tec_prueba_uio_a en UIO en cada corrida, así que reasignarlo
+    # aquí no deja basura para la siguiente vez.
+    aviso_sint = "99990011"
+    # Punto de partida conocido, corra o no preparar_prueba.php antes: el sintético
+    # asignado al técnico A en UIO (así la corrida anterior no lo deja en CNLJ).
+    ejecutar("UPDATE casos_gestion SET asignado_a = ?, zona = 'UIO', estado = 'ASIGNADO' WHERE aviso = ?",
+             [ids["tec_prueba_uio_a"], aviso_sint])
+    st, _, c = s["admin_prueba"].pedir("casos.php", form={
+        "accion": "asignar", "aviso": aviso_sint, "tecnico": str(ids["jefe_prueba_cnlj"]),
+        "csrf": csrf["admin_prueba"]})
+    fila = sql("SELECT asignado_a FROM casos_gestion WHERE aviso = ?", [aviso_sint])[0]
+    anotar("S2.ASG03", "asignar un caso de UIO a un técnico de CNLJ sin confirmo_zona → rechazado",
+           fila["asignado_a"] == ids["tec_prueba_uio_a"], f"asignado_a={fila['asignado_a']}")
+
+    inicio_conf = sql("SELECT NOW() n")[0]["n"]
+    st, _, c = s["admin_prueba"].pedir("casos.php", form={
+        "accion": "asignar", "aviso": aviso_sint, "tecnico": str(ids["jefe_prueba_cnlj"]),
+        "confirmo_zona": "1", "csrf": csrf["admin_prueba"]})
+    fila = sql("SELECT asignado_a FROM casos_gestion WHERE aviso = ?", [aviso_sint])[0]
+    anotar("S2.ASG03", "con confirmo_zona=1 → sí asigna a un técnico de otra zona",
+           fila["asignado_a"] == ids["jefe_prueba_cnlj"], f"asignado_a={fila['asignado_a']}")
+    bit = sql("SELECT datos FROM bitacora WHERE entidad = 'caso' AND referencia = ? AND accion = 'ASIGNAR' AND cuando >= ?",
+              [aviso_sint, inicio_conf])
+    anotar("S2.ASG03", "la asignación entre zonas queda marcada `confirmo_zona` en la bitácora",
+           any('"confirmo_zona":true' in (r["datos"] or "") for r in bit), f"{len(bit)} filas")
+    # Se devuelve al técnico A: verificar_bandeja.py lo espera así.
+    ejecutar("UPDATE casos_gestion SET asignado_a = ?, zona = 'UIO', estado = 'ASIGNADO' WHERE aviso = ?",
+             [ids["tec_prueba_uio_a"], aviso_sint])
+
+    # «Pedir seguimiento» (ASG-15), sobre el otro aviso sintético (ATENDIDO).
+    st, _, c = s["admin_prueba"].pedir("casos.php", form={
+        "accion": "seguimiento", "aviso": "99990012", "tecnico": str(ids["tec_prueba_uio_a"]),
+        "texto": "PRUEBA automatizada (S2): cuéntame cómo va este caso.", "csrf": csrf["admin_prueba"]})
+    fila = sql("SELECT texto FROM casos_seguimientos WHERE aviso = '99990012' ORDER BY seguimiento_id DESC LIMIT 1")
+    anotar("S2.ASG15", "pedir seguimiento sobre un caso ATENDIDO → fila en casos_seguimientos",
+           bool(fila) and "PRUEBA automatizada" in (fila[0]["texto"] or ""), f"{fila}")
+
+    # «Cerrar por falta de atención» (ASG-05) NO se ejecuta de verdad aquí: es
+    # una mutación masiva sobre el catálogo real de KFC, y automatizarla en una
+    # prueba que se repite en cada corrida es justo el riesgo que el 15% de
+    # guarda quiere evitar. Se comprueba en seco que panel.php muestra el mismo
+    # conteo que calcula `Reconciliar::cerrarSinAtencion(..., false)`.
+    php = ('require "nucleo/Casos.php"; require "nucleo/Reconciliar.php"; '
+           '$cat = Casos::catalogo()["datos"] ?? []; $aten = Casos::atenciones(); '
+           'echo json_encode(Reconciliar::cerrarSinAtencion($cat, $aten, 7, false));')
+    r = json.loads(ssh(f"cd {D} && php -r '{php}'"))
+    st, _, c = s["admin_prueba"].pedir("panel.php")
+    if r["candidatos"] > 0:
+        anotar("S2.ASG05", "panel.php muestra el mismo conteo de «7+ días sin informe» que el cálculo en seco",
+               str(r["candidatos"]) in c, f"dry-run candidatos={r['candidatos']}")
+    else:
+        anotar("S2.ASG05", "sin candidatos a cerrar por falta de atención ahora mismo", True, "candidatos=0")
 
     for se in s.values():
         se.pedir("salir.php")
