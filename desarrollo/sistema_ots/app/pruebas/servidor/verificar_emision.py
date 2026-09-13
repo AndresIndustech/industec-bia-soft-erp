@@ -174,9 +174,24 @@ def main():
     st, tipo, pdf = binario(sa, f"pdf.php?ot={ot}")
     anotar("008", "el técnico A abre su PDF", st == 200 and pdf[:5] == b"%PDF-" and "pdf" in tipo,
            f"{st} · {tipo} · {len(pdf)} B")
-    for u, esperado in (("tec_prueba_uio_b", 403), ("jefe_prueba_uio", 200), ("jefe_prueba_cnlj", 403)):
+    # Desde el 2026-09-12 (D1) el archivo de órdenes es de lectura para todos los
+    # roles y todas las zonas; hasta entonces aquí se esperaba 403 para el técnico
+    # B y el jefe de CNLJ. Lo que sí tiene que quedar es la fila de la bitácora.
+    for u in ("tec_prueba_uio_b", "jefe_prueba_uio", "jefe_prueba_cnlj"):
         st, _, _ = binario(s[u], f"pdf.php?ot={ot}")
-        anotar("008", f"{u} → {esperado}", st == esperado, st)
+        anotar("D1", f"{u} abre el PDF de otro (archivo general) → 200", st == 200, st)
+    n = sql("SELECT COUNT(*) n FROM bitacora WHERE accion = 'ABRIR_PDF' AND referencia = ? "
+            "AND usuario = 'tec_prueba_uio_b' AND exito = 1", [ot])[0]["n"]
+    anotar("D1", "la apertura del técnico B quedó en la bitácora", int(n) >= 1, n)
+    st, tipo, pdf = binario(sa, f"pdf.php?ot={ot}&dl=1")
+    anotar("D1", "?dl=1 entrega el PDF para guardar", st == 200 and pdf[:5] == b"%PDF-", st)
+    n = sql("SELECT COUNT(*) n FROM bitacora WHERE accion = 'DESCARGAR_PDF' AND referencia = ?", [ot])[0]["n"]
+    anotar("D1", "y se registra como descarga, no como apertura", int(n) >= 1, n)
+    st, _, _ = binario(sa, f"pdf.php?ot={ot}&exp=1&f=abc")
+    anotar("D1", "un enlace con firma inválida → 403", st == 403, st)
+    n = sql("SELECT COUNT(*) n FROM bitacora WHERE accion = 'DENEGADO' AND usuario = 'enlace' AND referencia = ? "
+            "AND exito = 0", [ot])[0]["n"]
+    anotar("D1", "y el intento queda en la bitácora", int(n) >= 1, n)
 
     print("\n== el reintento no saca otro número ==")
     st, _, c = sa.pedir("envio.php", cuerpo_json=cuerpo)

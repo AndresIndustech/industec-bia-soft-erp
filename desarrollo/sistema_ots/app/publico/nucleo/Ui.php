@@ -174,7 +174,10 @@ final class Ui
              '<span class="nom">', self::e($u['nombre']), '</span>',
              '<span class="chip siempre">', self::e($rol), '</span>',
              '<span class="chip">', $zona ? 'Zona ' . self::e($zona) : 'Las 3 zonas', '</span>',
-             '<a class="btn sm" href="salir.php">Salir</a>',
+             // Salir es un POST con token: por GET cualquier enlace cerraba la sesión (SEG-25).
+             '<form method="post" action="salir.php" class="app-salir">',
+             '<input type="hidden" name="csrf" value="', self::e(Auth::csrfToken()), '">',
+             '<button class="btn sm" type="submit">Salir</button></form>',
              '</div></div>';
 
         $mods = self::modulos($u);

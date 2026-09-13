@@ -50,6 +50,10 @@ final class Auth
         if (session_status() === PHP_SESSION_ACTIVE) {
             return;
         }
+        // Un identificador de sesión que el servidor no generó no se acepta: sin
+        // esto, un enlace con `PHPSESSID` fijado por otro se convierte en sesión
+        // válida al entrar (SEG-25).
+        ini_set('session.use_strict_mode', '1');
         session_set_cookie_params([
             'lifetime' => 0,
             'path'     => '/',
@@ -164,6 +168,16 @@ final class Auth
         }
         $_SESSION = [];
         session_destroy();
+        // La cookie también se retira del navegador: destruir la sesión del lado
+        // del servidor dejaba el identificador viejo en el celular (SEG-25).
+        if (!headers_sent()) {
+            setcookie(session_name(), '', [
+                'expires' => time() - 3600, 'path' => '/',
+                'secure' => (($_SERVER['HTTPS'] ?? '') !== '') || (($_SERVER['SERVER_PORT'] ?? '') === '443'),
+                'httponly' => true, 'samesite' => 'Lax',
+            ]);
+        }
+        self::$usuario = null;
     }
 
     /** El usuario de esta petición, o null. Revalida contra la base en cada llamada. */

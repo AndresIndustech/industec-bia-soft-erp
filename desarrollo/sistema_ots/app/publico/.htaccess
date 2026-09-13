@@ -7,7 +7,21 @@
 # Ningún archivo de datos se sirve directo. Los catálogos solo salen por
 # catalogos.php y cronograma.php, que exigen sesión.
 
-<FilesMatch "\.(json|log|txt|csv|bak|sql|md|mjs|env|previo)$">
+# La lista cubre también las copias de respaldo y los archivos de herramientas
+# (orig, swp, zip, gz, tar, ini, inc, yml, lock, sha256): hasta el 2026-09-12 un
+# `.orig` o un `.zip` olvidado en el sitio se servía tal cual (SEG-24).
+<FilesMatch "\.(json|log|txt|csv|bak|sql|md|mjs|env|previo|orig|swp|zip|gz|tar|ini|phps|inc|yml|yaml|lock|sha256)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Nada que empiece por punto: .gitignore, .env, .htpasswd y compañía.
+<FilesMatch "^\.">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -37,6 +51,15 @@
     Header always set X-Content-Type-Options "nosniff"
     Header always set Referrer-Policy "same-origin"
     Header always set Strict-Transport-Security "max-age=31536000"
+    # La política de contenido (SEG-08). Todo es propio: no hay CDN, ni fuentes
+    # externas, ni analítica. `unsafe-inline` en script y style porque las
+    # pantallas todavía llevan `onclick` y `<style>` en línea; el día que pasen a
+    # `addEventListener` se quita. `img-src` admite data: y blob: por las fotos y
+    # la firma que el formulario previsualiza antes de subir. `worker-src` y
+    # `manifest-src` para el trabajador de servicio y la instalación de la app.
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'"
+    # La cámara solo para esta app (las fotos de la orden); nada de ubicación ni micrófono.
+    Header always set Permissions-Policy "camera=(self), geolocation=(), microphone=(), payment=(), usb=()"
 </IfModule>
 
 # El CDN de Hostinger (hcdn) guardaba 7 días lo que el servidor marca como
