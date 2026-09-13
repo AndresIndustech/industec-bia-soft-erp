@@ -1,7 +1,17 @@
 # Librerías de la app de OTs
 
-Lo que la app necesita y **no va en la carpeta web**. Hoy solo es **dompdf**, que arma el PDF de
-la orden (`nucleo/Emision.php`, T2.13, la 008).
+Lo que la app necesita y **no va en la carpeta web**. Desde el 2026-09-13 son cuatro, todas
+libres:
+
+| Librería | Para qué | Quién la carga |
+|---|---|---|
+| **dompdf** | El PDF de la orden (T2.13, la 008) y el PDF de los reportes | `nucleo/Emision.php`, `reporte_exportar.php` |
+| **PHPMailer** | El despachador de la cola de correo (T2.14.6): reintentos con espera creciente, 4xx contra 5xx | `despachar_correo_cli.php` |
+| **PhpSpreadsheet** | Los reportes en Excel para Grupo KFC (T2.14.5) | `reporte_exportar.php` |
+| **PhpPresentation** | Los reportes en PowerPoint (T2.14.5) | `reporte_exportar.php` |
+
+El servidor ya tiene lo que exigen: `zip`, `gd`, `xml`, `mbstring`, `imagick` (medido el
+2026-09-12). Si una falta, la pantalla que la usa responde 503 diciendo cuál, no un 500.
 
 ## Por qué fuera de la carpeta web
 
