@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Casos.php';
 require_once __DIR__ . '/nucleo/Pendientes.php';
+require_once __DIR__ . '/nucleo/Reconciliar.php';
 require_once __DIR__ . '/nucleo/Ui.php';
 
 /**
@@ -55,6 +56,26 @@ if ($u['rol'] === 'TECNICO') { header('Location: mis.php'); exit; }
 
 $e = fn(?string $s): string => Ui::e($s);
 
+/** Los vencidos de 48 h de UNA zona, calculado aquí porque
+ *  `Pendientes::cumplimiento48()` no acepta zona todavía (se apoya en
+ *  `Auth::zonaAlcance()` de la sesión, no en un parámetro): mismo criterio de
+ *  «vencido» de esa función, misma resolución de zona que usa `Pendientes::alcance()`
+ *  (la del caso manda sobre la del pendiente, porque un caso derivado se lleva
+ *  su pendiente). Si S3 le agrega el parámetro, esta función deja de hacer falta. */
+function vencidos48DeZona(string $zona): ?int
+{
+    if (!Pendientes::disponible()) { return null; }
+    $f = Db::uno(
+        "SELECT SUM(p.via = 'SIN_VEREDICTO' AND p.deshabilitado = 1
+                    AND p.estado NOT IN ('RESUELTO','CANCELADO')
+                    AND COALESCE(p.plazo_desde, p.abierto_en) < DATE_SUB(NOW(), INTERVAL 48 HOUR)) AS vencidos
+           FROM pendientes p
+          WHERE COALESCE((SELECT g.zona FROM casos_gestion g WHERE g.aviso = p.aviso), p.zona) = ?",
+        [$zona]
+    );
+    return (int) ($f['vencidos'] ?? 0);
+}
+
 $zonaAlc  = Auth::zonaAlcance();
 $fuente   = Casos::catalogo();
 $gestion  = Casos::gestion();
@@ -68,10 +89,20 @@ $hoy      = date('Y-m-d');
    Se hacen en una sola pasada sobre el arreglo en vez de seis `array_filter`
    encadenados: son 918 casos y esto se dibuja en cada carga.
    ------------------------------------------------------------------------- */
-$n = ['total' => count($casos), 'sin_asignar' => 0, 'alerta' => 0, 'hoy' => 0,
+$n = ['total' => count($casos), 'sin_asignar' => 0, 'alerta' => 0, 'alerta_vieja' => 0, 'hoy' => 0,
       'semana' => 0, 'atendidos_por_cerrar' => 0, 'en_revision' => 0,
-      'sin_regularizar' => 0, 'sin_zona' => 0, 'espera' => 0];
-$porZona = ['UIO' => 0, 'LARB' => 0, 'CNLJ' => 0];
+      'sin_regularizar' => 0, 'sin_zona' => 0, 'espera' => 0, 'asignados_viejos' => 0];
+// 'OTRA' entra al mismo mapa que UIO/LARB/CNLJ (ASG-21): antes un caso
+// derivado a OTRA no sumaba en ningún contador y el panel lo perdía de vista.
+$porZona = ['UIO' => 0, 'LARB' => 0, 'CNLJ' => 0, 'OTRA' => 0];
+// El desglose por zona de "lo que te toca ahora" (ASG-09, TR-09): antes era
+// un solo acumulador y la administradora no podía leer «cuántos sin repartir
+// hay en CNLJ» sin entrar al buzón y filtrar a mano.
+$nz = [];
+foreach (array_keys($porZona) as $zk) {
+    $nz[$zk] = ['sin_asignar' => 0, 'atendidos_por_cerrar' => 0, 'en_revision' => 0,
+                'sin_regularizar' => 0, 'espera' => 0, 'asignados_viejos' => 0];
+}
 $porEstado = [];
 $desde7 = date('Y-m-d', strtotime('-7 days'));
 
@@ -83,17 +114,44 @@ foreach ($casos as $c) {
 
     $z = (string) ($c['zona'] ?? '');
     if (isset($porZona[$z])) { $porZona[$z]++; } elseif ($z === '') { $n['sin_zona']++; }
+    $zk = isset($nz[$z]) ? $z : null;
 
     if (($c['fecha_creacion'] ?? '') >= $desde7) { $n['semana']++; }
     if (($c['fecha_estimada'] ?? '') === $hoy)   { $n['hoy']++; }
-    if (($c['estado_alerta'] ?? '') === 'CON_ALERTA') { $n['alerta']++; }
+    if (($c['estado_alerta'] ?? '') === 'CON_ALERTA') {
+        $n['alerta']++;
+        // La que de verdad urge: con alerta, sin veredicto, y ya lleva una
+        // semana así (ASG-17): se le puede escapar tanto a la reconciliación
+        // como a quien mira el panel.
+        if (!in_array($estado, ['RESUELTO', 'NO_COMPETE'], true)) {
+            $edadAlerta = Ui::dias($c['fecha_creacion'] ?? null);
+            if ($edadAlerta !== null && $edadAlerta >= 7) { $n['alerta_vieja']++; }
+        }
+    }
 
-    if ($estado === 'NUEVO' && !isset($aten[$aviso])) { $n['sin_asignar']++; }
-    if ($estado === 'ATENDIDO')        { $n['atendidos_por_cerrar']++; }
-    if ($estado === 'EN_REVISION')     { $n['en_revision']++; }
-    if ($estado === 'ESPERA_REPUESTO') { $n['espera']++; }
-    if ($estado === 'CERRADO_SIN_ATENCION' && empty($g['regularizado_en'])) { $n['sin_regularizar']++; }
+    if ($estado === 'NUEVO' && !isset($aten[$aviso])) { $n['sin_asignar']++; if ($zk !== null) { $nz[$zk]['sin_asignar']++; } }
+    if ($estado === 'ATENDIDO')        { $n['atendidos_por_cerrar']++; if ($zk !== null) { $nz[$zk]['atendidos_por_cerrar']++; } }
+    if ($estado === 'EN_REVISION')     { $n['en_revision']++; if ($zk !== null) { $nz[$zk]['en_revision']++; } }
+    if ($estado === 'ESPERA_REPUESTO') { $n['espera']++; if ($zk !== null) { $nz[$zk]['espera']++; } }
+    if ($estado === 'CERRADO_SIN_ATENCION' && empty($g['regularizado_en'])) {
+        $n['sin_regularizar']++;
+        if ($zk !== null) { $nz[$zk]['sin_regularizar']++; }
+    }
+    // Asignado y sin informe hace 3 días o más (ASG-15): lo único que hoy dice
+    // si un caso repartido se está quedando quieto en la bandeja de alguien.
+    if ($estado === 'ASIGNADO') {
+        $diasAsig = Ui::dias(substr((string) ($g['asignado_en'] ?? ''), 0, 10) ?: null);
+        if ($diasAsig !== null && $diasAsig >= 3) {
+            $n['asignados_viejos']++;
+            if ($zk !== null) { $nz[$zk]['asignados_viejos']++; }
+        }
+    }
 }
+
+// Cuántos casos NUEVO llevan más de 7 días sin ningún informe, en seco (sin
+// escribir nada): es la cifra que respalda «Cerrar por falta de atención»
+// desde este mismo panel (ASG-05, spec S2 punto 3).
+$candidatosSinAtencion = Reconciliar::cerrarSinAtencion(Casos::catalogo()['datos'] ?? [], $aten, 7, false)['candidatos'];
 
 /* Novedades del preventivo por revisar. La tabla puede no existir todavía. */
 $novPendientes = null;
@@ -157,7 +215,7 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
 
   if ($n['sin_asignar'] > 0 && Auth::puede('casos.asignar')) {
       $tareas[] = ['urge', $n['sin_asignar'], 'sin repartir',
-          'Casos que llegaron y todavía no tienen técnico. A los 7 días sin informe se cierran solos por falta de atención.',
+          'Casos que llegaron y todavía no tienen técnico. Los que pasan de 7 días sin ningún informe se cierran por falta de atención desde este panel, con el botón de abajo.',
           'asignacion.php', 'Repartir'];
   }
   if ($pend['vencidos'] > 0) {
@@ -195,6 +253,31 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
           'Casos que parecen no corresponder a INDUSTEC. La alerta no decide: solo los pone a mano para que alguien los mire.',
           'casos.php?alerta=CON_ALERTA', 'Mirar'];
   }
+  if ($n['alerta_vieja'] > 0) {
+      // Un caso con alerta no se cierra por falta de atención (ASG-17): se
+      // queda esperando veredicto, y por eso necesita su propia tarea o se
+      // pierde entre los 918 que sí siguen la línea normal.
+      $tareas[] = ['urge', $n['alerta_vieja'], 'con alerta de alcance y más de 7 días sin veredicto',
+          'La reconciliación no los cierra solos por falta de atención: esperan a que decidas si nos compete. Llevan ya una semana así.',
+          'casos.php?alerta=CON_ALERTA', 'Decidir'];
+  }
+  if ($n['asignados_viejos'] > 0 && Auth::puede('casos.asignar')) {
+      // «Asignado» no es «atendido»: hoy un caso puede quedarse semanas en la
+      // bandeja de un técnico sin que nadie lo note (ASG-15). Es la otra mitad
+      // de «pedir seguimiento», que vive en casos.php.
+      $tareas[] = ['ojo', $n['asignados_viejos'], 'asignados hace 3 días o más, sin informe',
+          'Tienen técnico, pero nadie ha mandado la orden todavía. Puede que solo falte pedirle que avise cómo va.',
+          'casos.php?est=ASIGNADO&dias_asignado=3', 'Revisar'];
+  }
+  if ($esAdmin && ($pend['por_registrar'] ?? 0) > 0) {
+      // Lo que compra la administradora: repuestos validados por el jefe de
+      // zona y ya listos para el número de SAP (ASG-16). `?? 0` porque
+      // `Pendientes::contadores()` puede no traer todavía esta clave si S3
+      // no ha terminado su parte del corte (interfaz fijada en ola2_specs.md).
+      $tareas[] = ['ojo', $pend['por_registrar'], 'repuestos validados, por registrar en SAP',
+          'El jefe de zona ya confirmó el diagnóstico y la vía. Falta anotar el número del requerimiento en SAP.',
+          'pendientes.php?g=por_registrar', 'Registrar'];
+  }
   ?>
 
   <h2 style="margin-top:4px">Lo que te toca ahora</h2>
@@ -221,6 +304,90 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
           </div>
         </a>
       <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+
+  <?php /* =====================================================================
+     EL DESGLOSE POR ZONA (ASG-09, TR-09).
+     La administradora responde por las tres zonas a la vez; sin esto, para
+     saber «cuántos sin repartir hay en CNLJ» tenía que entrar al buzón y
+     filtrar a mano. Cada celda es un enlace que deja delante exactamente esos
+     casos, igual que las tareas de arriba.
+     ===================================================================== */ ?>
+  <?php if ($zonaAlc === null):
+    $zonasPanel = array_values(array_filter(['UIO', 'LARB', 'CNLJ', 'OTRA'], fn($zk) => $zk !== 'OTRA' || $porZona['OTRA'] > 0));
+  ?>
+    <h2 style="margin-top:26px">Por zona</h2>
+    <div class="panel-zonas">
+      <?php foreach ($zonasPanel as $zp): ?>
+        <?php $v48 = vencidos48DeZona($zp); $zonaCasos = $zp === 'OTRA' ? 'OTRA' : $zp; ?>
+        <div class="zona-card zona-<?= strtolower($zp) ?>">
+          <h3><?= Ui::zona($zp) ?></h3>
+          <ul>
+            <li>
+              <?php if ($nz[$zp]['sin_asignar'] > 0): ?>
+                <a href="asignacion.php?zona=<?= $zp ?>#por-repartir-<?= $zp ?>"><b><?= $nz[$zp]['sin_asignar'] ?></b> sin repartir</a>
+              <?php else: ?><b>0</b> sin repartir<?php endif; ?>
+            </li>
+            <li>
+              <?php if ($v48 === null): ?>
+                <span class="sub">vencidos 48 h: no disponible</span>
+              <?php elseif ($v48 > 0): ?>
+                <a href="pendientes.php?g=vencidos"><b><?= $v48 ?></b> vencidos 48 h</a>
+              <?php else: ?><b>0</b> vencidos 48 h<?php endif; ?>
+            </li>
+            <li>
+              <?php if ($nz[$zp]['asignados_viejos'] > 0): ?>
+                <a href="casos.php?zona=<?= $zonaCasos ?>&est=ASIGNADO&dias_asignado=3"><b><?= $nz[$zp]['asignados_viejos'] ?></b> asignados 3+ días sin informe</a>
+              <?php else: ?><b>0</b> asignados 3+ días sin informe<?php endif; ?>
+            </li>
+            <li>
+              <?php if ($nz[$zp]['atendidos_por_cerrar'] > 0): ?>
+                <a href="casos.php?zona=<?= $zonaCasos ?>&est=ATENDIDO"><b><?= $nz[$zp]['atendidos_por_cerrar'] ?></b> atendidos por cerrar</a>
+              <?php else: ?><b>0</b> atendidos por cerrar<?php endif; ?>
+            </li>
+            <li>
+              <?php if ($nz[$zp]['en_revision'] > 0): ?>
+                <a href="casos.php?zona=<?= $zonaCasos ?>&est=EN_REVISION"><b><?= $nz[$zp]['en_revision'] ?></b> en revisión</a>
+              <?php else: ?><b>0</b> en revisión<?php endif; ?>
+            </li>
+            <li>
+              <?php if ($nz[$zp]['sin_regularizar'] > 0): ?>
+                <a href="casos.php?zona=<?= $zonaCasos ?>&est=CERRADO_SIN_ATENCION"><b><?= $nz[$zp]['sin_regularizar'] ?></b> sin regularizar</a>
+              <?php else: ?><b>0</b> sin regularizar<?php endif; ?>
+            </li>
+          </ul>
+        </div>
+      <?php endforeach; ?>
+    </div>
+    <?php if (!Pendientes::disponible()): ?>
+      <p class="sub" style="margin:6px 0 0">Los vencidos de 48 h no se pueden calcular: falta la migración de pendientes.</p>
+    <?php endif; ?>
+  <?php endif; ?>
+
+  <?php /* =====================================================================
+     CERRAR POR FALTA DE ATENCIÓN (ASG-05).
+     El texto de esta pantalla y el de asignación prometían un cierre
+     automático a los 7 días que en el código solo existía en
+     `reconciliar_cli.php --ejecutar`, y nadie lo estaba lanzando. Mientras se
+     decide si eso se automatiza (sync_casos.php no es un archivo de este
+     corte), queda aquí un botón explícito: la administradora ve cuántos
+     candidatos hay y decide cuándo cerrarlos, con la misma guarda del 15 %
+     que usaría un cron. */ ?>
+  <?php if ($esAdmin && Auth::puede('casos.cerrar_sin_atencion') && $candidatosSinAtencion > 0): ?>
+    <div class="nota-regular" style="margin:14px 0">
+      <b><?= $candidatosSinAtencion ?> caso<?= $candidatosSinAtencion === 1 ? '' : 's' ?> con más de 7 días sin ningún informe.</b>
+      <p style="margin:6px 0 10px">
+        Nadie los tocó desde que llegaron. Cerrarlos por falta de atención los
+        saca de «por repartir» y los deja en el buzón para que se regularicen
+        ante KFC — no se borran ni se dan por resueltos.
+      </p>
+      <form method="post" action="casos.php"
+            onsubmit="return confirm('¿Cerrar ' + <?= (int) $candidatosSinAtencion ?> + ' casos por falta de atención?');">
+        <input type="hidden" name="csrf" value="<?= $e(Auth::csrfToken()) ?>">
+        <input type="hidden" name="accion" value="cerrar_sin_atencion">
+        <button class="btn danger" type="submit">Cerrar por falta de atención</button>
+      </form>
     </div>
   <?php endif; ?>
 
@@ -289,7 +456,7 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
     <div class="tile"><div class="n" data-n="<?= $n['total'] ?>">0</div>
       <div class="t">Vivos en 90 días</div></div>
     <?php if ($n['sin_zona']): ?>
-      <a class="tile viol" href="casos.php"><div class="n" data-n="<?= $n['sin_zona'] ?>">0</div>
+      <a class="tile viol" href="casos.php?zona=SIN"><div class="n" data-n="<?= $n['sin_zona'] ?>">0</div>
         <div class="t">Sin zona resuelta</div>
         <div class="pie">El nombre de SAP no calza con el maestro</div></a>
     <?php endif; ?>
@@ -300,7 +467,7 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
     // Los tres colores de zona pasaron la validación de la paleta contra TODOS
     // los pares, no solo los adyacentes: aquí conviven en el mismo gráfico.
     $datosZona = [];
-    foreach ($porZona as $z => $c) { $datosZona[] = ['e' => $z, 'v' => $c]; }
+    foreach ($porZona as $z => $c) { if ($c > 0) { $datosZona[] = ['e' => $z, 'v' => $c]; } }
     if ($n['sin_zona']) { $datosZona[] = ['e' => 'Sin zona', 'v' => $n['sin_zona'], 'c' => '#94a3b8']; }
 
     $datosEstado = [];

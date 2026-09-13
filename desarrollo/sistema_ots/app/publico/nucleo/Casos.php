@@ -205,6 +205,21 @@ final class Casos
             return ['aviso' => $aviso, 'sin_catalogo' => true,
                     'zona' => ($g['zona'] ?? '') !== '' ? $g['zona'] : ($u['zona'] ?? null)];
         }
+        /* A la administración y al jefe de zona les alcanza también lo que tiene
+           fila de gestión y ya salió de la ventana del catálogo: un caso ATENDIDO
+           hace cuatro meses que falta confirmar en SAP, o un aviso que KFC borró
+           del correo. Hasta el 2026-09-13 esto respondía «fuera de su alcance»
+           hasta a un superadmin (AUDITORIA_2026-09-10 §6, aviso 10353555). El
+           corte por zona se mantiene: el jefe solo alcanza los de su zona. */
+        if ($u !== null && $u['rol'] !== 'TECNICO' && $g !== null) {
+            $za = Auth::zonaAlcance();
+            $zg = (string) ($g['zona'] ?? '');
+            if ($za === null || ($zg !== '' && $zg === $za)) {
+                return ['aviso' => $aviso, 'sin_catalogo' => true,
+                        'zona' => $zg !== '' ? $zg : null, 'local' => '', 'local_nombre' => '',
+                        'caso' => 'sin dato en el catálogo', 'estado_gestion' => $g['estado'] ?? 'NUEVO'];
+            }
+        }
         return null;
     }
 
@@ -218,7 +233,10 @@ final class Casos
     public const TRANSICIONES = [
         // asignar reabre lo cerrado sin atención: la administradora que reparte
         // un caso ya decidió regularizarlo (D6). Sobre ASIGNADO es reasignar.
-        'asignar'              => ['NUEVO', 'EN_REVISION', 'CERRADO_SIN_ATENCION', 'ASIGNADO'],
+        // ESPERA_REPUESTO también se puede reasignar (ASG-02 MATIZADO): cambia
+        // quién tiene detrás el repuesto pendiente sin tocar el estado, y eso
+        // se decide en casos.php mirando `$antes`, no aquí.
+        'asignar'              => ['NUEVO', 'EN_REVISION', 'CERRADO_SIN_ATENCION', 'ASIGNADO', 'ESPERA_REPUESTO'],
         'derivar'              => ['NUEVO', 'ASIGNADO', 'EN_REVISION'],
         'revision'             => ['NUEVO', 'ASIGNADO'],
         'veredicto:NO_COMPETE' => ['NUEVO', 'ASIGNADO', 'EN_REVISION'],

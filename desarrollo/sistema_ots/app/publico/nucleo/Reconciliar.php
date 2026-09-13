@@ -133,13 +133,24 @@ final class Reconciliar
                                        AND asignado_a IS NOT NULL, 1, tecnico_auto),
                      estado       = CASE
                          WHEN estado IN ('RESUELTO','NO_COMPETE','EN_REVISION','ESPERA_REPUESTO') THEN estado
+                         -- Un ATENDIDO no regresa a ASIGNADO porque llegó una
+                         -- OT de seguimiento sin cerrar (ASG-13): eso le hacía
+                         -- perder al caso su lugar en «a registrar en SAP» sin
+                         -- que nadie hubiera decidido reabrirlo. Con orden de
+                         -- cierre sí avanza (VALUES(estado) = 'ATENDIDO', que
+                         -- cae en el ELSE de abajo).
+                         WHEN estado = 'ATENDIDO' AND VALUES(estado) = 'ASIGNADO' THEN estado
                          WHEN VALUES(estado) = 'ASIGNADO' AND asignado_a IS NULL THEN estado
                          ELSE VALUES(estado) END",
                 [$aviso, $nuevo, $ot, $fecha ? substr((string) $fecha, 0, 19) : null,
                  $idt, $idt === null ? 0 : 1]
             );
 
-            if ($estadoAntes !== $nuevo) {
+            // El $nuevo de PHP puede no ser el que quedó en la fila (la línea
+            // ATENDIDO->ASIGNADO de arriba lo frena): anotar 'ASIGNADO_AUTO'
+            // ahí sería una transición que la base nunca hizo.
+            $seFrenoEnAtendido = $estadoAntes === 'ATENDIDO' && $nuevo === 'ASIGNADO';
+            if ($estadoAntes !== $nuevo && !$seFrenoEnAtendido) {
                 self::anotar($cerrada ? 'ATENDIDO_AUTO' : 'ASIGNADO_AUTO', (string) $aviso,
                              $estadoAntes, $nuevo,
                              ['ot' => $ot, 'tecnicos' => $a['usuarios'] ?? [],
@@ -180,6 +191,12 @@ final class Reconciliar
             $estado = $actuales[$aviso] ?? 'NUEVO';
             // Solo lo que nadie tocó. Un caso asignado tiene a alguien detrás.
             if (!in_array($estado, ['NUEVO'], true)) { continue; }
+            // Una alerta de alcance espera el veredicto de la administradora,
+            // no un cierre automático (ASG-17): cerrarlo como «no atendido»
+            // infla el incumplimiento con casos que quizás no eran nuestros.
+            // Se queda NUEVO -- y por eso sigue contando en «con alerta» --
+            // hasta que alguien decida.
+            if (($c['estado_alerta'] ?? '') === 'CON_ALERTA') { continue; }
             $candidatos[] = ['aviso' => $aviso, 'zona' => $c['zona'] ?? null,
                              'creado' => $creado, 'local' => $c['local'] ?? null];
         }
