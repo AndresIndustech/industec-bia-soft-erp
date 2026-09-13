@@ -46,8 +46,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from t1_6b_resolver_cuarentena import normalizar_local_extendido  # noqa: E402
 from t2_4_sync_hostinger import DESTINO as ESPEJO, sha256_de  # noqa: E402
 
-CANONICO = Path(r"D:\RESPALDOS\ORDENES DE TRABAJO")
-INFORMES = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS")
+from comun import RESPALDOS, SALIDAS  # noqa: E402  (rutas relativas, T2.15.1)
+CANONICO = RESPALDOS / "ORDENES DE TRABAJO"
+INFORMES = SALIDAS
 
 # El modulo lo manda la carpeta de origen, no el nombre del archivo. Deducirlo
 # del sufijo -D{n} fallaba en los preventivos que no llevan numero de dia (T1.6).
@@ -294,7 +295,7 @@ def _env_minimo():
     """El espejo puede no existir todavia (primera corrida antes del sync). En
     ese caso solo hacen falta las credenciales de la base, no las de Hostinger."""
     env = {}
-    p = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
+    from comun import ENV_PATH as p
     for line in p.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:

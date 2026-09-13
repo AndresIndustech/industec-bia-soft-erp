@@ -1,77 +1,91 @@
 """
-T2.4.2 - Purga nocturna de los uploads de Hostinger, con compuerta de hash.
+T2.4.2 / T2.15.5 - Purga de los uploads del sistema viejo en Hostinger, con compuertas.
 
 Borra del servidor UNICAMENTE los PDFs que ya estan en el espejo local con el
-sha256 identico, recomprobado en el momento del borrado y no en el del ultimo
-espejo. Todo lo demas se queda donde esta.
+sha256 identico, recomprobado en el momento del borrado, y que ademas tienen
+una SEGUNDA COPIA con el mismo hash (T2.15.5: el equipo Veeam/TrueNAS, la ruta
+`SEGUNDA_COPIA` de config/.env). Mientras no exista la segunda copia, este
+script SOLO INFORMA: «0 borrables, motivo: sin segunda copia».
 
 POR QUE EXISTE ESTE SCRIPT Y NO SE USA cleanup.php:
 El cleanup.php que vino con el sistema hace `glob('/uploads/*')` y `unlink()`
 sobre todo, sin filtro de antiguedad, sin verificar que exista copia y sin
-mirar el resultado del unlink. Sobre el estado medido el 2026-09-03 habria
-borrado 1.952 PDFs (1,41 GB) y los 10 archivos de registros/ (838 KB de logs).
-Viola tres invariantes de una sola vez:
-  I-2  un cron nocturno es exactamente lo contrario de "que el cliente lo pida
-       en el momento";
-  I-4  no hay copia ni hash: borra primero y no verifica nunca;
-  I-5  unlink() falla en silencio, no aborta ruidosamente.
-Ademas el plan Premium de Hostinger solo trae respaldo SEMANAL (el diario es un
-add-on de pago), asi que un borrado equivocado se lleva hasta 7 dias de OTs sin
-red debajo.
+mirar el resultado del unlink. Viola tres invariantes de una sola vez (I-2,
+I-4, I-5). Ademas el plan Premium de Hostinger solo trae respaldo SEMANAL.
 
-POR QUE SI SE PURGA, entonces:
-No por espacio -- ese argumento no se sostiene: son 1,41 GB de 20 GB y ~2.000
-archivos de 400.000 inodos. Se purga por dos razones que si se sostienen:
-  1. Los PDFs son PUBLICOS y su nombre es adivinable (OT-{4 digitos}-{local}-
-     {aviso}-{zona}.pdf). Contienen nombre, correo y firma manuscrita de
-     administradores de locales de Grupo KFC. Cada dia que un PDF sobra en el
-     servidor es un dia de exposicion innecesaria.
-  2. El contrato de hosting (act. 2026-08-28) prohibe usar el servicio como
-     "a repository or storage for files". El archivo definitivo es D:\\RESPALDOS.
+POR QUE SI SE PURGA: los PDFs son publicos y su nombre es adivinable, con
+nombre, correo y firma de administradores de locales de Grupo KFC (cada dia
+que sobran es exposicion innecesaria), y el contrato de hosting prohibe usar el
+servicio como repositorio. El archivo definitivo es RESPALDOS.
+
+LAS CINCO COMPUERTAS, todas escritas en el informe archivo por archivo:
+  1. copia local en el espejo con el mismo hash (recalculado ahora);
+  2. segunda copia con el mismo hash (SEGUNDA_COPIA/_ORIGEN_SISTEMA/<modulo>/<nombre>);
+  3. hash presente en `ots.hash_pdf` de la estacion, si la base esta al alcance
+     (si no lo esta, se dice y se retiene);
+  4. edad en el servidor mayor que la retencion (`PURGA_RETENCION_DIAS` del
+     .env, 90 hasta D+30 del corte; 30 por defecto si no esta);
+  5. `sha256sum -c` en el servidor en el mismo instante del borrado.
+
+ESCRITURA EN PRODUCCION: es el unico script que la pide a `hostinger_ssh`
+(`escritura_produccion=True`), y solo con `--ejecutar --confirmo-borrado`.
 
 USO:
-    # 1. Siempre primero, sin argumentos: no borra nada, dice que borraria.
-    .venv/Scripts/python.exe scripts/t2_4_purga_hostinger.py
-
-    # 2. Solo despues de leer el informe del paso 1 y con autorizacion del momento:
+    .venv/Scripts/python.exe scripts/t2_4_purga_hostinger.py                      # informa
     .venv/Scripts/python.exe scripts/t2_4_purga_hostinger.py --ejecutar --confirmo-borrado
 """
+from __future__ import annotations
+
 import argparse
 import csv
-import hashlib
 import json
 import shlex
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from comun import leer_env  # noqa: E402
+import hostinger_ssh as H  # noqa: E402
 from t2_4_sync_hostinger import (  # noqa: E402
-    MODULOS, DESTINO, cargar_env, sha256_de, ssh_ejecutar, inventario_remoto)
+    MODULOS, DESTINO, cargar_env, inventario_remoto, ruta_remota, sha256_de, ssh_ejecutar)
 
 BITACORA = DESTINO / "_purgas"
-
-# Ventana de gracia. Un PDF recien emitido puede estar todavia rebotando en la
-# bandeja de alguien, o el tecnico puede necesitar reenviarlo desde el servidor.
-# 30 dias es holgado y sigue dejando el servidor muy por debajo de los 3 meses
-# que hoy acumula solo.
 RETENCION_DIAS_DEFECTO = 30
-
-# Freno de mano. Si una sola corrida quiere borrar mas que esto, algo se rompio
-# (un espejo apuntando al directorio equivocado, un inventario a medias) y es
-# preferible parar y mirar que borrar 2.000 archivos por un bug.
+# Freno de mano: si una corrida quiere borrar mas que esto, algo se rompio.
 TOPE_POR_CORRIDA = 400
 
 
-def edad_dias_remota(env, modulo, nombres):
-    """Edad en dias de cada archivo, medida por el propio servidor.
+def retencion_configurada(env: dict) -> int:
+    v = (env.get("PURGA_RETENCION_DIAS") or "").strip()
+    return int(v) if v.isdigit() else RETENCION_DIAS_DEFECTO
 
-    Se pregunta al servidor y no al mtime local porque el mtime local es la
-    fecha de descarga, no la de emision de la OT. Usar el local haria que todo
-    lo bajado hoy pareciera de hoy, y la ventana de retencion no protegeria nada.
-    """
-    remoto = f'{env["HOSTINGER_DOCROOT"]}/{MODULOS[modulo]}'
+
+def segunda_copia_configurada(env: dict) -> Path | None:
+    v = (env.get("SEGUNDA_COPIA") or "").strip().strip('"')
+    return Path(v) if v else None
+
+
+def hashes_en_base(env: dict) -> set[str] | None:
+    """Los hash_pdf de la tabla ots de la estacion, o None si la base no esta."""
+    try:
+        import mysql.connector
+        cnx = mysql.connector.connect(host=env["DB_HOST"], port=int(env.get("DB_PORT", "3306")),
+                                      user=env["DB_USER"], password=env["DB_PASSWORD"], database=env["DB_NAME"],
+                                      connection_timeout=10)
+        cur = cnx.cursor()
+        cur.execute("SELECT hash_pdf FROM ots WHERE hash_pdf IS NOT NULL")
+        out = {r[0] for r in cur.fetchall()}
+        cur.close(); cnx.close()
+        return out
+    except Exception:
+        return None
+
+
+def edad_dias_remota(env: dict, modulo: str, nombres):
+    """Edad en dias de cada archivo, medida por el propio servidor (el mtime
+    local es la fecha de descarga, no la de emision)."""
+    remoto = ruta_remota(env, modulo)
     salida = ssh_ejecutar(env, (
         f"cd {shlex.quote(remoto)} 2>/dev/null || exit 7; "
         f"find . -maxdepth 1 -type f -name '*.pdf' -printf '%T@\\t%f\\n'"), timeout=600)
@@ -88,9 +102,10 @@ def edad_dias_remota(env, modulo, nombres):
     return {n: edades.get(n) for n in nombres}
 
 
-def evaluar_modulo(env, modulo, retencion):
+def evaluar_modulo(env: dict, modulo: str, retencion: int, segunda_copia: Path | None = None,
+                   en_base: set[str] | None = None):
     """Decide, archivo por archivo, si es borrable. Todo lo que no cumpla las
-    tres condiciones queda fuera con el motivo escrito."""
+    compuertas queda fuera con el motivo escrito."""
     remotos, sin_hash = inventario_remoto(env, modulo)
     edades = edad_dias_remota(env, modulo, list(remotos))
     espejo = DESTINO / modulo
@@ -103,8 +118,6 @@ def evaluar_modulo(env, modulo, retencion):
         if not local.exists():
             retenidos.append((nombre, "sin copia local"))
             continue
-        # Se recalcula el hash local AHORA. El del manifiesto pudo quedar viejo
-        # si el archivo local se corrompio o alguien lo movio despues.
         h_local = sha256_de(local)
         if h_local != meta["sha256"]:
             retenidos.append((nombre, f"hash distinto (local {h_local[:12]} / remoto {meta['sha256'][:12]})"))
@@ -112,32 +125,41 @@ def evaluar_modulo(env, modulo, retencion):
         if local.stat().st_size != meta["bytes"]:
             retenidos.append((nombre, "tamano distinto"))
             continue
+        if segunda_copia is None:
+            retenidos.append((nombre, "sin segunda copia (SEGUNDA_COPIA no configurada)"))
+            continue
+        copia2 = segunda_copia / "_ORIGEN_SISTEMA" / modulo / nombre
+        if not copia2.is_file():
+            retenidos.append((nombre, "sin segunda copia (no esta en SEGUNDA_COPIA)"))
+            continue
+        if sha256_de(copia2) != meta["sha256"]:
+            retenidos.append((nombre, "segunda copia con hash distinto"))
+            continue
+        if en_base is None:
+            retenidos.append((nombre, "sin verificar en la base (ots.hash_pdf no alcanzable)"))
+            continue
+        if meta["sha256"] not in en_base:
+            retenidos.append((nombre, "hash no consta en ots.hash_pdf"))
+            continue
         if edad is None:
             retenidos.append((nombre, "sin fecha en el servidor"))
             continue
         if edad < retencion:
             retenidos.append((nombre, f"dentro de la retencion ({edad:.1f} d < {retencion} d)"))
             continue
-        borrables.append({"archivo": nombre, "sha256": meta["sha256"],
-                          "bytes": meta["bytes"], "edad_dias": round(edad, 1),
-                          "copia_local": str(local)})
+        borrables.append({"archivo": nombre, "sha256": meta["sha256"], "bytes": meta["bytes"],
+                          "edad_dias": round(edad, 1), "copia_local": str(local), "segunda_copia": str(copia2)})
 
     for nombre in sin_hash:
         retenidos.append((nombre, "el servidor no pudo calcular su hash"))
-
     return borrables, retenidos, len(remotos)
 
 
-def borrar_en_servidor(env, modulo, borrables):
-    """Borra con una ultima verificacion del lado del servidor.
-
-    El `sha256sum -c` remoto es la tercera compuerta: aunque el inventario y la
-    comparacion local hayan dicho que si, el archivo se borra solo si en ese
-    mismo instante el servidor confirma que su contenido sigue siendo el que
-    nosotros tenemos copiado. Si el archivo cambio entre el inventario y este
-    momento (un envio que reutilizo el correlativo), no se borra.
-    """
-    remoto = f'{env["HOSTINGER_DOCROOT"]}/{MODULOS[modulo]}'
+def borrar_en_servidor(env: dict, modulo: str, borrables) -> tuple[list[str], list[str]]:
+    """Borra con una ultima verificacion del lado del servidor (`sha256sum -c`
+    en el mismo instante). Es el unico comando de escritura sobre produccion y
+    pasa por la compuerta de `hostinger_ssh` de forma explicita."""
+    remoto = ruta_remota(env, modulo)
     lineas = "\n".join(f'{b["sha256"]}  ./{b["archivo"]}' for b in borrables)
     guion = (
         f"cd {shlex.quote(remoto)} || exit 7\n"
@@ -147,8 +169,7 @@ def borrar_en_servidor(env, modulo, borrables):
         f"echo \"$OK\" | while IFS= read -r f; do [ -n \"$f\" ] && rm -f -- \"$f\" && echo \"BORRADO\t$f\"; done\n"
         f"cat /tmp/purga_$$.err | sed 's/^/NOCOINCIDE\\t/'\n"
         f"rm -f /tmp/purga_$$.sha /tmp/purga_$$.err\n")
-    salida = ssh_ejecutar(env, guion, timeout=900)
-
+    salida = H.ssh(guion, timeout=900, escritura_produccion=True, env=env)
     borrados, rechazados = [], []
     for linea in salida.splitlines():
         if linea.startswith("BORRADO\t"):
@@ -159,18 +180,15 @@ def borrar_en_servidor(env, modulo, borrables):
     return borrados, rechazados
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(
-        description="Purga de uploads en Hostinger con compuerta de hash. Por defecto NO borra.")
-    ap.add_argument("--ejecutar", action="store_true",
-                    help="borra de verdad (requiere ademas --confirmo-borrado)")
-    ap.add_argument("--confirmo-borrado", action="store_true",
-                    help="segunda compuerta explicita, obligatoria para borrar")
-    ap.add_argument("--retencion-dias", type=int, default=RETENCION_DIAS_DEFECTO,
-                    help=f"no borra nada mas nuevo que esto (defecto {RETENCION_DIAS_DEFECTO})")
+        description="Purga de uploads del sistema viejo con compuertas. Por defecto NO borra.")
+    ap.add_argument("--ejecutar", action="store_true", help="borra de verdad (requiere ademas --confirmo-borrado)")
+    ap.add_argument("--confirmo-borrado", action="store_true", help="segunda compuerta explicita")
+    ap.add_argument("--retencion-dias", type=int, default=None,
+                    help="no borra nada mas nuevo que esto (defecto: PURGA_RETENCION_DIAS del .env o 30)")
     ap.add_argument("--modulo", choices=sorted(MODULOS), action="append")
-    ap.add_argument("--tope", type=int, default=TOPE_POR_CORRIDA,
-                    help=f"maximo de archivos a borrar en una corrida (defecto {TOPE_POR_CORRIDA})")
+    ap.add_argument("--tope", type=int, default=TOPE_POR_CORRIDA)
     args = ap.parse_args()
 
     borrar_de_verdad = args.ejecutar and args.confirmo_borrado
@@ -178,40 +196,41 @@ def main():
         sys.exit("--ejecutar exige tambien --confirmo-borrado. No se borro nada.")
 
     env = cargar_env()
+    retencion = args.retencion_dias if args.retencion_dias is not None else retencion_configurada(env)
+    segunda = segunda_copia_configurada(env)
+    en_base = hashes_en_base(env)
     modulos = args.modulo or list(MODULOS)
     inicio = datetime.now(timezone.utc)
 
-    print("Purga de uploads en Hostinger")
-    print(f"  modo      : {'BORRADO REAL' if borrar_de_verdad else 'SIMULACION (no borra nada)'}")
-    print(f"  retencion : {args.retencion_dias} dias")
-    print(f"  espejo    : {DESTINO}\n")
+    print("Purga de uploads del sistema viejo en Hostinger")
+    print(f"  modo          : {'BORRADO REAL' if borrar_de_verdad else 'SIMULACION (no borra nada)'}")
+    print(f"  retencion     : {retencion} dias")
+    print(f"  espejo        : {DESTINO}")
+    print(f"  segunda copia : {segunda if segunda else 'NO CONFIGURADA -> solo informa'}")
+    print(f"  base estacion : {'al alcance (' + str(len(en_base)) + ' hashes)' if en_base is not None else 'no alcanzable -> se retiene todo'}\n")
 
     informe, total_borrables = [], 0
     for m in modulos:
         print(f"[{m}]")
         try:
-            borrables, retenidos, n_remoto = evaluar_modulo(env, m, args.retencion_dias)
+            borrables, retenidos, n_remoto = evaluar_modulo(env, m, retencion, segunda, en_base)
         except Exception as e:
             print(f"  ERROR: {e}\n")
             informe.append({"modulo": m, "error": str(e)})
             continue
-
         mb = sum(b["bytes"] or 0 for b in borrables) / (1024 * 1024)
         print(f"  en servidor : {n_remoto}")
         print(f"  borrables   : {len(borrables)}  ({mb:.1f} MB)")
         print(f"  retenidos   : {len(retenidos)}")
-        motivos = {}
+        motivos: dict[str, int] = {}
         for _, motivo in retenidos:
             clave = motivo.split("(")[0].strip()
             motivos[clave] = motivos.get(clave, 0) + 1
         for k, v in sorted(motivos.items(), key=lambda x: -x[1]):
             print(f"      {v:>5}  {k}")
-
         sin_copia = [n for n, mo in retenidos if mo == "sin copia local"]
         if sin_copia:
-            print(f"  ATENCION: {len(sin_copia)} archivos NO tienen copia local. "
-                  f"Corre t2_4_sync_hostinger.py antes de purgar.")
-
+            print(f"  ATENCION: {len(sin_copia)} archivos NO tienen copia local. Corre t2_4_sync_hostinger.py antes.")
         total_borrables += len(borrables)
         informe.append({"modulo": m, "en_servidor": n_remoto, "borrables": borrables,
                         "retenidos": [{"archivo": n, "motivo": mo} for n, mo in retenidos],
@@ -219,63 +238,48 @@ def main():
         print()
 
     if total_borrables > args.tope:
-        sys.exit(f"FRENO: la corrida quiere borrar {total_borrables} archivos, por encima "
-                 f"del tope de {args.tope}. Revisa el informe antes de subir el tope "
-                 f"con --tope. No se borro nada.")
+        sys.exit(f"FRENO: la corrida quiere borrar {total_borrables} archivos, por encima del tope de "
+                 f"{args.tope}. Revisa el informe antes de subir el tope con --tope. No se borro nada.")
 
     borrados_reales = {}
-    if borrar_de_verdad:
+    if borrar_de_verdad and segunda is not None:
         for bloque in informe:
-            if "borrables" not in bloque or not bloque["borrables"]:
+            if not bloque.get("borrables"):
                 continue
             m = bloque["modulo"]
             print(f"[{m}] borrando {len(bloque['borrables'])} archivos...")
             ok, rech = borrar_en_servidor(env, m, bloque["borrables"])
             borrados_reales[m] = {"borrados": ok, "rechazados": rech}
             print(f"  borrados: {len(ok)}   rechazados por el servidor: {len(rech)}")
-            if rech:
-                for r in rech[:5]:
-                    print(f"    - {r}")
 
     BITACORA.mkdir(parents=True, exist_ok=True)
     sello = inicio.strftime("%Y%m%dT%H%M%SZ")
     registro = {
-        "inicio_utc": inicio.isoformat(),
-        "fin_utc": datetime.now(timezone.utc).isoformat(),
+        "inicio_utc": inicio.isoformat(), "fin_utc": datetime.now(timezone.utc).isoformat(),
         "modo": "BORRADO_REAL" if borrar_de_verdad else "SIMULACION",
-        "retencion_dias": args.retencion_dias,
-        "servidor": f"{env['HOSTINGER_USER']}@{env['HOSTINGER_HOST']}",
-        "evaluacion": informe,
-        "borrados_reales": borrados_reales,
+        "retencion_dias": retencion, "segunda_copia": str(segunda) if segunda else None,
+        "servidor": H.destino(env), "evaluacion": informe, "borrados_reales": borrados_reales,
     }
-    (BITACORA / f"purga_{sello}.json").write_text(
-        json.dumps(registro, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    # Un CSV plano de lo borrado, para que la administracion pueda revisarlo sin
-    # abrir un JSON. Cada linea lleva el hash y la ruta local: eso es lo que
-    # permite reponer el archivo en el servidor si alguna vez hiciera falta.
+    (BITACORA / f"purga_{sello}.json").write_text(json.dumps(registro, indent=2, ensure_ascii=False), encoding="utf-8")
     if borrados_reales:
         with open(BITACORA / f"borrados_{sello}.csv", "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
-            w.writerow(["modulo", "archivo", "sha256", "bytes", "edad_dias", "copia_local"])
+            w.writerow(["modulo", "archivo", "sha256", "bytes", "edad_dias", "copia_local", "segunda_copia"])
             for bloque in informe:
                 m = bloque.get("modulo")
                 ok = set(borrados_reales.get(m, {}).get("borrados", []))
                 for b in bloque.get("borrables", []):
                     if b["archivo"] in ok:
-                        w.writerow([m, b["archivo"], b["sha256"], b["bytes"],
-                                    b["edad_dias"], b["copia_local"]])
+                        w.writerow([m, b["archivo"], b["sha256"], b["bytes"], b["edad_dias"], b["copia_local"], b["segunda_copia"]])
 
     print("=" * 66)
-    if borrar_de_verdad:
+    if borrar_de_verdad and segunda is not None:
         n = sum(len(v["borrados"]) for v in borrados_reales.values())
         print(f"Borrados en el servidor: {n}")
-        print(f"Bitacora: {BITACORA / f'purga_{sello}.json'}")
     else:
-        print(f"SIMULACION. Se habrian borrado {total_borrables} archivos.")
-        print("Para borrar de verdad, y solo con autorizacion del momento:")
-        print("  --ejecutar --confirmo-borrado")
-        print(f"Informe: {BITACORA / f'purga_{sello}.json'}")
+        print(f"SIMULACION. Borrables: {total_borrables}" + ("" if segunda else "  (motivo: sin segunda copia)"))
+        print("Para borrar de verdad, y solo con autorizacion del momento: --ejecutar --confirmo-borrado")
+    print(f"Informe: {BITACORA / f'purga_{sello}.json'}")
 
 
 if __name__ == "__main__":

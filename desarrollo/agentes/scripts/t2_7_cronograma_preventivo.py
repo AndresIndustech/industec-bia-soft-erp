@@ -55,9 +55,12 @@ from pathlib import Path
 import mysql.connector
 import openpyxl
 
-ENV_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
+sys.path.insert(0, str(Path(__file__).parent))
+from comun import ENV_PATH, SALIDAS  # noqa: E402  (rutas relativas al repositorio, T2.15.1)
+# El Drive de INDUSTEC en la estacion (solo lectura). Se puede cambiar con
+# CRONOGRAMA_XLSX en config/.env sin tocar codigo.
 CRONOGRAMA = Path(r"G:\Mi unidad\SEGUIMIENTO PREVENTIVOS\SEGUIMIENTO PREVENTIVOS _ 2026.xlsx")
-SALIDA = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS\catalogos")
+SALIDA = SALIDAS / "catalogos"
 HOJA = "2026"
 ANIO = 2026
 

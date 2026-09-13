@@ -51,8 +51,9 @@ import mysql.connector
 sys.path.insert(0, str(Path(__file__).parent))
 from t1_6b_resolver_cuarentena import normalizar_local_extendido  # noqa: E402
 
-ENV_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
-SALIDA = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS\catalogos")
+sys.path.insert(0, str(Path(__file__).parent))
+from comun import ENV_PATH, SALIDAS  # noqa: E402  (rutas relativas al repositorio, T2.15.1)
+SALIDA = SALIDAS / "catalogos"
 
 # La denominacion de SAP viene como 007760_I_MAQYEQ_MESA MIXTA: codigo de
 # activo fijo, una letra de clasificacion, la clase (MAQYEQ = maquinaria y

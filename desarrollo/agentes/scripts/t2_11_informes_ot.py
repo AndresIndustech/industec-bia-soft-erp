@@ -74,10 +74,10 @@ import mysql.connector
 
 sys.path.insert(0, str(Path(__file__).parent))
 from t1_7_extractor_pdf import extraer_pdf          # el extractor ya verificado
+# Rutas, .env, empuje firmado y registro: una sola copia en comun.py (T2.15.1).
+from comun import BASE, ENV_PATH, RESPALDOS, SALIDAS, abrir_log, cargar_env, empujar  # noqa: F401
 
-BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
-ENV_PATH = BASE / "config" / ".env"
-SALIDA = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS\catalogos")
+SALIDA = SALIDAS / "catalogos"
 CASOS = SALIDA / "casos_sap.json"
 EMISOR = "reclutamiento@industec.me"
 
@@ -90,7 +90,9 @@ CACHE = BASE / "config" / "cache_tecnicos.json"
 # almacenamiento definitivo del proyecto, no a una carpeta temporal: son los
 # informes originales de ordenes que el sistema tiene que poder mostrar, y
 # volver a bajarlos del correo cada vez seria absurdo.
-DIR_PDF = pathlib.Path(r"D:\RESPALDOS\ORDENES DE TRABAJO\_DEL_BUZON")
+# `_ORIGEN_BUZON`, hermano de `_ORIGEN_DRIVE` y `_ORIGEN_SISTEMA` (T2.15.3): un
+# origen crudo mas, que la ingesta ignora (toda carpeta que empieza por `_`).
+DIR_PDF = RESPALDOS / "_ORIGEN_BUZON"
 
 # El cuerpo del informe, campo por campo. Si el sistema actual cambia el
 # formato, lo que falla es el parseo y se reporta -- no se rellena por parecido.
@@ -234,15 +236,6 @@ def resolver_varios(parte, padron):
     return []
 
 
-def cargar_env():
-    env = {}
-    for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            env[k.strip()] = v.strip()
-    return env
-
 
 def leer_informes(M, dias):
     """Cuerpos de todos los informes de la ventana. Un FETCH por lote."""
@@ -313,31 +306,6 @@ def guardar_cache(c):
     CACHE.write_text(json.dumps(c, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-def empujar(env, contenido, tipo):
-    """Manda el resultado al sitio, firmado igual que el catalogo de casos."""
-    url = env.get("SYNC_URL", "").strip()
-    secreto = env.get("SYNC_SECRETO", "").strip()
-    if not url or not secreto:
-        print("  SYNC_URL o SYNC_SECRETO no estan en config/.env: no se empuja")
-        return False
-    ts = str(int(time.time()))
-    firma = hmac.new(secreto.encode(), ts.encode() + b"." + contenido,
-                     hashlib.sha256).hexdigest()
-    pedido = urllib.request.Request(
-        url, data=contenido, method="POST",
-        headers={"Content-Type": "application/json", "X-Industec-Ts": ts,
-                 "X-Industec-Firma": firma, "X-Industec-Tipo": tipo,
-                 "User-Agent": "industec-informes/1.0"})
-    try:
-        with urllib.request.urlopen(pedido, timeout=60, context=ssl.create_default_context()) as r:
-            print(f"  empujado: HTTP {r.status} {r.read(300).decode('utf-8','replace').strip()[:160]}")
-            return r.status == 200
-    except urllib.error.HTTPError as e:
-        print(f"  ERROR del servidor: HTTP {e.code} {e.read(300).decode('utf-8','replace').strip()[:160]}")
-    except Exception as e:
-        print(f"  ERROR al empujar: {type(e).__name__}: {e}")
-    return False
-
 
 def tecnico_del_pdf(M, id_imap, ot=None):
     """Baja el PDF, lo GUARDA y saca el «Técnico Asignado».
@@ -376,24 +344,6 @@ def tecnico_del_pdf(M, id_imap, ot=None):
             return None, f"NO_LEGIBLE:{e}"
     return None, "sin PDF adjunto"
 
-
-def abrir_log(nombre):
-    """Manda la salida a `logs/<nombre>-<fecha>.log`.
-
-    Lo hace el script y no el .bat a proposito. Nombrar el archivo desde cmd
-    obliga a sacar la fecha de `%DATE:~n,m%` -- que depende del formato regional
-    y aqui producia "vigilante-2026 0mi.log" -- o de un `for /f` contra
-    PowerShell, que funcionaba a mano y fallaba dentro de la Tarea programada,
-    dejandola salir con codigo 1 sin escribir una sola linea. Aqui la fecha es
-    un `strftime` y no hay nada que se rompa segun quien lo lance.
-    """
-    d = BASE / "logs"
-    d.mkdir(parents=True, exist_ok=True)
-    ruta = d / f"{nombre}-{datetime.now():%Y-%m-%d}.log"
-    f = open(ruta, "a", encoding="utf-8", buffering=1)
-    sys.stdout = f
-    sys.stderr = f
-    return ruta
 
 
 def main():

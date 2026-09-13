@@ -20,17 +20,11 @@ from pathlib import Path
 import mysql.connector
 sys.path.insert(0, str(Path(__file__).parent))
 from t1_7_extractor_pdf import extraer_pdf
+from comun import RESPALDOS, cargar_env
 
-ENV_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
-env = {}
-for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
-    line = line.strip()
-    if not line or line.startswith("#") or "=" not in line:
-        continue
-    k, v = line.split("=", 1)
-    env[k.strip()] = v.strip()
+env = cargar_env(("DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"))
 
-RAIZ = Path(r"D:\RESPALDOS\ORDENES DE TRABAJO")
+RAIZ = RESPALDOS / "ORDENES DE TRABAJO"
 
 # El segmento del AVISO es opcional: los preventivos no nacen de un aviso SAP, y
 # algunos correctivos antiguos se emitieron sin el. Exigirlo mandaba a error
@@ -69,8 +63,12 @@ def main():
     cnx.autocommit = True
     cur = cnx.cursor()
 
-    pdfs = list(RAIZ.rglob("*.pdf"))
-    print(f"PDFs en arbol canonico: {len(pdfs)} (esperado 6597)")
+    # Toda carpeta que empiece por `_` es un origen crudo o una cuarentena
+    # (_ORIGEN_*, _divergentes, _cuarentena_hash, _bajando): no es el arbol
+    # canonico y no entra a la base (T2.15.3).
+    pdfs = [p for p in RAIZ.rglob("*.pdf")
+            if not any(parte.startswith("_") for parte in p.relative_to(RAIZ).parts[:-1])]
+    print(f"PDFs en arbol canonico: {len(pdfs)}")
 
     ok, con_error, sin_texto = 0, 0, 0
     errores_detalle = []

@@ -70,9 +70,10 @@ from pathlib import Path
 
 import mysql.connector
 
-ENV_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
-ALCANCE_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\alcance_trabajos.json")
-SALIDA = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS")
+sys.path.insert(0, str(Path(__file__).parent))
+from comun import CONFIG, ENV_PATH, SALIDAS  # noqa: E402  (rutas relativas al repositorio, T2.15.1)
+ALCANCE_PATH = CONFIG / "alcance_trabajos.json"
+SALIDA = SALIDAS
 
 REMITENTE = "sgerente@kfc.com.ec"
 
