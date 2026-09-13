@@ -1,0 +1,229 @@
+/* capturar_pantallas.mjs — Capturas de cada pantalla del sistema, por rol, contra
+   el sitio de pruebas, con un navegador de verdad (Edge o Chrome sin ventana por CDP).
+
+   PARA QUÉ EXISTE
+   Las baterías por rol (verificar_*.py) comprueban cifras y códigos HTTP, pero no
+   ven lo que ve una persona. El 2026-09-12 dos pantallas llevaban dos días sin
+   estilos con toda la batería en verde: eso solo se descubre mirando. Este arnés
+   entra con cada cuenta de prueba, abre cada pantalla en el tamaño en que se usa
+   (escritorio para administración y jefe, celular para el técnico), guarda la
+   captura de página completa y anota si el HTML trae un error de PHP o si el
+   título no es el esperado. Las capturas sirven además para las hojas del piloto.
+
+   Requiere ~/respaldos/preparar_prueba.php corrido en el servidor (usa
+   admin_prueba, jefe_prueba_uio y tec_prueba_uio_a). No escribe nada en la base.
+
+   Uso:  node capturar_pantallas.mjs [--solo admin|jefe|tecnico] [--salida <carpeta>]
+   Variables: INDUSTEC_NAVEGADOR, INDUSTEC_LLAVE_SSH. Sale con 1 si alguna pantalla
+   trae un error de PHP o no carga. */
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { mkdtempSync } from 'node:fs';
+
+const HOST = 'darkviolet-armadillo-872352.hostingersite.com';
+const BASE = `https://${HOST}/ot/`;
+const AQUI = dirname(fileURLToPath(import.meta.url));
+const REPO = join(AQUI, '..', '..', '..', '..', '..');
+const NAVEGADOR = process.env.INDUSTEC_NAVEGADOR || [
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+].find(existsSync);
+const ESTACION = join(REPO, 'desarrollo', 'agentes', 'config', 'clave_hostinger');
+const LLAVE = process.env.INDUSTEC_LLAVE_SSH || (existsSync(ESTACION) ? ESTACION : join(homedir(), '.ssh', 'industec_hostinger_pc'));
+const SSH = ['-i', LLAVE, '-o', 'IdentitiesOnly=yes', '-p', '65002', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=20',
+             '-o', 'StrictHostKeyChecking=accept-new', 'u671729428@82.25.73.181'];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const ERRORES_PHP = /Fatal error|Parse error|Warning: |Notice: |Deprecated: |Uncaught /;
+
+const args = process.argv.slice(2);
+const solo = args.includes('--solo') ? args[args.indexOf('--solo') + 1] : null;
+const SALIDA = args.includes('--salida') ? args[args.indexOf('--salida') + 1]
+  : join(process.env.INDUSTEC_PRUEBAS_SALIDA || tmpdir(), 'industec-capturas');
+
+/* Qué abre cada rol y en qué tamaño. Las pantallas nuevas se agregan aquí:
+   si una ruta no existe todavía en el servidor, la captura queda con «404» y
+   no se cuenta como error de PHP. */
+const ROLES = {
+  admin:   { usuario: 'admin_prueba',     ancho: 1400, alto: 900, rutas: [
+    'panel.php', 'casos.php', 'casos.php?est=ATENDIDO', 'asignacion.php', 'pendientes.php',
+    'novedades_visita.php', 'ordenes.php', 'cronograma.html', 'reportes.php', 'usuarios.php',
+    'bitacora.php', 'documentos.php',
+  ] },
+  jefe:    { usuario: 'jefe_prueba_uio',  ancho: 1400, alto: 900, rutas: [
+    'panel.php', 'casos.php', 'asignacion.php', 'pendientes.php', 'novedades_visita.php',
+    'ordenes.php', 'cronograma.html', 'reportes.php',
+  ] },
+  tecnico: { usuario: 'tec_prueba_uio_a', ancho: 390,  alto: 844, rutas: [
+    'mis.php', 'mis.php?t=atendidas', 'mis.php?t=avisos', 'index.html', 'pendientes.php',
+    'cronograma.html', 'ordenes.php', 'documentos.php',
+  ] },
+  // La administración también en celular: las pantallas anchas tienen que caber.
+  admin_movil: { usuario: 'admin_prueba', ancho: 390, alto: 844, rutas: ['panel.php', 'asignacion.php', 'pendientes.php'] },
+};
+
+function ssh(cmd) {
+  const r = spawnSync('ssh', [...SSH, cmd], { encoding: 'utf8', timeout: 120000 });
+  if (r.status !== 0) { throw new Error('ssh: ' + (r.stderr || '').trim().slice(0, 200)); }
+  return r.stdout;
+}
+
+class Navegador {
+  constructor(perfil, ancho, alto) { this.perfil = perfil; this.ancho = ancho; this.alto = alto; }
+
+  async abrir() {
+    this.puerto = 9700 + Math.floor(Math.random() * 250);
+    const args = ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+                  '--disable-extensions', '--hide-scrollbars', '--force-device-scale-factor=1',
+                  `--user-data-dir=${this.perfil}`, `--remote-debugging-port=${this.puerto}`,
+                  `--window-size=${this.ancho},${this.alto}`, 'about:blank'];
+    this.proc = spawn(NAVEGADOR, args, { stdio: 'ignore' });
+    let pagina;
+    for (let i = 0; i < 100 && !pagina; i++) {
+      await sleep(200);
+      try {
+        pagina = (await fetch(`http://127.0.0.1:${this.puerto}/json/list`).then((r) => r.json()))
+          .find((x) => x.type === 'page');
+      } catch { /* todavía no escucha */ }
+    }
+    if (!pagina) { throw new Error('el navegador no abrió'); }
+    this.ws = new WebSocket(pagina.webSocketDebuggerUrl);
+    this.id = 0;
+    this.pend = new Map();
+    this.estado = null;
+    await new Promise((ok, mal) => {
+      this.ws.addEventListener('open', ok, { once: true });
+      this.ws.addEventListener('error', () => mal(new Error('ws')), { once: true });
+    });
+    this.ws.addEventListener('message', (e) => {
+      const m = JSON.parse(e.data);
+      if (m.id && this.pend.has(m.id)) {
+        const { ok, mal } = this.pend.get(m.id);
+        this.pend.delete(m.id);
+        m.error ? mal(new Error(m.error.message)) : ok(m.result);
+      } else if (m.method === 'Network.responseReceived' && m.params.type === 'Document') {
+        this.estado = m.params.response.status;   // el código HTTP del documento principal
+      }
+    });
+    await this.send('Page.enable');
+    await this.send('Runtime.enable');
+    await this.send('Network.enable');
+    await this.send('Emulation.setDeviceMetricsOverride', {
+      width: this.ancho, height: this.alto, deviceScaleFactor: 1, mobile: this.ancho < 600,
+    });
+  }
+
+  send(method, params = {}) {
+    return new Promise((ok, mal) => {
+      const id = ++this.id;
+      this.pend.set(id, { ok, mal });
+      this.ws.send(JSON.stringify({ id, method, params }));
+    });
+  }
+
+  async ev(expresion) {
+    const r = await this.send('Runtime.evaluate', { expression: expresion, awaitPromise: true, returnByValue: true });
+    if (r.exceptionDetails) {
+      throw new Error('JS: ' + (r.exceptionDetails.exception?.description || r.exceptionDetails.text));
+    }
+    return r.result?.value;
+  }
+
+  async ir(ruta, espera = 6000) {
+    this.estado = null;
+    await this.send('Page.navigate', { url: BASE + ruta });
+    await sleep(espera);
+  }
+
+  async captura(archivo) {
+    // Página completa: se mide el alto real y se captura más allá de la ventana.
+    const alto = Math.min(8000, Math.max(this.alto, Number(await this.ev('document.documentElement.scrollHeight')) || this.alto));
+    const r = await this.send('Page.captureScreenshot', {
+      format: 'png', captureBeyondViewport: true,
+      clip: { x: 0, y: 0, width: this.ancho, height: alto, scale: 1 },
+    });
+    writeFileSync(archivo, Buffer.from(r.data, 'base64'));
+    return alto;
+  }
+
+  async cerrar() {
+    try {
+      const v = await fetch(`http://127.0.0.1:${this.puerto}/json/version`).then((r) => r.json());
+      const b = new WebSocket(v.webSocketDebuggerUrl);
+      await new Promise((r) => b.addEventListener('open', r, { once: true }));
+      b.send(JSON.stringify({ id: 1, method: 'Browser.close' }));
+    } catch { /* ya estaba cerrado */ }
+    for (let i = 0; i < 60 && this.proc.exitCode === null; i++) { await sleep(200); }
+    try { this.proc.kill(); } catch { /* nada */ }
+    await sleep(500);
+  }
+}
+
+async function entrar(nav, usuario, clave) {
+  await nav.ir('login.php', 4000);
+  await nav.ev(`(() => {
+    const d = document.querySelector('input[name=desplazar]');
+    if (d) { d.form.submit(); return 'desplazar'; }
+    document.querySelector('#usuario').value = ${JSON.stringify(usuario)};
+    document.querySelector('#clave').value = ${JSON.stringify(clave)};
+    document.querySelector('#clave').form.submit();
+    return 'normal';
+  })()`);
+  await sleep(4500);
+  if (await nav.ev(`!!document.querySelector('input[name=desplazar]')`)) {
+    await nav.ev(`document.querySelector('input[name=desplazar]').form.submit()`);
+    await sleep(4500);
+  }
+  return nav.ev('location.pathname');
+}
+
+const indice = [];
+let fallas = 0;
+mkdirSync(SALIDA, { recursive: true });
+if (!NAVEGADOR) { console.error('no hay Edge ni Chrome; define INDUSTEC_NAVEGADOR'); process.exit(1); }
+const claves = JSON.parse(ssh('cat ~/respaldos/claves_prueba.json')).claves;
+
+for (const [rol, def] of Object.entries(ROLES)) {
+  if (solo && rol !== solo) { continue; }
+  const carpeta = join(SALIDA, rol);
+  mkdirSync(carpeta, { recursive: true });
+  const perfil = mkdtempSync(join(tmpdir(), 'industec-cap-'));
+  const nav = new Navegador(perfil, def.ancho, def.alto);
+  console.log(`== ${rol} (${def.usuario}, ${def.ancho}×${def.alto}) ==`);
+  try {
+    await nav.abrir();
+    const donde = await entrar(nav, def.usuario, claves[def.usuario]);
+    if (String(donde).includes('login')) { throw new Error('no pudo entrar: sigue en ' + donde); }
+    for (const ruta of def.rutas) {
+      const nombre = ruta.replace(/[^a-z0-9]+/gi, '_').replace(/_+$/, '') + '.png';
+      const archivo = join(carpeta, nombre);
+      let fila = { rol, ruta, archivo, http: null, titulo: '', alto: 0, error_php: false, ok: false };
+      try {
+        await nav.ir(ruta, ruta.endsWith('.html') ? 8000 : 6000);
+        fila.http = nav.estado;
+        fila.titulo = String(await nav.ev('document.title'));
+        const texto = String(await nav.ev('document.body ? document.body.innerText.slice(0, 20000) : ""'));
+        fila.error_php = ERRORES_PHP.test(texto);
+        fila.alto = await nav.captura(archivo);
+        fila.ok = !fila.error_php && (fila.http === null || fila.http < 500) && !fila.titulo.includes('Ingreso');
+      } catch (e) {
+        fila.titulo = 'ERROR: ' + e.message;
+      }
+      if (!fila.ok) { fallas++; }
+      indice.push(fila);
+      console.log(`  ${fila.ok ? 'OK   ' : 'FALLA'} ${ruta.padEnd(28)} http=${fila.http ?? '?'} alto=${fila.alto} ${fila.error_php ? 'ERROR PHP ' : ''}${fila.titulo.slice(0, 60)}`);
+    }
+  } catch (e) {
+    fallas++;
+    console.log(`  FALLA ${rol}: ${e.message}`);
+    indice.push({ rol, ruta: '(ingreso)', ok: false, titulo: e.message });
+  } finally {
+    await nav.cerrar();
+  }
+}
+writeFileSync(join(SALIDA, 'indice.json'), JSON.stringify(indice, null, 1));
+console.log(`\n${indice.length - fallas} de ${indice.length} pantallas sin error · capturas en ${SALIDA}`);
+process.exit(fallas ? 1 : 0);

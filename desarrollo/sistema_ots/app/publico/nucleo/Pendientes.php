@@ -778,9 +778,9 @@ final class Pendientes
         $f = Db::uno(
             "SELECT
                SUM(p.veredicto_en IS NOT NULL
-                   AND TIMESTAMPDIFF(HOUR, COALESCE(p.plazo_desde, p.abierto_en), p.veredicto_en) <= 48) AS a_tiempo,
+                   AND TIMESTAMPDIFF(MINUTE, COALESCE(p.plazo_desde, p.abierto_en), p.veredicto_en) <= 48 * 60) AS a_tiempo,
                SUM(p.veredicto_en IS NOT NULL
-                   AND TIMESTAMPDIFF(HOUR, COALESCE(p.plazo_desde, p.abierto_en), p.veredicto_en) >  48) AS tarde,
+                   AND TIMESTAMPDIFF(MINUTE, COALESCE(p.plazo_desde, p.abierto_en), p.veredicto_en) >  48 * 60) AS tarde,
                SUM(p.via = 'SIN_VEREDICTO' AND p.deshabilitado = 1
                    AND p.estado NOT IN ('RESUELTO','CANCELADO')
                    AND COALESCE(p.plazo_desde, p.abierto_en) >= DATE_SUB(NOW(), INTERVAL 48 HOUR)) AS corriendo,

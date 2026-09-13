@@ -59,17 +59,22 @@ final class Ui
         /* `novedades_visita.php`, no `novedades.php`: ese nombre ya lo ocupa el
            extremo JSON que el buzon consulta cada 30 segundos. */
         ['novedades_visita.php', 'novedades.ver',  'Novedades',   'novedades', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO']],
-        ['ordenes.php',     'ots.ver',            'Órdenes',     null,        null],
+        /* El Archivo: las órdenes de todas las zonas, en solo lectura, para los
+           cuatro roles (decisión de Andrés del 2026-09-12, D1). El permiso puede
+           ser una lista: basta con tener uno. */
+        ['ordenes.php',     ['ots.archivo', 'ots.ver'], 'Archivo', null,     ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO']],
         ['cronograma.html', 'cronograma.ver',     'Preventivos', 'preventivo', null],
         ['reportes.php',    'reportes.ver',       'Reportes',    null,        null],
-        ['usuarios.php',    'usuarios.gestionar', 'Usuarios',    null,        null],
+        ['documentos.php',  'documentos.ver',     'Aprendizaje', null,        ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO']],
+        ['usuarios.php',    ['usuarios.gestionar', 'usuarios.operativos'], 'Usuarios', null, null],
+        ['bitacora.php',    'bitacora.ver',       'Bitácora',    null,        ['SUPERADMIN', 'ADMIN']],
     ];
 
     /** Lo que ya está construido. El resto no se dibuja: un 404 no es un módulo. */
     private const LISTOS = [
         'panel.php', 'mis.php', 'casos.php', 'asignacion.php', 'pendientes.php',
         'novedades_visita.php', 'ordenes.php', 'cronograma.html', 'reportes.php',
-        'usuarios.php', 'index.html',
+        'usuarios.php', 'index.html', 'documentos.php', 'bitacora.php',
     ];
 
     /** El técnico usa su bandeja, no el buzón de escritorio: son otra cosa. */
@@ -103,11 +108,22 @@ final class Ui
         return isset($cat[$codigo]);
     }
 
-    /** ¿Este usuario puede abrir este módulo? */
-    public static function puedeModulo(?string $permiso, ?array $rolesRespaldo, array $u): bool
+    /**
+     * ¿Este usuario puede abrir este módulo?
+     *
+     * @param string|string[]|null $permiso uno, o una lista de la que basta tener uno
+     */
+    public static function puedeModulo($permiso, ?array $rolesRespaldo, array $u): bool
     {
         if ($permiso === null) { return true; }
-        if (self::permisoExiste($permiso)) { return Auth::puede($permiso); }
+        $alguno = false;
+        foreach ((array) $permiso as $p) {
+            if (self::permisoExiste($p)) {
+                $alguno = true;
+                if (Auth::puede($p)) { return true; }
+            }
+        }
+        if ($alguno) { return false; }        // el permiso existe y no lo tiene
         return $rolesRespaldo !== null && in_array($u['rol'], $rolesRespaldo, true);
     }
 
@@ -142,6 +158,9 @@ final class Ui
         echo '<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">',
              '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
              '<meta name="theme-color" content="#0b4f8f">',
+             // El token contra peticiones forjadas, para los POST que hace ui.js
+             // por fetch (SEG-07). Los formularios llevan el suyo como campo oculto.
+             '<meta name="csrf" content="', self::e(Auth::csrfToken()), '">',
              '<title>', self::e($titulo), ' · B.IA Soft ERP</title>',
              '<link rel="stylesheet" href="estilo.css">';
         foreach ($extra as $hoja) { echo '<link rel="stylesheet" href="', self::e($hoja), '">'; }
@@ -211,7 +230,10 @@ final class Ui
         // aviso fijo dentro de la página, porque hay que leerlos y actuar.
         $f = $_SESSION['flash'] ?? null;
         if (!empty($f['ok'])) {
-            echo '<script>UI.toast(', json_encode((string) $f['ok'], JSON_UNESCAPED_UNICODE),
+            // JSON_HEX_*: el texto va dentro de un <script>; sin ellos un «</script>»
+            // o unas comillas dentro del mensaje rompen la página (SEG-22).
+            echo '<script>UI.toast(', json_encode((string) $f['ok'],
+                     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
                  ', "ok");</script>';
             unset($_SESSION['flash']['ok']);
         }

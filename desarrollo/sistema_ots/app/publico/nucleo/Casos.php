@@ -208,6 +208,119 @@ final class Casos
         return null;
     }
 
+    /* --- Las transiciones legales del caso ---------------------------------
+       Hasta la 009 cada rama de casos.php decidía por su cuenta desde qué
+       estado se podía hacer qué, y se quedaron huecos: «veredicto → RESUELTO»
+       cerraba un caso ESPERA_REPUESTO con el equipo parado (ASG-01), «revisión»
+       y «derivar» reabrían un caso RESUELTO con un POST fabricado (ASG-18).
+       Una sola tabla, que usan las ramas y los botones. Las claves son la
+       acción del formulario; para `veredicto` se mira además cuál. */
+    public const TRANSICIONES = [
+        // asignar reabre lo cerrado sin atención: la administradora que reparte
+        // un caso ya decidió regularizarlo (D6). Sobre ASIGNADO es reasignar.
+        'asignar'              => ['NUEVO', 'EN_REVISION', 'CERRADO_SIN_ATENCION', 'ASIGNADO'],
+        'derivar'              => ['NUEVO', 'ASIGNADO', 'EN_REVISION'],
+        'revision'             => ['NUEVO', 'ASIGNADO'],
+        'veredicto:NO_COMPETE' => ['NUEVO', 'ASIGNADO', 'EN_REVISION'],
+        // Solo desde ATENDIDO: el cierre es de dos manos, y la segunda no puede
+        // darse antes de que exista la primera.
+        'veredicto:RESUELTO'   => ['ATENDIDO'],
+        'cerrado_sap'          => ['ATENDIDO'],
+        'regularizar'          => ['CERRADO_SIN_ATENCION'],
+        'seguimiento'          => ['ASIGNADO', 'ESPERA_REPUESTO', 'ATENDIDO'],
+    ];
+
+    /** ¿Se puede hacer esta acción sobre un caso en ese estado? */
+    public static function puedeTransitar(string $accion, ?string $estadoAntes, ?string $veredicto = null): bool
+    {
+        $clave = $accion === 'veredicto' ? 'veredicto:' . strtoupper((string) $veredicto) : $accion;
+        $desde = self::TRANSICIONES[$clave] ?? null;
+        if ($desde === null) {
+            return false;
+        }
+        return in_array(strtoupper((string) ($estadoAntes ?: 'NUEVO')), $desde, true);
+    }
+
+    /**
+     * Lo que falta repartir: la ÚNICA definición.
+     *
+     * Hasta la 009 el panel contaba solo NUEVO, la asignación contaba NUEVO y
+     * EN_REVISION, y el buzón otra cosa: tres cifras distintas de «sin
+     * repartir» en tres pantallas (ASG-12). Y los casos NUEVO con un informe
+     * abierto firmado por alguien que no está en el padrón quedaban en un
+     * limbo: con informe no eran «sin repartir», sin técnico reconocido nadie
+     * los tenía, y la reconciliación tampoco los cerraba. Aquí entran, marcados,
+     * para que alguien los reparta a mano.
+     *
+     * @return array<int,array{c:array,estado:string,revision:?string,informe_sin_usuario:bool}>
+     */
+    public static function sinAsignar(array $casos, array $gestion, array $aten): array
+    {
+        $out = [];
+        foreach ($casos as $c) {
+            $aviso  = (string) ($c['aviso'] ?? '');
+            $g      = $gestion[$aviso] ?? null;
+            $estado = (string) ($g['estado'] ?? 'NUEVO');
+            if (!in_array($estado, ['NUEVO', 'EN_REVISION'], true)) {
+                continue;
+            }
+            $conInforme = isset($aten[$aviso]);
+            if ($conInforme) {
+                // Con informe y con técnico reconocido, la reconciliación ya lo
+                // puso ASIGNADO o ATENDIDO. Si sigue NUEVO es que la firma no
+                // cruzó con nadie del padrón: se ofrece a mano.
+                $usuarios = $aten[$aviso]['usuarios'] ?? [];
+                if (!empty($usuarios) || $estado !== 'NUEVO') {
+                    continue;
+                }
+            }
+            $out[] = ['c' => $c, 'estado' => $estado,
+                      'revision' => $g['revision_motivo'] ?? null,
+                      'informe_sin_usuario' => $conInforme];
+        }
+        usort($out, static function (array $a, array $b): int {
+            $pa = ['ALTA' => 0, 'MEDIA' => 1, 'BAJA' => 2][$a['c']['prioridad'] ?? ''] ?? 3;
+            $pb = ['ALTA' => 0, 'MEDIA' => 1, 'BAJA' => 2][$b['c']['prioridad'] ?? ''] ?? 3;
+            if ($pa !== $pb) { return $pa <=> $pb; }
+            return strcmp((string) ($b['c']['fecha_creacion'] ?? ''), (string) ($a['c']['fecha_creacion'] ?? ''));
+        });
+        return $out;
+    }
+
+    /**
+     * Los casos con gestión viva que ya no están en el catálogo del buzón.
+     *
+     * El catálogo es una ventana de 90 días que la estación reescribe entera.
+     * Un caso ATENDIDO hace cuatro meses que la administración todavía no
+     * confirmó en SAP sale de la ventana y desaparece de «a registrar en SAP»
+     * (ASG-04). Aquí se recuperan desde `casos_gestion`, con la forma mínima
+     * que las pantallas leen y marcados, sin inventar lo que el catálogo ya no
+     * dice (I-7).
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public static function fueraDeCatalogo(array $gestion): array
+    {
+        $cat = [];
+        foreach (self::catalogo()['datos'] ?? [] as $c) { $cat[(string) ($c['aviso'] ?? '')] = true; }
+        $vivos = ['ASIGNADO', 'ESPERA_REPUESTO', 'ATENDIDO', 'EN_REVISION', 'CERRADO_SIN_ATENCION'];
+        $out = [];
+        foreach ($gestion as $aviso => $g) {
+            $aviso = (string) $aviso;
+            if (isset($cat[$aviso]) || !in_array($g['estado'] ?? '', $vivos, true)) {
+                continue;
+            }
+            $out[] = [
+                'aviso' => $aviso, 'sin_catalogo' => true,
+                'zona' => (string) ($g['zona'] ?? ''), 'local' => '', 'local_nombre' => '',
+                'caso' => 'sin dato en el catálogo', 'prioridad' => '',
+                'fecha_creacion' => substr((string) ($g['creado_en'] ?? ''), 0, 10),
+                'fecha_estimada' => '', 'estado_alerta' => '', 'estado_gestion' => $g['estado'],
+            ];
+        }
+        return $out;
+    }
+
     /**
      * Etiqueta legible del estado.
      *

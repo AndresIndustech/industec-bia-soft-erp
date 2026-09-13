@@ -24,6 +24,12 @@ import zlib
 
 from verificar_http import BASE, D, SALIDA, Sesion, anotar, resultados, sql, ssh
 
+# En Windows la consola es cp1252 y la flecha «→» de los mensajes reventaba la
+# prueba antes de la primera comprobación (AUDITORIA_2026-09-12, P-07).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+
 
 def png(ancho, alto, rgb):
     """Un PNG de un color, sin librerías: foto.php acepta cualquier imagen y la vuelve JPEG."""

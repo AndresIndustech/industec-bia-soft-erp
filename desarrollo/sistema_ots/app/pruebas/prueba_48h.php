@@ -9,8 +9,10 @@ declare(strict_types=1);
  * lo primero que hay que poder comprobar sin levantar MySQL.
  */
 
-require_once 'd:/INDUSTECH IA/desarrollo/sistema_ots/app/publico/nucleo/Ui.php';
-require_once 'd:/INDUSTECH IA/desarrollo/sistema_ots/app/publico/nucleo/Pendientes.php';
+// Rutas relativas: la prueba vive en app/pruebas/ y el núcleo en app/publico/nucleo/.
+// Con la ruta absoluta de la estación pegada no corría en ningún otro equipo.
+require_once __DIR__ . '/../publico/nucleo/Ui.php';
+require_once __DIR__ . '/../publico/nucleo/Pendientes.php';
 
 $fallos = 0;
 $total = 0;
@@ -22,8 +24,14 @@ function afirmar(string $que, $real, $esperado): void
     $bien = $real === $esperado;
     if (!$bien) { $fallos++; }
     printf("  %-58s %-22s %s\n", $que,
-           is_bool($real) ? ($real ? 'true' : 'false') : (string) $real,
+           is_bool($real) ? ($real ? 'true' : 'false') : ($real === null ? 'null' : (is_scalar($real) ? (string) $real : gettype($real))),
            $bien ? 'ok' : 'FALLA (esperaba ' . var_export($esperado, true) . ')');
+}
+
+/** Lee una clave de lo que devolvió reloj(); si devolvió null, lo dice en vez de reventar. */
+function clave(?array $r, string $k)
+{
+    return $r === null ? 'contrato roto: reloj() devolvió null' : ($r[$k] ?? 'sin clave ' . $k);
 }
 
 function hace(float $horas): string
@@ -76,21 +84,45 @@ afirmar('equipo operando: no se mide plazo', $r, null);
 $r = Pendientes::reloj(array_merge($base, ['estado' => 'RESUELTO']));
 afirmar('ya resuelto: no se mide plazo', $r, null);
 
+// LAS HORAS LAS MIDE MYSQL, NO PHP. Desde que restar fechas en PHP dependía de
+// la configuración del hosting (error nº 11 del plan), Pendientes::lista()
+// inyecta `min_plazo` y `min_veredicto` en minutos y reloj() lee eso. Hasta el
+// 2026-09-12 esta prueba seguía pasando `abierto_en`/`veredicto_en` como si el
+// cálculo fuera en PHP: reloj() devolvía null y cuatro afirmaciones fallaban
+// sin que hubiera defecto (AUDITORIA_2026-09-12 P-01). Se prueba el contrato.
+
 // Con veredicto tarde: se guarda COMO se cumplio, no se sigue contando.
 $r = Pendientes::reloj(array_merge($base, [
-    'via' => 'REPUESTO', 'estado' => 'COTIZANDO',
-    'abierto_en' => hace(60), 'veredicto_en' => hace(5),
+    'via' => 'REPUESTO', 'estado' => 'COTIZANDO', 'min_veredicto' => 55 * 60,
 ]));
-afirmar('veredicto a las 55 h: queda como tarde', $r['vencido'], true);
-afirmar('veredicto tarde: el reloj deja de correr', $r['cerrado'], true);
+afirmar('veredicto a las 55 h: queda como tarde', clave($r, 'vencido'), true);
+afirmar('veredicto tarde: el reloj deja de correr', clave($r, 'cerrado'), true);
+afirmar('veredicto tarde: dice cuantas horas', (float) clave($r, 'horas'), 55.0);
 
 // Con veredicto a tiempo.
 $r = Pendientes::reloj(array_merge($base, [
-    'via' => 'GARANTIA', 'estado' => 'GARANTIA_RECLAMADA',
-    'abierto_en' => hace(30), 'veredicto_en' => hace(20),
+    'via' => 'GARANTIA', 'estado' => 'GARANTIA_RECLAMADA', 'min_veredicto' => 10 * 60,
 ]));
-afirmar('veredicto a las 10 h: a tiempo', $r['vencido'], false);
-afirmar('garantia de semanas NO cuenta como incumplida', $r['cerrado'], true);
+afirmar('veredicto a las 10 h: a tiempo', clave($r, 'vencido'), false);
+afirmar('garantia de semanas NO cuenta como incumplida', clave($r, 'cerrado'), true);
+
+// El borde: 48 h exactas es a tiempo; 48 h 50 min ya no. Hasta la 009
+// cumplimiento48() truncaba a horas y contaba 48:50 como a tiempo mientras la
+// fila decia «se decidio a las 49 h» (P-02): la unidad es el minuto en los dos.
+$r = Pendientes::reloj(array_merge($base, ['via' => 'REPUESTO', 'estado' => 'COTIZANDO', 'min_veredicto' => 48 * 60]));
+afirmar('veredicto a las 48 h exactas: a tiempo', clave($r, 'vencido'), false);
+$r = Pendientes::reloj(array_merge($base, ['via' => 'REPUESTO', 'estado' => 'COTIZANDO', 'min_veredicto' => 48 * 60 + 50]));
+afirmar('veredicto a las 48 h 50 min: tarde', clave($r, 'vencido'), true);
+
+// Con veredicto pero sin la medida de MySQL: no se inventa (I-7), devuelve null.
+$r = Pendientes::reloj(array_merge($base, ['via' => 'REPUESTO', 'estado' => 'COTIZANDO']));
+afirmar('con veredicto y sin min_veredicto: no se mide', $r, null);
+
+// Sin veredicto, con la medida de MySQL: el reloj corre desde ahi.
+$r = Pendientes::reloj(array_merge($base, ['min_plazo' => 60 * 60]));
+afirmar('sin veredicto, 60 h medidas por MySQL: vencido', clave($r, 'vencido'), true);
+afirmar('sin veredicto: el reloj sigue corriendo', clave($r, 'cerrado'), false);
+afirmar('sin veredicto, 60 h: las horas cuadran', abs((float) clave($r, 'horas') - 60.0) < 0.1, true);
 
 echo "\n=== La maquina de las cuatro vias ===\n";
 

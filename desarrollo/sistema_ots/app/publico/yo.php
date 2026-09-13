@@ -50,6 +50,10 @@ echo json_encode([
     'nombre'  => $u['nombre'],
     'rol'     => $u['rol'],
     'zona'    => $u['zona'] ?? null,
+    // El token contra peticiones forjadas: la cola del celular lo manda en la
+    // cabecera `X-Csrf` a envio.php y foto.php (SEG-07). Va en la caché con el
+    // resto porque es de esta sesión, no un secreto reutilizable fuera de ella.
+    'csrf'    => Auth::csrfToken(),
     // Lo que la interfaz usa para decidir qué ofrecer. NO es control de acceso:
     // cada endpoint revalida por su cuenta. Sirve para no dibujar un botón que
     // va a devolver 403.

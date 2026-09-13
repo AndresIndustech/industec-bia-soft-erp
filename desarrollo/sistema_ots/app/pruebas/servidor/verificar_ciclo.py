@@ -16,6 +16,12 @@ import uuid
 
 import verificar_http as vh
 
+# En Windows la consola es cp1252 y la flecha «→» de los mensajes reventaba la
+# prueba antes de la primera comprobación (AUDITORIA_2026-09-12, P-07).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+
 
 def main():
     claves = json.loads(vh.ssh("cat ~/respaldos/claves_prueba.json"))

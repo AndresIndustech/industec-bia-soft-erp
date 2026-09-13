@@ -313,7 +313,65 @@ final class Auth
             }
             exit;
         }
+        if (!$json && !headers_sent()) {
+            /* Las pantallas con sesión llevan datos del cliente y del personal:
+               ningún navegador ni proxy debe guardarlas (SEG-09). Los extremos
+               JSON no, porque el trabajador de servicio necesita cachear los
+               catálogos y `yo.php` para arrancar sin señal. */
+            header('Cache-Control: no-store, private');
+            header('Pragma: no-cache');
+        }
         return $u;
+    }
+
+    // ------------------------------------------------------------------- CSRF
+
+    /**
+     * El token contra peticiones forjadas, uno por sesión.
+     *
+     * `SameSite=Lax` en la cookie ya corta el caso común, pero no es una
+     * garantía en todos los navegadores viejos de los teléfonos de los técnicos,
+     * y un POST que asigna un caso o valida un repuesto no puede depender de
+     * eso (SEG-07). El formulario lo manda en `csrf`; la cola del celular, en la
+     * cabecera `X-Csrf` con el valor que trae `yo.php`.
+     */
+    public static function csrfToken(): string
+    {
+        self::iniciarCookie();
+        if (empty($_SESSION['csrf']) || !is_string($_SESSION['csrf'])) {
+            $_SESSION['csrf'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['csrf'];
+    }
+
+    /**
+     * Corta un POST que no traiga el token de la sesión. Va al inicio de toda
+     * rama `REQUEST_METHOD === 'POST'`, después de `exigir()`.
+     */
+    public static function exigirCsrf(): void
+    {
+        self::iniciarCookie();
+        $esperado = (string) ($_SESSION['csrf'] ?? '');
+        $recibido = (string) ($_POST['csrf'] ?? ($_SERVER['HTTP_X_CSRF'] ?? ''));
+        if ($esperado !== '' && $recibido !== '' && hash_equals($esperado, $recibido)) {
+            return;
+        }
+        self::bitacora('DENEGADO', 'csrf', basename((string) ($_SERVER['SCRIPT_NAME'] ?? '')),
+                       $recibido === '' ? 'sin token' : 'token distinto', null, null, [], false);
+        http_response_code(403);
+        $acepta = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');
+        $tipo   = (string) ($_SERVER['CONTENT_TYPE'] ?? '');
+        if (str_contains($acepta, 'application/json') || str_contains($tipo, 'application/json')
+            || !empty($_SERVER['HTTP_X_CSRF'])) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok' => false, 'error' => 'csrf',
+                              'motivo' => 'La sesión cambió: vuelve a entrar y reintenta.'],
+                             JSON_UNESCAPED_UNICODE);
+        } else {
+            echo '<p style="font-family:system-ui;padding:24px">La sesión cambió y esta acción no se '
+               . 'aceptó. Vuelve atrás, recarga la pantalla y reintenta.</p>';
+        }
+        exit;
     }
 
     // ------------------------------------------------------------------ rango

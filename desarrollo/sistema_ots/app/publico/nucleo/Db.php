@@ -22,16 +22,53 @@ declare(strict_types=1);
  */
 date_default_timezone_set('America/Guayaquil');
 
+/*
+ * NINGÚN ERROR SALE A LA PANTALLA (SEG-15). Un fallo de la base pintaba la traza
+ * con la consulta y trozos del DSN. Se registra en el log de PHP y la persona ve
+ * una línea; en la consola se imprime el mensaje, que es lo que necesita quien
+ * corre un script.
+ */
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+set_exception_handler(static function (Throwable $e): void {
+    error_log('excepción no capturada: ' . $e);
+    if (PHP_SAPI === 'cli') {
+        fwrite(STDERR, 'ERROR: ' . $e->getMessage() . "\n");
+        exit(1);
+    }
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+    echo 'Error interno. Quedó registrado.';
+    exit;
+});
+
 final class Db
 {
     private static ?PDO $pdo = null;
+
+    /**
+     * La ruta del archivo de configuración.
+     *
+     * `INDUSTEC_CONFIG` permite correr la aplicación o una prueba contra otra
+     * base (una local, una copia) sin tocar `nucleo/config.php`, que es lo único
+     * intocable del sitio de pruebas. Sin la variable, es el de siempre.
+     */
+    public static function rutaConfig(): string
+    {
+        $env = getenv('INDUSTEC_CONFIG');
+        if (is_string($env) && $env !== '' && is_file($env)) {
+            return $env;
+        }
+        return __DIR__ . '/config.php';
+    }
 
     public static function conn(): PDO
     {
         if (self::$pdo !== null) {
             return self::$pdo;
         }
-        $cfg = require __DIR__ . '/config.php';
+        $cfg = self::config();
 
         $dsn = sprintf(
             'mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',
@@ -85,6 +122,6 @@ final class Db
 
     public static function config(): array
     {
-        return require __DIR__ . '/config.php';
+        return require self::rutaConfig();
     }
 }

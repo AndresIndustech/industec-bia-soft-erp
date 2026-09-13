@@ -65,6 +65,29 @@ final class Emision
     }
 
     /**
+     * El patrón canónico de nombre de OT, en sus cuatro formas (más la zona
+     * OTRA, que existe en el esquema y en cuatro locales reales). Es la misma
+     * expresión que valida pdf.php: si cambia una, cambia la otra.
+     */
+    public const PATRON_OT = '/^OT-\d{3,5}-[A-Z]{1,2}\d{2,4}(EC)?(-\d{6,10})?(-D\d{1,2})?-(UIO|LARB|CNLJ|OTRA)$/';
+
+    /**
+     * ¿Existe el PDF de esa orden en el servidor?
+     *
+     * Las pantallas pintaban «Ver PDF» sin mirar: atenciones.json referencia
+     * 130 órdenes y en disco hay 120, así que el botón llevaba a un 404. Antes
+     * de ofrecer el enlace se pregunta aquí; si no está, la pantalla lo dice.
+     */
+    public static function existePdf(string $ot): bool
+    {
+        $ot = strtoupper(trim($ot));
+        if (!preg_match(self::PATRON_OT, $ot)) {
+            return false;
+        }
+        return is_file(self::dirPdf() . '/' . $ot . '.pdf');
+    }
+
+    /**
      * El siguiente número de la serie, en una sola sentencia atómica.
      *
      * Nada de leer y después escribir: con dos envíos a la vez los dos leen el

@@ -18,7 +18,12 @@ declare(strict_types=1);
  * que es peor que no migrarlo. Se quitan primero los comentarios de línea y
  * luego se parte, comprobando que cada trozo empiece por una palabra esperada.
  *
- * Uso:  php aplicar_sql.php ruta/al/archivo.sql
+ * LLEVA EL LIBRO. Desde la 009 existe la tabla `migraciones`: al terminar se
+ * anota el archivo con su huella, y un archivo ya anotado no se vuelve a aplicar
+ * salvo con --forzar (las 004, 005 y 006 no eran idempotentes y un segundo pase
+ * fallaba con error 1060 sin que nadie supiera por la base qué se había aplicado).
+ *
+ * Uso:  php aplicar_sql.php ruta/al/archivo.sql [--forzar]
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -26,9 +31,11 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
-$archivo = $argv[1] ?? '';
+$args    = array_slice($argv, 1);
+$forzar  = in_array('--forzar', $args, true);
+$archivo = (string) (array_values(array_filter($args, static fn($a) => $a !== '--forzar'))[0] ?? '');
 if ($archivo === '' || !is_file($archivo)) {
-    fwrite(STDERR, "Uso: php aplicar_sql.php <archivo.sql>\n");
+    fwrite(STDERR, "Uso: php aplicar_sql.php <archivo.sql> [--forzar]\n");
     exit(1);
 }
 
@@ -95,9 +102,36 @@ foreach ($sentencias as $i => $s) {
     }
 }
 
-echo basename($archivo) . ': ' . count($sentencias) . " sentencias\n";
+/* El libro de migraciones. Antes de la 009 la tabla no existe: entonces no hay
+   nada que consultar y la propia 009 la crea en su primera sentencia. */
+$nombre = basename($archivo);
+$huella = hash_file('sha256', $archivo);
+$hayLibro = (int) $db->query("SELECT COUNT(*) FROM information_schema.TABLES
+                               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'migraciones'")->fetchColumn() > 0;
+if ($hayLibro) {
+    $st = $db->prepare('SELECT sha256, aplicada_en FROM migraciones WHERE archivo = ?');
+    $st->execute([$nombre]);
+    $previa = $st->fetch();
+    if ($previa && !$forzar) {
+        echo "$nombre ya está aplicada (el {$previa['aplicada_en']}"
+           . ($previa['sha256'] !== '' && $previa['sha256'] !== $huella ? ', con OTRO contenido' : '')
+           . "). Nada que hacer; --forzar para repetirla.\n";
+        exit(0);
+    }
+}
+
+echo $nombre . ': ' . count($sentencias) . " sentencias\n";
 foreach ($sentencias as $i => $s) {
     $db->exec($s);
     echo '  ' . ($i + 1) . '. ' . strtok(preg_replace('/\s+/', ' ', $s), ' ') . ' ok' . "\n";
+}
+
+$hayLibro = (int) $db->query("SELECT COUNT(*) FROM information_schema.TABLES
+                               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'migraciones'")->fetchColumn() > 0;
+if ($hayLibro) {
+    $db->prepare('INSERT INTO migraciones (archivo, sha256, aplicada_por) VALUES (?, ?, ?)
+                  ON DUPLICATE KEY UPDATE sha256 = VALUES(sha256), aplicada_en = NOW(), aplicada_por = VALUES(aplicada_por)')
+       ->execute([$nombre, $huella, 'aplicar_sql.php' . ($forzar ? ' --forzar' : '')]);
+    echo "anotada en migraciones\n";
 }
 echo "aplicado\n";
