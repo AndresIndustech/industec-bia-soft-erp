@@ -3,6 +3,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Casos.php';
 require_once __DIR__ . '/nucleo/Pendientes.php';
 require_once __DIR__ . '/nucleo/Ui.php';
+// H-02: `Emision::existePdf()` hace falta también en la ficha del caso
+// (más abajo, antes del `require_once` de más adelante), así que se carga
+// aquí arriba y sirve para las dos ramas de este archivo.
+require_once __DIR__ . '/nucleo/Emision.php';
 
 /**
  * mis.php — La aplicación del técnico. Bandeja, en el celular, y sin señal.
@@ -68,15 +72,33 @@ $mios    = $esTecnico
                              array_merge(Casos::ABIERTOS_TECNICO, Casos::CERRADOS_TECNICO), $gestion)
          : Casos::enAlcance($fuente['datos'] ?? [], $gestion);
 
+/* El tab se resuelve aquí, ANTES del bloque de avisos (H-12): es lo que
+   decide si esta visita cuenta como «abrió la pestaña Avisos» o no. Antes se
+   calculaba más abajo, contra `$grupos` (que todavía no existe en este
+   punto), así que había que repetirlo; con la lista fija de pestañas válidas
+   alcanza con calcularlo una sola vez. */
+$tab = (string) ($_GET['t'] ?? 'pendientes');
+if (!in_array($tab, ['pendientes', 'esperando', 'atendidas'], true) && !($tab === 'avisos' && $esTecnico)) {
+    $tab = 'pendientes';
+}
+
 /* Los avisos del técnico (T2.13.5): lo que le pasó en las dos últimas semanas y
-   qué es nuevo desde su visita anterior. «Visto» se lee ANTES de anotar esta
-   consulta en la bitácora, porque es justo esa anotación la que lo mueve. */
+   qué es nuevo desde su visita anterior.
+   H-12: «visto» se marca SOLO al abrir la pestaña Avisos, con su propia
+   acción (`VER_AVISOS`) -- antes cualquier GET a mis.php (abrir una ficha,
+   cambiar a Pendientes) contaba como «ya los vio», y el técnico nunca
+   alcanzaba a leerlos con el marcador puesto. El `CONSULTAR` de más abajo
+   sigue existiendo, para auditoría, pero ya no es lo que mueve el «visto». */
 $avisos = [];
 $vistoAntes = null;
 if ($esTecnico) {
     require_once __DIR__ . '/nucleo/Avisos.php';
     $vistoAntes = Avisos::visto((int) $u['usuario_id']);
     $avisos = Avisos::delTecnico((int) $u['usuario_id'], date('Y-m-d H:i:s', time() - 14 * 86400));
+    if ($tab === 'avisos') {
+        Auth::bitacora('VER_AVISOS', 'bandeja', 'mis', 'avisos=' . count($avisos));
+        Avisos::marcarSeguimientosVistos((int) $u['usuario_id']);
+    }
 }
 $esNuevo = fn(array $a): bool => $vistoAntes === null || $a['cuando'] > $vistoAntes;
 $nuevos  = count(array_filter($avisos, $esNuevo));
@@ -92,6 +114,7 @@ Auth::bitacora('CONSULTAR', 'bandeja', 'mis', 'visibles=' . count($mios));
    hace cuando la pantalla se queda pensando.
    ========================================================================= */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    Auth::exigirCsrf();
     $accion = (string) ($_POST['accion'] ?? '');
     $vuelta = 'mis.php';
 
@@ -171,6 +194,11 @@ if (isset($_GET['ver'])) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b4f8f">
+<?php /* offline.js lo compara con Date.now() para saber si esta pantalla viene
+        servida en vivo o de una copia guardada por el trabajador de servicio
+        (H-13): sin `#otForm` no hay ningún `fetch` propio de esta pantalla que
+        traiga esa fecha, así que la pone el propio PHP al generarla. */ ?>
+<meta name="generado" content="<?= date('c') ?>">
 <title><?= $e($caso['local'] ?? 'Caso') ?> · B.IA Soft ERP</title>
 <link rel="stylesheet" href="estilo.css">
 </head>
@@ -242,7 +270,12 @@ if (isset($_GET['ver'])) {
         <div style="min-width:0">
           <div class="que"><?= $e($p['equipo_desc'] ?: ($p['activo_fijo'] ?: 'Equipo')) ?></div>
           <div class="meta">
-            <?= $e(Pendientes::etiquetaVia($p['via'])) ?> ·
+            <?php /* P-19: mientras el jefe no valida, la vía no existe: se
+                     enseña solo el estado («solicitado»), no «sin veredicto ·
+                     sin veredicto». */ ?>
+            <?php if (($p['via'] ?? 'SIN_VEREDICTO') !== 'SIN_VEREDICTO'): ?>
+              <?= $e(Pendientes::etiquetaVia($p['via'])) ?> ·
+            <?php endif; ?>
             <?= $e(Pendientes::etiquetaEstado($p['estado'])) ?>
             <?php if (!empty($p['prometido_para'])): ?>
               · comprometido para <?= $e($p['prometido_para']) ?>
@@ -271,6 +304,7 @@ if (isset($_GET['ver'])) {
 
       <?php if (Auth::puede('repuestos.pedir')): ?>
         <form method="post" style="margin-top:11px">
+          <input type="hidden" name="csrf" value="<?= $e(Auth::csrfToken()) ?>">
           <input type="hidden" name="accion" value="insistir">
           <input type="hidden" name="pendiente_id" value="<?= (int) $p['pendiente_id'] ?>">
           <label for="ins<?= (int) $p['pendiente_id'] ?>">Recordarle a la administración</label>
@@ -298,9 +332,11 @@ if (isset($_GET['ver'])) {
           <div><div class="que">Orden <?= $e($o['ot']) ?></div>
             <div class="meta"><?= $e(substr((string) $o['fecha'], 0, 10)) ?> ·
               <?= ($o['estado_ot'] ?? '') === 'Cerrada' ? 'con cierre' : 'en curso' ?></div></div>
-          <?php if (Auth::puede('ots.pdf')): ?>
+          <?php if (Auth::puede('ots.pdf') && Emision::existePdf((string) $o['ot'])): ?>
             <a class="btn sm" href="pdf.php?ot=<?= rawurlencode((string) $o['ot']) ?>"
                target="_blank" rel="noopener">Ver PDF</a>
+          <?php elseif (Auth::puede('ots.pdf')): ?>
+            <span class="derivado">PDF no cargado al archivo todavía</span>
           <?php endif; ?>
         </div>
       </div>
@@ -318,9 +354,11 @@ if (isset($_GET['ver'])) {
           <div><div class="que">Orden de cierre <?= $e($g['ot_cierre']) ?></div>
             <div class="meta"><?= $e(substr((string) ($g['atendido_en'] ?? ''), 0, 10)) ?> ·
               <?= $e(Casos::etiquetaEstado($est)) ?></div></div>
-          <?php if (Auth::puede('ots.pdf')): ?>
+          <?php if (Auth::puede('ots.pdf') && Emision::existePdf((string) $g['ot_cierre'])): ?>
             <a class="btn sm" href="pdf.php?ot=<?= rawurlencode((string) $g['ot_cierre']) ?>"
                target="_blank" rel="noopener">Ver PDF</a>
+          <?php elseif (Auth::puede('ots.pdf')): ?>
+            <span class="derivado">PDF no cargado al archivo todavía</span>
           <?php endif; ?>
         </div>
       </div>
@@ -350,6 +388,7 @@ if (isset($_GET['ver'])) {
 <?php if ($abierto && Auth::puede('repuestos.pedir') && !$pendCaso): ?>
 <dialog id="dlgTrabado">
   <form method="post">
+    <input type="hidden" name="csrf" value="<?= $e(Auth::csrfToken()) ?>">
     <input type="hidden" name="accion" value="no_concluye">
     <input type="hidden" name="aviso" value="<?= $e($avisoVer) ?>">
     <input type="hidden" name="activo_fijo" value="<?= $e($caso['activo_fijo'] ?? '') ?>">
@@ -454,8 +493,7 @@ usort($grupos['pendientes'], function ($a, $b) use ($ordPrio) {
 $cuandoCerro = fn(array $c): string => (string) ($c['_gestion']['atendido_en'] ?? $c['fecha_creacion'] ?? '');
 usort($grupos['atendidas'], fn($a, $b) => strcmp($cuandoCerro($b), $cuandoCerro($a)));
 
-$tab = (string) ($_GET['t'] ?? 'pendientes');
-if (!isset($grupos[$tab]) && !($tab === 'avisos' && $esTecnico)) { $tab = 'pendientes'; }
+// `$tab` ya se resolvió arriba, antes del bloque de avisos (H-12).
 
 /* Los pendientes de equipo que él abrió, para la pestaña «Esperando». */
 $misPend = Pendientes::disponible() ? Pendientes::lista(['grupo' => 'abiertos']) : [];
@@ -468,15 +506,25 @@ foreach ($misPend as $p) { $pendPorAviso[(string) $p['aviso']][] = $p; }
 require_once __DIR__ . '/nucleo/Emision.php';
 $prueba = Emision::modo() === 'PRUEBA';
 $capturas = [];
+// H-22: antes se cortaba en 60 sin decirlo. `?desde=<capturada_en>` es el
+// cursor de «Ver anteriores»; se pide una fila de más (61) para saber si hay
+// "anteriores" sin una segunda consulta, y se descarta antes de pintar.
+$desdeCap = (string) ($_GET['desde'] ?? '');
+$hayMasCapturas = false;
 if ($esTecnico && Pendientes::disponible()) {
-    $sqlCap = 'SELECT aviso, local_codigo, capturada_en, estado, motivo_rechazo, id_industec, %s
-                 FROM ot_capturadas WHERE usuario_id = ? ORDER BY capturada_en DESC LIMIT 60';
+    $condDesde = $desdeCap !== '' ? ' AND capturada_en < ?' : '';
+    $paramsCap = [(int) $u['usuario_id']];
+    if ($desdeCap !== '') { $paramsCap[] = $desdeCap; }
+    $sqlCap = "SELECT aviso, local_codigo, capturada_en, estado, motivo_rechazo, id_industec, %s
+                 FROM ot_capturadas WHERE usuario_id = ?$condDesde ORDER BY capturada_en DESC LIMIT 61";
     try {
-        $capturas = Db::todos(sprintf($sqlCap, 'emitida_en, emision_error'), [(int) $u['usuario_id']]);
+        $capturas = Db::todos(sprintf($sqlCap, 'emitida_en, emision_error'), $paramsCap);
     } catch (Throwable $ex) {
         // Sin la 008 no hay emisión que mostrar.
-        $capturas = Db::todos(sprintf($sqlCap, 'NULL AS emitida_en, NULL AS emision_error'), [(int) $u['usuario_id']]);
+        $capturas = Db::todos(sprintf($sqlCap, 'NULL AS emitida_en, NULL AS emision_error'), $paramsCap);
     }
+    $hayMasCapturas = count($capturas) > 60;
+    if ($hayMasCapturas) { array_pop($capturas); }
 }
 $enviadas  = array_count_values(array_filter(array_map(fn($k) => (string) ($k['aviso'] ?? ''), $capturas)));
 $misAvisos = array_flip(array_map(fn($c) => (string) ($c['aviso'] ?? ''), $mios));
@@ -494,6 +542,7 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b4f8f">
+<meta name="generado" content="<?= date('c') ?>">
 <title>Mis órdenes · B.IA Soft ERP</title>
 <link rel="stylesheet" href="estilo.css">
 <link rel="manifest" href="manifest.json">
@@ -516,6 +565,14 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
         Técnico<?= $u['zona'] ? ' · ' . $e((string) $u['zona']) : '' ?>
       </div>
     </div>
+    <?php /* H-02: entrada al archivo histórico de TODAS las zonas. No va en
+             `nav-abajo` -- esa barra la define `UI.BARRA_TECNICO` en `ui.js`,
+             que no es de esta sección, y `prueba_barra_tecnico.mjs` exige que
+             las dos barras de mis.php calcen exactas con ella-- así que el
+             enlace va aquí, junto a Salir. */ ?>
+    <?php if (Auth::puede('ots.archivo')): ?>
+      <a class="btn sm" href="ordenes.php">Archivo</a>
+    <?php endif; ?>
     <a class="btn sm" href="salir.php">Salir</a>
   </div>
 
@@ -723,16 +780,31 @@ if (!$lista && !$verCapturas):
               <?= $e('Motivo: ' . ($k['motivo_rechazo'] ?? 'sin dato')) ?>
             <?php elseif (!empty($k['emitida_en'])): ?>
               Orden <b><?= $e($k['id_industec']) ?></b> ·
-              <a href="pdf.php?ot=<?= rawurlencode((string) $k['id_industec']) ?>" target="_blank" rel="noopener">Ver PDF</a><?=
-                $prueba ? ' · es de prueba: no se envió a nadie' : '' ?>
+              <?php if (Emision::existePdf((string) $k['id_industec'])): ?>
+                <a href="pdf.php?ot=<?= rawurlencode((string) $k['id_industec']) ?>" target="_blank" rel="noopener">Ver PDF</a><?=
+                  $prueba ? ' · es de prueba: no se envió a nadie' : '' ?>
+              <?php else: ?>
+                PDF no cargado al archivo todavía
+              <?php endif; ?>
             <?php elseif (!empty($k['emision_error'])): ?>
-              El PDF no se pudo generar todavía: se reintenta la próxima vez que se envíe.
+              El PDF no se pudo generar todavía: se reintenta desde el servidor cada 10 minutos.
+            <?php elseif (!empty($k['id_industec'])): ?>
+              Orden <b><?= $e($k['id_industec']) ?></b> · el PDF se reintenta desde el servidor cada 10 minutos.
             <?php else: ?>
-              El PDF de esta orden todavía no se genera desde la app.
+              Orden recibida antes de la emisión automática (anterior al 2026-09-11): no tiene PDF.
             <?php endif; ?>
           </div>
         </div>
       <?php endforeach; ?>
+      <?php /* H-22: antes se cortaba en 60 sin decirlo. */ ?>
+      <?php if ($hayMasCapturas): ?>
+        <div class="row" style="margin-top:4px">
+          <a class="btn" href="?t=atendidas&desde=<?= rawurlencode((string) end($capturas)['capturada_en']) ?>">Ver anteriores</a>
+        </div>
+      <?php elseif (Auth::puede('ots.archivo')): ?>
+        <p class="sub">Esto es lo que enviaste desde la app. El historial completo, de todas las
+          zonas, está en <a href="ordenes.php">Archivo</a>.</p>
+      <?php endif; ?>
     </div>
   <?php endif; ?>
 <?php endif; ?>

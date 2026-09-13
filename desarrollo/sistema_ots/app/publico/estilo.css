@@ -1463,3 +1463,96 @@ body.con-nav-abajo{ padding-bottom:calc(var(--nav-abajo) + env(safe-area-inset-b
   table.repartir form.asignar .btn{ flex:1 1 auto; }
 }
 
+
+/* ==== §S1 tecnico (index.html, mis.php) ====
+   T2.14.1 — La app del técnico. Casi todo lo nuevo del formulario (equipo
+   nuevo, falla encontrada, repuestos estructurados, trabajo con otro
+   proveedor, datalist de administrador) se armó reutilizando lo que ya existe
+   en estilo.css sin necesitar una clase propia: .grid.g2/.g3 (colapsa a una
+   columna bajo 720px), .condicional/.porque (los mismos que .wrapDia y
+   .wrapTrabado ya usaban), .nota-regular, .derivado, .btn/.btn.secondary,
+   .footer. Esto es lo poco que sí hacía falta. */
+
+/* --- Repuestos estructurados (H-11/D9): filas repetibles de crearListaPartes()
+     en "Detalle de los repuestos" (la orden) y en "Qué repuesto haría falta"
+     (el equipo trabado). Con el grid de tres columnas colapsado a una sola en
+     el celular, dos filas seguidas sin más que el espacio quedaban indistintas
+     -- parecía un solo repuesto de seis campos, no dos de tres. */
+.parte-row{
+  padding-bottom:8px;
+  border-bottom:1px dashed var(--border);
+}
+.parte-row:last-child{
+  border-bottom:0;
+  padding-bottom:0;
+}
+
+/* --- "Equipo nuevo / no está en la lista" (H-10/D8): la nota que avisa que
+     ese activo lo va a revisar la administración, dentro del bloque de cada
+     equipo. .nota-regular ya trae fondo y borde; aquí solo se ajusta el
+     tamaño de letra para que no compita con el título del bloque ("Equipo
+     #1") que va justo arriba. */
+[data-eq-nuevo-nota]{
+  font-size:13px;
+  padding:9px 11px;
+}
+
+/* --- El selector "Falla encontrada" (H-11/D9) va justo antes del diagnóstico
+     libre: una separación clara de que es una ayuda para llenarlo, no un
+     campo aparte que se valide por su cuenta. */
+#pen_falla{
+  margin-bottom:4px;
+}
+
+/* ==== §S3 repuestos (pendientes.php, novedades_visita.php) ====
+   T2.14.3 — el flujo real técnico -> jefe -> SAP -> Grupo KFC. Casi todo
+   reutiliza .rep/.hilo/.tiles/.opciones; esto es lo poco propio. */
+
+/* Las cifras son enlaces a su filtro: la lista de abajo cambia con un toque. */
+.tiles-enlace a.tile{ display:block; color:inherit; text-decoration:none; cursor:pointer; }
+.tiles-enlace a.tile:hover{ box-shadow:var(--sombra-2); transform:translateY(-1px); }
+
+/* Los cinco pasos de la solicitud, con el que va marcado. Se lee de un
+   vistazo dónde está atorado sin descifrar el estado. */
+.rep .pasos{
+  list-style:none; margin:10px 0 0; padding:0; display:flex; flex-wrap:wrap; gap:4px 0;
+  counter-reset:paso; font-size:11.5px;
+}
+.rep .pasos li{
+  position:relative; padding:3px 10px 3px 22px; color:var(--muted);
+  background:var(--bg-alt); border:1px solid var(--border);
+}
+.rep .pasos li::before{
+  counter-increment:paso; content:counter(paso); position:absolute; left:7px; top:50%;
+  transform:translateY(-50%); width:13px; height:13px; border-radius:50%; font-size:9.5px;
+  line-height:13px; text-align:center; background:var(--border-fuerte); color:#fff; font-weight:700;
+}
+.rep .pasos li:first-child{ border-radius:var(--r-full) 0 0 var(--r-full); }
+.rep .pasos li:last-child{  border-radius:0 var(--r-full) var(--r-full) 0; }
+.rep .pasos li.hecho{ color:#166534; background:#f0fdf4; border-color:#bbf7d0; }
+.rep .pasos li.hecho::before{ content:'\2713'; background:#22c55e; }
+.rep .pasos li.actual{ color:var(--marca); background:#fff; border-color:var(--marca); font-weight:700; }
+.rep .pasos li.actual::before{ background:var(--marca); }
+
+/* El diagnóstico pre-redactado y las partes en lista (H-11/D9). */
+.rep .nota .diag-cod{ display:block; font-size:12px; color:var(--marca); margin-bottom:3px; }
+.rep .partes{ margin:8px 0 0; padding:0 0 0 16px; font-size:13px; color:#334155; }
+.rep .partes li{ margin:2px 0; }
+.rep .partes .mono{ color:var(--muted); font-size:12px; }
+
+/* El seguimiento de SAP y KFC: una línea por hito, sin repetir el hilo. */
+.rep .seguimiento{ margin-top:9px; font-size:12.5px; color:var(--muted); }
+.rep .seguimiento p{ margin:3px 0; }
+.rep .seguimiento b{ color:var(--ink); }
+
+/* En el hilo, el paso que dejó cada nota. */
+.hilo .msg .chip.paso{ font-size:10.5px; background:var(--bg-alt); color:var(--marca); border-color:var(--border); }
+.hilo .msg.tipo-aviso_interno .txt{ color:var(--muted); }
+.hilo .msg.tipo-validacion .txt,
+.hilo .msg.tipo-registro_sap .txt,
+.hilo .msg.tipo-veredicto_kfc .txt{ color:var(--ink); font-weight:600; }
+
+/* «Por regularizar»: la cola de la administración para las órdenes sin aviso. */
+.regularizar{ margin:0 0 16px; padding:14px 16px; border-left:4px solid var(--warn); }
+.regularizar h2{ margin:0 0 6px; font-size:15px; }
+.regularizar form.asignar input[type=text]{ flex:1 1 150px; }

@@ -137,8 +137,14 @@ def main():
 
     print("\n== T2.13.5 · el buzón de avisos del técnico ==")
     reg = json.loads(ssh("cat ~/respaldos/prueba_deshacer.json"))
-    caso = next(x for x in reg["elegidos"]
-                if sql("SELECT estado FROM casos_gestion WHERE aviso = ?", [x])[0]["estado"] == "ASIGNADO")
+    # Un caso ASIGNADO de los de prueba; si las otras baterías los dejaron
+    # todos ATENDIDOS (la orden concluida ahora mueve el caso en el acto), se
+    # devuelve uno a ASIGNADO: son casos de prueba del sitio de pruebas.
+    estados = {x: sql("SELECT estado FROM casos_gestion WHERE aviso = ?", [x])[0]["estado"] for x in reg["elegidos"]}
+    caso = next((x for x, e_ in estados.items() if e_ == "ASIGNADO"), None)
+    if caso is None:
+        caso = next((x for x, e_ in estados.items() if e_ == "ATENDIDO"), reg["elegidos"][0])
+        ejecutar("UPDATE casos_gestion SET estado = 'ASIGNADO', ot_cierre = NULL, atendido_en = NULL WHERE aviso = ?", [caso])
     b = claves["ids"]["tec_prueba_uio_b"]
     sj, sad = Sesion("jefe_prueba_uio"), Sesion("admin_prueba")
     sj.entrar(claves["claves"]["jefe_prueba_uio"])
@@ -151,8 +157,10 @@ def main():
     # «Te quitaron» sale de la asignación anterior en la bitácora: la de preparar_prueba
     # fue por SQL, así que primero el jefe se lo asigna a A por la pantalla.
     sj.pedir("casos.php", form={"accion": "asignar", "aviso": caso, "tecnico": a})
-    sa.pedir("mis.php")
-    sb.pedir("mis.php")                 # los dos abren su bandeja: ahí queda su «visto»
+    # H-12 (009): el «visto» lo deja solo la pestaña Avisos (`VER_AVISOS`), no
+    # cualquier GET a mis.php: antes, abrir una ficha ya contaba como leído.
+    sa.pedir("mis.php?t=avisos")
+    sb.pedir("mis.php?t=avisos")        # los dos abren sus avisos: ahí queda su «visto»
     time.sleep(1.2)                     # la bitácora guarda segundos: lo nuevo, después
     na, nb = avisos_de(sa), avisos_de(sb)
     anotar("T2.13.5", "recién abierta la bandeja, A y B no tienen avisos", na == 0 and nb == 0, f"A={na} B={nb}")
@@ -173,8 +181,8 @@ def main():
     na, nb = avisos_de(sa), avisos_de(sb)
     anotar("T2.13.5", "el jefe se lo devuelve a A → A 1 aviso y B 1", st == 302 and na == 1 and nb == 1,
            f"{st} · A={na} B={nb}")
-    sa.pedir("mis.php")
-    sb.pedir("mis.php")
+    sa.pedir("mis.php?t=avisos")
+    sb.pedir("mis.php?t=avisos")
     time.sleep(1.2)
     st, _, _ = sad.pedir("pendientes.php", form={"accion": "responder", "pendiente_id": reg["pendientes"]["uio"],
                                                   "nota": "PRUEBA T2.13.5: respuesta de la administración"})
@@ -205,6 +213,77 @@ def main():
     j = json.loads(c) if st == 200 else {}
     anotar("T2.13.4", "el jefe de zona sí los recibe: los usa para agendar",
            st == 200 and "tecnicos" in j and len(j.get("locales") or []) > 0, f"{st} · locales={len(j.get('locales') or [])}")
+
+    print("\n== S1 · T2.14.1 · lo nuevo del formulario del técnico ==")
+    # (a) El técnico abre el PDF de una OT «en curso» de su propio caso.
+    # «En curso» = no es el ot_cierre del caso: es la orden que se mandó más
+    # arriba (T2.13.3) contra el aviso ABIERTO, que sigue ASIGNADO/ESPERA_REPUESTO
+    # y por tanto sin cerrar. pdf.php lo resuelve S4 (D1: cualquier sesión con
+    # `ots.pdf` abre cualquier OT); aquí solo se comprueba que de verdad pasa.
+    fila_ot = sql("SELECT id_industec FROM ot_capturadas WHERE aviso = ? AND usuario_id = ? "
+                  "ORDER BY captura_id DESC LIMIT 1", [ABIERTO, a])
+    if fila_ot and fila_ot[0].get("id_industec"):
+        ot_en_curso = fila_ot[0]["id_industec"]
+        st, _, c = sa.pedir(f"pdf.php?ot={ot_en_curso}")
+        anotar("T2.14.1", "el técnico abre el PDF de una OT «en curso» de su caso (H-01, S4)",
+               st == 200, f"{st} · {ot_en_curso}")
+    else:
+        anotar("T2.14.1", "el técnico abre el PDF de una OT «en curso» de su caso (H-01, S4)",
+               False, "no se encontró la orden de T2.13.3 en ot_capturadas: revisa que esa prueba haya corrido antes")
+
+    # (c) catalogos.php trae los prellenados nuevos (H-08, H-11, D8, D9). Las
+    # llaves tienen que existir SIEMPRE -- vacías si la 009 no está aplicada,
+    # nunca ausentes-- porque de eso depende que app.js no reviente al leerlas.
+    st, _, c = sa.pedir("catalogos.php")
+    catn = json.loads(c) if st == 200 else {}
+    anotar("T2.14.1", "catalogos.php con cookie de técnico trae admins/familias/diagnosticos",
+           st == 200 and isinstance(catn.get("admins"), dict) and isinstance(catn.get("familias"), list)
+           and isinstance(catn.get("diagnosticos"), list),
+           f"{st} · admins={type(catn.get('admins')).__name__} familias={len(catn.get('familias') or [])} "
+           f"diagnosticos={len(catn.get('diagnosticos') or [])}")
+
+    # (b) Un equipo "nuevo / no está en la lista" deja fila en equipos_propuestos
+    # (H-10, D8), visible para todas las zonas desde que se propone.
+    tipo_prop = (catn.get("tipos") or ["FREIDORA ABIERTA"])[0]
+    eq_uuid = str(uuid.uuid4())
+    orden_nuevo = dict(orden)
+    orden_nuevo["equipos"] = [{"nuevo": True, "tipo": tipo_prop, "equipo_uuid": eq_uuid,
+                                "marca": "PRUEBA", "codigo_activo": None}]
+    st, _, c = sa.pedir("envio.php", cuerpo_json={
+        "envio_uuid": str(uuid.uuid4()), "usuario_captura": a,
+        "capturada_en": datetime.datetime.now(datetime.timezone.utc).isoformat(), "orden": orden_nuevo})
+    try:
+        fila_prop = sql("SELECT local_codigo, estado FROM equipos_propuestos WHERE equipo_uuid = ?", [eq_uuid])
+        anotar("T2.14.1", "un equipo marcado 'nuevo' deja fila en equipos_propuestos (H-10, D8)",
+               st == 200 and len(fila_prop) == 1 and fila_prop[0]["estado"] == "PROPUESTO",
+               f"{st} · {fila_prop}")
+    finally:
+        ejecutar("DELETE FROM equipos_propuestos WHERE equipo_uuid = ?", [eq_uuid])
+
+    # (d) `pendiente` con `concluida = 1` es una contradicción del propio
+    # formato -- una visita concluida no puede además dejar un equipo
+    # trabado-- y envio.php la rechaza con 400 antes de guardar nada.
+    orden_contradice = dict(orden)
+    orden_contradice["concluida"] = True
+    orden_contradice["pendiente"] = {"activo_fijo": "PRUEBA-CONTRADICE",
+                                      "diagnostico": "PRUEBA T2.14.1: no debería aceptarse con concluida=1"}
+    st, _, c = sa.pedir("envio.php", cuerpo_json={
+        "envio_uuid": str(uuid.uuid4()), "usuario_captura": a,
+        "capturada_en": datetime.datetime.now(datetime.timezone.utc).isoformat(), "orden": orden_contradice})
+    anotar("T2.14.1", "envio.php rechaza (400) 'pendiente' junto con concluida=1",
+           st == 400, f"{st} · {c[:140]}")
+
+    # (e) Todo POST del celular exige el token CSRF (`X-Csrf`, punto 10).
+    # `Sesion.pedir` lo manda solo desde que hay `self.csrf`; se lo quita
+    # momentáneamente para comprobar que el servidor de verdad lo exige.
+    csrf_guardado, sa.csrf = sa.csrf, ""
+    try:
+        st, _, c = sa.pedir("envio.php", cuerpo_json={
+            "envio_uuid": str(uuid.uuid4()), "usuario_captura": a,
+            "capturada_en": datetime.datetime.now(datetime.timezone.utc).isoformat(), "orden": orden})
+    finally:
+        sa.csrf = csrf_guardado
+    anotar("T2.14.1", "envio.php sin X-Csrf → 403", st == 403, f"{st} · {c[:140]}")
 
     for se in (sa, sb, sj, sad):
         se.pedir("salir.php")

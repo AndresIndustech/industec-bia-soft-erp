@@ -113,6 +113,21 @@
 
   var Cola = {};
 
+  /* --- CSRF (T2.14.1, punto 10) -------------------------------------------
+     `envio.php` y `foto.php` exigen el token de la sesión en la cabecera
+     `X-Csrf`. `yo.php` lo entrega y app.js ya lo consulta al arrancar, pero
+     `cola.js` puede mandar un envío mucho después -- con la pantalla ya
+     cerrada y reabierta, con la app en segundo plano-- así que se pide su
+     propia copia, cacheada, en vez de depender de una variable de app.js. */
+  var csrfToken = null;
+  function obtenerCsrf() {
+    return fetch('yo.php', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.csrf) { csrfToken = d.csrf; } return csrfToken; })
+      .catch(function () { return csrfToken; });
+  }
+  function conCsrf() { return csrfToken ? Promise.resolve(csrfToken) : obtenerCsrf(); }
+
   /**
    * Guardar una orden y ponerla en camino.
    *
@@ -162,6 +177,48 @@
     return tx('readwrite', function (t) { t.delete(id); }).then(pintar);
   };
 
+  /** Una fila de la cola, tal como quedó guardada. `undefined` si no está. */
+  Cola.leer = function (uuid) {
+    return tx('readonly', function (t) { return t.get(uuid); }).catch(function () { return null; });
+  };
+
+  /**
+   * «Corregir y reenviar» una orden RECHAZADA (H-07).
+   *
+   * Vuelve a poner PENDIENTE la MISMA fila (mismo `envio_uuid`: `envio.php` ya
+   * es idempotente por esa clave, así que el reenvío no crea una segunda
+   * orden). Las fotos que ya se habían subido (`subida: true`) se conservan
+   * tal cual -- `subirFotos()` las salta solas-- y las nuevas que traiga
+   * `nuevasFotos` se agregan detrás, sin subir todavía.
+   */
+  Cola.reencolar = function (uuid, orden, usuarioId, nuevasFotos) {
+    nuevasFotos = nuevasFotos || [];
+    return Cola.leer(uuid).then(function (fila) {
+      if (!fila) { throw new Error('esa orden ya no está guardada en este celular'); }
+      var previas = fila.fotos || [];
+      var base = previas.length;
+      var nuevas = nuevasFotos.map(function (f, i) { return { uuid: f.uuid, n: base + i, blob: f.blob, subida: false }; });
+      orden.fotos = previas.concat(nuevas).map(function (f) { return f.uuid; });
+      fila.orden = orden;
+      fila.fotos = previas.concat(nuevas);
+      fila.estado = 'PENDIENTE';
+      fila.intentos = 0;
+      fila.ultimo_error = null;
+      fila.espera_usuario = false;
+      if (usuarioId) { fila.usuario_id = usuarioId; }
+      fila.resumen = {
+        local: orden.local || orden.local_codigo || '',
+        aviso: orden.aviso || '',
+        caso: orden.caso || ''
+      };
+      return guardar(fila).then(function () {
+        pintar();
+        setTimeout(enviarTodo, 60);
+        return fila.uuid;
+      });
+    });
+  };
+
   /* --- El envío ----------------------------------------------------------
      Se manda de una en una y en orden de llegada. En paralelo iría más rápido
      y no vale la pena: con señal mala, seis peticiones a la vez se estorban
@@ -173,7 +230,12 @@
     enviando = true;
     return Cola.pendientes()
       .then(function (filas) {
-        var cola = filas.filter(function (f) { return f.estado === 'PENDIENTE'; });
+        // H-20: una orden AJENA o SIN_PERMISO no se va a arreglar sola cada
+        // 2 minutos -- necesita que alguien entre con la sesión correcta o
+        // que la administración dé el permiso-- así que deja de reintentarse
+        // sola. `espera_usuario` se apaga con el botón «Reintentar» de la
+        // propia fila, que es una acción de la persona, no del reloj.
+        var cola = filas.filter(function (f) { return f.estado === 'PENDIENTE' && !f.espera_usuario; });
         /* El `catch` por eslabón es lo que evita que una orden que falla al
            GUARDARSE corte la cadena y deje las siguientes sin intentar. */
         return cola.reduce(function (p, f) {
@@ -191,28 +253,29 @@
   }
 
   function enviarUna(fila) {
-    return subirFotos(fila)
-      .then(function (seguir) {
-        if (!seguir) { return null; }
-        return fetch(ENDPOINT, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            envio_uuid: fila.uuid,
-            capturada_en: fila.creado,
-            usuario_captura: fila.usuario_id || null,
-            orden: fila.orden
+    return conCsrf().then(function (token) {
+      return subirFotos(fila, token)
+        .then(function (seguir) {
+          if (!seguir) { return null; }
+          return fetch(ENDPOINT, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-Csrf': token || '' },
+            body: JSON.stringify({
+              envio_uuid: fila.uuid,
+              capturada_en: fila.creado,
+              usuario_captura: fila.usuario_id || null,
+              orden: fila.orden
+            })
           })
-        })
-          .then(leerRespuesta)
-          .then(function (res) { return tratarRespuesta(fila, res); });
-      })
-      .catch(function () {
-        fila.intentos++;
-        fila.ultimo_error = 'sin conexión';
-        return guardar(fila);
-      });
+            .then(leerRespuesta)
+            .then(function (res) { return tratarRespuesta(fila, res); });
+        });
+    }).catch(function () {
+      fila.intentos++;
+      fila.ultimo_error = 'sin conexión';
+      return guardar(fila);
+    });
   }
 
   function leerRespuesta(r) {
@@ -224,7 +287,7 @@
      De una en una, como las órdenes: con señal mala, varias a la vez se
      estorban y fallan todas. Devuelve si se puede mandar ya la orden: todas
      subieron, o las que el servidor rechazó quedaron fuera. */
-  function subirFotos(fila) {
+  function subirFotos(fila, token) {
     var faltan = (fila.fotos || []).filter(function (f) { return !f.subida && !f.descartada; });
     var parar = function () { return guardar(fila).then(function () { return false; }); };
     return faltan.reduce(function (p, f) {
@@ -235,7 +298,8 @@
         datos.append('foto_uuid', f.uuid);
         datos.append('n', String(f.n));
         datos.append('foto', f.blob, f.uuid + '.jpg');
-        return fetch(ENDPOINT_FOTO, { method: 'POST', credentials: 'same-origin', body: datos })
+        return fetch(ENDPOINT_FOTO, { method: 'POST', credentials: 'same-origin',
+                                      headers: { 'X-Csrf': token || '' }, body: datos })
           .then(leerRespuesta)
           .then(function (res) {
             if (res.http === 200 && res.cuerpo.ok) {
@@ -244,13 +308,29 @@
               f.blob = null;
               return guardar(fila).then(function () { return true; });
             }
-            if (res.http === 409 && res.cuerpo.ajena) { fila.ultimo_error = AJENA; return parar(); }
+            if (res.http === 409 && res.cuerpo.ajena) { fila.ultimo_error = AJENA; fila.espera_usuario = true; return parar(); }
+            if (res.http === 403 && res.cuerpo.error === 'csrf') {
+              // El token cambió o venció: se pide uno nuevo para el próximo
+              // intento. Es un problema de sesión, no de la foto: se reintenta.
+              csrfToken = null;
+              fila.intentos++;
+              fila.ultimo_error = 'no se pudo confirmar tu sesión; se reintenta';
+              return parar();
+            }
             if (res.http === 401 || (res.http === 403 && res.cuerpo.error === 'debe_cambiar_clave')) {
               fila.intentos++;
               fila.ultimo_error = FALTA_ENTRAR;
               return parar();
             }
-            if (res.http === 403) { fila.intentos++; fila.ultimo_error = SIN_PERMISO; return parar(); }
+            if (res.http === 403) { fila.intentos++; fila.ultimo_error = SIN_PERMISO; fila.espera_usuario = true; return parar(); }
+            if (res.http === 400 && /8|máximo|ocho/i.test(res.cuerpo.motivo || '')) {
+              // E-23: el servidor ya tiene el tope de fotos de esta orden.
+              // La foto que sobra no sirve para nada más: se descarta.
+              f.descartada = true;
+              f.error = res.cuerpo.motivo || 'el máximo de fotos por orden ya se alcanzó';
+              f.blob = null;
+              return guardar(fila).then(function () { return true; });
+            }
             if (res.http >= 400 && res.http < 500) {
               // La foto no sirve: la orden sale sin ella, y el PDF dice que falta.
               f.descartada = true;
@@ -271,23 +351,43 @@
     if (res.http === 200 && res.cuerpo.ok) {
       fila.estado = 'ENVIADA';
       fila.recibo = res.cuerpo.recibo || null;
-      // Recibida: en el celular queda el recibo, no la orden con el nombre y
-      // la firma del administrador del local, ni sus fotos.
-      fila.orden = null;
-      fila.fotos = null;
+      /* H-04/punto 1: si el PDF ya salió (`estado === 'EMITIDA'`), la orden
+         y las fotos ya no hacen falta en el celular. Si NO salió todavía
+         --el servidor lo reintenta cada 10 min, H-03-- se conservan: hasta
+         que se sepa que sí salió, o hasta la purga de 30 días (H-25),
+         borrarlas sería no poder demostrar nunca qué se envió. */
+      var emitida = fila.recibo && fila.recibo.estado === 'EMITIDA';
+      if (emitida) {
+        fila.orden = null;
+        fila.fotos = null;
+      }
       var anexos = (fila.recibo && fila.recibo.anexos) || [];
       var id = fila.recibo && fila.recibo.id_industec;
       return guardar(fila).then(function () {
+        // app.js escucha esto para pintar el recibo REAL (número, correo,
+        // botón «Ver PDF») en vez del texto fijo de siempre.
+        global.dispatchEvent(new CustomEvent('orden-emitida', { detail: { uuid: fila.uuid, recibo: fila.recibo } }));
         if (global.UI) {
-          UI.toast(id ? 'Orden ' + id + ' emitida. El PDF está en tu historial.'
+          UI.toast(id ? (emitida ? 'Orden ' + id + ' emitida. El PDF está en tu historial.'
+                                  : 'Orden ' + id + ' recibida. El PDF se genera desde el servidor.')
                       : 'Orden de ' + (fila.resumen.local || 'el local') + ' enviada.', 'ok');
           if (anexos.length) { UI.toast(anexos.join(' '), 'warn', { vida: 12000 }); }
         }
       });
     }
     if (res.http === 409 && res.cuerpo.ajena) {
-      // De otro usuario de este celular: espera a que entre él.
+      // De otro usuario de este celular: espera a que entre él (H-20: ya no
+      // se reintenta sola cada 2 min -- "Reintentar" es del técnico).
       fila.ultimo_error = AJENA;
+      fila.espera_usuario = true;
+      return guardar(fila);
+    }
+    if (res.http === 403 && err === 'csrf') {
+      // Token vencido o de otra sesión: se pide uno nuevo y se reintenta,
+      // igual que un 5xx -- no es que la orden esté mal.
+      csrfToken = null;
+      fila.intentos++;
+      fila.ultimo_error = 'no se pudo confirmar tu sesión; se reintenta';
       return guardar(fila);
     }
     if (res.http === 401 || (res.http === 403 && err === 'debe_cambiar_clave')) {
@@ -307,9 +407,12 @@
     if (res.http === 403) {
       /* Sin permiso NO es sesión caída: decirle «vuelve a entrar» lo
          mandaba a un callejón sin salida. Se queda en la cola hasta que la
-         administración le dé el permiso. */
+         administración le dé el permiso, y H-20 le apaga el reintento
+         automático: es la administración la que tiene que moverse, no el
+         reloj del celular. */
       fila.intentos++;
       fila.ultimo_error = SIN_PERMISO;
+      fila.espera_usuario = true;
       return guardar(fila);
     }
     if (res.http >= 400 && res.http < 500) {
@@ -384,12 +487,22 @@
                 (f.resumen.aviso ? ' · aviso ' + esc(f.resumen.aviso) : '') + '</span>' +
                 '<span class="est-envio">' + etiqueta + '</span></li>';
         if (f.estado === 'RECHAZADA') {
+          // H-07: «Corregir» manda al formulario con `?reintentar=<uuid>`,
+          // que app.js reconoce y vuelca la orden, la firma y las fotos que
+          // ya se habían subido -- sin rehacer los veinte minutos de trabajo.
           html += '<li style="background:transparent;padding:0 9px 6px;font-size:12px">' +
                   esc(f.ultimo_error || '') +
+                  ' <a class="btn sm" href="index.html?reintentar=' + esc(f.uuid) + '">Corregir</a>' +
                   ' <button type="button" class="btn sm" data-descartar="' + esc(f.uuid) + '">Descartar</button></li>';
         } else if (f.ultimo_error === AJENA || f.ultimo_error === SIN_PERMISO) {
+          // H-20: ya no se reintenta sola cada 2 minutos contra algo que no
+          // se va a arreglar solo. «Reintentar» es la acción de la persona
+          // -tras entrar con la sesión correcta, o tras recibir el permiso-,
+          // y «Descartar» existe por si ya se resolvió de otra forma.
           html += '<li style="background:transparent;padding:0 9px 6px;font-size:12px">' +
-                  esc(f.ultimo_error) + '</li>';
+                  esc(f.ultimo_error) +
+                  ' <button type="button" class="btn sm" data-reintentar="' + esc(f.uuid) + '">Reintentar</button>' +
+                  ' <button type="button" class="btn sm" data-descartar="' + esc(f.uuid) + '">Descartar</button></li>';
         }
       });
       html += '</ul>';
@@ -413,7 +526,38 @@
           }
         });
       });
+
+      Array.prototype.forEach.call(caja.querySelectorAll('[data-reintentar]'), function (b) {
+        b.addEventListener('click', function () {
+          var uuid = b.getAttribute('data-reintentar');
+          Cola.leer(uuid).then(function (f) {
+            if (!f) { return; }
+            f.espera_usuario = false;
+            f.ultimo_error = null;
+            return guardar(f);
+          }).then(function () { pintar(); enviarTodo(); });
+        });
+      });
     });
+  }
+
+  /** Filas ENVIADA de hace más de 30 días (H-25): la cola local no crece sin
+   *  límite. 30 días alcanza para que el técnico consulte el recibo reciente
+   *  y para que, si el PDF tardó en confirmarse (H-03/H-04), haya tiempo de
+   *  sobra para que el servidor lo reintente. */
+  function purgarEnviadas() {
+    var limite = Date.now() - 30 * 86400000;
+    return tx('readwrite', function (store) {
+      var idx = store.index('estado');
+      var req = idx.openCursor(IDBKeyRange.only('ENVIADA'));
+      req.onsuccess = function () {
+        var cur = req.result;
+        if (!cur) { return; }
+        var f = cur.value;
+        if (f && f.creado && new Date(f.creado).getTime() < limite) { cur.delete(); }
+        cur.continue();
+      };
+    }).catch(function () {});
   }
 
   function esc(s) {
@@ -429,6 +573,7 @@
   function arranque() {
     pintar();
     enviarTodo();
+    purgarEnviadas().then(pintar);
     global.addEventListener('online', function () { pintar(); enviarTodo(); });
     global.addEventListener('offline', pintar);
     document.addEventListener('visibilitychange', function () {

@@ -28,6 +28,14 @@ const MAX_BYTES = 15 * 1024 * 1024;
 const LADO_MAX  = 1200;
 const CALIDAD   = 70;
 const RE_UUID   = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
+// SEG-19/H-24: un PNG/JPEG "bomba" (pocos bytes, muchísimos píxeles) agota la
+// memoria al decodificarlo con GD y el fatal de PHP responde 500 -- que
+// cola.js SÍ reintenta, cada dos minutos, para siempre. 24 Mpx es más que
+// cualquier foto de celular real (12-16 Mpx) y deja margen.
+const MAX_PIXELES = 24_000_000;
+// E-23: tope de fotos por orden. app.js ya para en 8 en el picker; esto es lo
+// mismo del lado del servidor, que es el que de verdad decide.
+const MAX_FOTOS_POR_ENVIO = 8;
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -43,6 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     responder(405, ['ok' => false, 'motivo' => 'solo POST']);
 }
 $u = Auth::exigir('ots.crear', true);
+Auth::exigirCsrf();
 $uid = (int) $u['usuario_id'];
 
 $envio = strtolower((string) ($_POST['envio_uuid'] ?? ''));
@@ -66,6 +75,13 @@ try {
     if ($orden !== null && (int) $orden['usuario_id'] !== $uid) {
         responder(409, ['ok' => false, 'ajena' => true, 'motivo' => 'esa orden la llenó otro usuario']);
     }
+    // E-23: tope de fotos por orden. Se cuenta ANTES de aceptar el archivo:
+    // no tiene sentido decodificar una novena foto para rechazarla después.
+    $yaSubidas = (int) (Db::uno('SELECT COUNT(*) AS n FROM ot_fotos WHERE envio_uuid = ?', [$envio])['n'] ?? 0);
+    if ($yaSubidas >= MAX_FOTOS_POR_ENVIO) {
+        responder(400, ['ok' => false,
+                        'motivo' => 'esta orden ya tiene ' . MAX_FOTOS_POR_ENVIO . ' fotos, el máximo por orden']);
+    }
 } catch (Throwable $ex) {
     error_log('foto.php: ' . $ex->getMessage());
     responder(503, ['ok' => false, 'motivo' => 'el sistema todavía no recibe fotos; quedan en el celular y suben solas']);
@@ -79,7 +95,41 @@ if (!is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
 if ((int) $f['size'] > MAX_BYTES) {
     responder(413, ['ok' => false, 'motivo' => 'la foto pesa demasiado']);
 }
-$img = @imagecreatefromstring((string) file_get_contents($f['tmp_name']));
+
+$bin = (string) file_get_contents($f['tmp_name']);
+// SEG-19/H-24: se miran las DIMENSIONES antes de decodificar. Un archivo de
+// pocos MB puede describir una imagen de miles de millones de píxeles, y
+// `imagecreatefromstring` la decodifica entera en memoria: eso es lo que
+// tumbaba el proceso con un fatal 500 (que SÍ se reintenta) en vez de un 413
+// (que no). `getimagesizefromstring` solo lee la cabecera.
+$info = @getimagesizefromstring($bin);
+if ($info === false) {
+    responder(400, ['ok' => false, 'motivo' => 'el archivo no es una imagen']);
+}
+if ($info[0] * $info[1] > MAX_PIXELES) {
+    responder(413, ['ok' => false, 'motivo' => 'la foto es demasiado grande en píxeles; tómala de nuevo con menor resolución']);
+}
+
+/* Recodificar, siempre (quita EXIF con la ubicación del local). Con Imagick,
+   si está instalado, se corrige la orientación EXIF antes de nada (E-17):
+   sin esto, una foto que el navegador no pudo reducir —createImageBitmap
+   falló y se subió el original con su etiqueta de orientación— sale girada
+   en el PDF que recibe Grupo KFC. GD no lee EXIF; por eso es Imagick o nada. */
+if (class_exists('Imagick')) {
+    try {
+        $im = new Imagick();
+        $im->readImageBlob($bin);
+        $im->autoOrient();
+        $im->stripImage();
+        $bin = $im->getImageBlob();
+        $im->clear();
+    } catch (Throwable $ex) {
+        // Si Imagick no pudo leerla, se sigue con el binario original: GD
+        // decide después si de verdad es una imagen.
+    }
+}
+
+$img = @imagecreatefromstring($bin);
 if ($img === false) {
     responder(400, ['ok' => false, 'motivo' => 'el archivo no es una imagen']);
 }

@@ -142,7 +142,10 @@ foreach (Pendientes::VIAS as $via => [$etiqueta, $ayuda, $primerPaso]) {
 // exactamente el defecto que tenia Casos::etiquetaEstado().
 $delEnum = ['SIN_VEREDICTO','COTIZANDO','COMPRADO','EN_BODEGA','ENTREGADO',
             'EN_TALLER','DEVUELTO_TALLER','GARANTIA_RECLAMADA','GARANTIA_APROBADA',
-            'GARANTIA_NEGADA','BAJA_PROPUESTA','BAJA_APROBADA','RESUELTO','CANCELADO'];
+            'GARANTIA_NEGADA','BAJA_PROPUESTA','BAJA_APROBADA','RESUELTO','CANCELADO',
+            // Los de la 009: la cadena real técnico -> jefe -> SAP -> Grupo KFC (D3).
+            'SOLICITADO','VALIDADO_JEFE','REGISTRADO_SAP','ESPERA_KFC',
+            'REPUESTO_ENVIADO','TALLER_INDUSTEC','OTRO_PROVEEDOR'];
 foreach ($delEnum as $e) {
     afirmar("ENUM $e tiene etiqueta", isset(Pendientes::ESTADOS[$e]), true);
 }
@@ -150,6 +153,17 @@ afirmar('ABIERTOS no incluye RESUELTO', in_array('RESUELTO', Pendientes::ABIERTO
 afirmar('ABIERTOS no incluye CANCELADO', in_array('CANCELADO', Pendientes::ABIERTOS, true), false);
 afirmar('ABIERTOS cubre todos los demas',
         count(Pendientes::ABIERTOS) === count($delEnum) - 2, true);
+// Cada camino que deja la decisión de Grupo KFC termina en RESUELTO y arranca
+// en un estado con etiqueta; OTRO_PROVEEDOR no tiene camino (se resuelve en
+// el acto) y el técnico nunca ve «veredicto» a secas para lo que valida el jefe.
+foreach (Pendientes::PASOS_KFC as $k => $camino) {
+    afirmar("camino KFC $k termina en RESUELTO", end($camino), 'RESUELTO');
+    afirmar("camino KFC $k arranca con etiqueta", isset(Pendientes::ESTADOS[$camino[0]]), true);
+}
+afirmar('OTRO_PROVEEDOR no tiene camino', isset(Pendientes::PASOS_KFC['OTRO_PROVEEDOR']), false);
+afirmar('etiqueta del veredicto de KFC', Pendientes::etiquetaVeredictoKfc('TALLER_INDUSTEC'), 'a taller de INDUSTEC');
+afirmar('veredicto KFC desconocido cae en pendiente', Pendientes::etiquetaVeredictoKfc('XX'), 'sin decisión de Grupo KFC todavía');
+afirmar('SOLICITADO se explica sin decir «veredicto»', str_contains(Pendientes::ayudaEstado('SOLICITADO'), 'veredicto'), false);
 
 echo "\n=== Los ocho estados del caso (Ui::ESTADOS) ===\n";
 $enumCaso = ['NUEVO','ASIGNADO','EN_REVISION','RESUELTO','NO_COMPETE','ATENDIDO',

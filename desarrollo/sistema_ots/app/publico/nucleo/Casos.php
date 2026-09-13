@@ -185,6 +185,85 @@ final class Casos
         );
     }
 
+    /**
+     * La orden emitida desde la app mueve el caso en el acto (T2.14.3).
+     *
+     * Hasta el 2026-09-13 solo la reconciliación nocturna —que lee los informes
+     * del sistema viejo— ponía `ot_cierre` y pasaba el caso a ATENDIDO. Una
+     * orden concluida desde el celular dejaba el caso ASIGNADO hasta la noche
+     * siguiente, y la administradora no lo veía en «a registrar en SAP» en
+     * tiempo real, que es lo que pidió. Aquí se aplica la misma regla que
+     * `Reconciliar::atenciones()`, para un solo caso y en el momento:
+     *
+     *   - concluida: `ot_cierre` y `atendido_en` si no los tenía, y ATENDIDO,
+     *     salvo que una persona ya lo haya resuelto (RESUELTO/NO_COMPETE),
+     *     esté en revisión, o siga esperando un repuesto (ESPERA_REPUESTO: lo
+     *     libera `Pendientes` cuando el último pendiente se cierra, y como el
+     *     caso ya tiene `ot_cierre`, cae en ATENDIDO).
+     *   - sin concluir: el caso queda ASIGNADO al técnico que firmó, si nadie
+     *     lo había asignado ni derivado; un ATENDIDO no regresa (ASG-13).
+     *
+     * Lo que decidió una persona (asignado_por, derivado_en) no se pisa.
+     */
+    public static function atenderPorOrden(string $aviso, ?string $zona, string $idIndustec,
+                                           bool $concluida, int $tecnicoId): void
+    {
+        $aviso = trim($aviso);
+        if ($aviso === '') { return; }
+        self::asegurar($aviso, $zona);
+        $antes = Db::uno('SELECT estado FROM casos_gestion WHERE aviso = ?', [$aviso]);
+        $estadoAntes = (string) ($antes['estado'] ?? 'NUEVO');
+
+        if ($concluida) {
+            Db::ejecutar(
+                "UPDATE casos_gestion
+                    SET ot_cierre    = COALESCE(ot_cierre, ?),
+                        atendido_en  = COALESCE(atendido_en, NOW()),
+                        asignado_a   = IF(asignado_por IS NULL AND derivado_en IS NULL AND asignado_a IS NULL,
+                                          ?, asignado_a),
+                        tecnico_auto = IF(asignado_por IS NULL AND derivado_en IS NULL AND asignado_a IS NOT NULL
+                                          AND asignado_a = ?, 1, tecnico_auto),
+                        estado       = CASE
+                            WHEN estado IN ('RESUELTO','NO_COMPETE','EN_REVISION','ESPERA_REPUESTO') THEN estado
+                            ELSE 'ATENDIDO' END
+                  WHERE aviso = ?",
+                [$idIndustec, $tecnicoId, $tecnicoId, $aviso]
+            );
+            $nuevo = 'ATENDIDO';
+        } else {
+            Db::ejecutar(
+                "UPDATE casos_gestion
+                    SET asignado_a   = IF(asignado_por IS NULL AND derivado_en IS NULL AND asignado_a IS NULL,
+                                          ?, asignado_a),
+                        tecnico_auto = IF(asignado_por IS NULL AND derivado_en IS NULL AND asignado_a IS NOT NULL
+                                          AND asignado_a = ?, 1, tecnico_auto),
+                        estado       = CASE
+                            WHEN estado IN ('RESUELTO','NO_COMPETE','EN_REVISION','ESPERA_REPUESTO','ATENDIDO') THEN estado
+                            WHEN asignado_a IS NULL THEN estado
+                            ELSE 'ASIGNADO' END
+                  WHERE aviso = ?",
+                [$tecnicoId, $tecnicoId, $aviso]
+            );
+            $nuevo = 'ASIGNADO';
+        }
+
+        $desp = Db::uno('SELECT estado FROM casos_gestion WHERE aviso = ?', [$aviso]);
+        $estadoDesp = (string) ($desp['estado'] ?? $estadoAntes);
+        if ($estadoDesp !== $estadoAntes) {
+            // Mismo nombre de acción que la reconciliación, para que la bitácora
+            // y minar.php cuenten las dos fuentes juntas; la fuente lo distingue.
+            Auth::bitacora($concluida ? 'ATENDIDO_AUTO' : 'ASIGNADO_AUTO', 'caso', $aviso,
+                           'orden ' . $idIndustec . ($concluida ? ' concluida' : ' sin concluir'),
+                           $estadoAntes, $estadoDesp,
+                           ['ot' => $idIndustec, 'fuente' => 'orden emitida por la app', 'tecnico' => $tecnicoId]);
+        } elseif ($concluida && $estadoAntes === 'ESPERA_REPUESTO') {
+            Auth::bitacora('OT_CIERRE_CON_PENDIENTE', 'caso', $aviso,
+                           'orden ' . $idIndustec . ' concluida con el caso esperando repuesto',
+                           $estadoAntes, $estadoAntes, ['ot' => $idIndustec]);
+        }
+        unset($nuevo);
+    }
+
     /** ¿Existe ese aviso —en el catálogo o, para el técnico, asignado a él— y lo alcanza este usuario? */
     public static function alcanzaAviso(string $aviso, array $gestion): ?array
     {

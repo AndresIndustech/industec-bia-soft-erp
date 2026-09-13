@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Novedades.php';
 require_once __DIR__ . '/nucleo/Casos.php';
+require_once __DIR__ . '/nucleo/Catalogo.php';
 
 /**
  * novedades_visita.php — La bandeja de lo que se ve en la visita y no era la orden.
@@ -40,6 +41,8 @@ require_once __DIR__ . '/nucleo/Casos.php';
 $u = Auth::exigir();
 if ($u['debe_cambiar_clave']) { header('Location: clave.php'); exit; }
 if (!Ui::puedeModulo('novedades.ver', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO'], $u)) {
+    // SEG-20: la denegación deja rastro, como en el resto de pantallas.
+    Auth::bitacora('DENEGADO', 'novedades', '', 'sin permiso', null, null, [], false);
     http_response_code(403);
     exit('No tienes acceso a esta pantalla.');
 }
@@ -47,6 +50,7 @@ if (!Ui::puedeModulo('novedades.ver', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECN
 $e = fn(?string $s): string => Ui::e($s);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    Auth::exigirCsrf();
     $accion = (string) ($_POST['accion'] ?? '');
     if ($accion === 'resolver') {
         [$ok, $msg] = Novedades::resolver(
@@ -85,7 +89,19 @@ Auth::bitacora('CONSULTAR', 'novedades', $grupo, 'visibles=' . count($lista));
 
 $errFlash = Ui::errorFlash();
 $puedeResolver = Ui::puedeModulo('novedades.gestionar', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA'], $u);
+$puedeReportar = Ui::puedeModulo('novedades.reportar', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO'], $u);
 $esTecnico = $u['rol'] === 'TECNICO';
+$csrf = Auth::csrfToken();
+// P-22: los locales para el formulario de la oficina, del mismo maestro que
+// valida el servidor. Con alcance de zona, solo los de esa zona.
+$localesForm = [];
+if ($puedeReportar && !$esTecnico) {
+    $za = Auth::zonaAlcance();
+    foreach ((Catalogo::cargar()['locales'] ?? []) as $l) {
+        if ($za !== null && strtoupper((string) ($l['zona'] ?? '')) !== $za) { continue; }
+        $localesForm[] = $l;
+    }
+}
 
 $FILTROS = [
     'pendientes'  => ['Por decidir',        $cont['pendientes'], 'ambar'],
@@ -124,6 +140,15 @@ Ui::cabecera($u, 'novedades_visita.php',
       . 'tabla <span class="mono">novedades</span> y está escrita, sin aplicar: cambia el '
       . 'esquema y eso requiere aprobación.</p>') ?>
   <?php else: ?>
+
+    <?php if ($puedeReportar && !$esTecnico && $localesForm): ?>
+      <?php /* P-22: lo que llega por teléfono o por WhatsApp a la oficina se
+               registra aquí, con el mismo rastro que lo que reporta el
+               técnico desde la visita. */ ?>
+      <p style="margin:0 0 12px">
+        <button class="btn sm" type="button" onclick="reportar()">Registrar una novedad</button>
+      </p>
+    <?php endif; ?>
 
     <?php if (!$esTecnico): ?>
       <div class="tiles">
@@ -242,8 +267,16 @@ Ui::cabecera($u, 'novedades_visita.php',
 
           <?php if ($abierta && $puedeResolver): ?>
             <div class="acciones">
-              <button class="btn primary sm" type="button" onclick="resolver(<?= (int) $n['novedad_id'] ?>)">
+              <button class="btn primary sm" type="button" onclick="resolver(<?= (int) $n['novedad_id'] ?>, '<?= $e($n['estado']) ?>')">
                 Resolver
+              </button>
+            </div>
+          <?php elseif ($puedeResolver && in_array($n['estado'], ['DERIVADA_SAP', 'ASUMIDA_INDUSTEC'], true)): ?>
+            <?php /* P-15: una derivada o asumida se da por resuelta cuando se
+                     atiende, o se corrige su número de aviso. */ ?>
+            <div class="acciones">
+              <button class="btn sm" type="button" onclick="resolver(<?= (int) $n['novedad_id'] ?>, '<?= $e($n['estado']) ?>')">
+                Darla por resuelta o corregir
               </button>
             </div>
           <?php elseif ($abierta && $esTecnico): ?>
@@ -257,6 +290,7 @@ Ui::cabecera($u, 'novedades_visita.php',
 
 <dialog id="dlgResolver">
   <form method="post">
+    <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
     <input type="hidden" name="accion" value="resolver">
     <input type="hidden" name="novedad_id" id="r-id">
     <h2>¿Qué se hace con esta novedad?</h2>
@@ -266,22 +300,27 @@ Ui::cabecera($u, 'novedades_visita.php',
     </p>
 
     <div class="opciones" style="margin-bottom:14px">
-      <label class="opcion">
+      <label class="opcion" data-desde="REPORTADA EN_REVISION DERIVADA_SAP">
         <input type="radio" name="estado" value="DERIVADA_SAP" required>
         <span class="t">Se le pidió el aviso a KFC</span>
-        <span class="d">Ya tiene número de aviso. Es la prueba de que se avisó y cuándo.</span>
+        <span class="d">Ya tiene número de aviso. Es la prueba de que se avisó y cuándo. Desde una ya derivada, corrige el número.</span>
       </label>
-      <label class="opcion">
+      <label class="opcion" data-desde="REPORTADA EN_REVISION ASUMIDA_INDUSTEC">
         <input type="radio" name="estado" value="ASUMIDA_INDUSTEC">
         <span class="t">Lo asume INDUSTEC</span>
         <span class="d">Entra en nuestra planificación sin aviso nuevo.</span>
       </label>
-      <label class="opcion">
+      <label class="opcion" data-desde="REPORTADA EN_REVISION">
         <input type="radio" name="estado" value="EN_REVISION">
         <span class="t">La estoy revisando</span>
         <span class="d">Se marca como tomada para que no la revisen dos personas.</span>
       </label>
-      <label class="opcion">
+      <label class="opcion" data-desde="REPORTADA EN_REVISION DERIVADA_SAP ASUMIDA_INDUSTEC">
+        <input type="radio" name="estado" value="RESUELTA">
+        <span class="t">Ya se atendió</span>
+        <span class="d">Lo que se derivó o se asumió quedó hecho. Con una nota de qué se hizo.</span>
+      </label>
+      <label class="opcion" data-desde="REPORTADA EN_REVISION">
         <input type="radio" name="estado" value="DESCARTADA">
         <span class="t">No procede</span>
         <span class="d">Con motivo obligatorio: el técnico la reportó y merece saber por qué.</span>
@@ -306,11 +345,92 @@ Ui::cabecera($u, 'novedades_visita.php',
   </form>
 </dialog>
 
+<?php if ($puedeReportar && !$esTecnico && $localesForm): ?>
+<dialog id="dlgReportar">
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+    <input type="hidden" name="accion" value="reportar">
+    <h2>Registrar una novedad</h2>
+    <p class="sub" style="margin:0 0 12px">
+      Lo que llegó a la oficina por teléfono o por mensaje y no era una orden.
+      Queda con tu nombre; la zona y la cadena salen del maestro del local.
+    </p>
+    <div class="grid g2">
+      <div>
+        <label for="n-local">Local</label>
+        <input type="text" id="n-local" name="local" list="n-locales" required maxlength="12"
+               placeholder="Código del local" autocomplete="off" style="text-transform:uppercase">
+        <datalist id="n-locales">
+          <?php foreach ($localesForm as $l): ?>
+            <option value="<?= $e((string) $l['codigo']) ?>"><?= $e(trim((string) ($l['nombre'] ?? '') . ' · ' . (string) ($l['zona'] ?? ''), ' ·')) ?></option>
+          <?php endforeach; ?>
+        </datalist>
+      </div>
+      <div>
+        <label for="n-tipo">Área</label>
+        <select id="n-tipo" name="tipo" required>
+          <?php foreach (Novedades::TIPOS as $k => [$et, $_]): ?>
+            <option value="<?= $e($k) ?>"><?= $e($et) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div>
+        <label for="n-riesgo">Riesgo</label>
+        <select id="n-riesgo" name="riesgo">
+          <?php foreach (Novedades::RIESGOS as $k => $et): ?>
+            <option value="<?= $e($k) ?>" <?= $k === 'MEDIO' ? 'selected' : '' ?>><?= $e($et) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div>
+        <label for="n-resp">A quién le toca (propuesta)</label>
+        <select id="n-resp" name="responsable">
+          <option value="INDUSTEC">INDUSTEC</option>
+          <option value="CLIENTE">Grupo KFC</option>
+          <option value="TERCERO">Un tercero</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin:12px 0">
+      <label for="n-equipo">Equipo (si aplica)</label>
+      <input type="text" id="n-equipo" name="equipo_desc" maxlength="160" autocomplete="off">
+    </div>
+    <div style="margin-bottom:12px">
+      <label for="n-aviso">Aviso relacionado (si hay)</label>
+      <input type="text" id="n-aviso" name="aviso" maxlength="20" inputmode="numeric" autocomplete="off">
+    </div>
+    <div style="margin-bottom:12px">
+      <label for="n-desc">Qué pasa</label>
+      <textarea id="n-desc" name="descripcion" rows="3" required maxlength="800"
+                placeholder="Qué se vio o qué avisaron, y dónde exactamente."></textarea>
+    </div>
+    <div class="row" style="margin-top:14px;gap:8px">
+      <button class="btn primary" type="submit">Registrar</button>
+      <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+<?php endif; ?>
+
 <script>
-function resolver(id) {
+function resolver(id, desde) {
   document.getElementById('r-id').value = id;
-  document.querySelectorAll('#dlgResolver .opcion').forEach(function (o) { o.classList.remove('on'); });
+  // P-15: solo se ofrecen las salidas válidas desde el estado actual; el
+  // servidor las vuelve a comprobar (Novedades::TRANSICIONES).
+  document.querySelectorAll('#dlgResolver .opcion').forEach(function (o) {
+    o.classList.remove('on');
+    var permitidas = (o.dataset.desde || '').split(' ');
+    var r = o.querySelector('input');
+    var ok = permitidas.indexOf(desde || 'REPORTADA') !== -1;
+    o.hidden = !ok; r.disabled = !ok; r.checked = false;
+  });
+  document.getElementById('r-aviso').required = false;
+  document.getElementById('r-nota').required = false;
   document.getElementById('dlgResolver').showModal();
+}
+function reportar() {
+  var d = document.getElementById('dlgReportar');
+  if (d) { d.showModal(); document.getElementById('n-local').focus(); }
 }
 document.querySelectorAll('#dlgResolver .opcion input').forEach(function (r) {
   r.addEventListener('change', function () {

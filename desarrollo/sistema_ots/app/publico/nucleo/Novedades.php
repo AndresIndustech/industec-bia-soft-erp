@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Ui.php';
+require_once __DIR__ . '/Catalogo.php';
 
 /**
  * Novedades.php — Lo que el técnico ve en la visita y no era su orden.
@@ -68,6 +69,19 @@ final class Novedades
 
     public const RIESGOS = ['ALTO' => 'Alto', 'MEDIO' => 'Medio', 'BAJO' => 'Bajo'];
     public const PENDIENTES = ['REPORTADA', 'EN_REVISION'];
+
+    /** A dónde puede ir cada estado (P-15). Desde lo pendiente, a cualquiera;
+     *  una novedad ya derivada o asumida solo puede darse por resuelta o
+     *  corregir su aviso (quedándose donde está); nunca vuelve a REPORTADA,
+     *  y lo descartado o resuelto no se mueve. */
+    public const TRANSICIONES = [
+        'REPORTADA'        => ['EN_REVISION', 'DERIVADA_SAP', 'ASUMIDA_INDUSTEC', 'DESCARTADA', 'RESUELTA'],
+        'EN_REVISION'      => ['EN_REVISION', 'DERIVADA_SAP', 'ASUMIDA_INDUSTEC', 'DESCARTADA', 'RESUELTA'],
+        'DERIVADA_SAP'     => ['DERIVADA_SAP', 'RESUELTA'],
+        'ASUMIDA_INDUSTEC' => ['ASUMIDA_INDUSTEC', 'RESUELTA'],
+        'DESCARTADA'       => [],
+        'RESUELTA'         => [],
+    ];
 
     public static function disponible(): bool
     {
@@ -156,6 +170,12 @@ final class Novedades
         if (!self::disponible()) {
             return [false, 'El módulo de novedades todavía no está instalado en la base.', null];
         }
+        // SEG-12: el permiso se comprueba aquí, no solo en la pantalla: a esta
+        // función llegan envio.php y el formulario de la oficina.
+        if (!Auth::puede('novedades.reportar')) {
+            Auth::bitacora('DENEGADO', 'novedad', '', 'reportar sin permiso', null, null, [], false);
+            return [false, 'No tienes permiso para reportar novedades.', null];
+        }
         $u = Auth::actual();
         $uuid = (string) ($d['novedad_uuid'] ?? '');
         if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $uuid)) {
@@ -171,13 +191,37 @@ final class Novedades
         $resp = strtoupper((string) ($d['responsable'] ?? 'INDUSTEC'));
         if (!in_array($resp, ['INDUSTEC', 'CLIENTE', 'TERCERO'], true)) { $resp = 'INDUSTEC'; }
 
-        $zona = strtoupper((string) ($d['zona'] ?? ''));
+        $zona   = strtoupper((string) ($d['zona'] ?? ''));
+        $cadena = ($d['cadena'] ?? '') !== '' ? mb_substr((string) $d['cadena'], 0, 40) : null;
+        $local  = mb_substr(strtoupper(trim((string) ($d['local'] ?? ''))), 0, 12);
+        // P-14 / SEG-12: la zona y la cadena son las del maestro del local, no
+        // las que trae el POST ni la del usuario. Una novedad vista en un local
+        // de otra zona se archiva donde su jefe la ve, que es el de ESA zona.
+        // Sin el maestro (catálogo caído) se acepta lo que llega, y se anota.
+        $catalogo = Catalogo::cargar();
+        if ($catalogo !== null) {
+            $enMaestro = null;
+            foreach ($catalogo['locales'] as $l) {
+                if (strtoupper((string) ($l['codigo'] ?? '')) === $local) { $enMaestro = $l; break; }
+            }
+            if ($local === '' || $enMaestro === null) {
+                return [false, 'Ese local no está en el catálogo. Elige uno de la lista.', null];
+            }
+            $zona   = strtoupper((string) ($enMaestro['zona'] ?? $zona));
+            $cadena = ($enMaestro['cadena'] ?? '') !== '' ? mb_substr((string) $enMaestro['cadena'], 0, 40) : $cadena;
+        } else {
+            error_log('Novedades::reportar: sin catálogo de locales; se acepta la zona del envío');
+        }
         if (!in_array($zona, ['UIO', 'LARB', 'CNLJ', 'OTRA'], true)) { $zona = null; }
-        // Quien tiene alcance de zona solo reporta en la suya. Sin esto, un POST
-        // a mano mete novedades en la bandeja del jefe de otra zona (antes solo
-        // se forzaba al técnico; un jefe de zona podía escribir en cualquiera).
+        // El jefe de zona solo reporta en la suya: si el local es de otra, se
+        // rechaza con mensaje en vez de reescribir la zona (que la escondería).
+        // El técnico conserva la del local: puede cubrir un local de otra zona.
         $za = Auth::zonaAlcance();
-        if ($za !== null) { $zona = $za !== '' ? $za : null; }
+        if ($za !== null && $u['rol'] !== 'TECNICO' && $zona !== ($za !== '' ? $za : null)) {
+            Auth::bitacora('DENEGADO', 'novedad', '', 'reportar en local de otra zona: ' . $local,
+                           null, null, ['zona_local' => $zona], false);
+            return [false, 'Ese local es de otra zona: no está en tu alcance.', null];
+        }
 
         Db::ejecutar(
             'INSERT INTO novedades
@@ -197,9 +241,9 @@ final class Novedades
              ($d['aviso'] ?? '') !== '' ? mb_substr((string) $d['aviso'], 0, 20) : null,
              ($d['ot'] ?? '') !== '' ? mb_substr((string) $d['ot'], 0, 60) : null,
              in_array($d['modulo'] ?? '', ['CORRECTIVO', 'PREVENTIVO'], true) ? $d['modulo'] : null,
-             ($d['local'] ?? '') !== '' ? mb_substr((string) $d['local'], 0, 12) : null,
+             $local !== '' ? $local : null,
              $zona,
-             ($d['cadena'] ?? '') !== '' ? mb_substr((string) $d['cadena'], 0, 40) : null,
+             $cadena,
              $tipo,
              mb_substr(trim((string) ($d['activo_fijo'] ?? '')), 0, 60) ?: null,
              mb_substr(trim((string) ($d['equipo_desc'] ?? '')), 0, 160) ?: null,
@@ -252,6 +296,16 @@ final class Novedades
             return [false, 'Esa novedad no existe o no está en tu alcance.'];
         }
 
+        // P-15: las transiciones válidas. Una derivada o asumida solo se da por
+        // resuelta o corrige su aviso; nada vuelve a REPORTADA; lo cerrado no
+        // se mueve. Antes cualquier estado iba a cualquiera, y «resuelta» era
+        // inalcanzable desde la pantalla.
+        $desde = (string) $n['estado'];
+        if (!in_array($estado, self::TRANSICIONES[$desde] ?? [], true)) {
+            return [false, 'Una novedad «' . self::etiquetaEstado($desde) . '» no puede pasar a «'
+                         . self::etiquetaEstado($estado) . '».'];
+        }
+
         $avisoSap = trim($avisoSap);
         if ($estado === 'DERIVADA_SAP' && $avisoSap === '') {
             return [false, 'Para darla por derivada hace falta el número de aviso que creó Grupo KFC.'];
@@ -259,15 +313,25 @@ final class Novedades
         if ($estado === 'DESCARTADA' && trim($nota) === '') {
             return [false, 'Para descartarla hace falta el motivo: el técnico la reportó y merece saber por qué no procede.'];
         }
+        if ($estado === $desde && $avisoSap === '' && trim($nota) === '') {
+            return [false, 'No hay nada que corregir: ni aviso nuevo ni nota.'];
+        }
 
-        Db::ejecutar(
+        // El aviso solo se reemplaza cuando llega uno: pasar a RESUELTA no
+        // borra el número con que se derivó (antes NULLIF('') lo vaciaba).
+        $filas = Db::ejecutar(
             'UPDATE novedades
-                SET estado = ?, aviso_sap = NULLIF(?, ""), veredicto_por = ?,
-                    veredicto_en = NOW(), veredicto_nota = NULLIF(?, "")
-              WHERE novedad_id = ?',
+                SET estado = ?, aviso_sap = COALESCE(NULLIF(?, ""), aviso_sap), veredicto_por = ?,
+                    veredicto_en = NOW(), veredicto_nota = COALESCE(NULLIF(?, ""), veredicto_nota)
+              WHERE novedad_id = ? AND estado = ?',
             [$estado, mb_substr($avisoSap, 0, 20), (int) Auth::actual()['usuario_id'],
-             mb_substr(trim($nota), 0, 600), $id]
+             mb_substr(trim($nota), 0, 600), $id, $desde]
         );
+        if ($filas === 0) {
+            // Otra persona la movió entre la lectura y el UPDATE: no se anota
+            // una transición que no ocurrió.
+            return [false, 'Esa novedad cambió de estado mientras tanto: recarga la pantalla.'];
+        }
 
         Auth::bitacora('NOVEDAD_RESUELVE', 'novedad', (string) $id,
                        self::etiquetaEstado($estado) . ($avisoSap !== '' ? ' · aviso ' . $avisoSap : ''),

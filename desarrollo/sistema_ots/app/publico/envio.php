@@ -82,6 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // redirección al login, que el `fetch` de la cola guardaría como si fuera la
 // respuesta del envío.
 $u = Auth::exigir('ots.crear', true);
+// CSRF (T2.14.1, punto 10): `cola.js` manda el token de `yo.php` (cacheado)
+// en la cabecera `X-Csrf`, que `Auth::exigirCsrf()` ya sabe leer.
+Auth::exigirCsrf();
 
 $crudo = file_get_contents('php://input') ?: '';
 if (strlen($crudo) > 12 * 1024 * 1024) {
@@ -120,7 +123,10 @@ if ($captor !== 0 && $captor !== (int) $u['usuario_id']) {
                     'motivo' => 'esta orden la llenó otro usuario en este celular; tiene que entrar él para enviarla']);
 }
 try {
-    $previa = Db::uno('SELECT usuario_id FROM ot_capturadas WHERE envio_uuid = ?', [$uuid]);
+    // `emitida_en` y `carga` se leen ya aquí, ANTES de tocar nada: es contra lo
+    // que se compara después de guardar, para saber si un reintento llegó con
+    // datos distintos a los de una orden que ya se había emitido (E-04).
+    $previa = Db::uno('SELECT usuario_id, emitida_en, carga FROM ot_capturadas WHERE envio_uuid = ?', [$uuid]);
 } catch (Throwable $ex) {
     $previa = null;                     // sin la 007, el INSERT de abajo responde 503
 }
@@ -218,6 +224,29 @@ if ($observaciones) {
 }
 
 /* -------------------------------------------------------------------------
+   LA PREMISA DEL SERVICIO, TAMBIEN EN EL SERVIDOR (H-11 item 7).
+
+   El navegador ya no debería mandar un `pendiente` con `concluida = 1` --
+   `pendienteDeLaOrden()` en app.js devuelve null en ese caso-- pero un POST se
+   fabrica a mano, y "una visita concluye el trabajo" es la premisa del
+   servicio, no un detalle de interfaz. Si llega junto, la orden no sirve:
+   400, no se reintenta.
+   ------------------------------------------------------------------------- */
+$concluida = !array_key_exists('concluida', $orden) || (bool) $orden['concluida'];
+$pen = $orden['pendiente'] ?? null;
+if ($concluida && is_array($pen) && trim((string) ($pen['diagnostico'] ?? '')) !== '') {
+    responder(400, ['ok' => false,
+                    'motivo' => 'la orden llegó "concluida" pero trae un equipo pendiente; revisa "¿Quedó concluido el trabajo?"']);
+}
+
+// Trabajo con otro proveedor (H-18, D10): ya lo validó Validacion::validar()
+// arriba (CON_PROVEEDOR_SIN_NOMBRE bloquea si falta el nombre); aquí solo se
+// prepara el texto que va a la columna.
+$conProveedor = !empty($orden['con_proveedor_marcado']) && trim((string) ($orden['con_proveedor'] ?? '')) !== ''
+    ? mb_substr(trim((string) $orden['con_proveedor']), 0, 160)
+    : null;
+
+/* -------------------------------------------------------------------------
    SE GUARDA, EN UNA SOLA TRANSACCION.
 
    `$nueva` sale del propio INSERT: con ON DUPLICATE KEY UPDATE, MariaDB
@@ -243,13 +272,18 @@ try {
     $nueva = Db::ejecutar(
         'INSERT INTO ot_capturadas
             (envio_uuid, usuario_id, aviso, local_codigo, zona, cadena, modulo,
-             concluida, carga, capturada_en)
-         VALUES (?,?,?,?,?,?,?,?,?,FROM_UNIXTIME(?))
+             concluida, carga, con_proveedor, capturada_en)
+         VALUES (?,?,?,?,?,?,?,?,?,?,FROM_UNIXTIME(?))
          ON DUPLICATE KEY UPDATE
             /* El reintento no crea nada: refresca la carga por si el técnico
-               corrigió algo antes de que saliera, y solo si es del mismo. */
-            carga       = IF(usuario_id = VALUES(usuario_id), VALUES(carga), carga),
-            recibida_en = IF(usuario_id = VALUES(usuario_id), NOW(), recibida_en)',
+               corrigió algo antes de que saliera, y solo si es del mismo
+               usuario Y la orden todavía NO se emitió (E-04): una vez que el
+               PDF salió, lo que cuenta es lo que ese PDF describe, y la fila
+               no puede quedar diciendo otra cosa. `recibida_en` NO se toca:
+               conserva la primera llegada, que es la que mide la demora. */
+            carga          = IF(usuario_id = VALUES(usuario_id) AND emitida_en IS NULL, VALUES(carga), carga),
+            con_proveedor  = IF(usuario_id = VALUES(usuario_id) AND emitida_en IS NULL, VALUES(con_proveedor), con_proveedor),
+            ultimo_reintento_en = NOW()',
         [
             $uuid,
             (int) $u['usuario_id'],
@@ -261,14 +295,40 @@ try {
                 ? strtoupper((string) $orden['tipo']) : null,
             isset($orden['concluida']) ? (int) (bool) $orden['concluida'] : null,
             json_encode($orden, JSON_UNESCAPED_UNICODE),
+            $conProveedor,
             $t,
         ]
     ) === 1;
 
+    // E-04: si el reintento llegó con datos distintos a los de una orden que
+    // ya se había emitido, no se pisó nada arriba -- pero queda dicho en la
+    // bitácora, para que la administración decida si hay que regenerar el PDF
+    // a mano. Se comparan los campos que de verdad puede corregir un técnico,
+    // no el objeto entero: `_hoy`, `zona` derivada, etc. cambian solos entre
+    // un intento y otro sin que el técnico haya tocado nada.
+    if (!$nueva && $previa !== null && $previa['emitida_en'] !== null) {
+        $previaOrden = json_decode((string) $previa['carga'], true) ?: [];
+        $camposComparables = ['actividades', 'repuestos', 'observaciones', 'con_proveedor',
+                               'equipos', 'estado_ot', 'atiempo', 'satisfaccion'];
+        $cargaDistinta = false;
+        foreach ($camposComparables as $campo) {
+            if (json_encode($previaOrden[$campo] ?? null, JSON_UNESCAPED_UNICODE)
+                !== json_encode($orden[$campo] ?? null, JSON_UNESCAPED_UNICODE)) {
+                $cargaDistinta = true;
+                break;
+            }
+        }
+        if ($cargaDistinta) {
+            Auth::bitacora('REINTENTO_TRAS_EMISION', 'ot', $uuid,
+                           'el celular reenvió el mismo envío con datos distintos después de que la orden ya se había emitido; la carga NO se sobrescribió',
+                           null, null, ['emitida_en' => $previa['emitida_en']], true);
+            $anexos[] = 'Esta orden ya se había emitido: la corrección no reemplaza el PDF ya enviado. Avisa a la administración si hace falta uno nuevo.';
+        }
+    }
+
     if (!$nueva) {
         $anexos[] = 'Esta orden ya se había recibido: no se registró dos veces.';
     } else {
-        $pen = $orden['pendiente'] ?? null;
         if (is_array($pen) && trim((string) ($pen['diagnostico'] ?? '')) !== '') {
             if ($aviso === '') {
                 /* Sin aviso no hay caso al que colgar el pendiente, y
@@ -283,16 +343,74 @@ try {
                                null, null, ['pendiente' => $pen], true);
             } else {
                 [$ok, $msg, $idPen] = Pendientes::abrir([
-                    'aviso'         => $aviso,
-                    'activo_fijo'   => $pen['activo_fijo'] ?? '',
-                    'equipo_desc'   => $pen['equipo_desc'] ?? '',
-                    'diagnostico'   => $pen['diagnostico'],
-                    'parte'         => $pen['parte'] ?? '',
-                    'deshabilitado' => !empty($pen['deshabilitado']),
-                    'abierto_ts'    => $t,
+                    'aviso'              => $aviso,
+                    'activo_fijo'        => $pen['activo_fijo'] ?? '',
+                    'equipo_desc'        => $pen['equipo_desc'] ?? '',
+                    'diagnostico'        => $pen['diagnostico'],
+                    'parte'              => $pen['parte'] ?? '',
+                    'deshabilitado'      => !empty($pen['deshabilitado']),
+                    'abierto_ts'         => $t,
+                    // H-11/D9: el diagnóstico pre-redactado que eligió (si lo
+                    // hizo) y los repuestos estructurados. `Pendientes::abrir`
+                    // los acepta o los ignora según lo que S3 tenga hecho; no
+                    // rompe nada si todavía no los usa.
+                    'diagnostico_codigo' => $pen['diagnostico_codigo'] ?? null,
+                    'partes'             => is_array($pen['partes'] ?? null) ? $pen['partes'] : [],
                 ]);
                 $anexos[] = $ok ? $msg : ('No se pudo registrar el equipo trabado: ' . $msg
                                         . ' Quedó anotado dentro de la orden.');
+            }
+        }
+
+        // Administrador del local (H-08): se suma a `locales_admin` para que
+        // la próxima orden lo ofrezca en el datalist. Solo con orden NUEVA:
+        // contar un reintento sería inflar «veces» sin que haya una firma más.
+        $adminNombre = trim((string) ($orden['admin'] ?? ''));
+        $localCod = trim((string) ($orden['local'] ?? ''));
+        if ($adminNombre !== '' && $localCod !== '') {
+            try {
+                Db::ejecutar(
+                    "INSERT INTO locales_admin (local_codigo, nombre, veces, visto_ultimo, fuente)
+                     VALUES (?, ?, 1, NOW(), 'ORDEN')
+                     ON DUPLICATE KEY UPDATE veces = veces + 1, visto_ultimo = NOW(), activo = 1",
+                    [mb_substr($localCod, 0, 12), mb_substr($adminNombre, 0, 120)]
+                );
+            } catch (Throwable $ex) {
+                // Sin la 009 no existe `locales_admin`: no es motivo para
+                // perder la orden, que ya está guardada.
+            }
+        }
+
+        // Equipo nuevo / no está en la lista (H-10, D8): cada equipo marcado
+        // `nuevo: true` deja su fila en `equipos_propuestos`, visible para
+        // todas las zonas desde que se propone (Catalogo::cargar() ya los
+        // fusiona en el catálogo del local). Idempotente por `equipo_uuid`,
+        // que genera el celular: el reintento no lo duplica.
+        foreach ((array) ($orden['equipos'] ?? []) as $eq) {
+            if (!is_array($eq) || empty($eq['nuevo'])) { continue; }
+            $eqUuid = strtolower((string) ($eq['equipo_uuid'] ?? ''));
+            if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $eqUuid)) {
+                continue;                // sin uuid no hay cómo evitar duplicarlo: se queda solo en la carga
+            }
+            try {
+                Db::ejecutar(
+                    'INSERT INTO equipos_propuestos
+                        (equipo_uuid, local_codigo, zona, tipo, marca, modelo, serie, activo_fijo, area,
+                         envio_uuid, propuesto_por)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                     ON DUPLICATE KEY UPDATE equipo_uuid = equipo_uuid',
+                    [
+                        $eqUuid, $localCod !== '' ? $localCod : null,
+                        in_array($orden['zona'] ?? '', ['UIO', 'LARB', 'CNLJ', 'OTRA'], true) ? $orden['zona'] : null,
+                        mb_substr((string) ($eq['tipo'] ?? ''), 0, 80),
+                        $eq['marca'] ?? null, $eq['modelo'] ?? null, $eq['serie'] ?? null,
+                        $eq['codigo_activo'] ?? null, $eq['area'] ?? null,
+                        $uuid, (int) $u['usuario_id'],
+                    ]
+                );
+            } catch (Throwable $ex) {
+                // Sin la 009 no existe `equipos_propuestos`: el equipo sigue
+                // dentro de la carga JSON de la orden, solo que sin fila propia.
             }
         }
 
@@ -365,6 +483,49 @@ if ($em['error'] !== null) {
                    ['captura_id' => $fila['captura_id'] ?? null, 'modo' => Emision::modo()]);
 }
 
+/* -------------------------------------------------------------------------
+   EL CASO SE MUEVE EN EL ACTO (T2.14.3). Con la orden emitida, el caso queda
+   ATENDIDO con su orden de cierre (o ASIGNADO al firmante si no concluyó),
+   sin esperar a la reconciliación nocturna: es lo que la administradora ve
+   como «a registrar en SAP» en tiempo real. Va ANTES de resolver el pendiente
+   porque `Pendientes` decide ATENDIDO/ASIGNADO mirando si ya hay `ot_cierre`.
+   ------------------------------------------------------------------------- */
+if ($em['error'] === null && $aviso !== '' && !empty($em['id_industec'])) {
+    try {
+        Casos::atenderPorOrden($aviso, $orden['zona'] ?? null, (string) $em['id_industec'],
+                               $concluida, (int) $u['usuario_id']);
+    } catch (Throwable $ex) {
+        error_log('envio.php: atenderPorOrden: ' . $ex->getMessage());
+    }
+}
+
+/* -------------------------------------------------------------------------
+   LA ORDEN CONCLUIDA RESUELVE EL PENDIENTE SOLA (punto 7). Si el equipo del
+   caso ya no está trabado, no tiene sentido que el jefe de zona lo siga
+   viendo abierto porque nadie cerró el pendiente a mano. `Pendientes` (S3) es
+   quien lo ofrece; hasta que exista, esta llamada es un no-op seguro.
+   ------------------------------------------------------------------------- */
+if ($concluida && $aviso !== '' && method_exists('Pendientes', 'resolverPorOrden')) {
+    try {
+        Pendientes::resolverPorOrden(
+            $aviso, null, (string) ($em['id_industec'] ?? ($fila['captura_id'] ?? '')), (int) $u['usuario_id']
+        );
+    } catch (Throwable $ex) {
+        error_log('envio.php: resolverPorOrden: ' . $ex->getMessage());
+    }
+}
+
+/* Reintento oportunista de lo que quedó a medias (H-03, punto 7): unas pocas
+   por envío, no todo el backlog -- para eso está `emitir_pendientes_cli.php`
+   desde el cron cada 10 min (S6). */
+if (method_exists('Emision', 'reintentarPendientes')) {
+    try {
+        Emision::reintentarPendientes(3);
+    } catch (Throwable $ex) {
+        error_log('envio.php: reintentarPendientes: ' . $ex->getMessage());
+    }
+}
+
 responder(200, [
     'ok'     => true,
     'recibo' => [
@@ -379,7 +540,10 @@ responder(200, [
             ? 'Orden ' . $em['id_industec'] . ' emitida: el PDF está en tu historial. '
               . ($prueba ? 'Es el sistema en pruebas: el correo no se envió a nadie.'
                          : 'El correo al local sale de la cola.')
-            : 'La orden quedó guardada. El PDF no se pudo generar todavía: se reintenta en el próximo envío.',
+            : ($em['id_industec']
+                ? 'La orden quedó guardada con el número ' . $em['id_industec']
+                  . '. El PDF no se pudo generar todavía: se reintenta desde el servidor cada 10 minutos.'
+                : 'La orden quedó guardada. Todavía no se le pudo asignar número: se reintenta desde el servidor cada 10 minutos.'),
         // Qué pasó con el equipo trabado, las novedades y las observaciones.
         // Va aparte de la orden porque son hechos distintos con destinos distintos.
         'anexos'     => $anexos,

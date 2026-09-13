@@ -17,6 +17,7 @@ import os
 import re
 import ssl
 import subprocess
+import time
 import sys
 import tempfile
 import urllib.error
@@ -51,10 +52,18 @@ def anotar(clave, que, ok, obtenido, esperado=""):
 
 
 def ssh(cmd, entrada=None):
-    r = subprocess.run(SSH + [cmd], input=entrada, capture_output=True, text=True, timeout=120)
-    if r.returncode != 0:
-        raise RuntimeError(f"ssh falló: {r.stderr.strip()[:200]}")
-    return r.stdout
+    # Con tres baterías a la vez, Hostinger corta alguna conexión SSH sin
+    # decir nada (código 255, stderr vacío). Es un tropiezo de red, no un
+    # fallo del sistema: se reintenta una vez antes de abandonar la prueba.
+    for intento in (1, 2):
+        r = subprocess.run(SSH + [cmd], input=entrada, capture_output=True, text=True, timeout=120)
+        if r.returncode == 0:
+            return r.stdout
+        transitorio = r.returncode == 255 or not r.stderr.strip()
+        if intento == 1 and transitorio:
+            time.sleep(3)
+            continue
+        raise RuntimeError(f"ssh falló ({r.returncode}): {r.stderr.strip()[:200]}")
 
 
 def ejecutar(q, p=None):

@@ -53,6 +53,28 @@
         </select>
       </div>
 
+      <!-- H-18/D10: el trabajo lo hizo (o lo va a hacer) otro proveedor, no
+           INDUSTEC. No cambia el tipo de orden: solo deja el dato en
+           `con_proveedor` para que la administración sepa a quién preguntarle. -->
+      <label style="display:flex;align-items:center;gap:9px;margin-top:12px;font-size:13.5px;color:var(--ink)">
+        <input type="checkbox" id="con_proveedor_marcado" style="width:auto;height:auto;margin:0">
+        El trabajo lo hizo (o lo va a hacer) otro proveedor, no INDUSTEC
+      </label>
+      <div id="wrapProveedor" class="condicional" hidden style="margin-top:10px">
+        <span class="porque">Aparece porque marcaste "otro proveedor"</span>
+        <div class="grid g2">
+          <div>
+            <label for="proveedor_nombre">Nombre del proveedor</label>
+            <input type="text" id="proveedor_nombre" placeholder="p. ej. Frío Total">
+          </div>
+          <div>
+            <label for="proveedor_objeto">Qué hizo o va a hacer</label>
+            <input type="text" id="proveedor_objeto" placeholder="p. ej. compresor de la cámara 2">
+          </div>
+        </div>
+        <input type="hidden" name="con_proveedor" id="con_proveedor">
+      </div>
+
       <!-- ============ 2. LA ORDEN ============
            El técnico NO teclea números y ya no elige su nombre. El correlativo
            INDUSTEC lo reserva el servidor con el secuencial de su zona; el
@@ -141,12 +163,16 @@
             <span class="chip">Cadena <b id="chipCadena">—</b></span>
             <span class="chip" id="chipClienteWrap" hidden>Cliente <b id="chipCliente">—</b></span>
           </div>
-          <span class="derivado" id="localNota">La zona y la cadena las pone el maestro, no se escriben. Antes se cruzaban 4 locales de Quito a Cuenca.</span>
+          <span class="derivado" id="localNota">La zona y la cadena las pone el maestro, no se escriben.</span>
         </div>
 
         <div>
-          <label>Administrador del local (nombre y apellido)</label>
-          <input type="text" name="admin" id="admin" required>
+          <label for="admin">Administrador del local (nombre y apellido)</label>
+          <input type="text" name="admin" id="admin" list="adminsLista" required>
+          <!-- H-08: se llena con `CAT.admins[local]` (los ya ingresados en
+               `locales_admin`). No obliga a elegir de la lista: se puede
+               escribir uno nuevo si de verdad es otra persona. -->
+          <datalist id="adminsLista"></datalist>
         </div>
         <div>
           <label>Correo del local</label>
@@ -162,8 +188,7 @@
 
       <!-- ============ TÉCNICOS ============ -->
       <h2>¿Intervino alguien más?</h2>
-      <p class="sub">El responsable es quien llena la orden. Agrega aquí a los demás, si los hubo:
-        en el histórico 1 de cada 6 órdenes llevó más de un técnico y eso no se podía medir.</p>
+      <p class="sub">El responsable es quien llena la orden. Agrega aquí a los demás, si los hubo.</p>
       <div id="tecnicos"></div>
       <div class="row" style="margin-top:6px">
         <button type="button" class="btn secondary" id="addTecnico">+ Añadir otro técnico</button>
@@ -202,7 +227,15 @@
       <input type="hidden" name="uso_repuesto" id="uso_repuesto" value="0">
       <div id="wrapRepuestos" hidden style="margin-top:8px">
         <label>Detalle de los repuestos</label>
-        <textarea name="repuestos" id="repuestos" placeholder="Descripción y número de parte…"></textarea>
+        <!-- H-11/D9: lista estructurada en vez de texto libre. `#repuestos`
+             sigue existiendo -- es lo que valida Validacion.php y lo que
+             imprime el PDF-- pero ahora lo compone app.js a partir de las
+             filas de `#repuestosLista`; el técnico ya no lo teclea a mano. -->
+        <div id="repuestosLista"></div>
+        <div class="row" style="margin-top:6px">
+          <button type="button" class="btn secondary" id="addRepuesto">+ Agregar repuesto</button>
+        </div>
+        <textarea name="repuestos" id="repuestos" hidden></textarea>
       </div>
 
       <label style="margin-top:10px">Observaciones generales</label>
@@ -234,20 +267,39 @@
         <span class="porque">Aparece porque el trabajo no quedó concluido</span>
         <div class="bloque">
           <div>
+            <!-- H-11/D9: la falla filtra por la familia del equipo trabado
+                 (patrón de `CAT.familias`) y rellena el diagnóstico con el
+                 texto sugerido; sigue siendo editable después. -->
+            <label for="pen_falla">Falla encontrada (opcional, prellena el diagnóstico)</label>
+            <select id="pen_falla">
+              <option value="">Elige si calza con algo conocido…</option>
+            </select>
+            <input type="hidden" id="pen_diagnostico_codigo" name="pen_diagnostico_codigo">
+          </div>
+          <div style="margin-top:10px">
             <label for="pen_diagnostico">Qué encontraste y por qué no se pudo cerrar</label>
             <textarea id="pen_diagnostico" name="pen_diagnostico" rows="3"
               placeholder="p. ej. la resistencia de la freidora 2 está abierta; se midió continuidad y no pasa"></textarea>
             <span class="derivado">Es lo que sostiene el veredicto de tu jefe de zona y la respuesta a Grupo KFC.</span>
           </div>
-          <div class="grid g2" style="margin-top:10px">
-            <div>
-              <label for="pen_equipo">Qué equipo es</label>
-              <input type="text" id="pen_equipo" name="pen_equipo" placeholder="freidora 2, cámara de frío…">
+          <div style="margin-top:10px">
+            <label for="pen_equipo">Qué equipo es</label>
+            <input type="text" id="pen_equipo" name="pen_equipo" placeholder="freidora 2, cámara de frío…">
+          </div>
+          <div style="margin-top:10px">
+            <!-- H-11/D9: repuestos a solicitar, como lista (descripción,
+                 cantidad, número de parte si se sabe) y no un solo campo de
+                 texto -- es lo que Andrés pidió como "identificar claramente
+                 los repuestos a solicitar". `pen_parte` (compilado) sigue
+                 viajando para lo que hoy ya lee `Pendientes::abrir`. -->
+            <label>Qué repuesto haría falta, si ya lo sabes</label>
+            <div id="penPartes"></div>
+            <div class="row" style="margin-top:6px">
+              <button type="button" class="btn secondary" id="addParte">+ Agregar repuesto</button>
             </div>
-            <div>
-              <label for="pen_parte">Qué haría falta, si ya lo sabes</label>
-              <input type="text" id="pen_parte" name="pen_parte" placeholder="resistencia de 5 kW — opcional">
-            </div>
+            <span class="derivado">Si no estás seguro, déjalo vacío. Tu jefe de zona decide la vía:
+              comprar el repuesto, mandarlo a reparación, reclamar garantía o darlo de baja.</span>
+            <input type="hidden" id="pen_parte" name="pen_parte">
           </div>
           <label style="display:flex;align-items:flex-start;gap:9px;margin-top:12px;padding:11px;
                         border:1px solid var(--danger-bd);background:var(--danger-bg);
@@ -261,6 +313,9 @@
           </label>
         </div>
       </div>
+      <!-- Datalist compartido por la lista de repuestos de la orden y la del
+           equipo trabado: se llena una vez con `CAT.repuestos` (H-11/D9). -->
+      <datalist id="partesLista"></datalist>
 
       <!-- ============ ESTADO OT (complementario) ============ -->
       <h2>Estado de la orden</h2>
@@ -283,7 +338,7 @@
           </label>
         </div>
         <div class="slot-list" id="fileList"><div class="small">Sin fotos</div></div>
-        <div class="small">En el sistema de hoy las fotos viajan dentro del envío y superan el límite: PDFs en blanco. Aquí van aparte.</div>
+        <div class="small">Toma las fotos aquí; suben solas cuando haya señal. Hasta 8 por orden.</div>
       </div>
 
       <!-- ============ NOVEDADES DE LA VISITA ============
@@ -378,20 +433,15 @@
 
       <h2>Cómo va a quedar archivada</h2>
       <p id="rNombre" class="mono" style="font-size:15px;color:var(--ink);word-break:break-all"></p>
-      <p class="sub">El <code>NNNN</code> lo reemplaza el correlativo que reserva el servidor
-        con el secuencial de tu zona.</p>
+      <!-- H-04/DOC-04: el `NNNN` es un marcador MIENTRAS no llega el recibo
+           real de envio.php (cola.js dispara `orden-emitida` y app.js lo
+           escucha); en cuanto llega, #rNombre pasa a mostrar el número
+           verdadero y este párrafo se esconde -- ya no hace falta explicarlo. -->
+      <p class="sub" id="rNnnnNota">El <code>NNNN</code> lo reemplaza el correlativo que reserva el
+        servidor con el secuencial de tu zona; se confirma en cuanto la orden termine de procesarse.</p>
 
-      <!-- Se dice qué falta todavía, con esas palabras. Fingir que el informe
-           ya salió es peor que no decir nada: el técnico lo da por hecho y el
-           local nunca lo recibe. -->
-      <div class="aviso warn">
-        <span class="ic" aria-hidden="true">!</span>
-        <div class="cuerpo">
-          <b>El PDF y el correo al local todavía no salen de aquí.</b>
-          <p>La orden queda guardada y completa en el sistema, pero el informe al
-            administrador del local se sigue emitiendo por el camino de siempre.
-            Eso cambia cuando se active la emisión automática.</p>
-        </div>
+      <div class="footer" id="rVerPdfWrap" hidden>
+        <a class="btn primary bloque" id="rVerPdf" href="#" target="_blank" rel="noopener">Ver PDF</a>
       </div>
 
       <div class="footer">

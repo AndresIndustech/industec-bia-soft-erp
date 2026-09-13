@@ -25,12 +25,39 @@ require_once __DIR__ . '/Novedades.php';
  */
 final class Avisos
 {
-    /** Su última consulta de la bandeja; null si nunca la abrió. */
+    /**
+     * Su última visita a la pestaña Avisos; null si nunca la abrió.
+     *
+     * H-12: hasta la 009, esto leía `accion = 'CONSULTAR'`, que mis.php anota
+     * en TODA petición GET (abrir una ficha, cambiar de pestaña). El técnico
+     * nunca alcanzaba a ver un aviso marcado «nuevo»: cualquier toque en la
+     * bandeja ya contaba como si los hubiera leído. Ahora se lee la acción
+     * `VER_AVISOS`, que mis.php anota solo cuando `$tab === 'avisos'`.
+     */
     public static function visto(int $usuarioId): ?string
     {
         $f = Db::uno("SELECT MAX(cuando) AS v FROM bitacora
-                       WHERE usuario_id = ? AND accion = 'CONSULTAR' AND entidad = 'bandeja'", [$usuarioId]);
+                       WHERE usuario_id = ? AND accion = 'VER_AVISOS' AND entidad = 'bandeja'", [$usuarioId]);
         return $f['v'] ?? null;
+    }
+
+    /**
+     * Marca como vistos los pedidos de seguimiento (`casos_seguimientos`,
+     * ASG-15) dirigidos a este técnico. Se llama junto con la visita a la
+     * pestaña Avisos, no aparte: es el mismo gesto -- «entré a ver qué
+     * pasó»-- y duplicar el marcador sería otro lugar donde desincronizarse.
+     * Sin la 009 no existe la tabla: no es motivo para romper la bandeja.
+     */
+    public static function marcarSeguimientosVistos(int $usuarioId): void
+    {
+        try {
+            Db::ejecutar(
+                'UPDATE casos_seguimientos SET visto_en = NOW() WHERE tecnico_id = ? AND visto_en IS NULL',
+                [$usuarioId]
+            );
+        } catch (Throwable $e) {
+            // Sin la 009 no hay tabla que actualizar.
+        }
     }
 
     /**
@@ -106,6 +133,27 @@ final class Avisos
                                   . ($r['veredicto_nota'] ? ': ' . mb_substr((string) $r['veredicto_nota'], 0, 160) : ''),
                          'cuando' => (string) $r['veredicto_en']];
             }
+        }
+
+        // Le pidieron seguimiento de un caso (`casos_seguimientos`, ASG-15,
+        // 009): un jefe de zona o la administración lo pide desde `casos.php`
+        // y le aparece aquí, igual que cualquier otro aviso. Aparte del
+        // `try/catch` de `Pendientes::disponible()` porque es una tabla
+        // propia (S2), no del mismo paquete que las de repuestos.
+        try {
+            foreach (Db::todos(
+                "SELECT s.aviso, s.texto, s.pedido_en, u.nombre
+                   FROM casos_seguimientos s JOIN usuarios u ON u.usuario_id = s.pedido_por
+                  WHERE s.tecnico_id = ? AND s.pedido_en > ?",
+                [$usuarioId, $desde]
+            ) as $r) {
+                $ev[] = ['tipo' => 'SEGUIMIENTO', 'titulo' => 'Te pidieron seguimiento de un caso',
+                         'aviso' => (string) $r['aviso'],
+                         'texto' => $r['nombre'] . ': ' . mb_substr((string) $r['texto'], 0, 200),
+                         'cuando' => (string) $r['pedido_en']];
+            }
+        } catch (Throwable $e) {
+            // Sin la 009 no existe `casos_seguimientos` todavía.
         }
 
         usort($ev, static fn($a, $b) => strcmp($b['cuando'], $a['cuando']));

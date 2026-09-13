@@ -64,8 +64,12 @@ def subir(sesion, envio, foto, n, datos, nombre="foto.png", tipo="image/png"):
     partes.append(f'--{limite}\r\nContent-Disposition: form-data; name="foto"; filename="{nombre}"\r\n'
                   f'Content-Type: {tipo}\r\n\r\n'.encode() + datos + b"\r\n")
     partes.append(f"--{limite}--\r\n".encode())
-    st, _, cuerpo = abrir(sesion, urllib.request.Request(BASE + "foto.php", data=b"".join(partes), headers={
-        "Content-Type": f"multipart/form-data; boundary={limite}", "User-Agent": "verificar_emision/1.0"}))
+    cab = {"Content-Type": f"multipart/form-data; boundary={limite}", "User-Agent": "verificar_emision/1.0"}
+    # Desde la 009 foto.php exige el token CSRF en la cabecera X-Csrf, igual
+    # que cola.js; el arnés lo trae de yo.php al entrar.
+    if getattr(sesion, "csrf", ""):
+        cab["X-Csrf"] = sesion.csrf
+    st, _, cuerpo = abrir(sesion, urllib.request.Request(BASE + "foto.php", data=b"".join(partes), headers=cab))
     try:
         return st, json.loads(cuerpo.decode("utf-8") or "{}")
     except ValueError:

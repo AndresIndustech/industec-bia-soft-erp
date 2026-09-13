@@ -14,8 +14,11 @@
    marcada como tarea pendiente de la administración (PLAN §6.4b).
 
    Guarda la orden en el celular (cola.js) y la entrega a envio.php, que la
-   valida y la guarda. Todavía NO genera el PDF ni manda el correo, y no envía
-   las fotos ni la imagen de la firma: no reemplaza aún al formulario viejo.
+   valida, reserva el número de la zona, genera el PDF con las fotos y la
+   firma, y encola el correo (la 008). El recibo de esta pantalla (H-04,
+   DOC-04) espera el evento `orden-emitida` que dispara cola.js con el número
+   real y el estado del correo; mientras no llega, se dice lo que hay: que la
+   orden ya está guardada y va en camino.
    ========================================================================= */
 
 (function () {
@@ -30,7 +33,10 @@
   var validar = null;
   var localesPorCodigo = {};
   var avisoElegido = null;
+  var equipoAmbiguo = 0;       // H-09: cuántos activos iguales no se pudieron distinguir
   var firma;
+  var ultimoUuid = null;       // H-04: qué fila de la cola es "la que se acaba de mandar"
+  var reintentarUuid = null;   // H-07: viene de ?reintentar=<uuid>
 
   /* ---------- Carga ---------- */
   function cargarCatalogo() {
@@ -40,7 +46,10 @@
          Solo con senal: sin cobertura la copia guardada sirve y hay que dejarlo
          trabajar, que es el punto entero del modo sin conexion. */
       if (r.status === 401 && navigator.onLine) {
-        location.href = 'login.php?r=index.html';
+        // H-23: si esto abrió con `?aviso=…` (el caso venía precargado desde
+        // la bandeja), volver sin esos parámetros perdía la precarga: el
+        // técnico volvía a entrar y tenía que buscar el caso a mano.
+        location.href = 'login.php?r=' + encodeURIComponent('index.html' + location.search);
         return new Promise(function () {});   // se corta la cadena: ya nos vamos
       }
       if (r.status === 401) {
@@ -292,7 +301,10 @@
    */
   function tecnicoSesion() {
     if (!YO) return null;
-    var t = CAT.tecnicos.filter(function (x) { return mismoNombre(x.nombre, YO.nombre); })[0];
+    // H-05: si el catálogo no cargó, `CAT` sigue en `null` y esto reventaba
+    // antes de llegar a `n.textContent = YO.nombre` -- #yoNombre se quedaba
+    // en «Cargando…» para siempre, aunque `yo.php` sí hubiera contestado.
+    var t = CAT ? CAT.tecnicos.filter(function (x) { return mismoNombre(x.nombre, YO.nombre); })[0] : null;
     return {
       id: t ? t.id : YO.id,
       nombre: YO.nombre,
@@ -358,8 +370,11 @@
     fijarTipo(tipo);
     $('#tipoDerivado').hidden = false;
     $('#tipoDerivado').textContent = 'Derivado del caso “' + (a.caso || 'sin tipo') + '” de la orden. Corrígelo si no corresponde.';
-    pintarFicha(a);
+    // H-09: primero se resuelve el equipo (fija `equipoAmbiguo` si hay varios
+    // activos iguales), y recién con eso se pinta la ficha, que es donde se
+    // avisa si no se pudo identificar entre ellos.
     refrescarEquipos();
+    pintarFicha(a);
   }
 
   function alSoltarAviso() {
@@ -397,8 +412,27 @@
       '</dl>' +
       (a.descripcion_trabajo
         ? '<div class="cita">“' + esc(a.descripcion_trabajo) + '”</div>'
-        : '<div class="cita">El pedido en palabras de KFC llega en el correo de SAP; el export actual no lo trae.</div>');
+        : '<div class="cita">El pedido en palabras de KFC llega en el correo de SAP; el export actual no lo trae.</div>') +
+      // H-09: si el activo del aviso calzó con más de un equipo del local, no
+      // se adivina cuál -- se dice, y el técnico lo elige él mismo abajo.
+      (equipoAmbiguo > 1
+        ? '<div class="derivado" style="margin-top:8px">No se pudo identificar el activo entre '
+          + equipoAmbiguo + ' equipos iguales del local: elígelo en "Equipos intervenidos".</div>'
+        : '');
     f.hidden = false;
+  }
+
+  /* H-08: los administradores ya ingresados de este local (`CAT.admins`,
+     de `locales_admin`, más reciente primero). Un `<datalist>` no obliga a
+     elegir de la lista -- el técnico sigue pudiendo escribir uno nuevo-- pero
+     evita reteclear el mismo nombre en cada orden. */
+  function poblarAdminsDatalist(cod) {
+    var dl = $('#adminsLista');
+    if (!dl) return;
+    var nombres = (CAT.admins && CAT.admins[cod]) || [];
+    dl.innerHTML = nombres.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
+    var admin = $('#admin');
+    if (nombres.length && !admin.value) { admin.value = nombres[0]; }
   }
 
   /* ---------- Local: derivar zona, cadena y correos ---------- */
@@ -406,6 +440,7 @@
     var cod = $('#local').value;
     var l = localesPorCodigo[cod];
     var chips = $('#chipsLocal');
+    poblarAdminsDatalist(cod);
     if (!l) {
       chips.hidden = true;
       $('#correolocal').value = ''; $('#correojefeop').value = '';
@@ -467,11 +502,18 @@
     var wrap = document.createElement('div');
     wrap.className = 'bloque';
     wrap.dataset.eq = i;
+    // H-10/D8: cada bloque nace con su propio uuid, lo use o no. Solo hace
+    // falta cuando el técnico elige "Equipo nuevo…", pero generarlo aquí
+    // evita coordinarlo con el momento del cambio de <select>.
+    wrap.dataset.eqUuid = (window.Cola && Cola.uuid) ? Cola.uuid() : String(Date.now()) + '-' + i;
     wrap.innerHTML =
       '<div class="bloque-tit"><span>Equipo #' + (i + 1) + '</span>' +
       '<button type="button" class="btn danger" data-quitar-eq="' + i + '">Quitar</button></div>' +
       '<label>Equipo</label>' +
       '<select class="eq-sel" data-eq-sel="' + i + '"><option value="">Elige el local primero…</option></select>' +
+      '<div class="nota-regular" data-eq-nuevo-nota="' + i + '" hidden style="margin-top:8px">' +
+      '<b>Se registra como equipo nuevo.</b> Queda visible para todas las zonas y la ' +
+      'administración lo revisa antes de sumarlo al catálogo del local.</div>' +
       '<div class="grid g3" style="margin-top:8px">' +
       '  <div><label>Marca</label><input type="text" data-eq-marca="' + i + '"></div>' +
       '  <div><label>Modelo</label><input type="text" data-eq-modelo="' + i + '"></div>' +
@@ -486,6 +528,9 @@
       '    </div>' +
       '  </div>' +
       '</div>' +
+      '<div data-eq-area-wrap="' + i + '" hidden style="margin-top:8px">' +
+      '  <label>Área (opcional)</label><input type="text" data-eq-area="' + i + '" placeholder="cocina caliente, bodega…">' +
+      '</div>' +
       '<label style="margin-top:8px">Observaciones del equipo</label>' +
       '<textarea data-eq-obs="' + i + '" placeholder="Opcional"></textarea>';
     $('#equipos').appendChild(wrap);
@@ -496,16 +541,25 @@
       $$('#equipos .bloque').forEach(function (b, k) {
         b.querySelector('.bloque-tit span').textContent = 'Equipo #' + (k + 1);
       });
+      sincronizarFallas();
     });
     wrap.querySelector('[data-eq-estado-seg]').addEventListener('click', function (e) {
       var b = e.target.closest('button'); if (!b) return;
       $$('button', this).forEach(function (x) { x.classList.remove('on'); });
       b.classList.add('on');
+      sincronizarFallas();
     });
     var selEq = wrap.querySelector('.eq-sel');
     selEq.addEventListener('change', function () {
       var opt = selEq.selectedOptions[0];
-      wrap.querySelector('[data-eq-cod="' + i + '"]').value = (opt && opt.dataset.cod) || '';
+      var esNuevo = selEq.value.indexOf('TIPO:') === 0;
+      var cod = wrap.querySelector('[data-eq-cod="' + i + '"]');
+      cod.value = esNuevo ? '' : ((opt && opt.dataset.cod) || '');
+      cod.readOnly = !esNuevo;
+      cod.placeholder = esNuevo ? 'si lo tiene, opcional' : 'viene con el equipo';
+      wrap.querySelector('[data-eq-area-wrap="' + i + '"]').hidden = !esNuevo;
+      wrap.querySelector('[data-eq-nuevo-nota="' + i + '"]').hidden = !esNuevo;
+      sincronizarFallas();
     });
     poblarEquipoSelect(selEq);
   }
@@ -514,9 +568,14 @@
     var cod = $('#local').value;
     sel.innerHTML = '';
     if (!localesPorCodigo[cod]) { sel.innerHTML = '<option value="">Elige el local primero…</option>'; return; }
-    var activos = (CAT.equipos && CAT.equipos[cod]) || [];
+    var todos = (CAT.equipos && CAT.equipos[cod]) || [];
+    var activos = todos.filter(function (e) { return !e.propuesto; });
+    var propuestos = todos.filter(function (e) { return e.propuesto; });
+
+    sel.appendChild(new Option(
+      activos.length ? 'Elige el equipo…' : 'Este local no tiene activos en SAP — elige abajo…', ''));
+
     if (activos.length) {
-      sel.appendChild(new Option('Elige el equipo…', ''));
       var porArea = {};
       activos.forEach(function (e) { (porArea[e.area || 'Otros'] = porArea[e.area || 'Otros'] || []).push(e); });
       Object.keys(porArea).sort().forEach(function (area) {
@@ -532,24 +591,300 @@
         });
         sel.appendChild(og);
       });
-      // Si la orden de SAP dice qué activo es, se preselecciona: es el dato del
-      // cliente, y evita que se elija la freidora equivocada entre 4 iguales.
-      if (avisoElegido && avisoElegido.equipo_sap) {
-        var hay = Array.prototype.some.call(sel.options, function (o) { return o.value === avisoElegido.equipo_sap; });
-        if (hay) { sel.value = avisoElegido.equipo_sap; sel.dispatchEvent(new Event('change')); }
-      }
-    } else {
-      sel.appendChild(new Option('Este local no tiene activos en SAP — elige el tipo…', ''));
-      CAT.tipos.slice().sort().forEach(function (t) {
-        var o = new Option(limpiarTipo(t), 'TIPO:' + t);
-        o.dataset.tipo = t;
-        sel.appendChild(o);
+    }
+
+    // H-10/D8: los que otro técnico ya propuso para este local (Catalogo::
+    // cargar() los fusiona con `propuesto:true`). Elegir uno de estos NO es
+    // "equipo nuevo" -- ya está propuesto-- así que no dispara la nota ni la
+    // regla EQUIPO_NUEVO_PROPUESTO otra vez.
+    if (propuestos.length) {
+      var ogp = document.createElement('optgroup');
+      ogp.label = 'Propuestos por otros técnicos (pendientes de aprobar)';
+      propuestos.forEach(function (e) {
+        var o = document.createElement('option');
+        o.value = e.equipo_sap;
+        o.dataset.cod = e.codigo_activo || '';
+        o.dataset.tipo = e.tipo || '';
+        o.textContent = limpiarTipo(e.tipo) + (e.codigo_activo ? ' · AF ' + e.codigo_activo : '') + ' · propuesto';
+        ogp.appendChild(o);
       });
+      sel.appendChild(ogp);
+    }
+
+    var ogn = document.createElement('optgroup');
+    ogn.label = 'Equipo nuevo / no está en la lista';
+    (CAT.tipos || []).slice().sort().forEach(function (t) {
+      var o = new Option(limpiarTipo(t), 'TIPO:' + t);
+      o.dataset.tipo = t;
+      ogn.appendChild(o);
+    });
+    sel.appendChild(ogn);
+
+    // H-09: el equipo del aviso viene preseleccionado, cruzando por
+    // `equipo_sap` (si SAP lo trae) o por `codigo_activo` contra el activo
+    // fijo del caso. Si hay más de un candidato -- varios activos iguales--
+    // no se adivina: se deja vacío y se avisa en la ficha (equipoAmbiguo).
+    if (avisoElegido) {
+      var af = String(avisoElegido.equipo_denominacion || '').trim();
+      var cand = Array.prototype.filter.call(sel.options, function (o) {
+        return o.value && (
+          (avisoElegido.equipo_sap && o.value === avisoElegido.equipo_sap) ||
+          (af !== '' && o.dataset.cod && o.dataset.cod === af)
+        );
+      });
+      if (cand.length === 1) {
+        sel.value = cand[0].value;
+        sel.dispatchEvent(new Event('change'));
+      } else if (cand.length > 1) {
+        equipoAmbiguo = cand.length;
+      }
     }
   }
 
   function refrescarEquipos() {
+    equipoAmbiguo = 0;
     $$('#equipos .eq-sel').forEach(poblarEquipoSelect);
+  }
+
+  /* =======================================================================
+     Repuestos, estructurados (H-11, D9).
+
+     Una fila por repuesto: descripción, cantidad y número de parte si se
+     sabe. Se usa dos veces con el mismo molde -- en "Detalle de los
+     repuestos" de la orden, y en "Qué repuesto haría falta" del equipo
+     trabado-- porque son el mismo dato en dos momentos distintos: uno ya
+     usado, el otro por solicitar.
+     ======================================================================= */
+  function crearListaPartes(contId) {
+    var cont = $(contId);
+    function fila(valores) {
+      valores = valores || {};
+      var row = document.createElement('div');
+      row.className = 'grid g3 parte-row';
+      row.style.marginTop = '8px';
+      row.innerHTML =
+        '<div><label>Repuesto</label><input type="text" class="parte-desc" list="partesLista" placeholder="resistencia 5 kW"></div>' +
+        '<div><label>Cantidad</label><input type="number" class="parte-cant" min="1" value="1"></div>' +
+        '<div><label>N.° de parte</label><input type="text" class="parte-num" placeholder="opcional"></div>';
+      cont.appendChild(row);
+      row.querySelector('.parte-desc').value = valores.descripcion || '';
+      row.querySelector('.parte-cant').value = valores.cantidad || 1;
+      row.querySelector('.parte-num').value = valores.numero_parte || '';
+      return row;
+    }
+    return {
+      agregar: fila,
+      vaciar: function () { cont.innerHTML = ''; },
+      vacia: function () { return !cont.children.length; },
+      leer: function () {
+        return $$('.parte-row', cont).map(function (r) {
+          var d = r.querySelector('.parte-desc').value.trim();
+          if (!d) return null;
+          var cant = Math.max(1, +r.querySelector('.parte-cant').value || 1);
+          var num = r.querySelector('.parte-num').value.trim() || null;
+          // Si lo que escribió calza EXACTO con un repuesto frecuente, se
+          // completa el número de parte y el código -- así el veredicto de
+          // repuestos no vuelve a partir de un varchar sin estructura.
+          var m = (CAT && CAT.repuestos || []).filter(function (x) { return x.descripcion === d; })[0];
+          return { descripcion: d, cantidad: cant, numero_parte: num || (m ? m.numero_parte : null),
+                   codigo: m ? m.codigo : null };
+        }).filter(Boolean);
+      }
+    };
+  }
+  function compilarPartesTexto(items) {
+    return (items || []).map(function (p) {
+      return p.descripcion + (p.cantidad > 1 ? ' x' + p.cantidad : '') + (p.numero_parte ? ' (' + p.numero_parte + ')' : '');
+    }).join('; ');
+  }
+  var listaRepuestosOrden = null;
+  var listaPartesTrabado = null;
+
+  /* =======================================================================
+     "Falla encontrada" (H-11, D9): un selector por familia de equipo que
+     prellena el diagnóstico y sugiere repuestos frecuentes. La familia se
+     resuelve con el mismo patrón que trae `CAT.familias`, insensible a
+     mayúsculas y tildes -- es el patrón que también usa el servidor, si algún
+     día hace falta repetir la resolución ahí.
+     ======================================================================= */
+  function familiaDe(tipo) {
+    var t = baja(tipo || '').toUpperCase();
+    var f = (CAT && CAT.familias || []).filter(function (x) {
+      try { return new RegExp(x.patron, 'i').test(t); } catch (e) { return false; }
+    })[0];
+    return f ? f.familia : null;
+  }
+
+  /* El tipo del equipo trabado: el bloque marcado "Deshabilitado", o el único
+     equipo de la orden. Igual que `activoDelTrabado()`, pero para el tipo. */
+  function tipoDelTrabado() {
+    var bloques = $$('#equipos .bloque');
+    var parados = bloques.filter(function (b) {
+      var on = b.querySelector('[data-eq-estado-seg] button.on');
+      return on && on.dataset.v === 'Deshabilitado';
+    });
+    var b = parados.length === 1 ? parados[0] : (bloques.length === 1 ? bloques[0] : null);
+    if (!b) return null;
+    var opt = b.querySelector('.eq-sel').selectedOptions[0];
+    return opt ? (opt.dataset.tipo || null) : null;
+  }
+
+  function sincronizarFallas() {
+    var sel = $('#pen_falla');
+    if (!sel || !CAT) return;
+    var familia = familiaDe(tipoDelTrabado());
+    var opciones = (CAT.diagnosticos || []).filter(function (d) { return !familia || d.familia === familia; });
+    sel.innerHTML = '<option value="">Elige si calza con algo conocido…</option>' +
+      opciones.map(function (d) { return '<option value="' + esc(d.codigo) + '">' + esc(d.titulo) + '</option>'; }).join('');
+  }
+
+  /* Al elegir una falla: rellena el diagnóstico (editable después) y sugiere
+     los repuestos frecuentes que suelen ir con ella. No pisa filas que el
+     técnico ya haya escrito -- se agregan detrás. */
+  function alElegirFalla() {
+    var sel = $('#pen_falla');
+    var cod = sel.value;
+    $('#pen_diagnostico_codigo').value = cod;
+    if (!cod || !CAT) return;
+    var d = CAT.diagnosticos.filter(function (x) { return x.codigo === cod; })[0];
+    if (!d) return;
+    $('#pen_diagnostico').value = d.texto;
+    var yaEstan = listaPartesTrabado ? listaPartesTrabado.leer().map(function (p) { return p.codigo; }) : [];
+    (d.partes_frecuentes || []).forEach(function (codigoRep) {
+      if (yaEstan.indexOf(codigoRep) !== -1) return;
+      var r = (CAT.repuestos || []).filter(function (x) { return x.codigo === codigoRep; })[0];
+      if (r && listaPartesTrabado) { listaPartesTrabado.agregar({ descripcion: r.descripcion, cantidad: 1, numero_parte: r.numero_parte }); }
+    });
+  }
+
+  /* =======================================================================
+     Reconstruir los bloques repetibles (equipos, novedades) desde datos
+     guardados. Lo usan dos caminos que llegan con formas distintas:
+
+       - El BORRADOR (offline.js, H-14): guarda cada bloque con su propio
+         lector (`datosEquipo`/`datosNovedad`), en la misma forma que espera
+         `reconstruirEquipos`/`reconstruirNovedades`.
+       - "Corregir y reenviar" (cola.js, H-07): trae `fila.orden`, que es la
+         forma que ya arma `reunirOrden()` (`equipo_sap`/`tipo`+`nuevo`,
+         `codigo_activo`, `equipo_desc`…) y hay que adaptar primero.
+     ======================================================================= */
+  function equipoOrdenAValor(eq) {
+    return eq && eq.nuevo ? 'TIPO:' + (eq.tipo || '') : ((eq && eq.equipo_sap) || '');
+  }
+
+  function reconstruirEquipos(lista) {
+    $('#equipos').innerHTML = ''; nEq = 0;
+    (lista || []).forEach(function (eqd) {
+      bloqueEquipo();
+      var b = $('#equipos .bloque:last-child');
+      var sel = b.querySelector('.eq-sel');
+      if (eqd.valor) { sel.value = eqd.valor; sel.dispatchEvent(new Event('change')); }
+      var set = function (s, v) { var el = b.querySelector(s); if (el && v) { el.value = v; } };
+      set('[data-eq-marca]', eqd.marca); set('[data-eq-modelo]', eqd.modelo); set('[data-eq-serie]', eqd.serie);
+      set('[data-eq-area]', eqd.area);
+      if (eqd.codigo && sel.value.indexOf('TIPO:') === 0) { set('[data-eq-cod]', eqd.codigo); }
+      set('[data-eq-obs]', eqd.obs);
+      if (eqd.estado) {
+        var btn = b.querySelector('[data-eq-estado-seg] button[data-v="' + eqd.estado + '"]');
+        if (btn) { btn.click(); }
+      }
+    });
+    if (!$$('#equipos .bloque').length) { bloqueEquipo(); }
+  }
+
+  function reconstruirNovedades(lista) {
+    var btn = $('#addNovedad');
+    if (!btn || !lista || !lista.length) { return; }
+    lista.forEach(function (nvd) {
+      if (!nvd.descripcion) { return; }
+      btn.click();                        // guia.js arma el bloque; puede no existir
+      var b = $('#novedadesVisita .bloque:last-child');
+      if (!b) { return; }
+      var set = function (s, v) { var el = b.querySelector(s); if (el && v) { el.value = v; } };
+      set('.nov-tipo', nvd.tipo); set('.nov-riesgo', nvd.riesgo); set('.nov-resp', nvd.responsable);
+      set('.nov-equipo', nvd.equipo); set('.nov-desc', nvd.descripcion);
+    });
+  }
+
+  /**
+   * Vuelca una orden ya reunida (la forma de `reunirOrden()`/`fila.orden`) en
+   * el formulario. La usa "Corregir y reenviar" (H-07): la firma NO se
+   * restaura como trazo -- se avisa y se pide firmar de nuevo, que es más
+   * simple y más confiable que reconstruir el canvas desde el PNG-- pero
+   * todo lo demás (local, aviso, equipos, pendiente, novedades…) sí.
+   */
+  function volcarOrden(o) {
+    var sinAviso = !!o.sin_aviso;
+    fijarOrigen(sinAviso ? 'SIN_ASIGNAR' : 'ASIGNADA');
+    $$('#segOrigen button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === $('#origen').value); });
+    if (sinAviso) {
+      $('#motivo_sin_aviso').value = o.motivo_sin_aviso || '';
+      if (o.local) { comboLocal.elegirPorClave(o.local); }
+    } else if (o.aviso && !comboAviso.elegirPorClave(o.aviso) && o.local) {
+      // El caso ya no está entre los que carga el celular (se cerró, o se
+      // reasignó): al menos se deja el local a mano para no perder el resto.
+      comboLocal.elegirPorClave(o.local);
+    }
+    fijarTipo(o.tipo || 'CORRECTIVO');
+    $$('#segTipo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === $('#tipo').value); });
+    if (o.dia_intervencion) { $('#dia_intervencion').value = o.dia_intervencion; }
+    $('#admin').value = o.admin || '';
+    if (o.fecha_atencion) { $('#fecha_atencion').value = o.fecha_atencion; }
+    $('#inicio').value = o.inicio || '';
+    $('#fin').value = o.fin || '';
+    $('#actividades').value = o.actividades || '';
+    $('#observaciones').value = o.observaciones || '';
+    $('#estado_ot').value = o.estado_ot || 'Abierta';
+    $$('#segEstado button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === $('#estado_ot').value); });
+    $('#atiempo').value = o.atiempo || '';
+    $$('#segAtiempo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === o.atiempo); });
+    if (o.satisfaccion) {
+      $('#satisfaccion').value = o.satisfaccion;
+      $$('.star', $('#rating')).forEach(function (x) {
+        x.querySelector('span:last-child').textContent = (+x.dataset.v <= o.satisfaccion) ? '★' : '☆';
+      });
+    }
+    $('#uso_repuesto').value = o.uso_repuesto ? '1' : '0';
+    $$('#segRepuesto button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === (o.uso_repuesto ? 'si' : 'no')); });
+    $('#wrapRepuestos').hidden = !o.uso_repuesto;
+    if (o.uso_repuesto && listaRepuestosOrden) {
+      listaRepuestosOrden.vaciar();
+      if (o.repuestos) { listaRepuestosOrden.agregar({ descripcion: o.repuestos }); }
+      if (listaRepuestosOrden.vacia()) { listaRepuestosOrden.agregar(); }
+    }
+    $('#con_proveedor_marcado').checked = !!o.con_proveedor_marcado;
+    $('#wrapProveedor').hidden = !o.con_proveedor_marcado;
+    if (o.con_proveedor) {
+      var trozos = o.con_proveedor.split(' · ');
+      $('#proveedor_nombre').value = trozos[0] || '';
+      $('#proveedor_objeto').value = trozos.slice(1).join(' · ') || '';
+    }
+    reconstruirEquipos((o.equipos || []).map(function (eq) {
+      return { valor: equipoOrdenAValor(eq), marca: eq.marca, modelo: eq.modelo, serie: eq.serie,
+               codigo: eq.codigo_activo, area: eq.area, obs: eq.obs, estado: eq.estado };
+    }));
+    var concl = o.concluida !== false;
+    $('#concluida').value = concl ? '1' : '0';
+    $$('#segConcluye button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === (concl ? 'si' : 'no')); });
+    $('#wrapTrabado').hidden = concl;
+    $('#pen_diagnostico').required = !concl;
+    if (!concl && o.pendiente) {
+      $('#pen_diagnostico').value = o.pendiente.diagnostico || '';
+      $('#pen_diagnostico_codigo').value = o.pendiente.diagnostico_codigo || '';
+      $('#pen_equipo').value = o.pendiente.equipo_desc || '';
+      $('#pen_parado').checked = !!o.pendiente.deshabilitado;
+      sincronizarFallas();
+      if (listaPartesTrabado) {
+        listaPartesTrabado.vaciar();
+        var partes = (o.pendiente.partes && o.pendiente.partes.length)
+          ? o.pendiente.partes : (o.pendiente.parte ? [{ descripcion: o.pendiente.parte }] : []);
+        partes.forEach(function (p) { if (p.descripcion) { listaPartesTrabado.agregar(p); } });
+        if (listaPartesTrabado.vacia()) { listaPartesTrabado.agregar(); }
+      }
+    }
+    reconstruirNovedades((o.novedades || []).map(function (n) {
+      return { tipo: n.tipo, riesgo: n.riesgo, responsable: n.responsable, equipo: n.equipo_desc, descripcion: n.descripcion };
+    }));
   }
 
   /* ---------- Controles segmentados ---------- */
@@ -728,9 +1063,14 @@
       var opt = sel.selectedOptions[0];
       var val = sel.value;
       var eq;
-      if (val && val.indexOf('TIPO:') === 0) eq = { tipo: val.slice(5) };
-      else if (val) eq = { equipo_sap: val, tipo: (opt && opt.dataset.tipo) || '' };
-      else return {};
+      if (val && val.indexOf('TIPO:') === 0) {
+        // H-10/D8: "Equipo nuevo / no está en la lista". Viaja con su propio
+        // uuid (idempotente: el reintento no lo duplica en equipos_propuestos).
+        eq = { tipo: val.slice(5), nuevo: true, equipo_uuid: b.dataset.eqUuid || null };
+      } else if (val) {
+        eq = { equipo_sap: val, tipo: (opt && opt.dataset.tipo) || '' };
+        if (opt && opt.dataset.propuesto === '1') { eq.propuesto = true; }
+      } else { return {}; }
       /* Lo que va al PDF de cada equipo (T2.13, la 008): su estado y lo que el
          técnico escribió de él. Marca, modelo y serie no están en el maestro. */
       var on = b.querySelector('[data-eq-estado-seg] button.on');
@@ -740,6 +1080,8 @@
       eq.marca = txt('[data-eq-marca]') || null;
       eq.modelo = txt('[data-eq-modelo]') || null;
       eq.serie = txt('[data-eq-serie]') || null;
+      eq.codigo_activo = txt('[data-eq-cod]') || null;
+      if (eq.nuevo) { eq.area = txt('[data-eq-area]') || null; }
       return eq;
     });
 
@@ -751,6 +1093,21 @@
     });
 
     var usoRep = $('#uso_repuesto').value === '1';
+    // H-11/D9: el texto libre sigue viajando -- es lo que valida Validacion.php
+    // y lo que imprime el PDF-- pero ahora se compone desde la lista.
+    if (usoRep && listaRepuestosOrden) { $('#repuestos').value = compilarPartesTexto(listaRepuestosOrden.leer()); }
+
+    // H-18/D10: trabajo con otro proveedor. `con_proveedor_marcado` es la
+    // intención (la casilla); `con_proveedor` es el texto compuesto, y solo
+    // existe si además se escribió el nombre -- si no, Validacion lo bloquea
+    // con CON_PROVEEDOR_SIN_NOMBRE, a propósito.
+    var conProvMarcado = $('#con_proveedor_marcado').checked;
+    var provNombre = $('#proveedor_nombre').value.trim();
+    var provObjeto = $('#proveedor_objeto').value.trim();
+    var conProveedor = (conProvMarcado && provNombre)
+      ? (provNombre + (provObjeto ? ' · ' + provObjeto : ''))
+      : null;
+    $('#con_proveedor').value = conProveedor || '';
 
     return {
       tipo: tipo,
@@ -764,6 +1121,8 @@
       equipos: equipos,
       uso_repuesto: usoRep,
       repuestos: usoRep ? $('#repuestos').value.trim() : null,
+      con_proveedor_marcado: conProvMarcado,
+      con_proveedor: conProveedor,
       fecha_atencion: $('#fecha_atencion').value || null,
       inicio: $('#inicio').value || null,
       fin: $('#fin').value || null,
@@ -803,13 +1162,20 @@
    */
   function pendienteDeLaOrden() {
     if ($('#concluida').value === '1') return null;
+    // H-11/D9: repuestos a solicitar, estructurados (S3 los recibe vía
+    // Pendientes::abrir). `parte` sigue viajando, compuesto desde la lista,
+    // para lo que hoy ya lee esa columna en la ficha del caso.
+    var partes = listaPartesTrabado ? listaPartesTrabado.leer() : [];
+    $('#pen_parte').value = compilarPartesTexto(partes);
     return {
       /* El equipo concreto: sin él, dos equipos trabados del mismo caso caían
          en la misma fila y el segundo se fundía con el primero. */
       activo_fijo: activoDelTrabado(),
       diagnostico: ($('#pen_diagnostico').value || '').trim(),
+      diagnostico_codigo: $('#pen_diagnostico_codigo').value || null,
       equipo_desc: ($('#pen_equipo').value || '').trim(),
       parte: ($('#pen_parte').value || '').trim(),
+      partes: partes,
       deshabilitado: $('#pen_parado').checked
     };
   }
@@ -865,11 +1231,20 @@
                    mensaje: 'la orden no tiene aviso y el equipo no está identificado: '
                           + 'la administración no va a saber de qué equipo se trata' });
     }
-    if (!tecnicoSesion()) {
+    var ts = tecnicoSesion();
+    if (!ts) {
       // Ya no se elige: sale de la sesion. Si falta, la sesion se perdio, y
       // una orden sin firma identificada no se puede emitir.
       extra.push({ campo: 'tecnico', severidad: 'BLOQUEA',
                    mensaje: 'no se pudo leer tu sesión; vuelve a entrar al sistema antes de enviar' });
+    } else if (!ts.del_padron) {
+      // H-16: antes esto solo era un texto (pintarYo()) y la orden se dejaba
+      // enviar igual -- subía las fotos y recién en envio.php un 400
+      // TECNICO_NO_VIGENTE la dejaba RECHAZADA, con veinte minutos de trabajo
+      // ya gastados. Se corta aquí, antes de nada.
+      extra.push({ campo: 'tecnico', severidad: 'BLOQUEA',
+                   mensaje: 'tu usuario no está en el padrón de técnicos vigentes; pide a la '
+                          + 'administración que te agregue antes de emitir' });
     }
     if (o.origen === 'ASIGNADA' && !o.aviso) {
       extra.push({ campo: 'aviso', severidad: 'BLOQUEA',
@@ -948,6 +1323,16 @@
      --------------------------------------------------------------------- */
   function alEnviar(e) {
     e.preventDefault();
+    // H-05: con el catálogo caído, `CAT`/`validar` siguen en `null` y esto
+    // reventaba en silencio -- `e.preventDefault()` ya había corrido, así que
+    // el botón no hacía nada y el técnico no sabía por qué.
+    if (!CAT || !validar) {
+      if (window.UI) {
+        UI.toast('No se cargaron los locales ni los equipos: no se puede validar la orden. '
+                + 'Conéctate una vez y vuelve a intentarlo.', 'err', { vida: 9000 });
+      }
+      return;
+    }
     var o = reunirOrden();
     var hallazgos = validar(o, 'CAPTURA').concat(reglasDeCaptura(o));
     var res = pintarValidacion(hallazgos);
@@ -975,8 +1360,15 @@
       // ligada a quien la llenó: en un celular compartido, el servidor no la
       // acepta con la sesión de otro.
       prepararFotos(fotos).then(function (listas) {
-        return Cola.encolar(o, YO ? YO.id : null, listas);
-      }).then(function () {
+        // H-07: "Corregir y reenviar" -- si esto vino de
+        // `?reintentar=<uuid>`, es la MISMA fila, no una nueva; las fotos que
+        // ya se habían subido se conservan (Cola.reencolar las mantiene) y
+        // solo las que se agregaron ahora van en `listas`.
+        return reintentarUuid
+          ? Cola.reencolar(reintentarUuid, o, YO ? YO.id : null, listas)
+          : Cola.encolar(o, YO ? YO.id : null, listas);
+      }).then(function (uuid) {
+        ultimoUuid = uuid;
         window.dispatchEvent(new CustomEvent('orden-encolada'));
         mostrarRecibo(o);
       }).catch(function () {
@@ -1009,9 +1401,34 @@
     seguir();
   }
 
+  /* H-04/DOC-04: mientras no llega el recibo real de envio.php, se dice lo que
+     SÍ se sabe (guardada, en camino) y nada más. `cola.js` dispara
+     `orden-emitida` con `{uuid, recibo}` en cuanto el servidor contesta,
+     coincida o no con la pantalla que sigue abierta; por eso se compara
+     contra `ultimoUuid` antes de pintar nada. */
+  window.addEventListener('orden-emitida', function (e) {
+    var d = e.detail || {};
+    if (!d.uuid || d.uuid !== ultimoUuid) return;
+    var r = d.recibo || {};
+    var emitida = r.estado === 'EMITIDA';
+    if (r.id_industec) { $('#rNombre').textContent = r.id_industec; }
+    $('#rNnnnNota').hidden = !!r.id_industec;
+    if (r.que_sigue) {
+      $('#rEstado').className = 'aviso ' + (emitida ? 'ok' : 'info');
+      $('#rEstadoTxt').innerHTML = '<b>' + (emitida ? 'Orden emitida.' : 'Orden recibida.') + '</b> ' + esc(r.que_sigue);
+    }
+    var verPdf = $('#rVerPdf');
+    if (emitida && r.id_industec && verPdf) {
+      verPdf.href = 'pdf.php?ot=' + encodeURIComponent(r.id_industec);
+      $('#rVerPdfWrap').hidden = false;
+    }
+  });
+
   function mostrarRecibo(o) {
     var conSenal = navigator.onLine;
     $('#rNombre').textContent = nombreCanonico(o) || '(sin local, no se puede componer el nombre)';
+    $('#rNnnnNota').hidden = false;
+    $('#rVerPdfWrap').hidden = true;
     $('#rTarea').hidden = !o.sin_aviso;
 
     $('#rEstado').className = 'aviso ' + (conSenal ? 'info' : 'warn');
@@ -1058,7 +1475,13 @@
       locales: arr(cat.locales),
       tecnicos: arr(cat.tecnicos),
       tipos: arr(cat.tipos).map(function (t) { return (typeof t === 'string') ? t : t.tipo; }),
-      equipos: (cat.equipos && cat.equipos.datos) ? cat.equipos.datos : (cat.equipos || {})
+      equipos: (cat.equipos && cat.equipos.datos) ? cat.equipos.datos : (cat.equipos || {}),
+      // H-08/H-11/D8/D9: prellenados de catalogos.php. Si la 009 no está
+      // aplicada llegan vacíos y el formulario sigue igual que hoy.
+      admins: cat.admins || {},
+      familias: arr(cat.familias),
+      diagnosticos: arr(cat.diagnosticos),
+      repuestos: arr(cat.repuestos_frecuentes)
     };
   }
 
@@ -1074,9 +1497,27 @@
       var si = (v === 'si');
       $('#uso_repuesto').value = si ? '1' : '0';
       $('#wrapRepuestos').hidden = !si;
+      // H-11/D9: el primer renglón aparece solo -- no hace falta pulsar
+      // "Agregar repuesto" antes de poder escribir el primero.
+      if (si && listaRepuestosOrden && listaRepuestosOrden.vacia()) { listaRepuestosOrden.agregar(); }
     });
     segmentado($('#segEstado'), function (v) { $('#estado_ot').value = v; });
     segmentado($('#segAtiempo'), function (v) { $('#atiempo').value = v; });
+    // H-18/D10: trabajo con otro proveedor.
+    $('#con_proveedor_marcado').addEventListener('change', function () {
+      $('#wrapProveedor').hidden = !this.checked;
+    });
+    // H-11/D9: al abrir "el trabajo no quedó concluido", igual que arriba:
+    // el primer renglón de repuestos a solicitar aparece solo, y se refresca
+    // el selector de fallas por si cambió cuál es el equipo trabado.
+    $('#segConcluye').addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.v === 'no') {
+        sincronizarFallas();
+        if (listaPartesTrabado && listaPartesTrabado.vacia()) { listaPartesTrabado.agregar(); }
+      }
+    });
+    $('#pen_falla').addEventListener('change', alElegirFalla);
 
     $('#fecha_atencion').addEventListener('change', sincronizarInicioFin);
     $('#addTecnico').addEventListener('click', filaTecnico);
@@ -1090,6 +1531,27 @@
     firma = initFirma();
     initFotos();
     initRating();
+    listaRepuestosOrden = crearListaPartes('#repuestosLista');
+    listaPartesTrabado = crearListaPartes('#penPartes');
+    $('#addRepuesto').addEventListener('click', function () { listaRepuestosOrden.agregar(); });
+    $('#addParte').addEventListener('click', function () { listaPartesTrabado.agregar(); });
+
+    /* H-14: `offline.js` restaura los campos con `id` y dispara esto para que
+       app.js reponga lo que sabe reconstruir: los combos derivados
+       (local/aviso, con sus chips y correos) y los bloques de equipos y
+       novedades, que no tienen `id` propio. */
+    window.addEventListener('borrador-restaurado', function (e) {
+      var d = e.detail || {};
+      if (d.tipo) { fijarTipo(d.tipo); $$('#segTipo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === d.tipo); }); }
+      if (d.origen) { fijarOrigen(d.origen); $$('#segOrigen button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === d.origen); }); }
+      if (d.origen === 'ASIGNADA' && d.aviso) { comboAviso.elegirPorClave(d.aviso); }
+      else if (d.local) { comboLocal.elegirPorClave(d.local); }
+      if (d.uso_repuesto === '1' && listaRepuestosOrden && listaRepuestosOrden.vacia() && d.repuestos) {
+        listaRepuestosOrden.agregar({ descripcion: d.repuestos });
+      }
+      if (Array.isArray(d._equipos) && d._equipos.length) { reconstruirEquipos(d._equipos); }
+      if (Array.isArray(d._novedades) && d._novedades.length) { reconstruirNovedades(d._novedades); }
+    });
 
     fetch('yo.php', { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -1112,7 +1574,17 @@
       bloqueEquipo();
       refrescarAvisos();
 
+      // H-11/D9: el datalist compartido de repuestos, con lo que trae el
+      // catálogo (puede llegar vacío si la 009 no está aplicada).
+      $('#partesLista').innerHTML = (CAT.repuestos || [])
+        .map(function (r) { return '<option value="' + esc(r.descripcion) + '">'; }).join('');
+
       var params = new URLSearchParams(location.search);
+      var tipoPedido = params.get('tipo');
+      var diaPedido = params.get('dia');
+      var equiposPedidos = params.get('equipos');
+      var localPreventivo = params.get('local');
+
       /* Viene de «Emitir la orden de este caso» en la bandeja: el caso ya está
          asignado y entra puesto, sin buscarlo ni teclearlo. Hasta el 2026-09-10
          el enlace mandaba ?aviso= y aquí solo se leía ?local=. */
@@ -1126,13 +1598,54 @@
           $('#avisoCobertura').textContent = 'El caso ' + avisoPedido + ' no está entre los casos '
             + 'guardados en este celular. Si te lo acaban de asignar, abre la app con señal para actualizarla.';
         }
-      }
-
-      var pedido = params.get('local') || window.PRESELECT;
-      if (pedido && localesPorCodigo[pedido]) {
+      } else if (tipoPedido === 'PREVENTIVO' && localPreventivo && localesPorCodigo[localPreventivo]) {
+        /* H-17: cada visita del cronograma enlaza aquí con
+           `?tipo=PREVENTIVO&dia=N&local=X&equipos=sap1,sap2`. Antes solo se
+           leía `?local=` -- ni el tipo, ni el día, ni los equipos llegaban
+           prellenados, y el día quedaba sin sincronizar con `required`
+           cuando el tipo se fijaba por programa en vez de por clic. */
         fijarOrigen('SIN_ASIGNAR');
         $$('#segOrigen button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === 'SIN_ASIGNAR'); });
-        comboLocal.elegirPorClave(pedido);
+        comboLocal.elegirPorClave(localPreventivo);
+        fijarTipo('PREVENTIVO');
+        $$('#segTipo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === 'PREVENTIVO'); });
+        if (diaPedido) {
+          $('#dia_intervencion').value = diaPedido;
+          $('#dia_intervencion').dispatchEvent(new Event('change'));
+        }
+        if (equiposPedidos) {
+          var codigos = equiposPedidos.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+          if (codigos.length) {
+            reconstruirEquipos(codigos.map(function (sap) { return { valor: sap }; }));
+          }
+        }
+      } else {
+        var pedido = localPreventivo || window.PRESELECT;
+        if (pedido && localesPorCodigo[pedido]) {
+          fijarOrigen('SIN_ASIGNAR');
+          $$('#segOrigen button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === 'SIN_ASIGNAR'); });
+          comboLocal.elegirPorClave(pedido);
+        }
+      }
+
+      // H-07: "Corregir y reenviar" -- viene de `cola.js`, que ya conserva la
+      // firma y las fotos que se habían subido. Se vuelca todo lo demás; la
+      // firma se pide de nuevo (más simple y más confiable que reconstruir el
+      // canvas desde el PNG guardado).
+      reintentarUuid = params.get('reintentar');
+      if (reintentarUuid && window.Cola && Cola.leer) {
+        Cola.leer(reintentarUuid).then(function (fila) {
+          if (!fila || !fila.orden) {
+            reintentarUuid = null;
+            if (window.UI) { UI.toast('Esa orden ya no está guardada en este celular para corregir.', 'err'); }
+            return;
+          }
+          volcarOrden(fila.orden);
+          if (window.UI) {
+            UI.toast('Corrige lo que haga falta. Como ya tenía firma, hay que volver a firmarla antes de reenviar.',
+                     'warn', { vida: 12000 });
+          }
+        });
       }
 
       $('#pendientes').textContent =
@@ -1156,6 +1669,11 @@
           : 'Estás sin señal y este celular no tiene una copia guardada. Conéctate una vez y la aplicación queda lista para trabajar sin cobertura.') +
         '</p><p class="small">Detalle técnico: ' + String(err && err.message || err) + '</p></div>';
       caja.appendChild(aviso);
+      // H-05: el botón lo dice también, no solo el toast de más arriba --
+      // sigue visible (no se esconde el formulario, es mejora progresiva),
+      // pero deja claro por qué no reacciona.
+      var btn = $('#submitBtn');
+      if (btn) { btn.disabled = true; btn.title = 'Sin catálogo no se puede validar la orden'; }
     });
   });
 
