@@ -113,6 +113,10 @@ ARCHIVOS = [
     "login.php", "salir.php", "clave.php", "panel.php", "usuarios.php",
     "casos.php", "asignacion.php", "pendientes.php", "novedades_visita.php",
     "ordenes.php", "pdf.php", "reportes.php",
+    # T2.14.4: la bitácora con pantalla y el aprendizaje (manuales, guías y
+    # comunicados con aprobación). `documento.php` es el único que sirve los
+    # archivos de `documentos/`; su .htaccess niega el resto.
+    "bitacora.php", "documentos.php", "documento.php", "documentos/.htaccess",
 
     # --- Extremos que consultan las pantallas --------------------------------
     # `novedades.php` es el que el buzón consulta cada 30 s para saber si
@@ -147,10 +151,15 @@ ARCHIVOS = [
 #   nucleo/config.ejemplo.php, nucleo/config.hostinger.php
 #                        plantillas de configuración; no son código que corra.
 #   nucleo/crear_usuario.php, aplicar_sql.php, verificar_esquema.php,
-#   minar.php, reconciliar_cli.php, alta_padron_cli.php
+#   minar.php, reconciliar_cli.php, alta_padron_cli.php,
+#   emitir_pendientes_cli.php, despachar_correo_cli.php (T2.14.6),
+#   archivo_indexar_cli.php (T2.14.4: llena ot_archivo; lo corre el cron o
+#   t2_15_exportar_archivo.py --empujar)
 #                        herramientas de línea de órdenes. Las que ya están en
 #                        el servidor cortan con 404 por web; el resto no tienen
-#                        por qué llegar.
+#                        por qué llegar. Los dos CLI de T2.14.6 se suben con
+#                        scp cuando cambian (los llama el cron de hPanel:
+#                        reemisor cada 10 min, despachador cada 5).
 
 # Lo unico que NO se toca del sitio de pruebas.
 #

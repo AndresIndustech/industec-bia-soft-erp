@@ -75,7 +75,8 @@ final class Ui
         'panel.php', 'mis.php', 'casos.php', 'asignacion.php', 'pendientes.php',
         'novedades_visita.php', 'ordenes.php', 'cronograma.html', 'reportes.php',
         'usuarios.php', 'index.html',
-        // 'documentos.php' y 'bitacora.php' entran aquí cuando T2.14.4 los construya.
+        // T2.14.4 (2026-09-13): el aprendizaje y la bitácora ya existen.
+        'documentos.php', 'bitacora.php',
     ];
 
     /** El técnico usa su bandeja, no el buzón de escritorio: son otra cosa. */

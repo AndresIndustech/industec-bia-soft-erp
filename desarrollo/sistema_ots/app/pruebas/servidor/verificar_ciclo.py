@@ -207,6 +207,22 @@ def main():
     g = vh.sql("SELECT estado, ot_cierre FROM casos_gestion WHERE aviso = ?", [aviso])[0]
     vh.anotar("T2.14.3", "con orden de cierre, el caso queda ATENDIDO", g["estado"] == "ATENDIDO", g)
 
+    print("\n== 5b. una fila anterior a la 009 (estado SIN_VEREDICTO) se valida igual ==")
+    vh.ejecutar("DELETE n FROM pendiente_notas n JOIN pendientes p ON p.pendiente_id = n.pendiente_id "
+                "WHERE p.aviso = ? AND p.activo_fijo = 'PRUEBA-LEGADO'", [aviso])
+    vh.ejecutar("DELETE FROM pendientes WHERE aviso = ? AND activo_fijo = 'PRUEBA-LEGADO'", [aviso])
+    vh.ejecutar("INSERT INTO pendientes (aviso, zona, local_codigo, activo_fijo, equipo_desc, deshabilitado, via, estado, "
+                "diagnostico, abierto_por, abierto_en) VALUES (?, 'UIO', ?, 'PRUEBA-LEGADO', 'Equipo legado de prueba', 1, "
+                "'SIN_VEREDICTO', 'SIN_VEREDICTO', 'PRUEBA T2.14.3: fila anterior a la 009', ?, NOW())",
+                [aviso, local, ids["tec_prueba_uio_a"]])
+    leg = int(vh.sql("SELECT pendiente_id FROM pendientes WHERE aviso = ? AND activo_fijo = 'PRUEBA-LEGADO'", [aviso])[0]["pendiente_id"])
+    st, _, _ = jefe.pedir("pendientes.php", form={"accion": "validar", "pendiente_id": leg, "via": "GARANTIA", "nota": "PRUEBA T2.14.3: legado"})
+    e = estado(leg)
+    vh.anotar("T2.14.3", "el jefe valida una fila anterior a la 009 y pasa a VALIDADO_JEFE",
+              st == 302 and e["estado"] == "VALIDADO_JEFE" and e["via"] == "GARANTIA", e)
+    vh.ejecutar("DELETE FROM pendiente_notas WHERE pendiente_id = ?", [leg])
+    vh.ejecutar("DELETE FROM pendientes WHERE pendiente_id = ?", [leg])
+
     print("\n== 6. sin token CSRF no se toca nada (D13) ==")
     st, _, _ = jefe.pedir("pendientes.php", form={"accion": "responder", "pendiente_id": pid, "nota": "sin token", "csrf": None})
     vh.anotar("T2.14.3", "POST a pendientes.php sin csrf → 403", st == 403, st)

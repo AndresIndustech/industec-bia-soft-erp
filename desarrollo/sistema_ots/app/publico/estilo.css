@@ -1440,24 +1440,27 @@ body.con-nav-abajo{ padding-bottom:calc(var(--nav-abajo) + env(safe-area-inset-b
      estrujadas (captura admin_movil del 13-sep). La cabecera se oculta y cada
      celda pinta su `data-th` delante del valor; la de «Asignar a» va sin
      etiqueta porque el select y el botón ya dicen qué son. */
-  table.repartir thead{ display:none; }
-  table.repartir, table.repartir tbody{ display:block; }
-  table.repartir tr{
+  table.repartir thead, table.tarjetas thead{ display:none; }
+  table.repartir, table.repartir tbody, table.tarjetas, table.tarjetas tbody{ display:block; }
+  table.repartir tr, table.tarjetas tr{
     display:block; padding:10px 12px; margin:0 0 10px;
     background:var(--card); border:1px solid var(--border); border-radius:var(--r);
   }
-  table.repartir td{
+  table.tarjetas tr.grupo{ background:transparent; border:0; padding:0; margin:14px 0 6px; }
+  table.repartir td, table.tarjetas td{
     display:flex; gap:10px; align-items:baseline; flex-wrap:wrap;
     padding:4px 0; border:0; font-size:13px;
   }
-  table.repartir td::before{
+  table.repartir td::before, table.tarjetas td::before{
     content:attr(data-th); flex:0 0 74px; font-size:10.5px; font-weight:700;
     letter-spacing:.04em; text-transform:uppercase; color:var(--muted);
   }
-  table.repartir td[data-th="Asignar a"]{ display:block; padding-top:8px; }
-  table.repartir td[data-th="Asignar a"]::before{ display:none; }
-  table.repartir td.vacio{ display:block; }
-  table.repartir td.vacio::before{ display:none; }
+  table.repartir td[data-th="Asignar a"], table.tarjetas td[data-th="Acciones"],
+  table.tarjetas td[data-th="Informe"]{ display:block; padding-top:8px; }
+  table.repartir td[data-th="Asignar a"]::before, table.tarjetas td[data-th="Acciones"]::before,
+  table.tarjetas td[data-th="Informe"]::before{ display:none; }
+  table.repartir td.vacio, table.tarjetas td.vacio, table.tarjetas th{ display:block; }
+  table.repartir td.vacio::before, table.tarjetas td.vacio::before{ display:none; }
   table.repartir form.asignar{ display:flex; flex-wrap:wrap; gap:8px; }
   table.repartir form.asignar select.sel-tec{ flex:1 1 100%; min-width:0; }
   table.repartir form.asignar .btn{ flex:1 1 auto; }
@@ -1556,3 +1559,72 @@ body.con-nav-abajo{ padding-bottom:calc(var(--nav-abajo) + env(safe-area-inset-b
 .regularizar{ margin:0 0 16px; padding:14px 16px; border-left:4px solid var(--warn); }
 .regularizar h2{ margin:0 0 6px; font-size:15px; }
 .regularizar form.asignar input[type=text]{ flex:1 1 150px; }
+
+/* ==== §S4 archivo (ordenes.php, bitacora.php, usuarios.php, documentos.php) ====
+   T2.14.4 — el archivo general de todas las zonas, la bitácora con pantalla,
+   los usuarios agrupados por zona y el aprendizaje con aprobación. */
+
+/* Clases que las pantallas ya usaban sin regla (TR-16). */
+.acciones{ display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
+.acciones form{ margin:0; }
+tr.baja td{ color:var(--muted); background:var(--bg-alt); }
+.chip.abierta{ background:var(--ok-bg); color:var(--ok); border-color:var(--ok-bd); }
+.chip.chip-no{ background:var(--danger-bg); color:var(--danger); border-color:var(--danger-bd); }
+
+/* Los grupos por zona en la tabla de usuarios: una fila de cabecera por zona. */
+tr.grupo th{
+  background:var(--bg-alt); text-align:left; font-size:12.5px; padding:8px 12px;
+  border-top:2px solid var(--border-fuerte);
+}
+tr.grupo th .cuenta{ font-weight:500; color:var(--muted); margin-left:8px; text-transform:none; letter-spacing:0; }
+.crear-usuario{ margin:0 0 18px; }
+.crear-usuario > summary{ cursor:pointer; list-style:none; }
+.crear-usuario > summary::-webkit-details-marker{ display:none; }
+.crear-usuario > summary h2{ display:inline; }
+.crear-usuario > summary::after{ content:' · desplegar'; font-size:12px; color:var(--muted); }
+.crear-usuario[open] > summary::after{ content:' · plegar'; }
+
+/* La paginación del archivo y la bitácora. */
+.paginacion{ display:flex; gap:10px; align-items:center; justify-content:center; margin:14px 0 4px; }
+
+/* Las tiles de zona del archivo: la elegida se marca. */
+.tiles-enlace .zona-tile.on{ outline:2px solid var(--marca); outline-offset:-2px; }
+
+/* La bitácora: las denegaciones se ven de un barrido; los datos van plegados. */
+table.bitacora tr.denegado td{ background:#fff7f7; }
+table.bitacora td .datos{ margin-top:4px; }
+table.bitacora td .datos summary{ cursor:pointer; font-size:11.5px; color:var(--muted); }
+table.bitacora td .datos pre{
+  margin:4px 0 0; padding:6px 8px; font-size:11px; line-height:1.4; max-width:420px;
+  white-space:pre-wrap; word-break:break-all; background:var(--bg-alt); border-radius:var(--r-sm);
+}
+
+/* El aprendizaje: una tarjeta por documento. */
+.docs{ display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:12px; }
+.doc{
+  background:var(--card); border:1px solid var(--border); border-radius:var(--r);
+  border-left:4px solid var(--z-otra); padding:13px 14px; box-shadow:var(--sombra-1);
+  display:flex; flex-direction:column; gap:8px; min-width:0;
+  animation:entrar var(--t3) var(--curva) both; animation-delay:calc(min(var(--i,0),12) * 30ms);
+}
+.doc.tipo-manual{ border-left-color:var(--z-uio); }
+.doc.tipo-guia{ border-left-color:var(--z-larb); }
+.doc.tipo-comunicado{ border-left-color:var(--warn); }
+.doc.sin-vigente{ opacity:.75; }
+.doc .cab{ display:flex; justify-content:space-between; gap:10px; align-items:flex-start; flex-wrap:wrap; }
+.doc .que{ font-weight:700; font-size:14.5px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.doc .meta{ font-size:12px; color:var(--muted); margin-top:4px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.doc .acuse{ font-size:12.5px; color:var(--muted); text-align:right; }
+.doc .acuse b{ color:var(--ink); }
+.doc .desc-doc{ margin:0; font-size:13px; color:#334155; line-height:1.45; }
+.doc .acciones{ margin-top:auto; }
+.doc .versiones summary{ cursor:pointer; font-size:12px; color:var(--muted); }
+.doc .versiones ul{ list-style:none; margin:6px 0 0; padding:0; display:flex; flex-direction:column; gap:5px; font-size:12px; }
+.doc .versiones .desc{ display:block; }
+.por-aprobar{ margin:0 0 16px; padding:14px 16px; border-left:4px solid var(--warn); }
+.por-aprobar h2{ margin:0 0 6px; font-size:15px; }
+.propuestas{ margin:0; padding:0 0 0 16px; font-size:13px; }
+.propuestas li{ margin:4px 0; }
+@media (max-width:640px){
+  .docs{ grid-template-columns:1fr; }
+}

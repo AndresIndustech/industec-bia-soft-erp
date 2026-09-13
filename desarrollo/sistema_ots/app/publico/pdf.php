@@ -57,6 +57,9 @@ const HORAS_ENLACE = 24;
 // Tope absoluto: aunque el enlace venga bien firmado, no se aceptan caducidades
 // más lejanas. Es lo que acota el daño de un secreto filtrado.
 const HORAS_ENLACE_MAX = 24 * 7;
+// Los enlaces firmados antes del 2026-09-13 llevaban la firma vieja (sin quién
+// los compartió). Se aceptan hasta que el último de ellos caduque; después, no.
+const ENLACES_VIEJOS_HASTA = '2026-09-15 00:00:00';
 
 /** El patrón canónico de nombre de OT, en sus cuatro formas más la zona OTRA. */
 function otValida(string $ot): bool
@@ -64,17 +67,29 @@ function otValida(string $ot): bool
     return (bool) preg_match(Emision::PATRON_OT, strtoupper(trim($ot)));
 }
 
-function firmaEnlace(string $ot, int $exp, string $secreto): string
+/**
+ * La firma del enlace (SEG-02, SEG-13): con prefijo de dominio («pdf|»), para
+ * que el mismo secreto no firme otra cosa, y con quién lo compartió, para que
+ * la bitácora de la apertura diga de qué mano salió el enlace.
+ */
+function firmaEnlace(string $ot, int $exp, string $secreto, int $uid = 0): string
+{
+    return hash_hmac('sha256', 'pdf|' . $ot . '|' . $exp . '|' . $uid, $secreto);
+}
+
+/** La firma anterior al 2026-09-13, solo para los enlaces que ya circulaban. */
+function firmaEnlaceVieja(string $ot, int $exp, string $secreto): string
 {
     return hash_hmac('sha256', $ot . '.' . $exp, $secreto);
 }
 
-/** Arma el enlace que se manda por fuera. Lo usa ordenes.php. */
-function enlaceCompartido(string $ot, string $secreto, int $horas = HORAS_ENLACE): string
+/** Arma el enlace que se manda por fuera. Lo usa ordenes.php al pulsar «Compartir». */
+function enlaceCompartido(string $ot, string $secreto, int $uid = 0, int $horas = HORAS_ENLACE): string
 {
     $exp = time() + $horas * 3600;
     return 'pdf.php?ot=' . rawurlencode($ot) . '&exp=' . $exp
-         . '&f=' . firmaEnlace($ot, $exp, $secreto);
+         . ($uid > 0 ? '&u=' . $uid : '')
+         . '&f=' . firmaEnlace($ot, $exp, $secreto, $uid);
 }
 
 /** Bitácora de una entrada por enlace, con o sin éxito. No hay sesión: el usuario es «enlace». */
@@ -112,13 +127,19 @@ $cfg = Db::config();
 $secreto  = (string) ($cfg['enlace_secreto'] ?? $cfg['sync_secreto'] ?? '');
 $exp      = (int) ($_GET['exp'] ?? 0);
 $firma    = (string) ($_GET['f'] ?? '');
+$uidEnlace = (int) ($_GET['u'] ?? 0);
 $descarga = ($_GET['dl'] ?? '') === '1';
 $porEnlace = false;
 $u = null;
 
 if ($firma !== '' && $exp > 0) {
-    if ($secreto === '' || !hash_equals(firmaEnlace($ot, $exp, $secreto), $firma)) {
-        bitacoraEnlace('DENEGADO', $ot, 'enlace con firma inválida', ['exp' => $exp], false);
+    $valida = $secreto !== '' && hash_equals(firmaEnlace($ot, $exp, $secreto, $uidEnlace), $firma);
+    if (!$valida && $secreto !== '' && $uidEnlace === 0 && $exp < (int) strtotime(ENLACES_VIEJOS_HASTA)) {
+        // Un enlace de antes del cambio de firma, todavía dentro de su vida.
+        $valida = hash_equals(firmaEnlaceVieja($ot, $exp, $secreto), $firma);
+    }
+    if (!$valida) {
+        bitacoraEnlace('DENEGADO', $ot, 'enlace con firma inválida', ['exp' => $exp, 'u' => $uidEnlace], false);
         http_response_code(403);
         exit('Enlace no válido.');
     }
@@ -185,7 +206,8 @@ if ($firma !== '' && $exp > 0) {
 $ruta = DIR_PDF . '/' . $ot . '.pdf';
 if (!is_file($ruta)) {
     if ($porEnlace) {
-        bitacoraEnlace('ABRIR_PDF', $ot, 'el PDF no está en el servidor', ['exp' => date('c', $exp)], false);
+        bitacoraEnlace('ABRIR_PDF', $ot, 'el PDF no está en el servidor',
+                       ['exp' => date('c', $exp), 'compartido_por' => $uidEnlace ?: null], false);
     } else {
         Auth::bitacora('ABRIR_PDF', 'ot', $ot, 'el PDF no está en el servidor', null, null, ['ot' => $ot], false);
     }
@@ -195,8 +217,10 @@ if (!is_file($ruta)) {
 
 if ($porEnlace) {
     // No hay usuario, pero el acceso se registra igual: es lo que permite
-    // responder «quién vio esta firma» si alguien lo pregunta.
-    bitacoraEnlace('ABRIR_PDF', $ot, 'por enlace compartido', ['exp' => date('c', $exp)], true);
+    // responder «quién vio esta firma» si alguien lo pregunta -- y de qué
+    // mano salió el enlace (`compartido_por`, SEG-02).
+    bitacoraEnlace($descarga ? 'DESCARGAR_PDF' : 'ABRIR_PDF', $ot, 'por enlace compartido',
+                   ['exp' => date('c', $exp), 'compartido_por' => $uidEnlace ?: null, 'dl' => $descarga], true);
 } else {
     // Ver y descargar se distinguen (SEG-03): una descarga es una copia que sale
     // del sistema, y hay que poder contarlas por persona.

@@ -1,238 +1,399 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/nucleo/Casos.php';
+require_once __DIR__ . '/nucleo/Emision.php';
+require_once __DIR__ . '/nucleo/Catalogo.php';
 require_once __DIR__ . '/pdf.php';        // solo para enlaceCompartido() y otValida()
-require_once __DIR__ . '/nucleo/Ui.php';  // Ui::coincide() se usa al filtrar, antes de pintar
+require_once __DIR__ . '/nucleo/Ui.php';
 
 /**
- * ordenes.php — Las órdenes emitidas, con su informe.
+ * ordenes.php — El Archivo: las órdenes de trabajo de todas las zonas.
  *
- * QUE MUESTRA
- * Cada caso que tiene al menos una orden: cuál, de qué día, quién la firmó y en
- * qué quedó. Con el PDF a un clic, que es lo que hoy obliga a buscar en el
- * correo.
+ * LA REGLA DEL 2026-09-12 (D1)
+ * Andrés decidió que el archivo general de OT —de las tres zonas, como hoy en
+ * Google Drive— lo consulta, comparte y descarga todo el personal, en solo
+ * lectura: nadie borra ni edita nada desde aquí. El corte por zona sigue
+ * rigiendo las ACCIONES (asignar, validar, cerrar), no la lectura. El control
+ * compensatorio es la bitácora: cada consulta con sus filtros, cada apertura,
+ * cada descarga y cada enlace compartido quedan con quién, cuándo y desde dónde.
  *
- * EL ALCANCE, OTRA VEZ EN EL SERVIDOR
- * El técnico ve **sus** órdenes. El jefe de zona las de su zona. La
- * administración todas. Se resuelve con `Casos::enAlcance()`, la misma función
- * que usa el buzón: si algún día cambia la regla, cambia en un solo sitio.
+ * DE DÓNDE SALE LA LISTA
+ * De `ot_archivo` (009), el índice persistente que llena
+ * `archivo_indexar_cli.php`: los PDF que están en el servidor, lo que emitió la
+ * app, lo que llegó por el buzón de correo y el catálogo histórico que exporta
+ * la estación (7.069 órdenes). Hasta el 2026-09-13 esta pantalla listaba solo
+ * los casos de la ventana de 90 días del correo y recortaba por rol.
+ *
+ * LO QUE NO ESTÁ EN EL SERVIDOR
+ * Una orden puede estar en el índice y su PDF vivir solo en la estación (D2:
+ * subir los históricos a Hostinger está pendiente). Esa fila dice dónde está y
+ * ofrece «pedir copia», que deja la solicitud en `ot_archivo_solicitudes` para
+ * que la estación la atienda en su próximo saneamiento.
  *
  * COMPARTIR EL INFORME
  * El administrador del local pide su copia y no tiene usuario en el sistema.
- * Para eso está el enlace firmado y con caducidad de `pdf.php`: se genera aquí,
- * se copia, y se manda por correo o por WhatsApp. Caduca solo en 24 horas.
- *
- * El botón de WhatsApp abre `wa.me` con el mensaje escrito. No manda nada por
- * su cuenta: manda **a quien lo pulsa** a su propio WhatsApp con el texto
- * listo. Enviar desde el servidor exigiría la API de negocio de WhatsApp, que
- * es de pago y hoy no está contratada.
+ * El enlace firmado y con caducidad de `pdf.php` se genera AL PULSAR el botón
+ * (antes se generaban todos al pintar la tabla, sin rastro), con quién lo
+ * compartió dentro de la firma, y queda en la bitácora como COMPARTIR_PDF.
+ * El botón de WhatsApp abre `wa.me` con el mensaje escrito: manda **a quien lo
+ * pulsa** a su propio WhatsApp; el servidor no envía nada por su cuenta.
  */
 
-$u = Auth::exigir('ots.ver');
-if ($u['debe_cambiar_clave']) { header('Location: clave.php'); exit; }
+$u = Auth::exigir();
+if (!Ui::puedeModulo(['ots.archivo', 'ots.ver'], ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO'], $u)) {
+    Auth::bitacora('DENEGADO', 'archivo_ot', '', 'sin permiso', null, null, [], false);
+    http_response_code(403);
+    exit('No tienes acceso al archivo.');
+}
 
 function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
 
-$gestion = Casos::gestion();
-$catalogo = Casos::catalogo()['datos'] ?? [];
-$aten = Casos::atenciones();
-$mios = Casos::enAlcance($catalogo, $gestion);
+function json(int $codigo, array $cuerpo): void
+{
+    http_response_code($codigo);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($cuerpo, JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
-// De lo que este usuario alcanza, solo lo que tiene alguna orden emitida.
-$porAviso = [];
-foreach ($mios as $c) { $porAviso[$c['aviso'] ?? ''] = $c; }
+$hayIndice = true;
+try { Db::todos('SELECT 1 FROM ot_archivo LIMIT 1'); } catch (Throwable $ex) { $hayIndice = false; }
 
-$filas = [];
-foreach ($aten as $aviso => $a) {
-    if (!isset($porAviso[$aviso])) { continue; }
-    $c = $porAviso[$aviso];
-    $g = $gestion[$aviso] ?? [];
-    foreach ($a['ots'] ?? [] as $o) {
-        $filas[] = [
-            'ot'       => (string) ($o['ot'] ?? ''),
-            'fecha'    => (string) ($o['fecha'] ?? ''),
-            'estado'   => (string) ($o['estado_ot'] ?? ''),
-            'personas' => $o['personas'] ?? [],
-            'texto'    => (string) ($o['tecnico_texto'] ?? ''),
-            'equipo'   => (string) ($o['equipo'] ?? ''),
-            'aviso'    => (string) $aviso,
-            'local'    => (string) ($c['local'] ?? ''),
-            'local_n'  => (string) ($c['local_nombre'] ?? ''),
-            'zona'     => (string) ($c['zona'] ?? ''),
-            'caso'     => (string) ($c['caso'] ?? ''),
-            'gestion'  => (string) ($g['estado'] ?? 'NUEVO'),
-        ];
+/* -------------------------------------------------------------------------
+   LAS DOS ACCIONES. Responden JSON: las pide el botón por fetch y la pantalla
+   no se recarga. Las dos exigen el token CSRF y dejan bitácora.
+   ------------------------------------------------------------------------- */
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    Auth::exigirCsrf();
+    $accion = (string) ($_POST['accion'] ?? '');
+    $ot = strtoupper(trim((string) ($_POST['ot'] ?? '')));
+    if ($ot === '' || !otValida($ot)) { json(400, ['ok' => false, 'error' => 'Identificador de orden no válido.']); }
+    $fila = $hayIndice ? Db::uno('SELECT * FROM ot_archivo WHERE id_industec = ?', [$ot]) : null;
+
+    if ($accion === 'compartir') {
+        if (!Ui::puedeModulo('ots.compartir', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO'], $u)) {
+            Auth::bitacora('DENEGADO', 'ot', $ot, 'compartir sin permiso', null, null, [], false);
+            json(403, ['ok' => false, 'error' => 'No tienes permiso para compartir órdenes.']);
+        }
+        if (!Emision::existePdf($ot)) {
+            json(404, ['ok' => false, 'error' => 'El PDF de esa orden no está en el servidor: no hay qué compartir.']);
+        }
+        $cfg = Db::config();
+        $secreto = (string) ($cfg['enlace_secreto'] ?? $cfg['sync_secreto'] ?? '');
+        if ($secreto === '') { json(503, ['ok' => false, 'error' => 'El servidor no tiene configurado el secreto de los enlaces.']); }
+        $canal = in_array($_POST['canal'] ?? '', ['whatsapp', 'correo', 'copiar'], true) ? (string) $_POST['canal'] : 'copiar';
+        $enlace = enlaceCompartido($ot, $secreto, (int) $u['usuario_id']);
+        parse_str((string) parse_url($enlace, PHP_URL_QUERY), $q);
+        $exp = (int) ($q['exp'] ?? 0);
+        Auth::bitacora('COMPARTIR_PDF', 'ot', $ot, 'enlace de ' . HORAS_ENLACE . ' h por ' . $canal,
+                       null, null, ['exp' => date('c', $exp), 'canal' => $canal, 'horas' => HORAS_ENLACE]);
+        json(200, ['ok' => true, 'enlace' => $enlace, 'caduca' => date('Y-m-d H:i', $exp), 'horas' => HORAS_ENLACE]);
     }
+
+    if ($accion === 'pedir_copia') {
+        if ($fila === null) { json(404, ['ok' => false, 'error' => 'Esa orden no está en el índice.']); }
+        if ((int) $fila['en_servidor'] === 1 || Emision::existePdf($ot)) {
+            json(409, ['ok' => false, 'error' => 'Esa orden ya está en el servidor: ábrela directamente.']);
+        }
+        $n = Db::ejecutar(
+            'INSERT INTO ot_archivo_solicitudes (id_industec, usuario_id) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE solicitado_en = IF(atendido_en IS NULL, solicitado_en, NOW()),
+                                     atendido_en = NULL',
+            [$ot, (int) $u['usuario_id']]
+        );
+        Auth::bitacora('SOLICITAR_COPIA', 'ot', $ot, 'copia de la estación: ' . (string) ($fila['fuente_ruta'] ?? '-'),
+                       null, null, ['fuente_ruta' => $fila['fuente_ruta'] ?? null, 'nueva' => $n === 1]);
+        json(200, ['ok' => true, 'mensaje' => $n === 1
+            ? 'Pedido. La estación la sube en su próximo saneamiento y te avisamos aquí mismo.'
+            : 'Ya la habías pedido: sigue en la cola de la estación.']);
+    }
+
+    json(400, ['ok' => false, 'error' => 'Acción no reconocida.']);
 }
 
-$fTexto = trim((string) ($_GET['q'] ?? ''));
-$fEstado = (string) ($_GET['est'] ?? '');
-if ($fTexto !== '' || $fEstado !== '') {
-    $filas = array_values(array_filter($filas, function ($f) use ($fTexto, $fEstado) {
-        if ($fEstado !== '' && $f['estado'] !== $fEstado) { return false; }
-        // Coincidencia parcial: `2466` encuentra `OT-2466-...`, el aviso da igual
-        // con o sin los ceros de SAP. La misma regla que aplica busqueda.js.
-        //
-        // Los campos tienen que ser LOS MISMOS que los del `data-b` de la fila,
-        // más abajo. Hasta el 2026-09-12 aquí faltaba `caso` y allí sí estaba:
-        // escribir algo que solo aparece en la descripción lo encontraba el
-        // buscador en vivo, y al recargar —o al abrir la URL compartida, que es
-        // filtrado del servidor— la fila desaparecía. El comentario de allí
-        // afirmaba que las dos listas coincidían. `prueba_contratos.mjs` lo
-        // vigila ahora, para que no vuelva a depender de que alguien se acuerde.
-        return Ui::coincide([$f['ot'], $f['aviso'], $f['local'], $f['local_n'],
-                             $f['equipo'], $f['texto'], $f['caso']], $fTexto);
-    }));
+/* -------------------------------------------------------------------------
+   LOS FILTROS. Todos en el WHERE, con paginación de 50: el archivo tiene
+   miles de filas y pintarlas todas es lo que arrastra el celular del técnico.
+   ------------------------------------------------------------------------- */
+$ZONAS = ['UIO', 'LARB', 'CNLJ', 'OTRA'];
+$fq      = trim((string) ($_GET['q'] ?? ''));
+$fZona   = strtoupper((string) ($_GET['zona'] ?? ''));
+if (!in_array($fZona, $ZONAS, true)) { $fZona = ''; }
+$fLocal  = strtoupper(trim((string) ($_GET['local'] ?? '')));
+$fDesde  = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['desde'] ?? '')) ? (string) $_GET['desde'] : '';
+$fHasta  = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['hasta'] ?? '')) ? (string) $_GET['hasta'] : '';
+$fTec    = trim((string) ($_GET['tecnico'] ?? ''));
+$fOrigen = strtoupper((string) ($_GET['origen'] ?? ''));
+if (!in_array($fOrigen, ['APP', 'CORREO', 'HISTORICO'], true)) { $fOrigen = ''; }
+$fDonde  = (string) ($_GET['donde'] ?? '');      // '' | servidor | estacion
+$fRec    = ($_GET['rec'] ?? '') === '1';          // últimos 90 días
+$fMias   = ($_GET['mias'] ?? '') === '1' && $u['rol'] === 'TECNICO';
+$pagina  = max(1, (int) ($_GET['p'] ?? 1));
+$POR_PAGINA = 50;
+
+$donde = ['1=1'];
+$par = [];
+if ($fq !== '') {
+    $donde[] = '(a.id_industec LIKE ? OR a.aviso LIKE ? OR a.local_codigo LIKE ? OR a.local_nombre LIKE ? OR a.tecnico LIKE ?)';
+    $like = '%' . $fq . '%';
+    array_push($par, $like, $like, $like, $like, $like);
 }
-usort($filas, fn($a, $b) => strcmp($b['fecha'], $a['fecha']));   // la más nueva arriba
+if ($fZona !== '')   { $donde[] = 'a.zona = ?';          $par[] = $fZona; }
+if ($fLocal !== '')  { $donde[] = 'a.local_codigo = ?';  $par[] = $fLocal; }
+if ($fDesde !== '')  { $donde[] = 'a.fecha_atencion >= ?'; $par[] = $fDesde; }
+if ($fHasta !== '')  { $donde[] = 'a.fecha_atencion <= ?'; $par[] = $fHasta; }
+if ($fTec !== '')    { $donde[] = 'a.tecnico LIKE ?';    $par[] = '%' . $fTec . '%'; }
+if ($fOrigen !== '') { $donde[] = 'a.origen = ?';        $par[] = $fOrigen; }
+if ($fDonde === 'servidor') { $donde[] = 'a.en_servidor = 1'; }
+if ($fDonde === 'estacion') { $donde[] = 'a.en_servidor = 0'; }
+if ($fRec)           { $donde[] = 'a.fecha_atencion >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)'; }
+if ($fMias)          { $donde[] = 'a.tecnico LIKE ?';    $par[] = '%' . $u['nombre'] . '%'; }
+$where = implode(' AND ', $donde);
 
-$cerradas = count(array_filter($filas, fn($f) => $f['estado'] === 'Cerrada'));
-$cfg = Db::config();
-$secreto = (string) ($cfg['sync_secreto'] ?? '');
+$total = 0; $filas = []; $porZona = []; $tecnicos = [];
+if ($hayIndice) {
+    $total = (int) (Db::uno("SELECT COUNT(*) n FROM ot_archivo a WHERE $where", $par)['n'] ?? 0);
+    $paginas = max(1, (int) ceil($total / $POR_PAGINA));
+    if ($pagina > $paginas) { $pagina = $paginas; }
+    $filas = Db::todos(
+        "SELECT a.* FROM ot_archivo a WHERE $where
+          ORDER BY a.fecha_atencion DESC, a.id_industec DESC
+          LIMIT $POR_PAGINA OFFSET " . (($pagina - 1) * $POR_PAGINA), $par
+    );
+    foreach (Db::todos('SELECT zona, COUNT(*) n, SUM(en_servidor) s FROM ot_archivo GROUP BY zona') as $z) {
+        $porZona[(string) $z['zona']] = ['n' => (int) $z['n'], 's' => (int) $z['s']];
+    }
+    $tecnicos = array_column(Db::todos(
+        'SELECT tecnico FROM ot_archivo WHERE tecnico IS NOT NULL AND tecnico <> "" GROUP BY tecnico ORDER BY tecnico'
+    ), 'tecnico');
+} else {
+    $paginas = 1;
+}
+$totalIndice = array_sum(array_map(fn($z) => $z['n'], $porZona));
+$enServidor  = array_sum(array_map(fn($z) => $z['s'], $porZona));
 
-$ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
-        'JEFE_ZONA' => 'Jefe de zona', 'TECNICO' => 'Técnico'];
+$hayFiltro = $fq !== '' || $fZona !== '' || $fLocal !== '' || $fDesde !== '' || $fHasta !== ''
+          || $fTec !== '' || $fOrigen !== '' || $fDonde !== '' || $fRec || $fMias;
 
-Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Órdenes emitidas']);
+// SEG-03: la consulta del archivo queda registrada con sus filtros y cuántas
+// filas devolvió. Es lo que permite ver un barrido sistemático del archivo.
+Auth::bitacora('CONSULTAR', 'archivo_ot', $fZona !== '' ? $fZona : 'todas',
+               'q=' . $fq . ' visibles=' . count($filas) . ' de ' . $total,
+               null, null, ['q' => $fq, 'zona' => $fZona, 'local' => $fLocal, 'desde' => $fDesde,
+                            'hasta' => $fHasta, 'tecnico' => $fTec, 'origen' => $fOrigen,
+                            'donde' => $fDonde, 'rec' => $fRec, 'p' => $pagina, 'n' => $total]);
+
+$puedeCompartir = Ui::puedeModulo('ots.compartir', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO'], $u);
+$locales = Catalogo::cargar()['locales'] ?? [];
+$ORIGEN = ['APP' => 'app', 'CORREO' => 'correo', 'HISTORICO' => 'histórico'];
+
+/** Los parámetros vigentes, para armar enlaces que conserven los filtros. */
+$enlace = static function (array $cambios = []) use ($fq, $fZona, $fLocal, $fDesde, $fHasta, $fTec, $fOrigen, $fDonde, $fRec, $fMias): string {
+    $p = array_filter(array_merge([
+        'q' => $fq, 'zona' => $fZona, 'local' => $fLocal, 'desde' => $fDesde, 'hasta' => $fHasta,
+        'tecnico' => $fTec, 'origen' => $fOrigen, 'donde' => $fDonde, 'rec' => $fRec ? '1' : '',
+        'mias' => $fMias ? '1' : '',
+    ], $cambios), static fn($v) => $v !== '' && $v !== null);
+    return 'ordenes.php' . ($p ? '?' . http_build_query($p) : '');
+};
+
+Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de órdenes']);
 ?>
 <div class="wrap ancho">
 
   <div class="titulo entra">
-    <h1>Órdenes emitidas</h1>
+    <h1>Archivo de órdenes</h1>
     <p class="sub">
-      <?php if ($u['rol'] === 'TECNICO'): ?>
-        Las órdenes que has atendido. Puedes abrir el informe o mandárselo al
-        administrador del local.
-      <?php else: ?>
-        Las órdenes con informe recibido<?= Auth::zonaAlcance() ? ' en ' . e((string) Auth::zonaAlcance()) : '' ?>.
-      <?php endif; ?>
+      Las órdenes de trabajo de las tres zonas, en solo lectura: se consultan,
+      se abren, se descargan y se comparten, y cada uno de esos gestos queda en
+      la bitácora con tu nombre. Nada se borra ni se edita desde aquí.
     </p>
   </div>
 
-    <?php if (!$filas && $fTexto === '' && $fEstado === ''): ?>
-      <div class="nota-regular">
-        <b>Todavía no hay órdenes que mostrarte.</b>
-        <?php if ($u['rol'] === 'TECNICO'): ?>
-          Aquí aparecen las que hayas atendido, en cuanto llegue su informe al
-          buzón de la empresa.
-        <?php else: ?>
-          Los informes se leen del correo cada tres horas.
-        <?php endif; ?>
+  <?php if (!$hayIndice): ?>
+    <?= Ui::aviso('info', '<b>El índice del archivo todavía no está en la base.</b>'
+        . '<p>La migración <span class="mono">009_pulido_piloto.sql</span> crea la tabla '
+        . '<span class="mono">ot_archivo</span>; hasta aplicarla no hay qué mostrar.</p>') ?>
+  <?php elseif ($totalIndice === 0): ?>
+    <?= Ui::aviso('info', '<b>El índice del archivo está vacío.</b>'
+        . '<p>Se llena con <span class="mono">archivo_indexar_cli.php</span> (los PDF del servidor, lo '
+        . 'que emitió la app y lo que llegó por correo) y con el catálogo histórico que exporta la '
+        . 'estación (<span class="mono">t2_15_exportar_archivo.py --empujar</span>).</p>') ?>
+  <?php else: ?>
+
+    <div class="tiles tiles-enlace">
+      <a class="tile azul" href="ordenes.php">
+        <div class="n" data-n="<?= $totalIndice ?>">0</div>
+        <div class="t">Órdenes en el archivo</div>
+        <div class="pie"><?= $enServidor ?> con el PDF en el servidor</div>
+      </a>
+      <?php foreach ($ZONAS as $z): ?>
+        <?php if (empty($porZona[$z])) { continue; } ?>
+        <a class="tile zona-tile zona-<?= strtolower($z) ?> <?= $fZona === $z ? 'on' : '' ?>" href="<?= e($enlace(['zona' => $z])) ?>">
+          <div class="n" data-n="<?= $porZona[$z]['n'] ?>">0</div>
+          <div class="t"><?= Ui::zona($z) ?></div>
+          <div class="pie"><?= $porZona[$z]['s'] ?> en el servidor</div>
+        </a>
+      <?php endforeach; ?>
+    </div>
+
+    <div class="filtros-rapidos">
+      <a class="fr <?= !$hayFiltro ? 'on' : '' ?>" href="ordenes.php">Todas</a>
+      <a class="fr <?= $fRec ? 'on' : '' ?>" href="<?= e($enlace(['rec' => '1'])) ?>">Últimos 90 días</a>
+      <?php if ($u['rol'] === 'TECNICO'): ?>
+        <a class="fr <?= $fMias ? 'on' : '' ?>" href="<?= e($enlace(['mias' => '1'])) ?>">Las mías</a>
+      <?php endif; ?>
+      <a class="fr <?= $fDonde === 'servidor' ? 'on' : '' ?>" href="<?= e($enlace(['donde' => 'servidor'])) ?>">Con PDF aquí</a>
+      <a class="fr <?= $fDonde === 'estacion' ? 'on' : '' ?>" href="<?= e($enlace(['donde' => 'estacion'])) ?>">Solo en la estación</a>
+    </div>
+
+    <form class="filtros" method="get" data-auto>
+      <?php if ($fRec): ?><input type="hidden" name="rec" value="1"><?php endif; ?>
+      <?php if ($fMias): ?><input type="hidden" name="mias" value="1"><?php endif; ?>
+      <?php if ($fDonde !== ''): ?><input type="hidden" name="donde" value="<?= e($fDonde) ?>"><?php endif; ?>
+      <div class="campo" style="flex:1;min-width:200px">
+        <label for="f-q">Buscar</label>
+        <input type="search" id="f-q" name="q" value="<?= e($fq) ?>"
+               placeholder="orden, aviso, local o técnico"
+               data-busca="#tabla-archivo" data-busca-cuenta="#cuenta-archivo">
       </div>
-    <?php else: ?>
-
-      <div class="tiles">
-        <div class="tile"><div class="n"><?= count($filas) ?></div><div class="t">Órdenes</div></div>
-        <div class="tile"><div class="n"><?= $cerradas ?></div><div class="t">Con cierre</div></div>
-        <div class="tile"><div class="n"><?= count($filas) - $cerradas ?></div><div class="t">En curso</div></div>
+      <div class="campo">
+        <label for="f-zona">Zona</label>
+        <select id="f-zona" name="zona">
+          <option value="">Las tres</option>
+          <?php foreach ($ZONAS as $z): ?>
+            <option value="<?= $z ?>" <?= $fZona === $z ? 'selected' : '' ?>><?= $z ?></option>
+          <?php endforeach; ?>
+        </select>
       </div>
+      <div class="campo">
+        <label for="f-local">Local</label>
+        <input type="text" id="f-local" name="local" list="locales" value="<?= e($fLocal) ?>"
+               placeholder="código" style="width:120px;text-transform:uppercase" autocomplete="off">
+        <datalist id="locales">
+          <?php foreach ($locales as $l): ?>
+            <option value="<?= e((string) ($l['codigo'] ?? '')) ?>"><?= e((string) ($l['nombre'] ?? '')) ?></option>
+          <?php endforeach; ?>
+        </datalist>
+      </div>
+      <div class="campo">
+        <label for="f-desde">Desde</label>
+        <input type="date" id="f-desde" name="desde" value="<?= e($fDesde) ?>">
+      </div>
+      <div class="campo">
+        <label for="f-hasta">Hasta</label>
+        <input type="date" id="f-hasta" name="hasta" value="<?= e($fHasta) ?>">
+      </div>
+      <div class="campo">
+        <label for="f-tec">Técnico</label>
+        <select id="f-tec" name="tecnico">
+          <option value="">Todos</option>
+          <?php foreach ($tecnicos as $t): ?>
+            <option value="<?= e($t) ?>" <?= $fTec === $t ? 'selected' : '' ?>><?= e($t) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-origen">Origen</label>
+        <select id="f-origen" name="origen">
+          <option value="">Todos</option>
+          <?php foreach ($ORIGEN as $k => $et): ?>
+            <option value="<?= $k ?>" <?= $fOrigen === $k ? 'selected' : '' ?>><?= e($et) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="campo">
+        <label>&nbsp;</label>
+        <button class="btn primary" type="submit" style="height:38px">Filtrar</button>
+      </div>
+      <?php if ($hayFiltro): ?>
+        <div class="campo"><label>&nbsp;</label>
+          <a class="btn" href="ordenes.php" style="height:38px;display:flex;align-items:center">Limpiar</a>
+        </div>
+      <?php endif; ?>
+    </form>
 
-      <form class="filtros" method="get">
-        <div class="campo">
-          <label for="f-est">Estado</label>
-          <select id="f-est" name="est">
-            <option value="">Todas</option>
-            <option value="Cerrada" <?= $fEstado === 'Cerrada' ? 'selected' : '' ?>>Con cierre</option>
-            <option value="Abierta" <?= $fEstado === 'Abierta' ? 'selected' : '' ?>>En curso</option>
-          </select>
-        </div>
-        <div class="campo" style="flex:1;min-width:200px">
-          <label for="f-q">Buscar</label>
-          <input type="search" id="f-q" name="q" value="<?= e($fTexto) ?>"
-                 placeholder="parte de la orden, del aviso, del local o del equipo"
-                 data-busca="#tabla-ordenes" data-busca-cuenta="#cuenta-ordenes">
-        </div>
-        <div class="campo">
-          <label>&nbsp;</label>
-          <button class="btn primary" type="submit" style="height:38px">Filtrar</button>
-        </div>
-        <?php if ($fTexto !== '' || $fEstado !== ''): ?>
-          <div class="campo"><label>&nbsp;</label>
-            <a class="btn" href="ordenes.php" style="height:38px;display:flex;align-items:center">Limpiar</a>
-          </div>
+    <p class="sub" style="margin:0 0 8px">
+      <b id="cuenta-archivo" data-plantilla="{n}"><?= count($filas) ?></b> de <b><?= $total ?></b>
+      <?= $total === 1 ? 'orden' : 'órdenes' ?><?= $paginas > 1 ? ' · página ' . $pagina . ' de ' . $paginas : '' ?>.
+      La más reciente arriba.
+    </p>
+
+    <div class="tabla-wrap">
+      <table id="tabla-archivo" class="tarjetas">
+        <thead><tr>
+          <th>Orden</th><th>Fecha</th><th>Local</th><th>Zona</th><th>Aviso</th>
+          <th>Técnico</th><th>Origen</th><th>Informe</th>
+        </tr></thead>
+        <tbody>
+        <?php if (!$filas): ?>
+          <tr><td colspan="8" class="vacio">Nada con esos filtros. <a href="ordenes.php">Ver todas</a>.</td></tr>
         <?php endif; ?>
-      </form>
-
-      <p class="sub" style="margin:0 0 8px">
-        <b id="cuenta-ordenes" data-plantilla="{n}"><?= count($filas) ?></b> órdenes.
-      </p>
-
-      <div class="tabla-wrap">
-        <table id="tabla-ordenes">
-          <thead><tr>
-            <th>Orden</th><th>Local</th><th>Fecha</th><th>Quién la firmó</th>
-            <th>Estado</th><th>Informe</th>
-          </tr></thead>
-          <tbody>
-          <?php if (!$filas): ?>
-            <tr><td colspan="6" class="vacio">Nada con esos filtros. <a href="ordenes.php">Ver todas</a>.</td></tr>
-          <?php endif; ?>
-          <?php foreach ($filas as $f): ?>
-            <?php /* data-b: lo que compara el buscador en vivo. Mismos campos que
-                     Ui::coincide() al filtrar en el servidor. */ ?>
-            <tr data-b="<?= Ui::claveFila([$f['ot'], $f['aviso'], $f['local'], $f['local_n'],
-                                           $f['equipo'], $f['texto'], $f['caso']]) ?>">
-              <td>
-                <span class="mono"><?= e($f['ot']) ?></span>
-                <span class="desc">aviso <?= e($f['aviso']) ?></span>
-              </td>
-              <td>
-                <b><?= e($f['local']) ?></b>
-                <span class="desc"><?= e($f['local_n']) ?></span>
-                <span class="desc"><?= Ui::zona($f['zona']) ?></span>
-                <span class="desc"><?= e($f['caso']) ?></span>
-              </td>
-              <td class="mono"><?= e(substr($f['fecha'], 0, 10)) ?></td>
-              <td>
-                <?php foreach ($f['personas'] as $p): ?>
-                  <?php /* Tres situaciones distintas, y confundirlas seria decir
-                           que no sabemos quien firmo cuando si lo sabemos:
-                             activo true  -> trabaja hoy, tiene usuario
-                             activo false -> es del padron, pero ya salio
-                             activo null  -> la firma no calzo con nadie */ ?>
-                  <div>
-                    <?= e($p['nombre']) ?>
-                    <?php if ($p['activo'] === null): ?>
-                      <span class="chip">firma sin identificar</span>
-                    <?php elseif ($p['activo'] === false): ?>
-                      <span class="chip">ya no trabaja aquí</span>
-                    <?php endif; ?>
-                  </div>
-                <?php endforeach; ?>
-                <?php if ($f['equipo']): ?><span class="desc"><?= e($f['equipo']) ?></span><?php endif; ?>
-              </td>
-              <td>
-                <span class="chip <?= $f['estado'] === 'Cerrada' ? 'cerrada' : 'abierta' ?>">
-                  <?= $f['estado'] === 'Cerrada' ? 'con cierre' : 'en curso' ?>
-                </span>
-                <span class="desc"><?= Ui::estado($f['gestion']) ?></span>
-              </td>
-              <td>
+        <?php foreach ($filas as $f): ?>
+          <?php
+          $ot = (string) $f['id_industec'];
+          $aqui = (int) $f['en_servidor'] === 1;
+          ?>
+          <tr data-b="<?= Ui::claveFila([$ot, (string) $f['aviso'], (string) $f['local_codigo'],
+                                         (string) $f['local_nombre'], (string) $f['tecnico']]) ?>">
+            <td data-th="Orden">
+              <span class="mono"><?= e($ot) ?></span>
+              <?php if (!empty($f['modulo'])): ?>
+                <span class="desc"><?= e(strtolower((string) $f['modulo'])) ?><?= !empty($f['dia']) ? ' · día ' . (int) $f['dia'] : '' ?></span>
+              <?php endif; ?>
+            </td>
+            <td data-th="Fecha" class="mono"><?= e((string) ($f['fecha_atencion'] ?: '—')) ?></td>
+            <td data-th="Local">
+              <b><?= e((string) ($f['local_codigo'] ?: '—')) ?></b>
+              <span class="desc"><?= e((string) $f['local_nombre']) ?></span>
+            </td>
+            <td data-th="Zona"><?= Ui::zona((string) $f['zona']) ?></td>
+            <td data-th="Aviso" class="mono"><?= e((string) ($f['aviso'] ?: '—')) ?></td>
+            <td data-th="Técnico"><?= e((string) ($f['tecnico'] ?: '—')) ?></td>
+            <td data-th="Origen"><span class="chip"><?= e($ORIGEN[$f['origen']] ?? strtolower((string) $f['origen'])) ?></span></td>
+            <td data-th="Informe">
+              <?php if ($aqui): ?>
                 <div class="acc">
-                  <a class="btn primary" href="pdf.php?ot=<?= rawurlencode($f['ot']) ?>"
-                     target="_blank" rel="noopener">Ver PDF</a>
-                  <?php if ($secreto !== ''): ?>
-                    <button class="btn" type="button"
-                            data-ot="<?= e($f['ot']) ?>"
-                            data-enlace="<?= e(enlaceCompartido($f['ot'], $secreto)) ?>"
-                            onclick="compartir(this)">Compartir</button>
+                  <a class="btn primary sm" href="pdf.php?ot=<?= rawurlencode($ot) ?>" target="_blank" rel="noopener">Ver</a>
+                  <a class="btn sm" href="pdf.php?ot=<?= rawurlencode($ot) ?>&amp;dl=1">Descargar</a>
+                  <?php if ($puedeCompartir): ?>
+                    <button class="btn sm" type="button" data-ot="<?= e($ot) ?>" onclick="compartir(this)">Compartir</button>
                   <?php endif; ?>
                 </div>
-              </td>
-            </tr>
-          <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
+              <?php else: ?>
+                <div class="acc">
+                  <button class="btn sm" type="button" data-ot="<?= e($ot) ?>" onclick="pedirCopia(this)">Pedir copia</button>
+                </div>
+                <span class="desc" title="<?= e((string) ($f['fuente_ruta'] ?? '')) ?>">
+                  en la estación<?= !empty($f['fuente_ruta']) ? ': ' . e(mb_strimwidth((string) $f['fuente_ruta'], 0, 60, '…', 'UTF-8')) : '' ?>
+                </span>
+              <?php endif; ?>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+
+    <?php if ($paginas > 1): ?>
+      <nav class="paginacion" aria-label="Páginas">
+        <?php if ($pagina > 1): ?>
+          <a class="btn sm" href="<?= e($enlace(['p' => $pagina - 1])) ?>">← Anteriores</a>
+        <?php endif; ?>
+        <span class="sub">página <?= $pagina ?> de <?= $paginas ?></span>
+        <?php if ($pagina < $paginas): ?>
+          <a class="btn sm" href="<?= e($enlace(['p' => $pagina + 1])) ?>">Siguientes →</a>
+        <?php endif; ?>
+      </nav>
     <?php endif; ?>
+  <?php endif; ?>
 </div>
 
 <dialog id="dlg">
   <h2 style="margin:0 0 4px;font-size:17px">Compartir el informe</h2>
   <p class="sub" style="margin:0 0 10px">
-    Enlace de <b id="dlg-ot" class="mono"></b>. <b>Caduca en 24 horas</b> y deja
-    registrado quién lo abrió. Va con la firma del administrador del local:
-    mándaselo solo a quien corresponde.
+    Enlace de <b id="dlg-ot" class="mono"></b>. <b>Caduca <span id="dlg-caduca"></span></b> y deja
+    registrado quién lo abrió y que lo compartiste tú. Va con la firma del
+    administrador del local: mándaselo solo a quien corresponde.
   </p>
   <div class="enlace-caja" id="dlg-url"></div>
   <div class="row" style="gap:8px;flex-wrap:wrap">
@@ -245,27 +406,57 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Órdenes emitidas']);
 </dialog>
 
 <script>
-function compartir(b) {
-  var url = location.origin + location.pathname.replace(/ordenes\.php$/, '') + b.dataset.enlace;
-  var ot  = b.dataset.ot;
-  document.getElementById('dlg-ot').textContent = ot;
-  document.getElementById('dlg-url').textContent = url;
-  document.getElementById('dlg-copiado').hidden = true;
-  var texto = 'Informe de la orden ' + ot + ' de INDUSTEC: ' + url
-            + ' (el enlace caduca en 24 horas)';
-  document.getElementById('dlg-wa').href = 'https://wa.me/?text=' + encodeURIComponent(texto);
-  document.getElementById('dlg-mail').href =
-      'mailto:?subject=' + encodeURIComponent('Informe de la orden ' + ot)
-    + '&body=' + encodeURIComponent(texto);
-  document.getElementById('dlg').showModal();
+var CSRF = document.querySelector('meta[name="csrf"]') ? document.querySelector('meta[name="csrf"]').content : '';
+
+function accion(datos) {
+  var fd = new FormData();
+  Object.keys(datos).forEach(function (k) { fd.append(k, datos[k]); });
+  fd.append('csrf', CSRF);
+  return fetch('ordenes.php', { method: 'POST', body: fd, credentials: 'same-origin',
+                                headers: { 'X-Csrf': CSRF } })
+    .then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }); });
 }
+
+/* El enlace se pide al servidor al pulsar: así queda en la bitácora quién lo
+   compartió y cuándo, y la tabla no lleva cien enlaces firmados de antemano. */
+function compartir(b) {
+  var ot = b.dataset.ot;
+  b.disabled = true;
+  accion({ accion: 'compartir', ot: ot, canal: 'copiar' }).then(function (j) {
+    b.disabled = false;
+    if (!j.ok) { UI.toast(j.error || 'No se pudo generar el enlace.', 'err'); return; }
+    var url = location.origin + location.pathname.replace(/ordenes\.php$/, '') + j.enlace;
+    document.getElementById('dlg-ot').textContent = ot;
+    document.getElementById('dlg-caduca').textContent = 'el ' + j.caduca + ' (' + j.horas + ' horas)';
+    document.getElementById('dlg-url').textContent = url;
+    document.getElementById('dlg-copiado').hidden = true;
+    var texto = 'Informe de la orden ' + ot + ' de INDUSTEC: ' + url
+              + ' (el enlace caduca en ' + j.horas + ' horas)';
+    document.getElementById('dlg-wa').href = 'https://wa.me/?text=' + encodeURIComponent(texto);
+    document.getElementById('dlg-mail').href =
+        'mailto:?subject=' + encodeURIComponent('Informe de la orden ' + ot)
+      + '&body=' + encodeURIComponent(texto);
+    document.getElementById('dlg').showModal();
+  }).catch(function () { b.disabled = false; UI.toast('Sin conexión con el servidor.', 'err'); });
+}
+
+function pedirCopia(b) {
+  var ot = b.dataset.ot;
+  b.disabled = true;
+  accion({ accion: 'pedir_copia', ot: ot }).then(function (j) {
+    if (!j.ok) { b.disabled = false; UI.toast(j.error || 'No se pudo pedir la copia.', 'err'); return; }
+    b.textContent = 'Copia pedida';
+    UI.toast(j.mensaje, 'ok');
+  }).catch(function () { b.disabled = false; UI.toast('Sin conexión con el servidor.', 'err'); });
+}
+
 function copiar() {
   var t = document.getElementById('dlg-url').textContent;
   navigator.clipboard.writeText(t).then(function () {
     document.getElementById('dlg-copiado').hidden = false;
   }).catch(function () {
     /* Sin permiso de portapapeles queda el texto seleccionable a mano: el
-       recuadro tiene user-select:all, asi que un clic lo selecciona entero. */
+       recuadro tiene user-select:all, así que un clic lo selecciona entero. */
     document.getElementById('dlg-url').focus();
   });
 }

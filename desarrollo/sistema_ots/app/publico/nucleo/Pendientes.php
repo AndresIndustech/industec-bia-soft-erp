@@ -124,7 +124,7 @@ final class Pendientes
 
     public const ESTADOS = [
         // -- Anteriores a la 009: solo para las filas que ya estaban aquí. --
-        'SIN_VEREDICTO'      => ['sin veredicto',      '(anterior a la 009) Corre el plazo de 48 h: nadie ha decidido todavía la vía'],
+        'SIN_VEREDICTO'      => ['sin validar',        '(anterior a la 009) Corre el plazo de 48 h: el jefe de zona no ha validado todavía la vía'],
         'COTIZANDO'          => ['cotizando',          '(anterior a la 009) La administración está pidiendo precios de la pieza'],
         'COMPRADO'           => ['comprado',           '(anterior a la 009) La orden de compra salió; se espera al proveedor'],
         'EN_BODEGA'          => ['en bodega',          '(anterior a la 009) Llegó a INDUSTEC; falta llevarlo al local'],
@@ -207,7 +207,7 @@ final class Pendientes
     }
     public static function etiquetaVia(?string $v): string
     {
-        return self::VIAS[strtoupper((string) $v)][0] ?? 'sin veredicto';
+        return self::VIAS[strtoupper((string) $v)][0] ?? 'sin validar';
     }
     /** El «veredicto», reservado para lo que decide Grupo KFC (P-20): no se
      *  confunde con lo que valida el jefe de zona. */
@@ -641,7 +641,9 @@ final class Pendientes
             return [false, 'Ese pendiente no existe o no está en tu alcance.'];
         }
         if (!isset(self::VIAS[$via])) { return [false, 'Esa no es una de las cuatro vías.']; }
-        if (!$p['abierto'] || $p['estado'] !== 'SOLICITADO') {
+        // SIN_VEREDICTO es el estado con que nacían antes de la 009: esas filas
+        // siguen vivas en el sitio y se validan por aquí igual que SOLICITADO.
+        if (!$p['abierto'] || !in_array($p['estado'], ['SOLICITADO', 'SIN_VEREDICTO'], true)) {
             return [false, 'Ese pendiente ya fue validado, o está cerrado.'];
         }
         // Dar de baja un activo del cliente es una decisión que se le explica a
@@ -661,7 +663,7 @@ final class Pendientes
                 SET via = ?, estado = "VALIDADO_JEFE",
                     veredicto_por = ?, veredicto_en = NOW(), veredicto_nota = NULLIF(?, ""),
                     validado_por = ?, validado_en = NOW()
-              WHERE pendiente_id = ? AND estado = "SOLICITADO"',
+              WHERE pendiente_id = ? AND estado IN ("SOLICITADO", "SIN_VEREDICTO")',
             [$via, (int) $u['usuario_id'], mb_substr(trim($nota), 0, 600), (int) $u['usuario_id'], $id]
         );
         if ($filas === 0) {

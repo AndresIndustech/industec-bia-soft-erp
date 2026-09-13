@@ -1,0 +1,14 @@
+# Los documentos del aprendizaje (manuales, guías, comunicados) NUNCA se sirven
+# como archivo: el único camino es documento.php, que comprueba sesión y estado
+# de aprobación y deja bitácora. Los nombres físicos son aleatorios, pero eso
+# no sustituye a cerrar la carpeta.
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
+
+Options -Indexes
