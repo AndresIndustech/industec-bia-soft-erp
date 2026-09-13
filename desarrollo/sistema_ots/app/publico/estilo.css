@@ -1407,6 +1407,10 @@ body.con-nav-abajo{ padding-bottom:calc(var(--nav-abajo) + env(safe-area-inset-b
   margin-top:4px; font-weight:600;
 }
 .chk-otra-zona input{ margin:0; }
+/* El `display:flex` de arriba le gana al `[hidden]` del navegador: sin esta
+   regla la casilla salía en todas las filas (captura del jefe, 13-sep), y solo
+   debe verse cuando se eligió a alguien de otra zona (D4). */
+.chk-otra-zona[hidden]{ display:none; }
 
 /* --- El desglose "Por zona" del panel (ASG-09, TR-09) -------------------- */
 .panel-zonas{
@@ -1431,5 +1435,31 @@ body.con-nav-abajo{ padding-bottom:calc(var(--nav-abajo) + env(safe-area-inset-b
 @media (max-width:640px){
   .panel-zonas{ grid-template-columns:1fr; }
   .zona-bloque{ padding-left:11px; }
+
+  /* --- «Por repartir» en celular: una tarjeta por caso, no seis columnas
+     estrujadas (captura admin_movil del 13-sep). La cabecera se oculta y cada
+     celda pinta su `data-th` delante del valor; la de «Asignar a» va sin
+     etiqueta porque el select y el botón ya dicen qué son. */
+  table.repartir thead{ display:none; }
+  table.repartir, table.repartir tbody{ display:block; }
+  table.repartir tr{
+    display:block; padding:10px 12px; margin:0 0 10px;
+    background:var(--card); border:1px solid var(--border); border-radius:var(--r);
+  }
+  table.repartir td{
+    display:flex; gap:10px; align-items:baseline; flex-wrap:wrap;
+    padding:4px 0; border:0; font-size:13px;
+  }
+  table.repartir td::before{
+    content:attr(data-th); flex:0 0 74px; font-size:10.5px; font-weight:700;
+    letter-spacing:.04em; text-transform:uppercase; color:var(--muted);
+  }
+  table.repartir td[data-th="Asignar a"]{ display:block; padding-top:8px; }
+  table.repartir td[data-th="Asignar a"]::before{ display:none; }
+  table.repartir td.vacio{ display:block; }
+  table.repartir td.vacio::before{ display:none; }
+  table.repartir form.asignar{ display:flex; flex-wrap:wrap; gap:8px; }
+  table.repartir form.asignar select.sel-tec{ flex:1 1 100%; min-width:0; }
+  table.repartir form.asignar .btn{ flex:1 1 auto; }
 }
 

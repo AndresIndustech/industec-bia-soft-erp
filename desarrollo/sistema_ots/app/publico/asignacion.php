@@ -166,8 +166,11 @@ Ui::cabecera($u, 'asignacion.php',
     </p>
   <?php endif; ?>
 
-  <?php /* Las cuatro cifras del conjunto que se está viendo, para no perder el
-           total de vista cuando se filtra a una sola zona. */ ?>
+  <?php /* Las cuatro cifras del conjunto, para no perder el total de vista
+           cuando hay varias zonas. Con una sola a la vista (el jefe, o el
+           admin filtrando) se omiten: repetirían, número por número, las del
+           bloque de esa zona, que es lo que se veía en la captura del 13-sep. */ ?>
+  <?php if (count($zonasMostrar) > 1): ?>
   <div class="tiles">
     <div class="tile <?= $totalSinAsignar ? 'ambar' : 'verde' ?>">
       <div class="n"><?= $totalSinAsignar ?></div>
@@ -190,6 +193,7 @@ Ui::cabecera($u, 'asignacion.php',
       <div class="pie">asignados y todavía abiertos</div>
     </div>
   </div>
+  <?php endif; ?>
 
   <?php foreach ($zonasMostrar as $z): ?>
     <?php
@@ -243,8 +247,10 @@ Ui::cabecera($u, 'asignacion.php',
         administración los regularice: no se reparten desde aquí.
       </p>
 
+      <?php /* `data-th` en cada celda: en celular (≤640 px) la tabla pasa a
+               tarjetas y el CSS pinta esa etiqueta delante de cada valor. */ ?>
       <div class="tabla-wrap">
-        <table>
+        <table class="repartir">
           <thead><tr>
             <th>Aviso</th><th>Local</th><th>Qué pide</th><th>Prioridad</th>
             <th>Creado</th><th>Asignar a</th>
@@ -260,7 +266,7 @@ Ui::cabecera($u, 'asignacion.php',
             $otros   = $z !== '' ? array_diff_key($carga, $propios) : $carga;
             ?>
             <tr>
-              <td>
+              <td data-th="Aviso">
                 <span class="mono"><?= e($c['aviso'] ?? '—') ?></span>
                 <?php if ($s['estado'] === 'EN_REVISION'): ?>
                   <span class="chip">en revisión</span>
@@ -270,12 +276,12 @@ Ui::cabecera($u, 'asignacion.php',
                   <span class="chip" title="Hay una orden de cierre, pero la firma no cruzó con nadie del padrón">informe sin técnico reconocido</span>
                 <?php endif; ?>
               </td>
-              <td>
+              <td data-th="Local">
                 <b><?= e($c['local'] ?? '—') ?></b>
                 <span class="desc"><?= e($c['local_nombre'] ?? '') ?></span>
                 <?php if ($z === ''): ?><span class="desc"><?= Ui::zona($c['zona'] ?? null) ?></span><?php endif; ?>
               </td>
-              <td>
+              <td data-th="Qué pide">
                 <?= e($c['caso'] ?? '') ?>
                 <?php if (!empty($c['activo_fijo'])): ?>
                   <span class="desc"><?= e($c['activo_fijo']) ?></span>
@@ -284,15 +290,15 @@ Ui::cabecera($u, 'asignacion.php',
                   <span class="desc"><?= e(mb_strimwidth((string) $c['descripcion_trabajo'], 0, 120, '…', 'UTF-8')) ?></span>
                 <?php endif; ?>
               </td>
-              <td><?= Ui::prioridad($c['prioridad'] ?? null) ?></td>
-              <td>
+              <td data-th="Prioridad"><?= Ui::prioridad($c['prioridad'] ?? null) ?></td>
+              <td data-th="Creado">
                 <span class="mono sin-cortar"><?= e($c['fecha_creacion'] ?? '—') ?></span>
                 <?php /* La antiguedad al lado de la fecha: a los 7 dias sin
                          informe el caso se cierra solo por falta de atencion, y
                          eso hay que verlo venir, no descubrirlo despues. */ ?>
                 <span class="desc"><?= Ui::edad($c['fecha_creacion'] ?? null) ?></span>
               </td>
-              <td>
+              <td data-th="Asignar a">
                 <form method="post" action="casos.php" class="asignar">
                   <input type="hidden" name="csrf" value="<?= e(Auth::csrfToken()) ?>">
                   <input type="hidden" name="accion" value="asignar">
