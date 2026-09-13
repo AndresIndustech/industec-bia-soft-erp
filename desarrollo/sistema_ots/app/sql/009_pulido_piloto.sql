@@ -119,10 +119,13 @@ ALTER TABLE pendientes
   ADD KEY IF NOT EXISTS idx_pen_sap   (requerimiento_sap),
   ADD KEY IF NOT EXISTS idx_pen_flujo (estado, zona, validado_en);
 
+-- En MariaDB el IF NOT EXISTS va después de FOREIGN KEY, no después de
+-- CONSTRAINT: «ADD CONSTRAINT IF NOT EXISTS fk … FOREIGN KEY» es error 1064
+-- (medido el 2026-09-13 en el 11.8.9 del servidor).
 ALTER TABLE pendientes
-  ADD CONSTRAINT IF NOT EXISTS fk_pen_valida   FOREIGN KEY (validado_por)       REFERENCES usuarios(usuario_id),
-  ADD CONSTRAINT IF NOT EXISTS fk_pen_sap      FOREIGN KEY (registrado_sap_por) REFERENCES usuarios(usuario_id),
-  ADD CONSTRAINT IF NOT EXISTS fk_pen_kfc      FOREIGN KEY (veredicto_kfc_por)  REFERENCES usuarios(usuario_id);
+  ADD CONSTRAINT fk_pen_valida FOREIGN KEY IF NOT EXISTS fk_pen_valida (validado_por)       REFERENCES usuarios(usuario_id),
+  ADD CONSTRAINT fk_pen_sap    FOREIGN KEY IF NOT EXISTS fk_pen_sap    (registrado_sap_por) REFERENCES usuarios(usuario_id),
+  ADD CONSTRAINT fk_pen_kfc    FOREIGN KEY IF NOT EXISTS fk_pen_kfc    (veredicto_kfc_por)  REFERENCES usuarios(usuario_id);
 
 -- El hilo conoce los pasos nuevos, y distingue el recordatorio del técnico
 -- (cuenta como insistencia) del aviso interno de la oficina (no cuenta).
