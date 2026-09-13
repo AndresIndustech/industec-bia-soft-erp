@@ -143,8 +143,10 @@ def main():
     anotar("008", "el recibo dice que el correo no salió (sistema en pruebas)",
            "no se envió a nadie" in (rec.get("que_sigue") or ""), (rec.get("que_sigue") or "")[:90])
     fila = sql("SELECT estado, emitida_en, pdf_sha256, emision_error FROM ot_capturadas WHERE envio_uuid = ?", [envio])[0]
-    anotar("008", "ot_capturadas: PROCESADA, con fecha de emisión y huella del PDF",
-           fila["estado"] == "PROCESADA" and fila["emitida_en"] and fila["pdf_sha256"] and not fila["emision_error"], fila)
+    # Desde la 009 el estado real es EMITIDA (PROCESADA era el nombre anterior a los
+    # estados NUMERADA/EMITIDA/ENVIADA/FALLIDA, E-12).
+    anotar("008", "ot_capturadas: EMITIDA, con fecha de emisión y huella del PDF",
+           fila["estado"] == "EMITIDA" and fila["emitida_en"] and fila["pdf_sha256"] and not fila["emision_error"], fila)
     despues = int(sql("SELECT ultimo FROM correlativos WHERE serie = ?", [serie])[0]["ultimo"])
     num = int(ot.split("-")[1]) if ot else -1
     anotar("008", "el correlativo quedó en ese número, uno más que antes",
@@ -204,8 +206,12 @@ def main():
     anotar("008", "ni se encoló un segundo correo", int(n) == 1, n)
 
     print("\n== diez reservas a la vez, diez números distintos (T2.1.5) ==")
-    salida = ssh(f"cd {D} && for i in $(seq 10); do php -r 'require \"nucleo/Emision.php\"; "
-                 f"echo Emision::reservar(\"CONCURRENCIA:UIO\"), PHP_EOL;' & done; wait")
+    # Cada proceso escribe en su propio archivo: con la salida compartida dos
+    # números se pegaban en una sola línea («90069005») y la prueba fallaba sin
+    # que la reserva estuviera mal (flaqueza medida el 2026-09-13).
+    salida = ssh(f"cd {D} && rm -f /tmp/conc_uio_* && for i in $(seq 10); do php -r 'require \"nucleo/Emision.php\"; "
+                 f"echo Emision::reservar(\"CONCURRENCIA:UIO\");' > /tmp/conc_uio_$i & done; wait; "
+                 f"cat /tmp/conc_uio_*; echo; rm -f /tmp/conc_uio_*")
     nums = sorted(int(x) for x in salida.split())
     anotar("008", "10 procesos a la vez: 10 números, sin repetir y seguidos",
            len(nums) == 10 and len(set(nums)) == 10 and nums[-1] - nums[0] == 9, nums)

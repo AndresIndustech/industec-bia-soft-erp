@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/Auth.php';       // la bitácora de la regeneración y del correo sin destino
 require_once __DIR__ . '/Catalogo.php';
 
 /**
@@ -43,7 +44,11 @@ require_once __DIR__ . '/Catalogo.php';
 final class Emision
 {
     public const SERIE_PRUEBA = 9000;
-    private const ZONAS = ['UIO', 'LARB', 'CNLJ'];
+    /* OTRA existe en el esquema y en cuatro locales reales (Pollo Gus fuera de
+       las tres zonas): sin ella esas órdenes nunca recibían número (E-01, D7). Su
+       serie es propia (CORRECTIVO:OTRA) y el sufijo del nombre, -OTRA. Qué
+       contador lleva producción para ellos lo confirma Andrés en el corte. */
+    private const ZONAS = ['UIO', 'LARB', 'CNLJ', 'OTRA'];
 
     private static ?array $cat = null;
 
@@ -151,7 +156,9 @@ final class Emision
                 if ($id === null) {
                     $id = self::idIndustec(self::reservar($modulo . ':' . $zona), $local,
                                            $aviso !== '' ? $aviso : null, $dia ?: null, $zona);
-                    Db::ejecutar('UPDATE ot_capturadas SET id_industec = ? WHERE captura_id = ?', [$id, $capturaId]);
+                    // NUMERADA: con correlativo y todavía sin PDF (E-12).
+                    Db::ejecutar("UPDATE ot_capturadas SET id_industec = ?, estado = 'NUMERADA' WHERE captura_id = ?",
+                                 [$id, $capturaId]);
                 }
                 $pdo->commit();
             } catch (Throwable $e) {
@@ -164,17 +171,43 @@ final class Emision
         // 2. El PDF. Se genera si falta: la fila es el registro y el PDF, su representación.
         $ruta = self::dirPdf() . '/' . $id . '.pdf';
         if ($c['emitida_en'] === null || !is_file($ruta)) {
+            $pdo = Db::conn();
             try {
-                $pdf = self::pdf($c, $orden, $id);
-                if (!is_dir(self::dirPdf())) { mkdir(self::dirPdf(), 0755, true); }
-                $tmp = $ruta . '.tmp';
-                if (file_put_contents($tmp, $pdf) !== strlen($pdf) || !rename($tmp, $ruta)) {
-                    throw new RuntimeException('no se pudo escribir el archivo');
+                /* Candado sobre la fila mientras se arma el PDF (E-21): dos reintentos
+                   simultáneos chocaban en el rename y uno anotaba un error falso. Si
+                   al tomarlo el archivo ya existe y la orden ya está emitida, no se
+                   regenera. El .tmp lleva sufijo aleatorio por lo mismo. */
+                $pdo->beginTransaction();
+                $fila = Db::uno('SELECT emitida_en, pdf_sha256 FROM ot_capturadas WHERE captura_id = ? FOR UPDATE', [$capturaId]);
+                if (($fila['emitida_en'] ?? null) !== null && is_file($ruta)) {
+                    $pdo->commit();
+                } else {
+                    $pdf = self::pdf($c, $orden, $id);
+                    if (!is_dir(self::dirPdf())) { mkdir(self::dirPdf(), 0755, true); }
+                    $tmp = $ruta . '.' . bin2hex(random_bytes(4)) . '.tmp';
+                    if (file_put_contents($tmp, $pdf) !== strlen($pdf) || !rename($tmp, $ruta)) {
+                        @unlink($tmp);
+                        throw new RuntimeException('no se pudo escribir el archivo');
+                    }
+                    $huella = hash('sha256', $pdf);
+                    /* Regenerar un PDF perdido conserva la fecha y la huella del que
+                       recibió KFC; la nueva va aparte (E-10). */
+                    $regen = ($fila['emitida_en'] ?? null) !== null;
+                    Db::ejecutar("UPDATE ot_capturadas
+                                     SET emitida_en = COALESCE(emitida_en, NOW()),
+                                         pdf_sha256 = COALESCE(pdf_sha256, ?),
+                                         pdf_sha256_regen = ?,
+                                         estado = 'EMITIDA', emision_error = NULL
+                                   WHERE captura_id = ?",
+                                 [$huella, $regen && ($fila['pdf_sha256'] ?? null) !== $huella ? $huella : null, $capturaId]);
+                    if ($regen) {
+                        Auth::bitacora('REGENERAR_PDF', 'ot', $id, 'PDF regenerado desde la fila', null, null,
+                                       ['sha256_original' => $fila['pdf_sha256'] ?? null, 'sha256_nuevo' => $huella]);
+                    }
+                    $pdo->commit();
                 }
-                Db::ejecutar("UPDATE ot_capturadas SET emitida_en = COALESCE(emitida_en, NOW()), pdf_sha256 = ?,
-                                     estado = 'PROCESADA', emision_error = NULL
-                               WHERE captura_id = ?", [hash('sha256', $pdf), $capturaId]);
             } catch (Throwable $e) {
+                if ($pdo->inTransaction()) { $pdo->rollBack(); }
                 return self::falla($capturaId, $r, 'no se pudo generar el PDF: ' . $e->getMessage());
             }
         }
@@ -194,7 +227,12 @@ final class Emision
     {
         error_log('Emision, captura ' . $capturaId . ': ' . $motivo);
         try {
-            Db::ejecutar('UPDATE ot_capturadas SET emision_error = ? WHERE captura_id = ?',
+            // FALLIDA solo si todavía no hay PDF: un fallo del correo no borra la
+            // emisión. El reemisor (emitir_pendientes_cli.php) recoge las dos cosas.
+            Db::ejecutar("UPDATE ot_capturadas
+                             SET emision_error = ?,
+                                 estado = IF(emitida_en IS NULL, 'FALLIDA', estado)
+                           WHERE captura_id = ?",
                          [mb_substr($motivo, 0, 300), $capturaId]);
         } catch (Throwable $e) {
             // Sin la 008 no hay dónde anotarlo; queda el registro de errores.
@@ -217,19 +255,53 @@ final class Emision
             if ($m !== '' && filter_var($m, FILTER_VALIDATE_EMAIL) && !in_array($m, $para, true)) { $para[] = $m; }
         }
         $prueba = self::modo() === 'PRUEBA';
+        /* En producción una orden sin destinatarios no se encola como si fuera a
+           salir: queda FALLIDO con el motivo y en la bitácora (E-15). */
+        $sinDestino = !$prueba && $para === [];
+        if ($sinDestino) {
+            Auth::bitacora('CORREO_SIN_DESTINATARIO', 'ot', $id,
+                           'el local no tiene correo y config.php no define correo_fijos', null, null, [], false);
+        }
         $cuerpo = "Se ha generado una nueva OT: $id\nZona: $zona\nLocal: " . ($c['local_codigo'] ?? '')
                 . "\nORDEN SAP: " . ($c['aviso'] ?? 'sin aviso')
                 . "\nTipo de Trabajo: " . ucfirst(strtolower((string) $c['modulo']))
                 . "\nEstado de OT: " . ($orden['estado_ot'] ?? '') . "\nTécnico: " . ($orden['tecnico'] ?? '');
         Db::ejecutar("INSERT INTO email_queue (captura_id, id_industec, tipo, para, asunto, cuerpo, adjunto, estado, motivo)
                       VALUES (?, ?, 'EMISION', ?, ?, ?, ?, ?, ?)
-                      ON DUPLICATE KEY UPDATE correo_id = correo_id",
+                      ON DUPLICATE KEY UPDATE
+                        estado   = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', 'PENDIENTE', estado),
+                        intentos = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', 0, intentos),
+                        proximo_intento_en = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', NULL, proximo_intento_en),
+                        motivo   = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', NULL, motivo)",
                      [(int) $c['captura_id'], $id, json_encode($para, JSON_UNESCAPED_UNICODE),
                       'ORDEN DE TRABAJO INDUSTEC - ' . $id, $cuerpo, $id . '.pdf',
-                      $prueba ? 'RETENIDO' : 'PENDIENTE',
+                      $prueba ? 'RETENIDO' : ($sinDestino ? 'FALLIDO' : 'PENDIENTE'),
                       $prueba ? 'sitio de pruebas: los correos no salen (irían al local, a Grupo KFC y al buzón de la administradora)'
-                              : null]);
+                              : ($sinDestino ? 'sin destinatarios: el local no tiene correo y config.php no define correo_fijos' : null)]);
         return (string) Db::uno("SELECT estado FROM email_queue WHERE id_industec = ? AND tipo = 'EMISION'", [$id])['estado'];
+    }
+
+    /**
+     * Reintenta las emisiones que quedaron a medias: sin número, sin PDF o con
+     * un error anotado (H-03, E-02). Lo llama envio.php al recibir una orden
+     * —de forma oportunista, pocas— y emitir_pendientes_cli.php desde el cron.
+     * Hasta la 009 nadie las reintentaba: el celular ya había marcado ENVIADA.
+     *
+     * @return int cuántas quedaron emitidas en esta pasada
+     */
+    public static function reintentarPendientes(int $max = 3): int
+    {
+        $filas = Db::todos(
+            "SELECT captura_id FROM ot_capturadas
+              WHERE estado IN ('RECIBIDA', 'NUMERADA', 'FALLIDA') OR emision_error IS NOT NULL
+              ORDER BY recibida_en LIMIT " . max(1, min(200, $max))
+        );
+        $ok = 0;
+        foreach ($filas as $f) {
+            $r = self::emitir((int) $f['captura_id']);
+            if ($r['pdf'] && $r['error'] === null) { $ok++; }
+        }
+        return $ok;
     }
 
     /** El PDF, con dompdf y la plantilla de producción. */

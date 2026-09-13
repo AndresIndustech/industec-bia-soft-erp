@@ -26,5 +26,17 @@ return [
      *     php -r "echo bin2hex(random_bytes(32));"
      * Si falta o tiene menos de 32 caracteres, el endpoint devuelve 500 y no
      * recibe nada: preferimos que no funcione a que funcione sin proteccion. */
+    /* --- La emisión (la 008 y la 009). Ver config.ejemplo.php: sin estas claves
+     *     la app corre en modo PRUEBA (serie 9000+, PDF marcado, correo RETENIDO).
+     *     Se completan SOLO en el corte a producción (T2.16), con autorización. */
+    // 'emision_modo'    => 'PRUEBA',
+    // 'correo_fijos'    => [],
+    // 'correo_por_zona' => ['UIO' => [], 'LARB' => [], 'CNLJ' => [], 'OTRA' => []],
+    // 'dompdf_autoload' => null,
+    // 'enlace_secreto'  => '…',
+    // 'smtp_host' => '…', 'smtp_puerto' => 465, 'smtp_usuario' => '…', 'smtp_clave' => '…', 'smtp_de' => '…',
+    // 'correo_tope_dia' => 900,
+    // 'cdn_rangos'      => [],
+
     'sync_secreto' => 'PEGA_AQUI_EL_SECRETO_DE_64_CARACTERES',
 ];
