@@ -80,14 +80,32 @@
                : ('del ' + f.toLocaleDateString('es-EC') + ' a las ' + hora);
   }
 
-  /* La señal que manda es de dónde salieron los datos, no navigator.onLine.
-     `onLine` solo dice que hay una red conectada: en el celular de un técnico,
-     con una barra de señal y sin datos, sigue diciendo que sí. */
+  /* De cuándo es esta pantalla, para las que no hacen su propio `fetch` (H-13).
+     `index.html` lo sabe por `window.__datosDesdeCache` (lo fija app.js al leer
+     catalogos.php). `mis.php` es HTML servido por PHP: no hay `fetch` propio
+     que traiga la cabecera `x-guardado-en`, así que se compara contra la fecha
+     en que el servidor la generó -- un `<meta name="generado">` que la propia
+     pantalla imprime -- y no contra la geometría ni contra `navigator.onLine`
+     a secas, que en un celular con barra de señal y sin datos sigue diciendo
+     que sí hay red. */
+  function metaGenerado() {
+    var m = document.querySelector('meta[name="generado"]');
+    return m ? m.getAttribute('content') : null;
+  }
+
   function revisarRed() {
     if (window.__datosDesdeCache) {
       pintarEstado(false, 'Las órdenes y los locales que ves son ' +
         cuando(window.__datosDesdeCache) + '; puede faltar algo de después.');
       return;
+    }
+    var gen = metaGenerado();
+    if (gen) {
+      var vieja = (Date.now() - new Date(gen).getTime()) > 2 * 60000;
+      if (!navigator.onLine || vieja) {
+        pintarEstado(false, 'Esta bandeja se guardó ' + cuando(gen) + '; puede faltar algo de después.');
+        return;
+      }
     }
     pintarEstado(navigator.onLine);
   }
@@ -102,12 +120,41 @@
     ).filter(function (el) { return el.id && el.type !== 'file' && el.type !== 'password'; });
   }
 
+  /* Los bloques repetibles (equipos, novedades) no tienen `id` -- lo llevan en
+     atributos `data-eq-*`/clases, porque puede haber hasta 7-- así que
+     `campos()` los pasaba por alto entero (H-14): «Retomar» dejaba el
+     formulario a medias, sin los equipos ni las novedades. Se guardan aparte,
+     por su propio lector, y se reconstruyen disparando los mismos botones
+     («+ Añadir equipo», «+ Reportar una novedad») que usaría el técnico. */
+  function leerCampo(b, sel) { var el = b.querySelector(sel); return el ? el.value : ''; }
+  function datosEquipo(b) {
+    var on = b.querySelector('[data-eq-estado-seg] button.on');
+    return {
+      valor: (b.querySelector('.eq-sel') || {}).value || '',
+      marca: leerCampo(b, '[data-eq-marca]'), modelo: leerCampo(b, '[data-eq-modelo]'),
+      serie: leerCampo(b, '[data-eq-serie]'), codigo: leerCampo(b, '[data-eq-cod]'),
+      area: leerCampo(b, '[data-eq-area]'), obs: leerCampo(b, '[data-eq-obs]'),
+      estado: on ? on.dataset.v : null
+    };
+  }
+  function datosNovedad(b) {
+    return {
+      tipo: leerCampo(b, '.nov-tipo'), riesgo: leerCampo(b, '.nov-riesgo'),
+      responsable: leerCampo(b, '.nov-resp'), equipo: leerCampo(b, '.nov-equipo'),
+      descripcion: leerCampo(b, '.nov-desc')
+    };
+  }
+
   function guardarBorrador() {
     try {
       var d = {};
       campos().forEach(function (el) {
         d[el.id] = (el.type === 'checkbox') ? el.checked : el.value;
       });
+      var eqs = Array.prototype.map.call(document.querySelectorAll('#equipos .bloque'), datosEquipo);
+      if (eqs.length) { d._equipos = eqs; }
+      var novs = Array.prototype.map.call(document.querySelectorAll('#novedadesVisita .bloque'), datosNovedad);
+      if (novs.length) { d._novedades = novs; }
       d._cuando = new Date().toISOString();
       localStorage.setItem(CLAVE_BORRADOR, JSON.stringify(d));
     } catch (e) { /* modo privado o sin espacio: no es motivo para romper nada */ }
@@ -122,9 +169,17 @@
         localStorage.removeItem(CLAVE_BORRADOR);
         return null;
       }
-      // Solo cuenta si tiene algo escrito de verdad.
-      var util = ['local', 'aviso', 'actividades', 'admin', 'tecSesion'];
-      return util.some(function (k) { return d[k]; }) ? d : null;
+      // Solo cuenta si tiene algo escrito de verdad. `tecSesion` salió de la
+      // lista (H-14): lo rellena `pintarYo()` en TODA carga, así que siempre
+      // había "algo" y el aviso de "orden a medio llenar" salía siempre, hasta
+      // en un formulario recién abierto. El equipo por omisión (el primer
+      // bloque, vacío) tampoco cuenta solo por existir.
+      var util = ['local', 'aviso', 'actividades', 'admin'];
+      var eqUtil = (d._equipos || []).some(function (e) {
+        return e.valor || e.marca || e.modelo || e.serie || e.obs;
+      });
+      var novUtil = (d._novedades || []).some(function (n) { return n.descripcion; });
+      return (util.some(function (k) { return d[k]; }) || eqUtil || novUtil) ? d : null;
     } catch (e) { return null; }
   }
 
@@ -135,6 +190,10 @@
       else el.value = d[el.id];
       el.dispatchEvent(new Event('change', { bubbles: true }));
     });
+    // app.js escucha esto para reponer el local/aviso derivados (chips, correos,
+    // tipo) y reconstruir los bloques de equipos y de novedades, que este
+    // archivo no sabe armar -- son de app.js y de guia.js.
+    window.dispatchEvent(new CustomEvent('borrador-restaurado', { detail: d }));
   }
 
   function ofrecerBorrador() {
@@ -161,8 +220,13 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    if (!$('#otForm')) return;          // el cronograma no usa nada de esto
+    // H-13: esto antes se cortaba aquí si la pantalla no tenía `#otForm`, así
+    // que `mis.php` (la bandeja) nunca corría `revisarRed()` y no decía nada
+    // de cuándo eran sus datos. El borrador, en cambio, es del formulario y no
+    // tiene sentido en ninguna otra pantalla.
     revisarRed();
+    if (!$('#otForm')) return;          // el resto es del formulario, y el cronograma no lo usa
+
     // Se espera a que app.js termine de armar los bloques repetibles.
     setTimeout(ofrecerBorrador, 1500);
 

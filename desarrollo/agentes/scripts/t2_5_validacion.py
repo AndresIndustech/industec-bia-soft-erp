@@ -39,12 +39,16 @@ from pathlib import Path
 
 import mysql.connector
 
-CATALOGOS = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS\catalogos")
-ENV_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
-INFORME = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS")
+# Rutas relativas a la raíz del repositorio: con la ruta absoluta de la estación
+# pegada, el fixture no se podía correr en ningún otro equipo (AUDITORIA_2026-09-12, H10).
+_BASE = Path(__file__).resolve().parents[1]          # desarrollo/agentes
+_RAIZ = _BASE.parents[1]                             # la raíz del proyecto
+CATALOGOS = _RAIZ / "SALIDAS IA" / "OTS" / "catalogos"
+ENV_PATH = _BASE / "config" / ".env"
+INFORME = _RAIZ / "SALIDAS IA" / "OTS"
 # Fixture compartido con la implementacion PHP del servidor. Es el arbitro: si
 # los dos lados no dan lo mismo sobre estos casos, las reglas se separaron.
-FIXTURE = Path(r"D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas\fixture_validacion.json")
+FIXTURE = _RAIZ / "desarrollo" / "sistema_ots" / "app" / "pruebas" / "fixture_validacion.json"
 
 BLOQUEA, ADVIERTE, INFORMA = "BLOQUEA", "ADVIERTE", "INFORMA"
 
@@ -183,6 +187,7 @@ def validar(orden, cat, contexto="CAPTURA"):
     for i, eq in enumerate(equipos, start=1):
         ref = eq.get("equipo_sap")
         tipo_eq = (eq.get("tipo") or "").upper()
+        es_nuevo = bool(eq.get("nuevo"))
         if ref:
             if activos_local and ref not in activos_local:
                 h.append(Hallazgo(f"equipos[{i}]", "EQUIPO_DE_OTRO_LOCAL", BLOQUEA,
@@ -190,16 +195,27 @@ def validar(orden, cat, contexto="CAPTURA"):
         elif not tipo_eq:
             h.append(Hallazgo(f"equipos[{i}]", "EQUIPO_SIN_IDENTIFICAR", BLOQUEA,
                               "elige el activo del local, o al menos su tipo"))
+        elif es_nuevo:
+            # "Equipo nuevo / no esta en la lista" (H-10, D8): no bloquea, pero
+            # queda marcado para que la administracion lo apruebe.
+            h.append(Hallazgo(f"equipos[{i}]", "EQUIPO_NUEVO_PROPUESTO", ADVIERTE,
+                              f"'{tipo_eq}' se registra como equipo nuevo de {local}; "
+                              "la administracion lo revisa"))
         elif tipo_eq not in cat["tipos"]:
             # No bloquea: los 6 locales sin activos catalogados y los tipos que
             # SAP todavia no registro son un caso real. Se marca para que el
             # catalogo crezca con lo que aparece, no para frenar al tecnico.
             h.append(Hallazgo(f"equipos[{i}]", "TIPO_FUERA_DE_CATALOGO", ADVIERTE,
                               f"'{tipo_eq}' no esta entre los {len(cat['tipos'])} tipos conocidos"))
-        if catalogo_local and tipo_eq and not ref and tipo_eq in catalogo_local:
+        if catalogo_local and tipo_eq and not ref and not es_nuevo and tipo_eq in catalogo_local:
             h.append(Hallazgo(f"equipos[{i}]", "EQUIPO_ELEGIBLE_POR_ACTIVO", INFORMA,
                               f"{local} tiene activos de tipo '{tipo_eq}' en el catalogo; "
                               "conviene elegir cual"))
+
+    # --- TRABAJO CON OTRO PROVEEDOR (H-18, D10). ---------------------------
+    if orden.get("con_proveedor_marcado") and not str(orden.get("con_proveedor") or "").strip():
+        h.append(Hallazgo("con_proveedor", "CON_PROVEEDOR_SIN_NOMBRE", BLOQUEA,
+                          "marcaste que el trabajo lo hizo otro proveedor pero falta su nombre"))
 
     # --- REPUESTOS. La casilla que elimina el 50% del ruido. ---------------
     uso = orden.get("uso_repuesto")
@@ -587,6 +603,7 @@ def _mapear_severidades():
         ("SIN_TECNICO", BLOQUEA), ("TECNICO_NO_VIGENTE", BLOQUEA),
         ("TECNICO_YA_NO_VIGENTE", INFORMA), ("FECHA_FUTURA", BLOQUEA),
         ("VARIOS_TECNICOS_EN_UN_CAMPO", INFORMA),
+        ("EQUIPO_NUEVO_PROPUESTO", ADVIERTE), ("CON_PROVEEDOR_SIN_NOMBRE", BLOQUEA),
     ]:
         _SEVERIDADES[nombre] = sev
 

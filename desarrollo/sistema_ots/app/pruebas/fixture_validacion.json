@@ -175,6 +175,33 @@
      "nota": "K146EC es de CNLJ. La zona la manda el maestro; en el formato unico ni se envia."},
 
     {"nombre": "tipo que no es correctivo ni preventivo bloquea",
-     "cambios": {"tipo": "LO QUE SEA"}, "espera": ["TIPO_INVALIDO"]}
+     "cambios": {"tipo": "LO QUE SEA"}, "espera": ["TIPO_INVALIDO"]},
+
+    {"nombre": "equipo nuevo propuesto solo advierte",
+     "cambios": {"equipos": [{"nuevo": true, "tipo": "HORNO"}]},
+     "espera": ["EQUIPO_NUEVO_PROPUESTO"],
+     "nota": "T2.14.1 H-10/D8: el tecnico registra un activo que no esta en el catalogo del local; se acepta y la administracion lo revisa despues."},
+
+    {"nombre": "equipo nuevo con tipo fuera de catalogo no duplica el aviso",
+     "cambios": {"equipos": [{"nuevo": true, "tipo": "APARATO RARISIMO"}]},
+     "espera": ["EQUIPO_NUEVO_PROPUESTO"],
+     "nota": "Un equipo marcado nuevo no ademas dispara TIPO_FUERA_DE_CATALOGO: ya se avisa que es una propuesta."},
+
+    {"nombre": "con proveedor marcado sin nombre bloquea",
+     "cambios": {"con_proveedor_marcado": true, "con_proveedor": null},
+     "espera": ["CON_PROVEEDOR_SIN_NOMBRE"],
+     "nota": "T2.14.1 H-18/D10: la casilla de trabajo con otro proveedor exige el nombre."},
+
+    {"nombre": "con proveedor marcado y con nombre es valido",
+     "cambios": {"con_proveedor_marcado": true, "con_proveedor": "Frio Total · compresor de la camara 2"},
+     "espera": []},
+
+    {"nombre": "un pendiente con diagnostico por codigo y repuestos estructurados no afecta la validacion del formato",
+     "cambios": {"pendiente": {"activo_fijo": "007762", "diagnostico": "Resistencia abierta segun FRE-01",
+                               "diagnostico_codigo": "FRE-01",
+                               "partes": [{"descripcion": "Resistencia 5kW", "cantidad": 1,
+                                          "numero_parte": "REP-014", "codigo": "REP-014"}]}},
+     "espera": [],
+     "nota": "Validacion.php no mira 'pendiente': lo guarda Pendientes::abrir. Este caso deja constancia de que agregarlo no rompe nada."}
   ]
 }

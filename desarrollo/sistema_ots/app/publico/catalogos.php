@@ -54,6 +54,13 @@ if ($cat === null) {
 $base = (string) Catalogo::carpeta();
 ['locales' => $locales, 'tecnicos' => $tecnicos, 'tipos' => $tipos, 'equipos' => $equipos] = $cat;
 
+/* Prellenados del formulario (H-08, H-11, D8, D9): el administrador de cada
+   local, y las familias/diagnósticos/repuestos frecuentes para el selector
+   «Falla encontrada». Si la 009 no está aplicada, cada llave llega vacía y el
+   formulario sigue con el diagnóstico y los repuestos en texto libre. */
+$admins = Catalogo::admins();
+$diagCat = Catalogo::diagnosticos();
+
 /**
  * Las ordenes que se le ofrecen al tecnico.
  *
@@ -135,10 +142,17 @@ if ($u['rol'] === 'TECNICO') {
 }
 
 echo json_encode([
-    'generado' => date('c'),
-    'locales'  => array_values($locales),
-    'tecnicos' => array_values($tecnicos),
-    'tipos'    => array_values(array_filter($tipos)),
-    'equipos'  => $equipos,
-    'avisos'   => $avisos,
+    'generado'  => date('c'),
+    'locales'   => array_values($locales),
+    'tecnicos'  => array_values($tecnicos),
+    'tipos'     => array_values(array_filter($tipos)),
+    'equipos'   => $equipos,
+    'avisos'    => $avisos,
+    // Prellenados del formulario (H-08, H-11, D8, D9). No son parte del
+    // catálogo de validación (Catalogo::cargar() ya fusionó los equipos
+    // propuestos ahí dentro): son datos de apoyo para la interfaz.
+    'admins'              => (object) $admins,
+    'familias'            => $diagCat['familias'],
+    'diagnosticos'        => $diagCat['diagnosticos'],
+    'repuestos_frecuentes' => $diagCat['repuestos'],
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);

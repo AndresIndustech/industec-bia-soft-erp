@@ -60,7 +60,11 @@
     SIN_TECNICO: BLOQUEA,
     TECNICO_NO_VIGENTE: BLOQUEA,
     TECNICO_YA_NO_VIGENTE: INFORMA,
-    VARIOS_TECNICOS_EN_UN_CAMPO: INFORMA
+    VARIOS_TECNICOS_EN_UN_CAMPO: INFORMA,
+    // T2.14.1 (H-10, D8): equipo nuevo propuesto para el local; no bloquea.
+    EQUIPO_NUEVO_PROPUESTO: ADVIERTE,
+    // T2.14.1 (H-18, D10): casilla "otro proveedor" marcada sin su nombre.
+    CON_PROVEEDOR_SIN_NOMBRE: BLOQUEA
   };
 
   function quitarTildes(s) {
@@ -190,21 +194,31 @@
         var n = i + 1;
         var ref = eq.equipo_sap != null ? String(eq.equipo_sap) : '';
         var tipoEq = String(eq.tipo || '').toUpperCase();
+        var esNuevo = !!eq.nuevo;
         if (ref !== '') {
           if (hayActivos && !activos[ref]) {
             add('equipos[' + n + ']', 'EQUIPO_DE_OTRO_LOCAL', 'el activo ' + ref + ' no pertenece a ' + local);
           }
         } else if (tipoEq === '') {
           add('equipos[' + n + ']', 'EQUIPO_SIN_IDENTIFICAR', 'elige el activo del local, o al menos su tipo');
+        } else if (esNuevo) {
+          add('equipos[' + n + ']', 'EQUIPO_NUEVO_PROPUESTO',
+            "'" + tipoEq + "' se registra como equipo nuevo del local " + local + '; la administración lo revisa');
         } else if (!tipos[tipoEq]) {
           add('equipos[' + n + ']', 'TIPO_FUERA_DE_CATALOGO',
             "'" + tipoEq + "' no está entre los " + Object.keys(tipos).length + ' tipos conocidos');
         }
-        if (hayTiposLocal && tipoEq !== '' && ref === '' && tiposLocal[tipoEq]) {
+        if (hayTiposLocal && tipoEq !== '' && ref === '' && !esNuevo && tiposLocal[tipoEq]) {
           add('equipos[' + n + ']', 'EQUIPO_ELEGIBLE_POR_ACTIVO',
             local + " tiene activos de tipo '" + tipoEq + "' en el catálogo; conviene elegir cuál");
         }
       });
+
+      // --- TRABAJO CON OTRO PROVEEDOR (H-18, D10) ---
+      if (o.con_proveedor_marcado && !String(o.con_proveedor || '').trim()) {
+        add('con_proveedor', 'CON_PROVEEDOR_SIN_NOMBRE',
+          'marcaste que el trabajo lo hizo otro proveedor pero falta su nombre');
+      }
 
       // --- REPUESTOS ---
       var uso = Object.prototype.hasOwnProperty.call(o, 'uso_repuesto') ? o.uso_repuesto : null;

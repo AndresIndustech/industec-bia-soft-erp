@@ -74,6 +74,14 @@ final class Validacion
         'TECNICO_NO_VIGENTE' => self::BLOQUEA,
         'TECNICO_YA_NO_VIGENTE' => self::INFORMA,
         'VARIOS_TECNICOS_EN_UN_CAMPO' => self::INFORMA,
+        // T2.14.1 (H-10, D8): un equipo que no estaba en el catalogo del local
+        // se acepta -- no bloquea el envio de la orden-- pero queda marcado
+        // para que la administracion lo revise antes de sumarlo al maestro.
+        'EQUIPO_NUEVO_PROPUESTO' => self::ADVIERTE,
+        // T2.14.1 (H-18, D10): la casilla "trabajo con otro proveedor" abre el
+        // nombre del proveedor; marcarla sin decir quien es deja un dato inutil
+        // para la administracion.
+        'CON_PROVEEDOR_SIN_NOMBRE' => self::BLOQUEA,
     ];
 
     /** @var array{locales:array,equipos:array,tipos:array,tecnicos:array} */
@@ -232,6 +240,7 @@ final class Validacion
             $n    = $i + 1;
             $ref  = isset($eq['equipo_sap']) ? (string) $eq['equipo_sap'] : '';
             $tipoEq = strtoupper((string) ($eq['tipo'] ?? ''));
+            $esNuevo = !empty($eq['nuevo']);
             if ($ref !== '') {
                 if ($activos && !isset($activos[$ref])) {
                     $add("equipos[$n]", 'EQUIPO_DE_OTRO_LOCAL',
@@ -240,6 +249,13 @@ final class Validacion
             } elseif ($tipoEq === '') {
                 $add("equipos[$n]", 'EQUIPO_SIN_IDENTIFICAR',
                      'elige el activo del local, o al menos su tipo');
+            } elseif ($esNuevo) {
+                // «Equipo nuevo / no está en la lista» (H-10, D8): el técnico
+                // eligió un tipo del catálogo pero el activo no existe todavía
+                // en el maestro del local. No bloquea -- el trabajo se hizo--
+                // pero queda para que la administración lo apruebe.
+                $add("equipos[$n]", 'EQUIPO_NUEVO_PROPUESTO',
+                     "'$tipoEq' se registra como equipo nuevo del local $local; la administración lo revisa");
             } elseif (!isset($this->cat['tipos'][$tipoEq])) {
                 // No bloquea: los 6 locales sin activos catalogados y los tipos
                 // que SAP todavia no registro son un caso real. Se marca para
@@ -247,10 +263,16 @@ final class Validacion
                 $add("equipos[$n]", 'TIPO_FUERA_DE_CATALOGO',
                      "'$tipoEq' no esta entre los " . count($this->cat['tipos']) . ' tipos conocidos');
             }
-            if ($tiposLocal && $tipoEq !== '' && $ref === '' && isset($tiposLocal[$tipoEq])) {
+            if ($tiposLocal && $tipoEq !== '' && $ref === '' && !$esNuevo && isset($tiposLocal[$tipoEq])) {
                 $add("equipos[$n]", 'EQUIPO_ELEGIBLE_POR_ACTIVO',
                      "$local tiene activos de tipo '$tipoEq' en el catalogo; conviene elegir cual");
             }
+        }
+
+        // --- TRABAJO CON OTRO PROVEEDOR (H-18, D10). -------------------------
+        if (!empty($o['con_proveedor_marcado']) && trim((string) ($o['con_proveedor'] ?? '')) === '') {
+            $add('con_proveedor', 'CON_PROVEEDOR_SIN_NOMBRE',
+                 'marcaste que el trabajo lo hizo otro proveedor pero falta su nombre');
         }
 
         // --- REPUESTOS. La casilla que elimina el 50% del ruido. -------------

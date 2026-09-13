@@ -119,7 +119,7 @@
         nodo.remove();                          // el <h2> pasa a ser la cabecera
 
         actual = { caja: caja, cab: cab, cuerpo: cuerpo, resu: resu,
-                   titulo: tit.textContent, abierto: false };
+                   titulo: tit.textContent, abierto: false, visitado: false };
         pasos.push(actual);
 
         cab.addEventListener('click', function () {
@@ -173,6 +173,12 @@
     pasos.forEach(function (p, k) {
       var esta = (k === i);
       p.abierto = esta;
+      // Un paso sin ningún campo obligatorio (ok === null) -- «Evidencia»,
+      // «¿Viste algo más?», «Estado de la orden», «Firma»-- antes solo se
+      // marcaba listo si era el primero: los demás quedaban con el ✓ apagado
+      // para siempre, aunque el técnico ya los hubiera abierto y llenado.
+      // Basta con haberlo abierto una vez.
+      if (esta) { p.visitado = true; }
       p.caja.classList.toggle('abierto', esta);
       if (p.miga) { p.miga.classList.toggle('activo', esta); }
     });
@@ -191,27 +197,38 @@
    * mantener una lista de campos por paso. Una lista se desincroniza el día
    * que alguien agrega un campo al HTML; esto no.
    *
-   * Los campos escondidos no cuentan. Es el caso del día de intervención, que
-   * es obligatorio solo en preventivo: contarlo escondido dejaría el paso
-   * eternamente incompleto en los correctivos.
+   * Los campos CONDICIONALMENTE escondidos no cuentan (H-15): es el caso del
+   * día de intervención, que es obligatorio solo en preventivo. Eso se decide
+   * mirando el atributo `hidden` de los ancestros -- que es como app.js
+   * esconde `#wrapDia`, `#wrapTrabado`, etc. -- y NO la geometría
+   * (`offsetParent`/`offsetWidth`/`offsetHeight`): esos tres dan cero para
+   * CUALQUIER campo de un paso plegado, porque `.paso-caja:not(.abierto) >
+   * .cuerpo { display:none }` los esconde a todos, estén o no respondidos
+   * (H-06). Con la geometría, un paso ya lleno se veía "incompleto" en cuanto
+   * se plegaba, y perdía el ✓ y el resumen.
    */
   function completo(p) {
-    var obligatorios = $$('[required]', p.cuerpo).filter(visible);
+    var obligatorios = $$('[required]', p.cuerpo).filter(function (el) { return aplica(el, p.cuerpo); });
     if (!obligatorios.length) { return null; }      // sin obligatorios: no se opina
     return obligatorios.every(function (el) {
       return String(el.value || '').trim() !== '';
     });
   }
 
-  function visible(el) {
-    return !!(el.offsetParent || el.offsetWidth || el.offsetHeight);
+  /** ¿El campo aplica de verdad, o está dentro de un bloque condicional
+   *  escondido con `hidden` (no con el plegado del propio paso)? */
+  function aplica(el, cuerpo) {
+    for (var n = el; n && n !== cuerpo; n = n.parentElement) {
+      if (n.hidden) { return false; }
+    }
+    return true;
   }
 
   /** Un resumen de una línea de lo que se llenó, para el paso plegado. */
   function resumir(p) {
     var trozos = [];
     $$('input, select, textarea', p.cuerpo).forEach(function (el) {
-      if (!visible(el) || el.type === 'hidden' || el.type === 'file') { return; }
+      if (!aplica(el, p.cuerpo) || el.type === 'hidden' || el.type === 'file') { return; }
       var v = String(el.value || '').trim();
       if (!v || v === 'Lo asigna el servidor') { return; }
       if (el.tagName === 'SELECT' && el.selectedOptions[0]) {
@@ -233,7 +250,7 @@
     var previoListo = true;
     pasos.forEach(function (p, i) {
       var ok = completo(p);
-      var listo = ok === true || (ok === null && i === 0);
+      var listo = ok === true || (ok === null && (i === 0 || p.visitado));
 
       p.caja.classList.toggle('listo', listo && !p.abierto);
       if (p.miga) {
