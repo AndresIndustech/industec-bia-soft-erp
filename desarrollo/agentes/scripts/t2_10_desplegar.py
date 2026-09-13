@@ -117,6 +117,9 @@ ARCHIVOS = [
     # comunicados con aprobación). `documento.php` es el único que sirve los
     # archivos de `documentos/`; su .htaccess niega el resto.
     "bitacora.php", "documentos.php", "documento.php", "documentos/.htaccess",
+    # T2.14.5: los reportes por zona con exportación (Excel, PDF, PowerPoint) y
+    # el cronograma que escribe.
+    "reporte_exportar.php", "nucleo/Reportes.php", "nucleo/reporte_pdf.php", "cronograma_accion.php",
 
     # --- Extremos que consultan las pantallas --------------------------------
     # `novedades.php` es el que el buzón consulta cada 30 s para saber si
@@ -154,7 +157,9 @@ ARCHIVOS = [
 #   minar.php, reconciliar_cli.php, alta_padron_cli.php,
 #   emitir_pendientes_cli.php, despachar_correo_cli.php (T2.14.6),
 #   archivo_indexar_cli.php (T2.14.4: llena ot_archivo; lo corre el cron o
-#   t2_15_exportar_archivo.py --empujar)
+#   t2_15_exportar_archivo.py --empujar),
+#   cronograma_importar_cli.php (T2.14.5: carga cronograma_preventivo.json en
+#   ingresos_preventivos; se corre tras cada publicación del cronograma)
 #                        herramientas de línea de órdenes. Las que ya están en
 #                        el servidor cortan con 404 por web; el resto no tienen
 #                        por qué llegar. Los dos CLI de T2.14.6 se suben con

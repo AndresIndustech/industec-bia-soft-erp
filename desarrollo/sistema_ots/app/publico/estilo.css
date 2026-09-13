@@ -512,7 +512,7 @@ tr[hidden]{ display:none !important; }
 /* Filtros de un toque. Van antes que los desplegables porque el 90% de las
    veces lo que se quiere es «lo de hoy» o «lo que tiene alerta», y eso no
    debería costar tres clics. */
-.filtros-rapidos{ display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+.filtros-rapidos{ display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; align-items:center; }
 .fr{
   display:inline-flex; align-items:center; gap:7px; padding:6px 12px;
   border:1px solid var(--border-fuerte); border-radius:var(--r-full); background:#fff;
@@ -1627,4 +1627,18 @@ table.bitacora td .datos pre{
 .propuestas li{ margin:4px 0; }
 @media (max-width:640px){
   .docs{ grid-template-columns:1fr; }
+}
+
+/* ==== §S5 reportes (reportes.php) ====
+   T2.14.5 — filtros de zona y mes, exportación y las dos tablas nuevas
+   (rendimiento por técnico y preventivo por zona). */
+.reporte-filtros{ align-items:center; }
+.reporte-filtros form{ margin:0; }
+table.rendimiento td.n,table.rendimiento th.n{ text-align:right; font-variant-numeric:tabular-nums; }
+table td.n.mal{ color:var(--danger); font-weight:700; }
+table.rendimiento tr.baja td{ color:var(--muted); }
+@media (max-width:640px){
+  table.tarjetas td.n{ justify-content:space-between; }
+  table.tarjetas td.n::before{ text-align:left; }
+  .reporte-filtros .exportar{ margin-left:0; width:100%; }
 }

@@ -377,24 +377,24 @@ Ui::cabecera($u, 'documentos.php',
 
     <div class="filtros-rapidos">
       <a class="fr <?= $fTipo === '' ? 'on' : '' ?>" href="documentos.php">Todo</a>
-      <?php foreach ($TIPOS as $k => $et): ?>
-        <a class="fr <?= $fTipo === $k ? 'on' : '' ?>" href="?tipo=<?= $k ?>"><?= $e($et) ?>s</a>
+      <?php foreach (['MANUAL' => 'Manuales', 'GUIA' => 'Guías', 'COMUNICADO' => 'Comunicados'] as $k => $et): ?>
+        <a class="fr <?= $fTipo === $k ? 'on' : '' ?>" href="?tipo=<?= $k ?>"><?= $e($et) ?></a>
       <?php endforeach; ?>
-      <form method="get" data-auto style="display:flex;gap:6px;margin-left:auto;flex-wrap:wrap">
+      <form method="get" data-auto style="display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;align-items:center">
         <input type="hidden" name="tipo" value="<?= $e($fTipo) ?>">
-        <select name="familia" style="height:36px;font-size:13.5px">
+        <select name="familia" style="height:36px;font-size:13.5px;width:auto;min-width:150px">
           <option value="">Todo equipo</option>
           <?php foreach ($familias as $f): ?>
             <option value="<?= $e($f) ?>" <?= $fFam === $f ? 'selected' : '' ?>><?= $e($f) ?></option>
           <?php endforeach; ?>
         </select>
-        <select name="zona" style="height:36px;font-size:13.5px">
+        <select name="zona" style="height:36px;font-size:13.5px;width:auto;min-width:120px">
           <option value="">Toda zona</option>
           <?php foreach ($ZONAS as $z): ?>
             <option value="<?= $z ?>" <?= $fZona === $z ? 'selected' : '' ?>><?= $z ?></option>
           <?php endforeach; ?>
         </select>
-        <input type="search" name="q" value="<?= $e($fq) ?>" placeholder="título…" style="height:36px;min-width:150px;font-size:13.5px">
+        <input type="search" name="q" value="<?= $e($fq) ?>" placeholder="título…" style="height:36px;width:auto;min-width:150px;font-size:13.5px">
         <button class="btn sm" type="submit">Buscar</button>
       </form>
     </div>

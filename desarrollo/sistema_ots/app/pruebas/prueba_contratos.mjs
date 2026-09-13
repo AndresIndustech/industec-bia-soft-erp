@@ -382,19 +382,35 @@ console.log('\n=== El buscador: JS y PHP reducen el texto igual ===\n');
       .map((m) => m.replace(/.*'([^']+)'.*/, '$1'));
   };
 
-  for (const pantalla of ['casos.php', 'ordenes.php']) {
-    const txt = leer(pantalla);
+  {
+    const txt = leer('casos.php');
     const srv = campos(txt, 'Ui::coincide(');
     const cli = campos(txt, 'Ui::claveFila(');
     const iguales = srv && cli && srv.length > 0 &&
                     srv.join(',') === cli.join(',');
-    afirmar(`${pantalla}: el filtro del servidor y el data-b comparan los mismos campos`,
+    afirmar('casos.php: el filtro del servidor y el data-b comparan los mismos campos',
+            iguales,
+            srv && cli ? `servidor=[${srv}] data-b=[${cli}]` : 'no pude leer las dos listas');
+  }
+  {
+    /* Desde T2.14.4 el Archivo (ordenes.php) filtra en SQL sobre `ot_archivo`,
+       no con Ui::coincide(): el contrato es que las columnas del LIKE del
+       servidor sean las mismas que lleva el `data-b` de cada fila. */
+    const txt = leer('ordenes.php');
+    const like = txt.match(/\(a\.[a-z_]+ LIKE \?(?: OR a\.[a-z_]+ LIKE \?)+\)/);
+    const srv = like ? (like[0].match(/a\.([a-z_]+) LIKE/g) || []).map(x => x.replace(/^a\./, '').replace(/ LIKE$/, '')) : null;
+    const m = txt.match(/Ui::claveFila\(\[([\s\S]*?)\]\)/);
+    const cli = m ? (m[1].match(/\$ot|\$f\['([a-z_]+)'\]/g) || [])
+                      .map(x => x === '$ot' ? 'id_industec' : x.replace(/^\$f\['/, '').replace(/'\]$/, '')) : null;
+    const iguales = srv && cli && srv.length > 0 && srv.join(',') === cli.join(',');
+    afirmar('ordenes.php: el LIKE del servidor y el data-b comparan las mismas columnas',
             iguales,
             srv && cli ? `servidor=[${srv}] data-b=[${cli}]` : 'no pude leer las dos listas');
   }
   afirmar('el input de búsqueda apunta a su tabla con data-busca',
           /data-busca="#tabla-casos"/.test(leer('casos.php'))
-          && /data-busca="#tabla-ordenes"/.test(leer('ordenes.php')));
+          && /data-busca="#tabla-archivo"/.test(leer('ordenes.php'))
+          && /id="tabla-archivo"/.test(leer('ordenes.php')));
 }
 
 console.log('\n=== El service worker conoce los archivos nuevos ===\n');

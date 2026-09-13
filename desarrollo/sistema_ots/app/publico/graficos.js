@@ -115,7 +115,7 @@
     var total = datos.reduce(function (a, d) { return a + (+d.v || 0); }, 0);
     var zona = w - anchoEt - 62;
 
-    var svg = svgEl('svg', { viewBox: '0 0 ' + w + ' ' + h, role: 'img' });
+    var svg = svgEl('svg', { viewBox: '0 0 ' + w + ' ' + h, role: 'img', 'aria-label': opts.titulo || null });
 
     datos.forEach(function (d, i) {
       var y = i * (alto + hueco);
@@ -156,7 +156,7 @@
     var paso = w / Math.max(datos.length, 1);
     var ancho = Math.min(paso - 6, 46);
 
-    var svg = svgEl('svg', { viewBox: '0 0 ' + w + ' ' + h, role: 'img' });
+    var svg = svgEl('svg', { viewBox: '0 0 ' + w + ' ' + h, role: 'img', 'aria-label': opts.titulo || null });
 
     // Cuatro líneas de rejilla y sus valores. Más líneas no ayudan a leer.
     for (var g = 0; g <= 4; g++) {
@@ -199,7 +199,7 @@
   function anillo(datos, opts) {
     var s = 210, r = 88, gr = 26, cx = s / 2, cy = s / 2;
     var total = datos.reduce(function (a, d) { return a + (+d.v || 0); }, 0);
-    var svg = svgEl('svg', { viewBox: '0 0 ' + s + ' ' + s, role: 'img' });
+    var svg = svgEl('svg', { viewBox: '0 0 ' + s + ' ' + s, role: 'img', 'aria-label': opts.titulo || null });
 
     if (total <= 0) {
       var vacio = svgEl('text', { x: cx, y: cy, class: 'etiqueta', 'text-anchor': 'middle' });
@@ -323,6 +323,8 @@
     catch (e) { datos = []; }
 
     var opts = {
+      // El título del gráfico es también su nombre accesible (TR-21).
+      titulo: fig.getAttribute('data-titulo') || '',
       unidad: fig.getAttribute('data-unidad') || '',
       centro: fig.getAttribute('data-centro') || '',
       anchoEtiqueta: +fig.getAttribute('data-ancho-etiqueta') || 0,
@@ -365,7 +367,7 @@
     var cuerpo = tipo === 'columnas' ? columnas(datos, opts)
                : tipo === 'anillo'   ? anillo(datos, opts)
                : tipo === 'apilada'  ? apilada(datos)
-               : barras(datos, { anchoEtiqueta: opts.anchoEtiqueta || 118,
+               : barras(datos, { anchoEtiqueta: opts.anchoEtiqueta || 118, titulo: opts.titulo,
                                  unidad: opts.unidad, sinPorcentaje: opts.sinPorcentaje });
     fig.appendChild(cuerpo);
 

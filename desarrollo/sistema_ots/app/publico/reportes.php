@@ -1,248 +1,130 @@
 <?php
 declare(strict_types=1);
-require_once __DIR__ . '/nucleo/Casos.php';
-require_once __DIR__ . '/nucleo/Pendientes.php';
-require_once __DIR__ . '/nucleo/Novedades.php';
+require_once __DIR__ . '/nucleo/Reportes.php';
 
 /**
  * reportes.php — El tablero de la administración y la gerencia.
  *
  * ============================================================================
- * QUE INDICADORES, Y POR QUE ESTOS
+ * QUÉ INDICADORES, Y POR QUÉ ESTOS
  *
  * Hay dos familias, y conviene no mezclarlas:
  *
- * LO QUE PIDE GRUPO KFC — volumen, reparto por zona, antigüedad de lo abierto
- * y cumplimiento de plazos. Es lo que se responde en una reunión de servicio.
+ * LO QUE PIDE GRUPO KFC — volumen, reparto por zona, antigüedad de lo abierto,
+ * cumplimiento de plazos y del cronograma preventivo. Es lo que se responde en
+ * una reunión de servicio, y desde T2.14.5 se descarga en Excel, PDF y
+ * PowerPoint con los mismos números de esta pantalla (`Reportes::calcular`).
  *
- * LO QUE MIDE SI EL SERVICIO ESTA SANO — y que nadie pide, pero es lo que
- * anticipa los problemas. De la práctica de mantenimiento en operaciones como
- * esta, cuatro se sostienen solos:
- *
- *   1. **Se concluye en una visita.** Es la premisa de INDUSTEC. Cuando este
- *      número baja, sube todo lo demás: más viajes, más horas, más equipos
- *      parados. Es el indicador que hay que mirar primero.
- *   2. **Antigüedad de lo abierto**, no solo cuánto hay abierto. Cien casos de
- *      hoy es una operación normal; diez de hace un mes es un problema.
- *   3. **Reincidencia por local y equipo.** El mismo equipo que rompe tres
- *      veces al año casi nunca es mala reparación: es causa de otra área.
- *   4. **Veredictos dentro de las 48 horas.** El compromiso duro del servicio.
+ * LO QUE MIDE SI EL SERVICIO ESTÁ SANO — y que nadie pide, pero es lo que
+ * anticipa los problemas: se concluye en una visita, antigüedad de lo abierto,
+ * reincidencia por local, validación dentro de las 48 horas, y el rendimiento
+ * por técnico que pidieron los jefes de zona.
  *
  * ============================================================================
- * LOS GRAFICOS
- *
- * Anillo cuando hay que repartir un total en pocas partes: zonas, correctivo
- * contra preventivo, cumplimiento del plazo. Barras cuando hay que comparar
- * magnitudes con nombre: locales, técnicos, áreas. Columnas para el tiempo.
- *
- * **Con más de cinco porciones no se usa anillo**, se usa barras. No es un
- * capricho: comparar dos ángulos pequeños es imposible, y un gráfico que no se
- * puede leer es peor que una tabla. El dibujante pliega solo la cola en «Otros»
- * si le llegan más.
- *
- * Cada gráfico lleva **su tabla debajo**, plegada. No es un adorno de
- * accesibilidad: es que a la administradora le van a preguntar «¿y cuántos
- * exactamente?» y la respuesta no puede ser pasar el dedo por una barra.
+ * DOS CORTES, LOS DOS EN EL SERVIDOR
+ *   zona (`?zona=`): la administración elige las tres o una; el jefe de zona
+ *   recibe la suya aunque pida otra. mes (`?mes=AAAA-MM`): sobre la fecha de
+ *   creación del caso; sin mes, todo el periodo que trae el buzón.
  *
  * ============================================================================
- * DE DONDE SALE CADA CIFRA, Y QUE NO SE PUEDE CALCULAR TODAVIA
+ * LOS GRÁFICOS
+ * Anillo para repartir un total en pocas partes; barras para comparar
+ * magnitudes con nombre; columnas para el tiempo. Cada gráfico lleva su tabla
+ * debajo, plegada: «¿y cuántos exactamente?» no se responde con el dedo.
  *
- * Todo esto sale del catálogo del buzón (los 90 días del correo de SAP), de
- * las decisiones guardadas en `casos_gestion`, y del cruce de informes de OT.
- * Lo que NO se puede calcular con eso se dice en la propia pantalla en vez de
- * aproximarse: el histórico completo vive en la estación, no aquí (I-7).
+ * Lo que NO se puede calcular con lo que hay se dice en la propia pantalla en
+ * vez de aproximarse (I-7).
  */
 
 $u = Auth::exigir('reportes.ver');
-if ($u['debe_cambiar_clave']) { header('Location: clave.php'); exit; }
 
 $e = fn(?string $s): string => Ui::e($s);
 $j = fn(array $d): string => Ui::e(json_encode($d, JSON_UNESCAPED_UNICODE));
 
-$zonaAlc = Auth::zonaAlcance();
-$fuente  = Casos::catalogo();
-$gestion = Casos::gestion();
-$aten    = Casos::atenciones();
-$casos   = Casos::enAlcance($fuente['datos'] ?? [], $gestion);
-$hoy     = date('Y-m-d');
+$zonaGet = strtoupper((string) ($_GET['zona'] ?? ''));
+$mesGet  = (string) ($_GET['mes'] ?? '');
+$r = Reportes::calcular($zonaGet !== '' ? $zonaGet : null, $mesGet !== '' ? $mesGet : null);
+$zona = $r['meta']['zona'];
+$mes  = $r['meta']['mes'];
+$fijo = $r['meta']['alcance_fijo'];
 
-Auth::bitacora('CONSULTAR', 'reportes', 'tablero', 'casos=' . count($casos));
+Auth::bitacora('CONSULTAR', 'reportes', 'tablero', 'zona=' . ($zona ?? 'todas') . ' mes=' . ($mes ?? 'todo') . ' casos=' . $r['meta']['casos'],
+               null, null, ['zona' => $zona, 'mes' => $mes]);
 
-/* -------------------------------------------------------------------------
-   Una sola pasada sobre los casos. Son ~918 y aquí se calculan diez cortes:
-   hacerlo con diez `array_filter` encadenados es diez recorridos.
-   ------------------------------------------------------------------------- */
-$porZona = ['UIO' => 0, 'LARB' => 0, 'CNLJ' => 0];
-$sinZona = 0;
-$porEstado = $porMes = $porLocal = $porTipo = $porTecnico = [];
-$edad = ['Hoy y ayer' => 0, 'De 2 a 3 días' => 0, 'De 4 a 7 días' => 0, 'Más de una semana' => 0];
-$abiertos = 0;
-$conInforme = 0;
-$cadenas = [];
+// Los últimos doce meses para el selector, del más reciente al más antiguo.
+$meses = [];
+for ($k = 0; $k < 12; $k++) { $meses[] = date('Y-m', strtotime("first day of -$k month")); }
+$enlace = static fn(array $c = []) => 'reportes.php?' . http_build_query(array_filter(
+    array_merge(['zona' => $zona ?? '', 'mes' => $mes ?? ''], $c), static fn($v) => $v !== '' && $v !== null));
+$exportar = static fn(string $f) => 'reporte_exportar.php?' . http_build_query(array_filter(
+    ['formato' => $f, 'zona' => $zona ?? '', 'mes' => $mes ?? ''], static fn($v) => $v !== ''));
 
-foreach ($casos as $c) {
-    $aviso  = (string) ($c['aviso'] ?? '');
-    $estado = $gestion[$aviso]['estado'] ?? 'NUEVO';
-    $porEstado[$estado] = ($porEstado[$estado] ?? 0) + 1;
-
-    $z = (string) ($c['zona'] ?? '');
-    if (isset($porZona[$z])) { $porZona[$z]++; } else { $sinZona++; }
-
-    $mes = substr((string) ($c['fecha_creacion'] ?? ''), 0, 7);
-    if ($mes !== '') { $porMes[$mes] = ($porMes[$mes] ?? 0) + 1; }
-
-    $loc = trim((string) ($c['local'] ?? ''));
-    if ($loc !== '') { $porLocal[$loc] = ($porLocal[$loc] ?? 0) + 1; }
-
-    $cad = trim((string) ($c['cadena'] ?? ''));
-    if ($cad !== '') { $cadenas[$cad] = ($cadenas[$cad] ?? 0) + 1; }
-
-    $tp = trim((string) ($c['caso'] ?? '')) ?: 'Sin clasificar';
-    $porTipo[$tp] = ($porTipo[$tp] ?? 0) + 1;
-
-    // La antigüedad SOLO de lo que sigue abierto. Medirla sobre todo, incluido
-    // lo ya cerrado, da un número que solo crece con el tiempo y no dice nada
-    // de cómo va la operación hoy.
-    $vivo = !in_array($estado, ['RESUELTO', 'NO_COMPETE', 'CERRADO_SIN_ATENCION'], true);
-    if ($vivo) {
-        $abiertos++;
-        $d = Ui::dias($c['fecha_creacion'] ?? null);
-        if ($d !== null) {
-            if ($d <= 1)      { $edad['Hoy y ayer']++; }
-            elseif ($d <= 3)  { $edad['De 2 a 3 días']++; }
-            elseif ($d <= 7)  { $edad['De 4 a 7 días']++; }
-            else              { $edad['Más de una semana']++; }
-        }
-    }
-
-    if (isset($aten[$aviso])) {
-        $conInforme++;
-        foreach (($aten[$aviso]['tecnicos'] ?? []) as $t) {
-            $porTecnico[$t] = ($porTecnico[$t] ?? 0) + 1;
-        }
-    }
+$s = $r['salud']; $c48 = $r['c48']; $nov = $r['novedades']; $pre = $r['preventivo']; $arch = $r['archivo'];
+$rend = $r['rendimiento'];
+$dRend = [];
+foreach (array_slice($rend, 0, 12) as $t) { $dRend[] = ['e' => $t['nombre'], 'v' => $t['asignados']]; }
+$dPreZona = [];
+foreach ($pre['por_zona'] as $z => $pz) {
+    $dPreZona[] = ['e' => $z, 'v' => (int) $pz['cumplidos'], 'c' => Reportes::COLOR_ZONA[$z] ?? '#94a3b8'];
 }
-
-arsort($porLocal); arsort($porTipo); arsort($porTecnico); ksort($porMes); arsort($cadenas);
-
-/* -------------------------------------------------------------------------
-   La reincidencia: locales con varios casos en la ventana de 90 días.
-   Es el indicador que apunta a causa de otra área en vez de a mala reparación.
-   ------------------------------------------------------------------------- */
-$reincidentes = array_filter($porLocal, fn($n) => $n >= 5);
-
-/* -------------------------------------------------------------------------
-   Se concluye en una visita: el indicador central del servicio.
-   Se calcula sobre los casos que YA tienen informe, porque de los que no lo
-   tienen todavía no se sabe si concluyeron. Contarlos como «no concluidos»
-   haría que el número empeorara solo por tener trabajo reciente.
-   ------------------------------------------------------------------------- */
-/* Sin la 007 no hay de dónde saber qué quedó trabado: el número es «sin dato»,
-   no 100 % en verde. Y se restan solo los casos de ESTA población —con informe
-   y en el alcance de quien mira—, no la tabla entera de pendientes. */
-$conPendiente = 0;
-$concluyeUna = 0;
-$pctConcluye = null;
-if (Pendientes::disponible() && $conInforme > 0) {
-    $trabados = array_flip(array_column(
-        Db::todos("SELECT DISTINCT aviso FROM pendientes WHERE estado <> 'CANCELADO'"), 'aviso'));
-    foreach ($casos as $c) {
-        $av = (string) ($c['aviso'] ?? '');
-        if (isset($aten[$av], $trabados[$av])) { $conPendiente++; }
-    }
-    $concluyeUna = max(0, $conInforme - $conPendiente);
-    $pctConcluye = round($concluyeUna * 100 / $conInforme);
-}
-
-$c48 = Pendientes::cumplimiento48();
-$novC = Novedades::contadores();
-
-/* Novedades por área: qué hace fallar los equipos y de quién es. */
-$novPorArea = [];
-if (Novedades::disponible()) {
-    $sql = 'SELECT tipo, COUNT(*) n FROM novedades'
-         . ($zonaAlc !== null ? ' WHERE zona = ?' : '') . ' GROUP BY tipo ORDER BY n DESC';
-    foreach (Db::todos($sql, $zonaAlc !== null ? [$zonaAlc] : []) as $r) {
-        $novPorArea[] = ['e' => Novedades::etiquetaTipo($r['tipo']), 'v' => (int) $r['n']];
-    }
-}
-
-/* ---- Los arreglos que consume el dibujante ------------------------------ */
-$dZona = [];
-foreach ($porZona as $z => $c) { if ($c > 0) { $dZona[] = ['e' => $z, 'v' => $c]; } }
-if ($sinZona > 0) { $dZona[] = ['e' => 'Sin zona', 'v' => $sinZona, 'c' => '#94a3b8']; }
-
-$dEstado = [];
-foreach ($porEstado as $k => $c) {
-    $dEstado[] = ['e' => Ui::etiquetaEstado($k), 'v' => $c, 'c' => Ui::colorEstado($k)];
-}
-usort($dEstado, fn($a, $b) => $b['v'] <=> $a['v']);
-
-$dEdad = [];
-$colorEdad = ['Hoy y ayer' => '#1baf7a', 'De 2 a 3 días' => '#2a78d6',
-              'De 4 a 7 días' => '#eda100', 'Más de una semana' => '#e34948'];
-foreach ($edad as $k => $c) { $dEdad[] = ['e' => $k, 'v' => $c, 'c' => $colorEdad[$k]]; }
-
-$dMes = [];
-foreach (array_slice($porMes, -12, 12, true) as $m => $c) {
-    $dMes[] = ['e' => substr($m, 5, 2) . '/' . substr($m, 2, 2), 'v' => $c];
-}
-
-$dLocal = [];
-foreach (array_slice($porLocal, 0, 12, true) as $l => $c) { $dLocal[] = ['e' => $l, 'v' => $c]; }
-
-$dTipo = [];
-foreach (array_slice($porTipo, 0, 10, true) as $t => $c) {
-    $dTipo[] = ['e' => mb_strimwidth($t, 0, 34, '…', 'UTF-8'), 'v' => $c];
-}
-
-$dTecnico = [];
-foreach (array_slice($porTecnico, 0, 12, true) as $t => $c) { $dTecnico[] = ['e' => $t, 'v' => $c]; }
-
-$d48 = [
-    ['e' => 'Decididos a tiempo', 'v' => $c48['a_tiempo'],  'c' => '#1baf7a'],
-    ['e' => 'Decididos tarde',    'v' => $c48['tarde'],     'c' => '#eda100'],
-    ['e' => 'Reloj corriendo',    'v' => $c48['corriendo'], 'c' => '#2a78d6'],
-    ['e' => 'Vencidos ahora',     'v' => $c48['vencidos'],  'c' => '#e34948'],
-];
-
-$dCadena = [];
-foreach (array_slice($cadenas, 0, 8, true) as $k => $c) { $dCadena[] = ['e' => $k, 'v' => $c]; }
-
-$generado = (string) ($fuente['generado'] ?? '');
+$mesTexto = Reportes::nombreMes($mes);
 
 Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
 ?>
 
-<div class="wrap ancho">
+<div class="wrap ancho" data-casos="<?= (int) $r['meta']['casos'] ?>">
   <div class="titulo entra">
     <h1>Tablero de servicio</h1>
     <p class="sub">
-      <?= $zonaAlc === null ? 'Las tres zonas. '
-            : ($zonaAlc !== '' ? 'Zona <b>' . $e($zonaAlc) . '</b>. ' : 'Tu cuenta no tiene zona asignada. ') ?>
-      Todo lo de esta pantalla sale de la ventana de <b>90 días</b> del correo de
-      SAP<?= $generado !== '' ? ', barrida por última vez el <b>' . $e(substr($generado, 0, 10)) . '</b>' : '' ?>,
-      cruzada con los informes de orden que llegan al mismo buzón. El histórico
-      completo de 7.069 órdenes vive en la estación, no aquí.
+      <?= $zona === null ? 'Las tres zonas. ' : 'Zona <b>' . $e($zona) . '</b>. ' ?>
+      <?= $mes === null ? 'Todo el periodo que trae el buzón de SAP (<b>90 días</b>)' : 'Casos creados en <b>' . $e($mesTexto) . '</b>' ?><?= $r['meta']['generado'] !== '' ? ', barrido por última vez el <b>' . $e(substr($r['meta']['generado'], 0, 10)) . '</b>' : '' ?>,
+      cruzado con los informes de orden y con lo decidido en el sistema.
+      <?php if ($arch !== null && $arch['total'] > 0): ?>
+        El archivo general tiene <b><?= number_format($arch['total'], 0, ',', '.') ?></b> órdenes indexadas<?= $zona !== null ? ' de ' . $e($zona) : '' ?>.
+      <?php else: ?>
+        El histórico completo de órdenes vive en la estación hasta que se indexe el archivo.
+      <?php endif; ?>
     </p>
   </div>
 
-  <?php if (!$fuente): ?>
+  <?php if (!$r['meta']['hay_fuente']): ?>
     <?= Ui::aviso('warn',
         '<b>No hay datos del buzón.</b><p>Sin <span class="mono">casos_sap.json</span> '
       . 'no hay nada que graficar, y esta pantalla no va a inventar una tendencia.</p>') ?>
     <?php Ui::pie(); exit; ?>
   <?php endif; ?>
 
+  <div class="filtros-rapidos reporte-filtros">
+    <?php if (!$fijo): ?>
+      <a class="fr <?= $zona === null ? 'on' : '' ?>" href="<?= $e($enlace(['zona' => ''])) ?>">Las tres</a>
+      <?php foreach (Reportes::ZONAS as $z): ?>
+        <a class="fr <?= $zona === $z ? 'on' : '' ?>" href="<?= $e($enlace(['zona' => $z])) ?>"><?= $e($z) ?></a>
+      <?php endforeach; ?>
+    <?php endif; ?>
+    <form method="get" data-auto style="display:flex;gap:6px;align-items:center">
+      <?php if ($zona !== null): ?><input type="hidden" name="zona" value="<?= $e($zona) ?>"><?php endif; ?>
+      <label for="f-mes" class="sub" style="margin:0">Periodo</label>
+      <select id="f-mes" name="mes" style="height:36px;width:auto;font-size:13.5px">
+        <option value="">Todo el buzón (90 días)</option>
+        <?php foreach ($meses as $m): ?>
+          <option value="<?= $e($m) ?>" <?= $mes === $m ? 'selected' : '' ?>><?= $e(ucfirst(Reportes::nombreMes($m))) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </form>
+    <div class="exportar" style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+      <a class="btn sm" href="<?= $e($exportar('xlsx')) ?>">Descargar Excel</a>
+      <a class="btn sm" href="<?= $e($exportar('pdf')) ?>">Descargar PDF</a>
+      <a class="btn sm" href="<?= $e($exportar('pptx')) ?>">Descargar PowerPoint</a>
+    </div>
+  </div>
+
   <?php /* =====================================================================
      PRIMERO EL INDICADOR DEL NEGOCIO, no el volumen.
-     Cuántos casos hay es contexto; si el servicio concluye en una visita es
-     el estado de salud, y es lo que hay que ver antes que nada.
      ===================================================================== */ ?>
   <h2 style="margin-top:4px">La salud del servicio</h2>
   <div class="viz-grid">
     <div class="hero">
-      <?php if ($pctConcluye === null): ?>
+      <?php if ($s['pct_concluye'] === null): ?>
         <div class="n" style="color:var(--muted)">—</div>
         <div class="t">
           <b>Se concluye en una visita</b><br>
@@ -250,11 +132,11 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
           estima: sin el dato, el número diría más de lo que se sabe.
         </div>
       <?php else: ?>
-        <div class="n" data-n="<?= $pctConcluye ?>" style="color:<?= $pctConcluye >= 85 ? 'var(--ok)' : ($pctConcluye >= 70 ? 'var(--warn)' : 'var(--danger)') ?>">0</div>
+        <div class="n" data-n="<?= $s['pct_concluye'] ?>" style="color:<?= $s['pct_concluye'] >= 85 ? 'var(--ok)' : ($s['pct_concluye'] >= 70 ? 'var(--warn)' : 'var(--danger)') ?>">0</div>
         <div class="t">
           <b>% que se concluye en una sola visita</b><br>
-          De <?= number_format($conInforme, 0, ',', '.') ?> casos con informe,
-          <?= number_format($concluyeUna, 0, ',', '.') ?> cerraron sin dejar equipo trabado.
+          De <?= number_format($s['con_informe'], 0, ',', '.') ?> casos con informe,
+          <?= number_format($s['concluye_una'], 0, ',', '.') ?> cerraron sin dejar equipo trabado.
           Es la premisa del servicio: cuando este número baja, suben los viajes,
           las horas y los equipos parados.
         </div>
@@ -263,15 +145,15 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
 
     <figure class="viz" data-viz="anillo"
             data-titulo="El plazo de 48 horas"
-            data-sub="De los equipos que quedaron deshabilitados, cuándo se decidió la vía. El plazo mide la decisión, no la reparación completa."
+            data-sub="De los equipos que quedaron deshabilitados, cuándo validó el jefe la solicitud. El plazo mide la decisión, no la reparación."
             data-centro="equipos"
-            data-datos='<?= $j($d48) ?>'></figure>
+            data-datos='<?= $j($r['d48']) ?>'></figure>
 
     <figure class="viz" data-viz="barras"
             data-titulo="Antigüedad de lo que sigue abierto"
             data-sub="Cien casos de hoy es operación normal; diez de hace un mes es un problema. A los 7 días sin informe, el caso se cierra por falta de atención."
             data-ancho-etiqueta="132"
-            data-datos='<?= $j($dEdad) ?>'></figure>
+            data-datos='<?= $j($r['edad']) ?>'></figure>
   </div>
 
   <?php /* ===================================================================== */ ?>
@@ -279,34 +161,156 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
   <div class="viz-grid">
     <figure class="viz" data-viz="anillo"
             data-titulo="Casos por zona"
-            data-sub="Los <?= count($casos) ?> vivos en la ventana de 90 días"
+            data-sub="Los <?= (int) $r['meta']['casos'] ?> del periodo"
             data-centro="casos"
-            data-datos='<?= $j($dZona) ?>'></figure>
+            data-datos='<?= $j($r['zonas']) ?>'></figure>
 
     <figure class="viz" data-viz="barras"
             data-titulo="En qué estado están"
-            data-sub="El estado que decidió una persona o dedujo la reconciliación. NO es el estado de SAP: el correo avisa cuando KFC crea un caso, nunca cuando lo cierra."
+            data-sub="El estado que decidió una persona, dedujo la reconciliación o dejó la orden emitida desde la app. NO es el estado de SAP."
             data-ancho-etiqueta="140"
-            data-datos='<?= $j($dEstado) ?>'></figure>
+            data-datos='<?= $j($r['estados']) ?>'></figure>
 
-    <?php if (count($dMes) > 1): ?>
+    <?php if (count($r['meses']) > 1): ?>
       <figure class="viz" data-viz="columnas"
               data-titulo="Casos por mes"
               data-sub="Por fecha de creación en SAP. Los meses de los extremos de la ventana están incompletos y por eso se ven bajos."
-              data-datos='<?= $j($dMes) ?>'></figure>
+              data-datos='<?= $j($r['meses']) ?>'></figure>
     <?php endif; ?>
 
-    <?php if (count($dCadena) > 1): ?>
-      <?php /* La cadena es dimensión de primera clase, no un detalle: el mismo
-               sistema tiene que servir cuando INDUSTEC atienda a más clientes,
-               y ese día este gráfico es el que dice cuánto pesa cada uno. */ ?>
+    <?php if (count($r['cadenas']) > 1): ?>
       <figure class="viz" data-viz="anillo"
               data-titulo="Por cadena"
               data-sub="La cadena sale del maestro de locales, nunca del prefijo del código."
               data-centro="casos"
-              data-datos='<?= $j($dCadena) ?>'></figure>
+              data-datos='<?= $j($r['cadenas']) ?>'></figure>
     <?php endif; ?>
   </div>
+
+  <?php /* =====================================================================
+     RENDIMIENTO POR TÉCNICO (TR-03): lo que pidieron los jefes de zona.
+     Por quién está asignado el caso, no por la firma del informe.
+     ===================================================================== */ ?>
+  <h2>Rendimiento por técnico</h2>
+  <?php if (!$rend): ?>
+    <?= Ui::aviso('neutro', '<b>Sin técnicos con actividad en este corte.</b>') ?>
+  <?php else: ?>
+    <div class="viz-grid">
+      <figure class="viz" data-viz="barras"
+              data-titulo="Casos asignados"
+              data-sub="Los doce con más casos a su nombre en el periodo. Es carga de trabajo; el rendimiento está en la tabla."
+              data-ancho-etiqueta="150" data-sin-porcentaje
+              data-datos='<?= $j($dRend) ?>'></figure>
+      <div class="hero">
+        <?php $conDato = array_filter($rend, fn($t) => $t['pct_una_visita'] !== null); ?>
+        <?php if ($conDato): ?>
+          <?php $mejor = array_reduce($conDato, fn($a, $t) => $a === null || $t['pct_una_visita'] > $a['pct_una_visita'] ? $t : $a); ?>
+          <div class="n" data-n="<?= (int) $mejor['pct_una_visita'] ?>" style="color:var(--ok)">0</div>
+          <div class="t"><b>% en una visita del mejor técnico del periodo</b><br>
+            <?= $e($mejor['nombre']) ?>, con <?= (int) $mejor['con_informe'] ?> casos con informe. Cada punto por encima
+            del promedio son viajes que no se hicieron.</div>
+        <?php else: ?>
+          <div class="n" style="color:var(--muted)">—</div>
+          <div class="t"><b>% en una visita por técnico</b><br>Sin informes cruzados todavía en este corte.</div>
+        <?php endif; ?>
+      </div>
+    </div>
+    <div class="tabla-wrap">
+      <table class="tarjetas rendimiento">
+        <thead><tr>
+          <th>Técnico</th><th>Zona</th><th class="n">Asignados</th><th class="n">Con informe</th>
+          <th class="n">En una visita</th><th class="n">Días a la 1.ª atención</th><th class="n">Abiertos ahora</th>
+          <th class="n">Repuestos vencidos</th><th class="n">Novedades</th><th class="n">Órdenes por la app</th>
+        </tr></thead>
+        <tbody>
+        <?php foreach ($rend as $t): ?>
+          <tr class="<?= $t['activo'] ? '' : 'baja' ?>">
+            <td data-th="Técnico"><b><?= $e($t['nombre']) ?></b><?= $t['activo'] ? '' : ' <span class="chip">de baja</span>' ?></td>
+            <td data-th="Zona"><?= Ui::zona($t['zona']) ?></td>
+            <td data-th="Asignados" class="n"><?= (int) $t['asignados'] ?></td>
+            <td data-th="Con informe" class="n"><?= (int) $t['con_informe'] ?></td>
+            <td data-th="En una visita" class="n"><?= $t['pct_una_visita'] === null ? '—' : (int) $t['una_visita'] . ' <span class="desc">(' . (int) $t['pct_una_visita'] . '%)</span>' ?></td>
+            <td data-th="Días a la 1.ª atención" class="n"><?= $t['dias_primera'] === null ? '—' : $e(number_format((float) $t['dias_primera'], 1, ',', '.')) ?></td>
+            <td data-th="Abiertos ahora" class="n"><?= (int) $t['abiertos_ahora'] ?></td>
+            <td data-th="Repuestos vencidos" class="n <?= $t['pendientes_vencidos'] ? 'mal' : '' ?>"><?= (int) $t['pendientes_vencidos'] ?></td>
+            <td data-th="Novedades" class="n"><?= (int) $t['novedades'] ?></td>
+            <td data-th="Órdenes por la app" class="n"><?= (int) $t['ordenes_app'] ?></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <p class="sub" style="margin:6px 0 0">
+      «En una visita»: de sus casos con informe, cuántos cerraron sin dejar equipo trabado. «Días a la 1.ª atención»:
+      promedio entre la creación del caso en SAP y la primera orden. «Repuestos vencidos»: solicitudes suyas
+      paradas más de 48 h sin validar. Un caso complejo cuenta igual que uno simple: la tabla se lee junto con el trabajo.
+    </p>
+  <?php endif; ?>
+
+  <?php /* =====================================================================
+     CUMPLIMIENTO DEL PREVENTIVO (TR-04): contra el plan acordado con KFC.
+     ===================================================================== */ ?>
+  <h2>Cumplimiento del preventivo</h2>
+  <?php if ($pre['fuente'] === null): ?>
+    <?= Ui::aviso('neutro', '<b>Sin cronograma cargado.</b><p>Cuando la estación publique '
+        . '<span class="mono">cronograma_preventivo.json</span> o se importe a la base, aquí aparece el cumplimiento.</p>') ?>
+  <?php else: ?>
+    <div class="viz-grid">
+      <div class="hero">
+        <?php if ($pre['pct_a_tiempo'] === null): ?>
+          <div class="n" style="color:var(--muted)">—</div>
+          <div class="t"><b>% de ingresos cumplidos a tiempo</b><br>Todavía no hay ingresos cerrados ni vencidos en este corte.</div>
+        <?php else: ?>
+          <div class="n" data-n="<?= (int) $pre['pct_a_tiempo'] ?>" style="color:<?= $pre['pct_a_tiempo'] >= 85 ? 'var(--ok)' : ($pre['pct_a_tiempo'] >= 70 ? 'var(--warn)' : 'var(--danger)') ?>">0</div>
+          <div class="t"><b>% de ingresos cumplidos a tiempo</b><br>
+            Contra lo acordado con Grupo KFC (el plan original, que no se pisa al reagendar):
+            <?= (int) $pre['cumplidos_a_tiempo'] ?> a tiempo, <?= (int) $pre['cumplidos_tarde'] ?> tarde y <?= (int) $pre['vencidos'] ?> vencidos.
+            <?= (int) $pre['reagendados'] ?> reagendados; kit confirmado en <?= (int) $pre['kits_confirmados'] ?> de <?= (int) $pre['total'] ?>.
+            <?= $pre['fuente'] === 'json' ? 'Leído del archivo de la estación (todavía no importado a la base).' : '' ?>
+          </div>
+        <?php endif; ?>
+      </div>
+      <figure class="viz" data-viz="anillo"
+              data-titulo="Los ingresos del periodo"
+              data-sub="Cumplidos a tiempo o tarde, vencidos, en curso y sin agendar. Los planificados a futuro no entran en el anillo."
+              data-centro="ingresos"
+              data-datos='<?= $j(array_values(array_filter($pre['estados'], fn($x) => $x['v'] > 0))) ?>'></figure>
+      <?php if ($dPreZona): ?>
+        <figure class="viz" data-viz="barras"
+                data-titulo="Cumplidos por zona"
+                data-sub="Cuántos ingresos cerró cada zona en el periodo."
+                data-ancho-etiqueta="70" data-sin-porcentaje
+                data-datos='<?= $j($dPreZona) ?>'></figure>
+      <?php endif; ?>
+      <?php if ($pre['motivos']): ?>
+        <figure class="viz" data-viz="barras"
+                data-titulo="Por qué se reagendó"
+                data-sub="Los motivos que se registraron al mover una fecha. Es lo que se le explica a Grupo KFC."
+                data-ancho-etiqueta="200"
+                data-datos='<?= $j($pre['motivos']) ?>'></figure>
+      <?php endif; ?>
+    </div>
+    <?php if ($pre['por_zona']): ?>
+      <div class="tabla-wrap">
+        <table class="tarjetas">
+          <thead><tr><th>Zona</th><th class="n">Ingresos</th><th class="n">Cumplidos</th><th class="n">A tiempo</th><th class="n">Vencidos</th><th class="n">En curso</th><th class="n">Sin agendar</th></tr></thead>
+          <tbody>
+          <?php foreach ($pre['por_zona'] as $z => $pz): ?>
+            <tr>
+              <td data-th="Zona"><?= Ui::zona($z === 'Sin zona' ? null : $z) ?></td>
+              <td data-th="Ingresos" class="n"><?= (int) $pz['total'] ?></td>
+              <td data-th="Cumplidos" class="n"><?= (int) $pz['cumplidos'] ?></td>
+              <td data-th="A tiempo" class="n"><?= (int) $pz['a_tiempo'] ?><?= $pz['cumplidos'] + $pz['vencidos'] > 0 ? ' <span class="desc">(' . (int) round($pz['a_tiempo'] * 100 / ($pz['cumplidos'] + $pz['vencidos'])) . '%)</span>' : '' ?></td>
+              <td data-th="Vencidos" class="n <?= $pz['vencidos'] ? 'mal' : '' ?>"><?= (int) $pz['vencidos'] ?></td>
+              <td data-th="En curso" class="n"><?= (int) $pz['en_curso'] ?></td>
+              <td data-th="Sin agendar" class="n"><?= (int) $pz['sin_agendar'] ?></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php endif; ?>
+  <?php endif; ?>
 
   <?php /* ===================================================================== */ ?>
   <h2>Dónde se concentra el trabajo</h2>
@@ -315,46 +319,46 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
             data-titulo="Locales con más casos"
             data-sub="Los doce primeros. Un local muy arriba de la lista casi nunca es mala suerte: suele ser causa de otra área."
             data-ancho-etiqueta="88"
-            data-datos='<?= $j($dLocal) ?>'></figure>
+            data-datos='<?= $j($r['locales']) ?>'></figure>
 
     <figure class="viz" data-viz="barras"
             data-titulo="Qué se pide"
             data-sub="Los diez tipos de caso más frecuentes, tal como los nombra SAP."
             data-ancho-etiqueta="200"
-            data-datos='<?= $j($dTipo) ?>'></figure>
+            data-datos='<?= $j($r['tipos']) ?>'></figure>
 
-    <?php if ($dTecnico): ?>
+    <?php if ($r['tecnicos_firma']): ?>
       <figure class="viz" data-viz="barras"
-              data-titulo="Casos atendidos por técnico"
-              data-sub="Sale de la firma del informe de cada orden. Es carga de trabajo, no una medida de desempeño: un caso complejo cuenta igual que uno simple."
+              data-titulo="Casos atendidos por técnico (firma)"
+              data-sub="Sale de la firma del informe de cada orden: quién fue, aunque el caso estuviera a nombre de otro."
               data-ancho-etiqueta="150"
-              data-datos='<?= $j($dTecnico) ?>'></figure>
+              data-datos='<?= $j($r['tecnicos_firma']) ?>'></figure>
     <?php endif; ?>
   </div>
 
-  <?php if ($reincidentes): ?>
+  <?php if ($r['reincidentes']): ?>
     <h2>Locales que repiten</h2>
     <?= Ui::aviso('warn',
-        '<b>' . count($reincidentes) . ' locales tienen 5 o más casos en 90 días.</b>'
+        '<b>' . count($r['reincidentes']) . ' locales tienen 5 o más casos en el periodo.</b>'
       . '<p>Cuando un local repite así, la causa casi nunca es la reparación: es la '
       . 'instalación eléctrica, la ventilación o el desagüe. Vale la pena cruzarlos '
       . 'con las <a href="novedades_visita.php?g=ajenas">novedades de otras áreas</a> antes de '
       . 'la próxima reunión con Grupo KFC.</p>') ?>
   <?php endif; ?>
 
-  <?php if ($novPorArea): ?>
+  <?php if ($nov['por_area']): ?>
     <h2>Qué hace fallar los equipos</h2>
     <div class="viz-grid">
       <figure class="viz" data-viz="barras"
               data-titulo="Novedades por área"
-              data-sub="Lo que los técnicos ven en la visita y no era su orden. Lo que no dice «Equipo» es de otra área del local: son las causas de que un mismo equipo rompa varias veces al año."
+              data-sub="Lo que los técnicos ven en la visita y no era su orden. Lo que no dice «Equipo» es de otra área del local."
               data-ancho-etiqueta="190"
-              data-datos='<?= $j($novPorArea) ?>'></figure>
+              data-datos='<?= $j($nov['por_area']) ?>'></figure>
       <div class="hero">
-        <div class="n" data-n="<?= $novC['con_aviso'] ?>">0</div>
+        <div class="n" data-n="<?= (int) $nov['con_aviso'] ?>">0</div>
         <div class="t">
           <b>novedades que llegaron a tener aviso en SAP</b><br>
-          De <?= $novC['pendientes'] ?> todavía sin decidir, <?= $novC['alto'] ?> son de
+          De <?= (int) $nov['pendientes'] ?> todavía sin decidir, <?= (int) $nov['alto'] ?> son de
           riesgo alto. Cada aviso conseguido es una avería que se evitó, y la prueba
           documentada de que se avisó a tiempo.
         </div>
@@ -366,9 +370,9 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
       '<b>Cómo leer estas cifras.</b>'
     . '<p>El correo de SAP avisa cuando Grupo KFC <b>crea</b> o <b>elimina</b> un caso, '
     . 'y <b>nunca cuando lo cierra</b>. Así que «abierto» aquí significa «INDUSTEC no lo '
-    . 'ha cerrado», no «KFC lo tiene abierto». Para el estado real hace falta el export '
-    . 'de SAP, y ese cruce se hace en la estación. Lo que sí es exacto en esta pantalla '
-    . 'es todo lo que decidió una persona: asignaciones, veredictos, plazos y novedades.</p>') ?>
+    . 'ha cerrado», no «KFC lo tiene abierto». Lo que sí es exacto es todo lo que decidió '
+    . 'una persona o emitió la app: asignaciones, validaciones, registros en SAP, plazos, '
+    . 'novedades y órdenes. Los tres archivos de descarga llevan estos mismos números.</p>') ?>
 </div>
 
 <?php Ui::pie(['js' => ['graficos.js']]); ?>

@@ -12,16 +12,17 @@
 <!-- La barra de la aplicación.
      Esta pantalla es HTML estático —la sirve el trabajador de servicio para que
      funcione sin señal— así que no puede llamar a `Ui::cabecera()` como las
-     demás. La barra va escrita a mano con las mismas clases, y los enlaces y el
-     nombre los rellena `cronograma.js` con lo que devuelve el servidor. Así se
-     ve como el resto del sistema y se puede salir de aquí sin volver al panel,
-     que es lo que obligaba a hacer antes. -->
+     demás. La barra va con las mismas clases, y los módulos, el nombre y el
+     rol los rellena `cronograma.js` con lo que devuelve el servidor
+     (`Ui::modulos()`, TR-12): los mismos que ve en cualquier otra pantalla.
+     Lo escrito aquí es solo lo que se ve mientras carga. -->
 <header class="app-barra">
   <div class="app-barra-fila">
     <a class="app-marca" href="panel.php"><span class="punto"></span>B.IA <span class="fino">Soft ERP</span></a>
     <span class="app-espacio"></span>
     <div class="app-yo">
       <span class="nom" id="barraNombre"></span>
+      <span class="chip" id="barraRol" hidden></span>
       <span class="chip" id="barraAlcance"></span>
       <a class="btn sm" href="salir.php">Salir</a>
     </div>
@@ -29,8 +30,6 @@
   <nav class="app-nav" aria-label="Módulos">
     <div class="app-nav-fila" id="barraNav">
       <a href="panel.php">Inicio</a>
-      <a href="casos.php">Buzón</a>
-      <a href="pendientes.php">Repuestos y equipos</a>
       <a href="cronograma.html" class="on" aria-current="page">Preventivos</a>
     </div>
   </nav>
@@ -80,6 +79,8 @@
       <span><i class="pt poriniciar"></i>Inicia en ≤3 días</span>
       <span><i class="pt encurso"></i>En curso</span>
       <span><i class="pt planificado"></i>Planificado</span>
+      <span><i class="pt cumplido"></i>Cumplido</span>
+      <span><i class="pt sinagendar"></i>Sin agendar</span>
       <span><i class="pt sinkit"></i>Sin kit</span>
     </div>
 
