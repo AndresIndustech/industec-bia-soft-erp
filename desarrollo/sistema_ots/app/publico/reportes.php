@@ -366,6 +366,53 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
     </div>
   <?php endif; ?>
 
+  <?php /* =====================================================================
+     OTROS TRABAJOS (011). Lo que INDUSTEC hizo para Grupo KFC fuera de su
+     área, por un acuerdo, y que la administradora autorizó. Va aparte porque
+     es el extra que INDUSTEC da como un plus al servicio y hay que poder
+     mostrárselo a KFC (decisión de Andrés, 2026-09-14). Los «otros clientes»
+     —fuera de KFC— no entran aquí: son otro reporte, interno.
+     ===================================================================== */ ?>
+  <?php $otr = $r['otros_trabajos']; $modOtros = (int) ($arch['modulo_otros'] ?? 0); ?>
+  <h2>Otros trabajos para Grupo KFC</h2>
+  <p class="sub" style="margin:0 0 10px">
+    Trabajos fuera del área de INDUSTEC —constructivo, infraestructura, lo que no es
+    soporte de equipos— hechos por acuerdo con KFC y autorizados por la administración:
+    <b><?= count($otr) ?></b> en el periodo.
+    <?php if ($r['otros_por_decidir'] > 0): ?>
+      <a href="casos.php?otro=por_decidir"><?= (int) $r['otros_por_decidir'] ?> caso<?= $r['otros_por_decidir'] === 1 ? '' : 's' ?>
+      fuera del área esperan esa decisión</a>.
+    <?php endif; ?>
+    <?php if ($modOtros > 0): ?>
+      Además, el Archivo tiene <b><?= $modOtros ?></b> órdenes del módulo «Otros»: extras
+      dentro del mismo trato con KFC.
+    <?php endif; ?>
+  </p>
+  <?php if ($otr): ?>
+    <div class="tabla-wrap">
+      <table>
+        <thead><tr>
+          <th>Aviso</th><th>Local</th><th>Zona</th><th>Trabajo</th><th>Orden</th>
+          <th>Estado</th><th>Acuerdo con KFC</th><th>Autorizó</th>
+        </tr></thead>
+        <tbody>
+        <?php foreach ($otr as $o): ?>
+          <tr>
+            <td class="mono"><?= $e($o['aviso']) ?><span class="desc"><?= $e($o['fecha']) ?></span></td>
+            <td><b><?= $e($o['local']) ?></b><span class="desc"><?= $e($o['local_nombre']) ?></span></td>
+            <td><?= Ui::zona($o['zona'] !== '' ? $o['zona'] : null) ?></td>
+            <td><?= $e($o['trabajo']) ?></td>
+            <td class="mono"><?= $e($o['ot'] !== '' ? $o['ot'] : '—') ?></td>
+            <td><?= $e($o['estatus']) ?></td>
+            <td><?= $e($o['acuerdo']) ?></td>
+            <td><?= $e($o['autorizo']) ?><span class="desc"><?= $e($o['autorizado_en']) ?></span></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
+
   <?= Ui::aviso('neutro',
       '<b>Cómo leer estas cifras.</b>'
     . '<p>El correo de SAP avisa cuando Grupo KFC <b>crea</b> o <b>elimina</b> un caso, '

@@ -705,7 +705,7 @@ se tomó la más conservadora y se dejó escrita aquí. **Ninguna de estas es ir
 | # | Decisión por defecto | Motivo |
 |---|---|---|
 | **D1** | **La regla de alcance se parte en dos.** Las *acciones* (asignar, veredicto, cerrar, gestionar) siguen filtradas por zona y por técnico **en el WHERE del servidor**. La *consulta* del archivo de órdenes emitidas es de **solo lectura para los cuatro roles, en las tres zonas**, incluido el TÉCNICO desde el celular. Cada apertura, descarga y compartición queda en la bitácora con quién, cuándo y qué. Compartir sigue produciendo un enlace firmado que caduca a 24 h | Decisión de Andrés del 2026-09-12; la bitácora es el control compensatorio |
-| **D2** | **El histórico de 7.069 órdenes entra como índice** (`ot_archivo`, cargado desde el catálogo de la estación) y los PDF se sirven cuando existen en Hostinger; los que solo están en `D:\RESPALDOS` muestran «pedir copia» y la petición queda registrada para que la estación la suba. **Subir los 5 GB de PDF históricos a Hostinger es decisión de Andrés** (cabe en el plan, pero cambia la regla de los 90 días y la lectura del contrato de hosting) | No se sube nada del cliente a la nube sin que él lo pida |
+| **D2** | **El histórico de 7.069 órdenes entra como índice** (`ot_archivo`, cargado desde el catálogo de la estación) y los PDF se sirven cuando existen en Hostinger; los que solo están en `D:\RESPALDOS` muestran «pedir copia» y la petición queda registrada para que la estación la suba. ~~Subir los 5 GB de PDF históricos a Hostinger es decisión de Andrés~~ **Revocada por Andrés el 2026-09-14: se sube TODO el histórico y lo nuevo cada noche, solo desde la estación (T2.19). «Pedir copia» queda de respaldo** | No se sube nada del cliente a la nube sin que él lo pida — y lo pidió: «Quiero que no sea necesario pedir copia a la estación» |
 | **D3** | **Flujo de repuestos:** `SOLICITADO` (técnico) → `VALIDADO_JEFE` (jefe de zona; la administración puede validar por excepción y queda en bitácora) → `REGISTRADO_SAP` (administración, **con el número del requerimiento**) → `ESPERA_KFC` → veredicto de KFC: `REPUESTO_ENVIADO` / `TALLER_INDUSTEC` / `OTRO_PROVEEDOR` / `BAJA` → `RESUELTO` o `CANCELADO`. El reloj de 48 h mide la validación del jefe (la decisión de INDUSTEC), no la respuesta de KFC. La orden **concluida** del técnico tras instalar el repuesto resuelve el pendiente sola. Los estados viejos (`COTIZANDO`, `COMPRADO`…) se conservan en el ENUM para las filas existentes | Es el flujo que Andrés describió; lo de KFC se mide aparte porque no depende de INDUSTEC |
 | **D4** | Asignar a un técnico de **otra zona** exige marcar «confirmo que es de otra zona» y queda en bitácora; no se prohíbe | Hay técnicos que cubren locales vecinos |
 | **D5** | El **cierre por falta de atención a los 7 días no es automático**: el panel muestra «N casos con más de 7 días sin informe» y un botón de la administración lo ejecuta con confirmación. Los textos que decían «se cierran solos» se corrigen | Es una decisión sobre casos del cliente; la toma una persona |
@@ -862,6 +862,50 @@ nocturna), y no borra nada: divergentes y huérfanos se reportan para que una pe
 3. Con eso corrido, `python scripts/t2_18_atender_pedidos_copia.py --ejecutar` para la única solicitud real pendiente y las que se acumulen; considerar si conviene una Tarea programada aparte (no la del saneamiento) para que corra cada hora, como el propio `archivo_indexar_cli.php` sugiere para el cron de hPanel.
 4. Decidir si conviene sumar el paso 2 al final de `saneamiento_nocturno.py` (una llamada, sin tocar lo demás) para que el clasificado quede al día solo, o si se prefiere seguir corriéndolo aparte.
 
+### T2.19 · Todos los PDF de orden en el servidor, sin «pedir copia» (2026-09-14)
+
+**Pedido de Andrés del 2026-09-14**, con capturas del buzón: «Quiero que no sea necesario pedir
+copia a la estación y se muestren todos los pdfs de todos los casos y órdenes atendidas y en
+curso». **Decidió, con las opciones delante:** subir **todo** el histórico más lo nuevo cada noche,
+y **solo desde la estación** — no se copia de producción a darkviolet dentro del servidor, ni en
+solo lectura. **Revoca D2.** El mismo informe llega con dos nombres (`OT-2488-K061-…` en
+`_DEL_BUZON`, `OT-2488-K061EC-…` en el árbol canónico): suben los dos y el buzón los junta por aviso.
+
+| # | Subtarea | Qué hace | Verificación exacta |
+|---|---|---|---|
+| **T2.19.1** | `t2_19_subir_pdfs.py` | Inventario del árbol canónico y de `_DEL_BUZON` con sha256; inventario del servidor (`find` de `ordenes_pdf/` y `ot_archivo.sha256`, sin re-hashear el hosting); lo que falta va en lotes .tar con manifiesto a `~/respaldos/subida_pdf/`, se verifica con `sha256sum -c`, se mueve con `mv -n` a `ordenes_pdf/`, se verifica otra vez, se borra el temporal y se corre `archivo_indexar_cli.php --solo-pdf`. Colisión en la estación y divergente en el servidor: se reportan, ni se suben ni se pisan (I-11). Nombres que `pdf.php` no sirve y carpetas `_…` apartadas: se cuentan. Simula por defecto | `t2_19_pruebas.py`: **16/16** (2026-09-14, PC). Punta a punta con `--destino-prueba` contra el servidor: 7 en 4 lotes verificados, segunda corrida 0, divergente no pisado, huellas iguales, 0 temporales (salida en `ESTADO.md` §1b) |
+| **T2.19.2** | Paso `pdfs` en `saneamiento_nocturno.py` | Último de la noche, a propósito: un lote que falle no frena el catálogo del archivo | `saneamiento_nocturno.py --ensayo` en la estación lo muestra como 7.º paso |
+| **T2.19.3** | **Primera carga, en la estación** | Simulación (cifra real de lo que falta, colisiones y nombres fuera de patrón) → `--ejecutar --limite 500` para medir el tiempo → `--ejecutar` | En el buzón, 10354415, 10354383 y 10351229 abren su PDF; en el Archivo, «Solo en la estación» cerca de 0 |
+
+| Autónomo | Requiere aprobación de Andrés | Prohibido |
+|---|---|---|
+| Correr `t2_19_subir_pdfs.py --ejecutar` en la estación y dejarlo en el saneamiento | Servir el patrón con el correlativo al final (tocar `Emision::PATRON_OT` y `pdf.php`, 161 documentos); resolver una colisión o un divergente | Copiar desde producción; pisar un PDF del servidor; borrar un original |
+
+### T2.20 · «Otros trabajos»: los extras que INDUSTEC hace para KFC fuera de su área (2026-09-14)
+
+**Pedido de Andrés del 2026-09-14:** hay casos excepcionales en que, por un acuerdo interno con
+KFC, INDUSTEC hace un trabajo fuera de su área y emite el informe — puede llegar un informe
+constructivo de una OT que no nos llegó o no se nos pidió. La OT es válida, el trabajo se hizo, y
+**se contabiliza y se le reporta a KFC como extra**. Cuando KFC manda un caso fuera del área, **la
+administradora decide**: lo acepta (hubo acuerdo) o lo cierra y le pide a KFC que lo derive al área
+o proveedor que corresponde. **Siempre decide ella.**
+
+**Decisiones de Andrés, con las opciones delante:** es una **marca aparte del estado** (el caso sigue
+su flujo y la marca dice si cuenta como extra); el **módulo OTROS** del sistema viejo son extras de
+KFC dentro del mismo trato y van con los otros trabajos; **«otros clientes»** —locales o cadenas
+fuera de KFC— es otra evaluación y un reporte interno aparte, secundario: no entra aquí.
+
+| # | Subtarea | Qué hace | Verificación exacta |
+|---|---|---|---|
+| **T2.20.1** | Migración `011_otros_trabajos.sql` | `casos_gestion.otro_trabajo` (AUTORIZADO / NO_AUTORIZADO; NULL = sin decidir), el acuerdo, quién y cuándo | Aplicada el 2026-09-14; `verificar_esquema.php` → bloque «migracion 011» y TODO OK |
+| **T2.20.2** | Núcleo y buzón | `Casos::fueraDeArea()` y `Casos::otroTrabajoPorDecidir()`, la única definición; acción `otro_trabajo` en `casos.php` (solo `casos.veredicto`, acuerdo obligatorio, bitácora `OTRO_TRABAJO`); botón en los casos con alerta o ya decididos; marca visible; filtro `?otro=`; el veredicto «no nos compete» dice que se pide a KFC derivarlo | 7 casos por decidir en darkviolet el 2026-09-14 |
+| **T2.20.3** | Panel y reportes | La tarea «fuera del área, por decidir» reemplaza a «con alerta de alcance», que nunca bajaba; la alerta vieja ya no cuenta los decididos; «Otros trabajos para Grupo KFC» en pantalla, hoja de Excel, diapositiva de PowerPoint y sección del PDF, con el conteo del módulo OTROS del Archivo | `Reportes::calcular()` bajo superadmin en memoria: 927 casos, 7 por decidir, 0 autorizados; el HTML del PDF trae la sección |
+| **T2.20.4** | **Lo que falta** | (a) probar la acción y las descargas con una sesión real, empezando por el 10351229; (b) proponer también los informes de órdenes **sin aviso** o de avisos que nunca llegaron al buzón (hoy solo entran los que tienen fila de gestión); (c) el conteo del módulo OTROS espera el catálogo histórico de la estación (hoy `ot_archivo.modulo` está vacío en las 164 filas); (d) el reporte interno de otros clientes | — |
+
+| Autónomo | Requiere aprobación de Andrés | Prohibido |
+|---|---|---|
+| Ajustar textos, filtros y reportes de la marca | Cambiar quién decide (hoy administración y superadmin) o que algo se marque solo | Que el sistema autorice o cierre un caso por su cuenta |
+
 ---
 
 # FASE 3 · DECISIÓN — Noviembre
@@ -1012,7 +1056,7 @@ Las tareas T1.9 a T1.11 avanzan en paralelo conforme se desbloqueen sus dependen
 
 ---
 
-## 11b. Arranque para una conversación nueva — al 2026-09-13
+## 11b. Arranque para una conversación nueva — al 2026-09-14
 
 > Esta sección existe para que quien abra una conversación nueva pueda **empezar
 > a ejecutar sin preguntar nada**. Se actualiza cada vez que cambia lo que sigue.
@@ -1082,6 +1126,13 @@ pruebas están hechos y en verde; lo que falta es que la estación fusione la
 rama y lo corra contra `D:\RESPALDOS` real (acción **F** de abajo) — desde el
 PC no se pudo, porque esa carpeta no existe aquí.
 
+**Sumado el 2026-09-14, en `pc/documentos-y-otros-trabajos-2026-09-14`** (lleva dentro
+`pc/pulido-2026-09-12` y T2.18: la estación puede fusionar **solo esta**): el buzón muestra todos
+los documentos de cada caso y, a la administración, el informe de cierre junto a «Ya lo cerré en
+SAP»; el Archivo indexa las órdenes de cierre; y «otros trabajos» (T2.20, migración 011). Las tres
+cosas **desplegadas y verificadas** en darkviolet. La subida de **todos** los PDF (T2.19) está
+escrita y probada contra el servidor; falta correrla en la estación (acción **G**). Andrés revocó D2.
+
 ### Antes de dar nada por verificado
 
 Las baterías **están todas en verde al 2026-09-13**, y esa es la línea base que
@@ -1132,7 +1183,7 @@ ni duplicada. Los fallos llegan por `COMO_REPORTAR_FALLOS.md` y se corrigen en e
 sitio de pruebas el mismo día.
 
 **D. Las decisiones que solo Andrés puede tomar**, y que no bloquean el piloto:
-subir los PDF históricos a Hostinger (D2), los cron de hPanel, el segundo usuario
+los cron de hPanel (D2 ya no: el 2026-09-14 Andrés decidió subir todo, acción G), el segundo usuario
 MySQL, las cinco URL por servicio de la web (SEO) y lo que César responda de
 `NOTAS_PARA_CESAR.md`.
 
@@ -1147,6 +1198,17 @@ piloto.* `git merge origin/pc/archivo-zona-franquicia-2026-09-13`, después
 para la solicitud real que ya está pendiente. El detalle completo, con lo que
 no se pudo probar desde el PC por no tener acceso a `D:\RESPALDOS`, está en la
 tarea T2.18 más arriba, sección «Pendiente de la estación».
+
+**G. Fusionar la rama del 2026-09-14 y cargar todos los PDF (T2.19)** — *autónomo, en la
+estación; lo decidió Andrés el 2026-09-14.* `git fetch origin && git merge
+origin/pc/documentos-y-otros-trabajos-2026-09-14` (trae también el pulido y T2.18: con esta basta,
+y reemplaza a A y F en lo que toca a fusionar). Después, desde `desarrollo/agentes`:
+`.venv/Scripts/python.exe scripts/t2_19_pruebas.py` (16/16); `scripts/t2_19_subir_pdfs.py` en
+simulación —anotar cuántos faltan, las colisiones y los nombres fuera de patrón—;
+`--ejecutar --limite 500` para medir; `--ejecutar` para el resto; y
+`t2_15_exportar_archivo.py --desde-mariadb --empujar` para que el Archivo tenga el catálogo con su
+módulo. Criterio: en el buzón, 10354415, 10354383 y 10351229 abren su PDF; en el Archivo, «Solo en
+la estación» cerca de 0. El saneamiento nocturno ya trae el paso `pdfs` para lo nuevo.
 
 *Lo que en la versión anterior de esta sección eran las acciones A a D (las 4
 comprobaciones rotas de `prueba_48h.php`, `prueba_offline.mjs`, la copia
@@ -1334,7 +1396,7 @@ sobre-contó el backlog 8× en T1.11.
 | ~~Sacar el proyecto del único disco~~ | ✅ **Hecho el 2026-09-10:** remoto privado `AndresIndustech/industec-bia-soft-erp`. La base y el árbol canónico siguen en un solo disco hasta el TrueNAS |
 | ~~Desplegar los arreglos que ya afectan al sitio en uso y corregir las 2 filas «ASIGNADO» sin técnico~~ | ✅ **Hecho el 2026-09-10** con aprobación de Andrés: `sw.js` v4, `pdf.php`, `nucleo/Reconciliar.php`, `nucleo/Auth.php` y los dos `.htaccess`; huérfanas a NUEVO. `login.php` y `usuarios.php` suben con T2.12.3 porque necesitan el `Ui.php` y el `estilo.css` del rediseño. Ver [`AUDITORIA_2026-09-10.md`](AUDITORIA_2026-09-10.md) §3 |
 | Delegado de protección de datos ante la SPDP | Trámite: gratis, en línea, guía en `TRAMITE_DELEGADO_DATOS.md`. **El plazo venció hace más de 8 meses** |
-| **Recuperar el PDF de `OT-2488-K061-10351229-CNLJ`** (aviso `10351229` / crudo `000010351229`, local `K061EC` Mall del Río Cuenca, zona CNLJ, cadena KFC; cerrada por informe el 2026-09-11, reportada por Andrés el 2026-09-13 — el clic caía en el 404 de `pdf.php`, causa ya corregida en `casos.php`, ver §11b «errores que ya se pagaron» #16) | **La estación, con acceso a `D:\RESPALDOS`** (no accesible desde este PC ni desde el PC de Andrés). Buscar el archivo en la carpeta canónica `D:\RESPALDOS\ORDENES DE TRABAJO\2026\CORRECTIVO\CNLJ\KFC\` (o por el aviso `10351229`/`000010351229` dentro del texto del PDF, con `industec-extraccion-pdf`) y subirlo por scp como `ordenes_pdf/OT-2488-K061-10351229-CNLJ.pdf` en el sitio de pruebas (mismo nombre exacto, sensible a mayúsculas); después `php archivo_indexar_cli.php --solo-pdf` por SSH para que el Archivo lo indexe. Si no aparece en la carpeta canónica, el informe nunca llegó a bajarse del buzón — mismo cuadro que `OT-2503-K146-10354374-CNLJ`, hallado el 2026-09-13 sin `fuente_ruta` al simular `t2_18_atender_pedidos_copia.py` contra darkviolet — y hace falta revisarlo con `t2_11_informes_ot.py` o pedir una copia nueva al local. La rama `pc/archivo-zona-franquicia-2026-09-13` (T2.18, del propio Andrés, **sin fusionar con `pc/pulido-2026-09-12` ni con `master`**) ya trae construido y probado en simulación justo este mecanismo (`t2_18_clasificar_archivo.py` + `t2_18_atender_pedidos_copia.py`, que atiende la cola `ot_archivo_solicitudes` del botón «Pedir copia»): fusionarla y correrla contra el `D:\RESPALDOS` real es más rápido que resolver este caso a mano |
+| **Recuperar el PDF de `OT-2488-K061-10351229-CNLJ`** — **lo resuelve T2.19 (acción G):** el 2026-09-14 Andrés mostró que la estación lo tiene dos veces, en `_DEL_BUZON` y en el árbol canónico como `OT-2488-K061EC-10351229-CNLJ`; los dos suben y el buzón los junta por aviso. Lo que sigue es el detalle anterior (aviso `10351229` / crudo `000010351229`, local `K061EC` Mall del Río Cuenca, zona CNLJ, cadena KFC; cerrada por informe el 2026-09-11, reportada por Andrés el 2026-09-13 — el clic caía en el 404 de `pdf.php`, causa ya corregida en `casos.php`, ver §11b «errores que ya se pagaron» #16) | **La estación, con acceso a `D:\RESPALDOS`** (no accesible desde este PC ni desde el PC de Andrés). Buscar el archivo en la carpeta canónica `D:\RESPALDOS\ORDENES DE TRABAJO\2026\CORRECTIVO\CNLJ\KFC\` (o por el aviso `10351229`/`000010351229` dentro del texto del PDF, con `industec-extraccion-pdf`) y subirlo por scp como `ordenes_pdf/OT-2488-K061-10351229-CNLJ.pdf` en el sitio de pruebas (mismo nombre exacto, sensible a mayúsculas); después `php archivo_indexar_cli.php --solo-pdf` por SSH para que el Archivo lo indexe. Si no aparece en la carpeta canónica, el informe nunca llegó a bajarse del buzón — mismo cuadro que `OT-2503-K146-10354374-CNLJ`, hallado el 2026-09-13 sin `fuente_ruta` al simular `t2_18_atender_pedidos_copia.py` contra darkviolet — y hace falta revisarlo con `t2_11_informes_ot.py` o pedir una copia nueva al local. La rama `pc/archivo-zona-franquicia-2026-09-13` (T2.18, del propio Andrés, **sin fusionar con `pc/pulido-2026-09-12` ni con `master`**) ya trae construido y probado en simulación justo este mecanismo (`t2_18_clasificar_archivo.py` + `t2_18_atender_pedidos_copia.py`, que atiende la cola `ot_archivo_solicitudes` del botón «Pedir copia»): fusionarla y correrla contra el `D:\RESPALDOS` real es más rápido que resolver este caso a mano |
 
 ### Entorno
 
@@ -1435,6 +1497,19 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     que se verifica en todos los sitios donde el patrón se repite**: `grep -rn
     "pdf.php?ot="` sobre `app/publico` es el comando, y da seis sitios; verificar
     los seis, no solo el que reportaron.
+17. **Leer un hecho de una sola de sus fuentes.** El buzón decidía si un caso
+    estaba atendido mirando solo `atenciones.json`, que es una ventana del
+    correo, mientras la orden de cierre que dejan la app y la reconciliación
+    vivía en `casos_gestion`: 36 casos atendidos se veían «sin atender» en la
+    misma fila que decía «atendido · técnico (del informe)» (10354415,
+    10354383), y 19 órdenes de cierre no estaban en el índice del Archivo. Y el
+    mismo informe llega con dos nombres (`K061` por correo, `K061EC` en el
+    árbol), así que se relaciona por aviso. **Cuando un hecho tiene más de una
+    fuente, se junta en un solo sitio (`Casos::documentos()`) y todas las
+    pantallas leen de ahí.** De paso: el `casos.php` vivo era el de `014b529`;
+    el arreglo `00870b4` estaba confirmado y empujado, pero **nunca se había
+    desplegado**. El `sha256sum` del archivo vivo contra `git show
+    <commit>:<ruta>` de cada versión dice cuál está arriba.
 
 ### Lo que no se toca, nunca
 

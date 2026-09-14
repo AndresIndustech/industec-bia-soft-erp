@@ -123,7 +123,8 @@ foreach ($casos as $c) {
         // La que de verdad urge: con alerta, sin veredicto, y ya lleva una
         // semana así (ASG-17): se le puede escapar tanto a la reconciliación
         // como a quien mira el panel.
-        if (!in_array($estado, ['RESUELTO', 'NO_COMPETE'], true)) {
+        // Autorizado —o no— como «otro trabajo» (011) ya tiene decisión.
+        if (!in_array($estado, ['RESUELTO', 'NO_COMPETE'], true) && empty($g['otro_trabajo'])) {
             $edadAlerta = Ui::dias($c['fecha_creacion'] ?? null);
             if ($edadAlerta !== null && $edadAlerta >= 7) { $n['alerta_vieja']++; }
         }
@@ -248,10 +249,16 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
           'Lo que los técnicos vieron y no era su orden: correctivos que vienen, y cosas de otras áreas (eléctrico, ventilación, desagüe) que hacen fallar los equipos. Hay que decidir cuáles se le piden a Grupo KFC como aviso nuevo.',
           'novedades_visita.php', 'Revisar'];
   }
-  if ($n['alerta'] > 0) {
-      $tareas[] = ['', $n['alerta'], 'con alerta de alcance',
-          'Casos que parecen no corresponder a INDUSTEC. La alerta no decide: solo los pone a mano para que alguien los mire.',
-          'casos.php?alerta=CON_ALERTA', 'Mirar'];
+  // Fuera del área y sin decidir (011, «otros trabajos»). Antes era «con alerta
+  // de alcance» y contaba también los ya decididos, así que la cifra nunca bajaba.
+  $nOtros = count(array_filter($casos, fn($c) =>
+      Casos::otroTrabajoPorDecidir($c, $gestion[(string) ($c['aviso'] ?? '')] ?? null)));
+  if ($nOtros > 0) {
+      $tareas[] = [$esAdmin ? 'ojo' : '', $nOtros, 'fuera del área, por decidir',
+          $esAdmin
+            ? 'Casos que parecen no ser de INDUSTEC. Tú decides: si hubo acuerdo con Grupo KFC, se autoriza como «otro trabajo» y se reporta aparte como extra; si no, «no nos compete» y se le pide a KFC que lo derive.'
+            : 'Casos que parecen no ser de INDUSTEC. La alerta no decide: la administración resuelve si es un «otro trabajo» acordado con KFC o si no nos compete.',
+          'casos.php?otro=por_decidir', $esAdmin ? 'Decidir' : 'Mirar'];
   }
   if ($n['alerta_vieja'] > 0) {
       // Un caso con alerta no se cierra por falta de atención (ASG-17): se

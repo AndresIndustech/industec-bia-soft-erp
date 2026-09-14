@@ -9,6 +9,7 @@ Encadena, en este orden y abortando al primer fallo:
   4. ingesta     t1_7_ingesta.py                el arbol canonico a la base de la estacion
   5. informes    t2_11_informes_ot.py --empujar los informes de OT del buzon, al sitio
   6. archivo     t2_15_exportar_archivo.py --empujar  el catalogo historico al indice del archivo (Hostinger)
+  7. pdfs        t2_19_subir_pdfs.py --ejecutar  los PDF que faltan en el servidor, verificados por hash
 
 POR QUE UN SOLO ORQUESTADOR: hasta hoy cada paso era una Tarea programada
 distinta o se corria a mano, y un paso que fallaba en silencio dejaba a los de
@@ -51,6 +52,10 @@ PASOS = [
     ("ingesta",    ["t1_7_ingesta.py"],                           "arbol canonico -> base de la estacion"),
     ("informes",   ["t2_11_informes_ot.py", "--empujar"],         "informes de OT del buzon -> sitio"),
     ("archivo",    ["t2_15_exportar_archivo.py", "--desde-mariadb", "--empujar"], "catalogo historico -> indice del archivo"),
+    # T2.19 (2026-09-14, revoca D2): los PDF que faltan en el servidor, verificados
+    # por hash. Va ULTIMO a proposito: un lote que falle no debe frenar el catalogo,
+    # y el propio t2_19 reindexa al terminar (archivo_indexar_cli.php --solo-pdf).
+    ("pdfs",       ["t2_19_subir_pdfs.py", "--ejecutar"],          "PDF de orden que faltan en el servidor"),
 ]
 
 

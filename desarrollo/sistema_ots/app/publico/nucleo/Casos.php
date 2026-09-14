@@ -110,16 +110,43 @@ final class Casos
         $filas = Db::todos(
             'SELECT g.*, t.nombre AS tecnico_nombre, t.usuario AS tecnico_usuario,
                     a.nombre AS asignador_nombre, v.nombre AS veredicto_nombre,
-                    r.nombre AS revision_nombre
+                    r.nombre AS revision_nombre, o.nombre AS otro_trabajo_nombre
                FROM casos_gestion g
                LEFT JOIN usuarios t ON t.usuario_id = g.asignado_a
                LEFT JOIN usuarios a ON a.usuario_id = g.asignado_por
                LEFT JOIN usuarios v ON v.usuario_id = g.veredicto_por
-               LEFT JOIN usuarios r ON r.usuario_id = g.revision_por'
+               LEFT JOIN usuarios r ON r.usuario_id = g.revision_por
+               LEFT JOIN usuarios o ON o.usuario_id = g.otro_trabajo_por'
         );
         $out = [];
         foreach ($filas as $f) { $out[$f['aviso']] = $f; }
         return $out;
+    }
+
+    /**
+     * ¿El caso parece fuera del área de INDUSTEC? Lo dicen las alertas de
+     * `config/alcance_trabajos.json`: CON_ALERTA, y POR_CONFIRMAR para los
+     * tipos que todavía no tienen criterio. No decide nada: señala dónde hace
+     * falta la decisión de la administradora (011, «otros trabajos»).
+     */
+    public static function fueraDeArea(array $c): bool
+    {
+        return in_array((string) ($c['estado_alerta'] ?? ''), ['CON_ALERTA', 'POR_CONFIRMAR'], true);
+    }
+
+    /**
+     * Fuera del área y sin decidir: la ÚNICA definición, para el panel, el
+     * buzón y los reportes. Deja de estarlo cuando la administradora lo
+     * autoriza —o no— como «otro trabajo» (hubo acuerdo con KFC), o cuando lo
+     * cierra como «no nos compete» y le pide a KFC que lo derive. Un caso ya
+     * RESUELTO también entra: el 10351229 (Mant. Constructivo, CNLJ) se atendió
+     * y se cerró sin que nadie decidiera si era un extra.
+     */
+    public static function otroTrabajoPorDecidir(array $c, ?array $g): bool
+    {
+        return self::fueraDeArea($c)
+            && empty($g['otro_trabajo'])
+            && ($g['estado'] ?? 'NUEVO') !== 'NO_COMPETE';
     }
 
     /**

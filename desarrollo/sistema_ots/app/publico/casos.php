@@ -342,6 +342,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $aviso_ok = 'Caso ' . $aviso . ' derivado a ' . $zn . '. Queda sin asignar.';
             }
 
+        } elseif ($accion === 'otro_trabajo' && Auth::puede('casos.veredicto')) {
+            /* «Otros trabajos» (011, decisión de Andrés del 2026-09-14): lo que
+             * INDUSTEC hace para KFC fuera de su área, por un acuerdo. Es una
+             * marca aparte del estado: el caso sigue su flujo, y la marca dice
+             * si se cuenta y se reporta a KFC como extra. La decide SIEMPRE la
+             * administración, y sin el acuerdo escrito no se sostiene ante KFC.
+             * No mira el estado a propósito: el 10351229 se atendió y se cerró
+             * antes de que existiera esta decisión. */
+            $dec = (string) ($_POST['decision'] ?? '');
+            $motivo = trim((string) ($_POST['motivo'] ?? ''));
+            if (!in_array($dec, ['AUTORIZADO', 'NO_AUTORIZADO'], true)) {
+                $error = 'Decisión no válida.';
+            } elseif ($motivo === '') {
+                $error = $dec === 'AUTORIZADO'
+                    ? 'Escribe el acuerdo con KFC: es lo que respalda el trabajo extra.'
+                    : 'Escribe por qué no se autoriza.';
+            } else {
+                Db::ejecutar(
+                    'UPDATE casos_gestion
+                        SET otro_trabajo = ?, otro_trabajo_motivo = ?,
+                            otro_trabajo_por = ?, otro_trabajo_en = NOW()
+                      WHERE aviso = ?',
+                    [$dec, mb_substr($motivo, 0, 255), $u['usuario_id'], $aviso]
+                );
+                Auth::bitacora('OTRO_TRABAJO', 'caso', $aviso, $dec . ': ' . $motivo,
+                               $antes, $antes,
+                               ['decision' => $dec, 'antes' => $gest0[$aviso]['otro_trabajo'] ?? null,
+                                'motivo' => $motivo, 'tipo' => $caso['caso'] ?? null,
+                                'zona' => $caso['zona'] ?? null]);
+                $aviso_ok = 'Caso ' . $aviso . ($dec === 'AUTORIZADO'
+                          ? ': autorizado como otro trabajo.' : ': no autorizado como otro trabajo.');
+            }
+
         } elseif ($error === null) {
             Auth::bitacora('DENEGADO', 'caso', $aviso, "accion=$accion sin permiso",
                            $antes, null, ['accion' => $accion], false);
@@ -419,14 +452,20 @@ $fAtn   = (string) ($_GET['atn'] ?? '');            // '' | sin | curso | cerrad
    atendidos esperando cierre» tiene que dejar a la persona delante de ESOS 12,
    no de la lista completa para que los busque. */
 $fEst   = (string) ($_GET['est'] ?? '');
+// «Otros trabajos» (011): por_decidir, AUTORIZADO o NO_AUTORIZADO. El panel
+// enlaza aquí con `?otro=por_decidir`.
+$fOtro  = (string) ($_GET['otro'] ?? '');
+if (!in_array($fOtro, ['por_decidir', 'AUTORIZADO', 'NO_AUTORIZADO'], true)) { $fOtro = ''; }
 // «Sin zona» no es una zona más: es la ausencia de una (ASG-21). El buzón no
 // podía filtrarla porque `zona=` vacío no filtra nada.
 $fDiasAsig = (string) ($_GET['dias_asignado'] ?? '');    // asignados sin informe hace N+ días (ASG-15)
 $desdeF = $fDias !== '' ? date('Y-m-d', strtotime('-' . (int) $fDias . ' days')) : null;
 
-$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $fEst, $fDiasAsig, $porAviso, $gestion) {
+$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $fEst, $fDiasAsig, $fOtro, $porAviso, $gestion) {
     $g = $gestion[$c['aviso'] ?? ''] ?? null;
     if ($fEst !== '' && (($g['estado'] ?? 'NUEVO') !== $fEst)) { return false; }
+    if ($fOtro === 'por_decidir' && !Casos::otroTrabajoPorDecidir($c, $g)) { return false; }
+    if ($fOtro !== '' && $fOtro !== 'por_decidir' && ($g['otro_trabajo'] ?? null) !== $fOtro) { return false; }
     if ($fAtn !== '') {
         $e = $porAviso[$c['aviso'] ?? '']['estado_industec'] ?? null;
         if ($fAtn === 'sin' && $e !== null) { return false; }
@@ -520,6 +559,8 @@ $ACCIONES = [
      'Para el caso que llegó al buzón equivocado. El caso cambia de zona y queda sin asignar.'],
     ['Pedir seguimiento',  'casos.seguimiento',
      'Le manda al técnico un recordatorio sobre un caso que ya tiene asignado. No le cambia el estado: es un aviso, no una transición.'],
+    ['Otros trabajos',     'casos.veredicto',
+     'Solo la administración. Para un caso fuera del área: si hubo acuerdo con KFC, lo autoriza como «otro trabajo» con el acuerdo escrito, y se reporta aparte como extra. Si no, el veredicto «no nos compete» lo cierra y se le pide a KFC que lo derive.'],
 ];
 
 $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
@@ -744,6 +785,17 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
             <option value="cerrada" <?= $fAtn === 'cerrada' ? 'selected' : '' ?>>Con orden de cierre</option>
           </select>
         </div>
+        <?php if ($u['rol'] !== 'TECNICO'): ?>
+          <div class="campo">
+            <label for="f-otro">Otros trabajos</label>
+            <select id="f-otro" name="otro">
+              <option value="">—</option>
+              <option value="por_decidir"   <?= $fOtro === 'por_decidir' ? 'selected' : '' ?>>Fuera del área, por decidir</option>
+              <option value="AUTORIZADO"    <?= $fOtro === 'AUTORIZADO' ? 'selected' : '' ?>>Autorizados</option>
+              <option value="NO_AUTORIZADO" <?= $fOtro === 'NO_AUTORIZADO' ? 'selected' : '' ?>>No autorizados</option>
+            </select>
+          </div>
+        <?php endif; ?>
         <div class="campo">
           <label for="f-dias">Llegados en</label>
           <select id="f-dias" name="dias">
@@ -758,7 +810,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
           <label>&nbsp;</label>
           <button class="btn primary" type="submit" style="height:38px">Filtrar</button>
         </div>
-        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn || $fEst || $fDiasAsig !== ''): ?>
+        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn || $fEst || $fDiasAsig !== '' || $fOtro !== ''): ?>
           <div class="campo">
             <label>&nbsp;</label>
             <a class="btn" href="casos.php" style="height:38px;display:flex;align-items:center">Limpiar</a>
@@ -935,6 +987,13 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                   <?php if (Auth::puede('casos.seguimiento') && Casos::puedeTransitar('seguimiento', $est)): ?>
                     <button class="btn" type="button" data-accion="seguimiento">Pedir seguimiento</button>
                   <?php endif; ?>
+
+                  <?php /* «Otros trabajos» (011): la decisión de la administradora
+                           sobre un caso fuera del área, o cambiarla. Solo donde
+                           hay algo que decidir: con alerta de alcance o ya decidido. */ ?>
+                  <?php if (Auth::puede('casos.veredicto') && (Casos::fueraDeArea($c) || !empty($g['otro_trabajo']))): ?>
+                    <button class="btn" type="button" data-accion="otro_trabajo">Otro trabajo</button>
+                  <?php endif; ?>
                 </div>
 
                 <?php if ($g): ?>
@@ -966,6 +1025,15 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                   <?php if (!empty($g['regularizado_en'])): ?>
                     <span class="desc" style="color:#166534">regularizado</span>
                   <?php endif; ?>
+                <?php endif; ?>
+                <?php if (!empty($g['otro_trabajo'])): ?>
+                  <span class="desc" style="color:<?= $g['otro_trabajo'] === 'AUTORIZADO' ? '#166534' : '#64748b' ?>"
+                        title="<?= e(($g['otro_trabajo_nombre'] ?? '') . ', ' . substr((string) ($g['otro_trabajo_en'] ?? ''), 0, 10)) ?>">
+                    otro trabajo · <?= $g['otro_trabajo'] === 'AUTORIZADO' ? 'autorizado' : 'no autorizado' ?>:
+                    <?= e($g['otro_trabajo_motivo'] ?? '') ?>
+                  </span>
+                <?php elseif (Casos::otroTrabajoPorDecidir($c, $g)): ?>
+                  <span class="desc" style="color:#92400e">fuera del área: falta decidir si es un otro trabajo</span>
                 <?php endif; ?>
               </td>
             </tr>
@@ -1065,7 +1133,17 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
       <label for="acc-vd">Veredicto</label>
       <select name="veredicto" id="acc-vd">
         <option value="RESUELTO">Nos compete y está resuelto</option>
-        <option value="NO_COMPETE">No es trabajo de INDUSTEC</option>
+        <option value="NO_COMPETE">No es trabajo de INDUSTEC: se cierra y se pide a KFC que lo derive</option>
+      </select>
+    </div>
+
+    <?php /* «Otros trabajos» (011). El motivo es obligatorio: si se autoriza, es
+             el acuerdo con KFC que respalda el trabajo extra ante el cliente. */ ?>
+    <div id="acc-otro" hidden>
+      <label for="acc-ot">Decisión</label>
+      <select name="decision" id="acc-ot">
+        <option value="AUTORIZADO">Autorizar como otro trabajo: hubo acuerdo con KFC</option>
+        <option value="NO_AUTORIZADO">No autorizar: no se cuenta como extra</option>
       </select>
     </div>
 
@@ -1105,7 +1183,9 @@ var ACC = {
   cerrado_sap: { t:'Confirmar el cierre en SAP', a:'INDUSTEC ya emitió la orden de cierre. Esto es que además ya lo cerraste en SAP, que es lo que el correo nunca avisa.',
                  campos:['motivo'], ok:'Confirmar', motivo:'Nota (opcional)' },
   regularizar: { t:'Marcar como regularizado',   a:'Se cerró por falta de atención. Esto deja de contarlo como pendiente tuyo; el caso sigue constando como no atendido.',
-                 campos:['motivo'], ok:'Regularizar', motivo:'Qué se hizo (opcional)' }
+                 campos:['motivo'], ok:'Regularizar', motivo:'Qué se hizo (opcional)' },
+  otro_trabajo: { t:'Otros trabajos',           a:'Un trabajo fuera del área de INDUSTEC hecho por acuerdo con KFC se autoriza aquí: se cuenta y se reporta aparte, como extra, y el caso sigue su flujo normal. Si no hubo acuerdo, lo que corresponde es el veredicto «no nos compete».',
+                  campos:['otro','motivo'], ok:'Guardar', motivo:'El acuerdo con KFC (o por qué no se autoriza)' }
 };
 /* Los técnicos asignables, para reconstruir el <select> según la zona del
    caso que se abrió: solo los suyos, y los de otras zonas aparte y aparte
@@ -1163,14 +1243,14 @@ function abrir(accion, aviso, zona) {
   document.getElementById('acc-titulo').textContent = c.t + ' · ' + aviso;
   document.getElementById('acc-ayuda').textContent  = c.a;
   document.getElementById('acc-ok').textContent     = c.ok;
-  ['tecnico','zona','veredicto','motivo','texto'].forEach(function (k) {
+  ['tecnico','zona','veredicto','otro','motivo','texto'].forEach(function (k) {
     document.getElementById('acc-' + k).hidden = c.campos.indexOf(k) === -1;
   });
   document.getElementById('acc-confirmo-zona-wrap').hidden = true;
   document.getElementById('acc-confirmo-zona').checked = false;
   var mt = document.getElementById('acc-mt');
   mt.value = '';
-  mt.required = (accion === 'revision');
+  mt.required = (accion === 'revision' || accion === 'otro_trabajo');
   if (c.motivo) { document.getElementById('acc-mt-label').textContent = c.motivo; }
   var tx = document.getElementById('acc-tx');
   tx.value = '';
