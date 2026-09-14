@@ -972,7 +972,7 @@ Las tareas T1.9 a T1.11 avanzan en paralelo conforme se desbloqueen sus dependen
 
 ---
 
-## 11b. Arranque para una conversación nueva — al 2026-09-12
+## 11b. Arranque para una conversación nueva — al 2026-09-13
 
 > Esta sección existe para que quien abra una conversación nueva pueda **empezar
 > a ejecutar sin preguntar nada**. Se actualiza cada vez que cambia lo que sigue.
@@ -980,10 +980,16 @@ Las tareas T1.9 a T1.11 avanzan en paralelo conforme se desbloqueen sus dependen
 ### Lo primero, antes de leer nada
 
 ```bash
-cd "D:\INDUSTECH IA"
+cd "D:\INDUSTECH IA"          # en la estación; en el PC de Andrés, la copia del repo bajo entrada/desarrollador/INDUSTEC/
 git fetch origin && git status --short && git log --oneline -5
 git rev-list --left-right --count master...origin/master     # 0  0 = al día
+git log --oneline master..origin/pc/pulido-2026-09-12 | wc -l   # > 0: el pulido del 12/13-sep NO está fusionado todavía
 ```
+
+**Al 2026-09-13 el trabajo vive en la rama `pc/pulido-2026-09-12`** (diez
+commits sobre `master`, empujados). En la estación, lo primero es fusionarla:
+`git merge origin/pc/pulido-2026-09-12`. Sin eso, la estación despliega código
+viejo sobre el sitio de pruebas y corre scripts que ya no existen con ese contrato.
 
 **No te fíes del disco.** El 2026-09-11 se escribió en este plan que la 007
 estaba pendiente y que `sw.js` iba en v3, cuando existía una rama **29 commits
@@ -1008,29 +1014,41 @@ se invoca siempre al empezar, antes de la primera línea.
 ### Dónde está parado el proyecto, en un párrafo
 
 La Fase 1 está cerrada: 7.069 órdenes en el árbol canónico y en la base. **La
-Fase 2 está hecha y funcionando en el sitio de pruebas**, no solo escrita: la
-007 y la 008 aplicadas, el rediseño de las trece pantallas desplegado, la
-aplicación móvil del técnico con captura sin señal, el reloj de 48 horas, los
-reportes gráficos, la emisión de la orden con su número, su PDF y su correo en
-cola, la hora del negocio en hora de Ecuador, y la verificación por rol con
-ingreso real (87 comprobaciones). El buscador por coincidencia parcial y las dos
-pantallas que el rediseño había dejado sin estilos entraron el 2026-09-12,
-desplegadas y verificadas **contra lo que entrega la web**, no contra el disco
-del servidor. El repositorio está en GitHub y `master` sincronizado. **Lo que
-falta ya no es construir: es el piloto real en UIO (I-8), que depende de
-Andrés.**
+Fase 2 está hecha, pulida y funcionando en el sitio de pruebas**: la 007, 008,
+009 y 010 aplicadas; las quince pantallas por rol desplegadas (T2.14: app del
+técnico con PDF siempre visible y formulario prellenado, asignación por zona,
+repuestos con el flujo de KFC, Archivo de todas las zonas, bitácora, Aprendizaje,
+reportes en Excel/PDF/PowerPoint, cronograma que escribe, `equipos.php`);
+**319 comprobaciones contra el servidor en verde**; la estación con su
+saneamiento nocturno escrito y probado (T2.15); la web corporativa rediseñada
+con ilustraciones propias y publicada (T2.17); y el **paquete del piloto** listo
+en `desarrollo/sistema_ots/piloto/` (T2.14.8). Todo en la rama
+`pc/pulido-2026-09-12`, empujada. **Lo que falta ya no es construir: es
+fusionar la rama en la estación, hacer la lista de `ANTES_DE_EMPEZAR.md` y
+empezar el piloto real en UIO (I-8), que depende de Andrés.**
 
 ### Antes de dar nada por verificado
 
-La batería **no está toda en verde**, y hay que saberlo para no leer un «4
-fallos» como si fuera normal:
+Las baterías **están todas en verde al 2026-09-13**, y esa es la línea base que
+hay que conservar:
 
 ```bash
-cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas"
-D:/SOFTWARE/PHP83/php.exe prueba_48h.php    # 96 · 4 FALLOS — abierto, ver abajo
-node prueba_graficos.mjs                     # 62 · 0
-node prueba_contratos.mjs                    # 57 · 0
-node prueba_barra_tecnico.mjs                # OK
+# Locales (con el PHP 8.2 de la estación o el portable del PC en PHP_BIN)
+cd desarrollo/sistema_ots/app
+php pruebas/prueba_48h.php                    # 120 · 0
+PHP_BIN=<php> node pruebas/prueba_contratos.mjs   # 57 · 0
+node pruebas/prueba_graficos.mjs              # 62 · 0
+
+# Contra el sitio de pruebas (preparar_prueba.php corrido en el servidor)
+cd pruebas/servidor
+set INDUSTEC_LLAVE_SSH=<llave del equipo>; set PYTHONUTF8=1
+python verificar_http.py        # 86 · 0
+python verificar_bandeja.py     # 37 · 0
+python verificar_ciclo.py       # 48 · 0
+python verificar_emision.py     # 34 · 0
+python verificar_archivo.py     # 50 · 0
+python verificar_reportes.py    # 36 · 0
+python verificar_seguridad.py   # 28 · 0
 ```
 
 ### La siguiente acción, concreta
@@ -1038,52 +1056,40 @@ node prueba_barra_tecnico.mjs                # OK
 **Escoge por este orden.** Las tres primeras son autónomas y no dependen de
 nadie; la cuarta y la quinta requieren a Andrés.
 
-**A. Las 4 comprobaciones rotas de `prueba_48h.php`** — *autónomo, y hazlo
-primero.* Es lo único que hoy ensucia la señal de la batería, y una batería que
-informa «4 fallos» de forma permanente deja pasar el quinto, que sí será real.
+**A. Fusionar `pc/pulido-2026-09-12` en `master`** — *en la estación; es
+mecánico, pero tiene que ser lo primero.* Si `git merge` se niega por cambios
+locales en `ESTADO.md` u otro archivo, se apartan con `git stash push -- <archivo>`
+y se devuelven con `git stash pop`. Después, `t2_4_sync_hostinger.py --probar`
+(el contrato SSH cambió: `hostinger_ssh.py` resuelve la llave de la estación
+solo) y `t2_4_pruebas.py`.
 
-```bash
-cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\pruebas"
-D:/SOFTWARE/PHP83/php.exe prueba_48h.php    # los 4 fallos, con su nombre
-```
+**B. La lista de `desarrollo/sistema_ots/piloto/ANTES_DE_EMPEZAR.md`** — *diez
+pasos con su comprobación; los 2, 3, 4 y 9 son de Andrés.* Las siete baterías en
+verde, `deshacer_prueba.php`, la decisión sobre las órdenes 90xx, las cuentas de
+UIO y sus claves (`CUENTAS.md`), la Tarea programada del saneamiento y
+`SEGUNDA_COPIA` en `.env`.
 
-Los cuatro son del reloj: «veredicto a las 55 h: queda como tarde», «el reloj
-deja de correr», «veredicto a las 10 h: a tiempo» y «garantía de semanas NO
-cuenta como incumplida». **La hipótesis, que hay que confirmar antes de tocar
-nada:** el error nº 11 de la lista de abajo dice que el cálculo de las 48 horas
-se pasó **a SQL** justo porque restar fechas en PHP dependía de la configuración
-del hosting, y esta prueba sigue midiendo la función PHP. Si es así, no hay
-defecto: hay una prueba que quedó midiendo lo que ya no es la implementación.
-*Criterio de aceptación:* o la prueba mide el camino SQL y pasa, o se retira con
-el motivo escrito en su cabecera y las comprobaciones que sí valgan se conservan.
-**No la borres sin dejar dicho por qué.**
+**C. El piloto real en UIO** — *requiere a Andrés, y es I-8.* Con las tres hojas
+del paquete (técnico, jefe de zona, administración) y el guion de cinco días de
+`QUE_PROBAR.md`. Criterio: ≥ 50 correctivas y 5 preventivas sin una orden perdida
+ni duplicada. Los fallos llegan por `COMO_REPORTAR_FALLOS.md` y se corrigen en el
+sitio de pruebas el mismo día.
 
-**B. `prueba_offline.mjs`, que ni arranca** — *autónomo.* Corta en el primer
-paso con `ERR "[object Object]" is not valid JSON`, antes de comprobar nada.
-Primero averigua si es de entorno (necesita el servidor local encendido) o si
-una respuesta dejó de ser JSON. Mismo criterio que A: arreglada o retirada con
-su motivo, no a medias.
+**D. Las decisiones que solo Andrés puede tomar**, y que no bloquean el piloto:
+subir los PDF históricos a Hostinger (D2), los cron de hPanel, el segundo usuario
+MySQL, las cinco URL por servicio de la web (SEO) y lo que César responda de
+`NOTAS_PARA_CESAR.md`.
 
-**C. Decidir `desarrollo/sitio_web/` contra `desarrollo/web_corporativa/`** —
-*autónomo hasta la decisión; borrar NO es autónomo.* Hay dos copias del sitio
-corporativo y solo una está versionada y publicada (`web_corporativa`). La otra
-son 215 archivos sin seguimiento con 22 MB de imágenes. **Ninguna se borra sin
-que Andrés lo pida en el momento** (I-2): lo que se puede hacer es comparar,
-decidir cuál queda y escribir la recomendación. Detalle y riesgos en §5.2b de
-[`ESTADO.md`](ESTADO.md) — incluido que `publico/contacto.php:35` redirige a un
-`contacto.html` que no existe.
+**E. El corte (T2.16)** — *solo cuando el piloto cierre.* Siete pasos con camino
+de vuelta, y la parte B de `LEEME_ACCESO_HOSTINGER.md` con lo que se hace en
+producción **en bloque y una sola vez**. `t2_14_sembrar_correlativos.py
+--ejecutar` va ahí, con el sistema viejo detenido; en ensayo ya dio los números.
 
-**D. T2.12.12 — las tres hojas de capacitación** — *autónomo escribirlas;
-agendar la capacitación es de Andrés.* Es lo único de T2.12 que falta. Van en
-`SALIDAS IA\OTS\`, una por rol (administración, jefe de zona, técnico). La
-convención es una carpeta por entrega: mira `paquete_buzon` y
-`paquete_alta_padron` como precedentes.
-
-**E. El piloto real en UIO** — *requiere a Andrés, y es I-8.* Todo está
-desplegado y verificado en el sitio de pruebas, pero el sistema **no lo usa
-todavía nadie de INDUSTEC**. El paso es empezar el uso real en UIO, verificar
-**48 horas**, y solo entonces LARB y CNLJ. Para el corte quedan el despachador
-de la cola de correo y los contadores reales.
+*Lo que en la versión anterior de esta sección eran las acciones A a D (las 4
+comprobaciones rotas de `prueba_48h.php`, `prueba_offline.mjs`, la copia
+`sitio_web/` y las hojas de capacitación) está hecho o resuelto: la batería está
+en 120·0 con rutas relativas, `prueba_offline.mjs` toma PHP y navegador de
+`PHP_BIN`/`CHROME_BIN`, y las hojas son el paquete del piloto (T2.14.8).*
 
 Y si vas a **desplegar** algo, el método que hizo seguro el del 2026-09-12:
 
@@ -1099,7 +1105,7 @@ cd "D:\INDUSTECH IA\desarrollo\agentes"
 # 3. Si tocaste algo de la lista PRECARGA de `sw.js` (estilo.css, ui.js, app.js,
 #    cola.js, guia.js, index.html), SUBE `VERSION` en sw.js y despliégalo: se
 #    sirve cache-first y el navegador que ya instaló la app no vería el cambio.
-#    Hoy va en v7, y el repositorio y el servidor coinciden.
+#    Hoy va en v10, y el repositorio y el servidor coinciden.
 ```
 
 ---
@@ -1255,8 +1261,8 @@ sobre-contó el backlog 8× en T1.11.
 
 | Bloqueado | Lo desbloquea |
 |---|---|
-| ~~Aplicar la 007~~ | ✅ **Aplicada el 2026-09-11** en el sitio de pruebas, dos veces sin duplicar. La **003** sigue pendiente y sigue necesitando a **Andrés**: cambia el esquema |
-| **Las 4 comprobaciones rotas de `prueba_48h.php` y `prueba_offline.mjs`** | **Nadie: es autónomo.** Es la acción A de arriba. No están bloqueadas, están sin hacer |
+| ~~Aplicar la 007~~ | ✅ **Aplicada el 2026-09-11** en el sitio de pruebas, dos veces sin duplicar; la 008, 009 y 010 también. La **003** de agentes quedó superada en parte por la 008 (Hostinger); lo que resta es de la estación y va con el corte |
+| ~~Las 4 comprobaciones rotas de `prueba_48h.php` y `prueba_offline.mjs`~~ | ✅ **Hecho el 2026-09-13** (T2.14.7): 120·0 y rutas por `PHP_BIN`/`CHROME_BIN` |
 | Desplegar a UIO, y 48 h después a LARB y CNLJ | **Andrés** (I-8). El 2026-09-11 el rediseño se subió entero al sitio de pruebas porque nadie lo usa; el piloto por zona se decide cuando empiece el uso real |
 | ~~Que el PDF y el correo salgan del sistema nuevo~~ | ✅ **El PDF, desde el 2026-09-11** (la 008, en el sitio de pruebas). El correo queda en `email_queue`; falta el despachador y los datos reales del corte: contadores de `counter_{zona}.txt` y destinatarios en `config.php` |
 | El 36% del correctivo que el buzón no trae | Confirmar la causa — ver `SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md` |
@@ -1272,7 +1278,9 @@ sobre-contó el backlog 8× en T1.11.
 cd "D:\INDUSTECH IA\desarrollo\agentes"
 .venv/Scripts/python.exe scripts/<script>.py     # siempre el venv, no el python del sistema
 
-D:/SOFTWARE/PHP83/php.exe                        # el PHP local, para -l y para las pruebas
+D:/SOFTWARE/PHP83/php.exe                        # el PHP local de la estación, para -l y las pruebas
+                                                 # (el servidor corre 8.2.33; en el PC de Andrés se usa un
+                                                 #  PHP 8.2 portable y las pruebas toman PHP_BIN)
 node                                             # v24, para node --check y las pruebas .mjs
 ```
 
