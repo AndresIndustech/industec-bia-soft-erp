@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" width="640" height="400" role="img" aria-label="Ilustración monocroma: el equipo técnico de INDUSTEC baja de la camioneta de servicio frente a un local, con la escalera, la caja de herramientas y un repuesto, listo para entrar a la cocina.">
+<style>
+  .k{stroke:#1E2438;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round}
+  .g{stroke:#1E2438;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round;fill:none}
+</style>
+<rect width="640" height="400" fill="#FFFFFF"/>
+<!-- piso -->
+<path class="k" d="M0 330H640" fill="none"/>
+<rect x="0" y="330" width="640" height="70" fill="#9DB7E0"/>
+
+<!-- fachada del local: puerta, ventana y toldo -->
+<rect class="k" x="420" y="90" width="200" height="240" fill="#FFFFFF"/>
+<path class="k" d="M410 130H630l-14 34H424Z" fill="#9DB7E0"/>
+<path class="g" d="M440 130v34M470 130v34M500 130v34M530 130v34M560 130v34M590 130v34"/>
+<rect class="k" x="446" y="190" width="60" height="140" fill="#FFFFFF"/>
+<circle class="k" cx="496" cy="262" r="4" fill="#1E2438"/>
+<rect class="k" x="530" y="190" width="70" height="70" fill="#9DB7E0"/>
+<path class="g" d="M565 190v70M530 225h70"/>
+<!-- letrero sin texto -->
+<rect class="k" x="470" y="100" width="100" height="20" rx="4" fill="#FFFFFF"/>
+<path class="g" d="M482 110h76" stroke="#9DB7E0"/>
+
+<!-- camioneta de servicio -->
+<path class="k" d="M40 236h150l30-50h80a16 16 0 0 1 16 16v128H40Z" fill="#FFFFFF"/>
+<path class="k" d="M40 236h150v94H40Z" fill="#9DB7E0"/>
+<path class="k" d="M226 196h64a8 8 0 0 1 8 8v30h-92Z" fill="#9DB7E0"/>
+<path class="g" d="M190 236h126M60 260h110"/>
+<circle class="k" cx="90" cy="330" r="22" fill="#FFFFFF"/>
+<circle class="k" cx="90" cy="330" r="9" fill="#9DB7E0"/>
+<circle class="k" cx="266" cy="330" r="22" fill="#FFFFFF"/>
+<circle class="k" cx="266" cy="330" r="9" fill="#9DB7E0"/>
+<!-- escalera sobre el techo -->
+<path class="g" d="M30 172h230M30 184h230M60 172v12M100 172v12M140 172v12M180 172v12M220 172v12"/>
+<!-- puerta trasera abierta -->
+<path class="k" d="M40 236l-30 20v74h30Z" fill="#FFFFFF"/>
+
+<!-- técnico 1: baja con la caja de herramientas -->
+<path d="M334 330l6-52 20-8" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M334 330l6-52 20-8" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M378 330l-10-44-8-16" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M378 330l-10-44-8-16" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path class="k" d="M322 334h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M372 334h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M348 274l4-68 32 0 0 68Z" fill="#9DB7E0"/>
+<path class="g" d="M362 212v56M372 212v56" stroke="#FFFFFF"/>
+<path d="M382 214l22 24-2 14" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M382 214l22 24-2 14" fill="none" stroke="#9DB7E0" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="402" cy="256" r="6" fill="#FFFFFF"/>
+<rect class="k" x="386" y="260" width="40" height="26" rx="4" fill="#FFFFFF"/>
+<path class="g" d="M398 260v-6h16v6M386 272h40"/>
+<path d="M350 214l-16 26" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round"/>
+<path d="M350 214l-16 26" fill="none" stroke="#9DB7E0" stroke-width="8" stroke-linecap="round"/>
+<circle class="k" cx="334" cy="242" r="6" fill="#FFFFFF"/>
+<circle class="k" cx="368" cy="192" r="12" fill="#FFFFFF"/>
+<path class="k" d="M356 188a12 12 0 0 1 24 0Z" fill="#1E2438"/>
+<path class="k" d="M380 188h12l-2 4h-10Z" fill="#1E2438"/>
+<circle cx="371" cy="194" r="1.6" fill="#1E2438"/>
+<circle cx="377" cy="194" r="1.6" fill="#1E2438"/>
+<path class="g" d="M371 200q4 2 6 0"/>
+
+<!-- técnico 2: lleva el repuesto en una caja -->
+<path d="M262 330l6-50" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M262 330l6-50" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/>
+<path d="M296 330l-8-50" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M296 330l-8-50" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M250 334h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M288 334h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M262 282l2-66 30 0 2 66Z" fill="#9DB7E0"/>
+<path class="g" d="M274 222v54M284 222v54" stroke="#FFFFFF"/>
+<path d="M268 226l-16 22 12 10" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M268 226l-16 22 12 10" fill="none" stroke="#9DB7E0" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M292 226l14 22-10 10" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M292 226l14 22-10 10" fill="none" stroke="#9DB7E0" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<rect class="k" x="256" y="246" width="46" height="30" rx="3" fill="#FFFFFF"/>
+<path class="g" d="M256 261h46M279 246v30"/>
+<circle class="k" cx="278" cy="202" r="12" fill="#FFFFFF"/>
+<path class="k" d="M266 198a12 12 0 0 1 24 0l-2 4-6-4-8 3-6-1Z" fill="#1E2438"/>
+<circle cx="281" cy="204" r="1.6" fill="#1E2438"/>
+<circle cx="287" cy="204" r="1.6" fill="#1E2438"/>
+<path class="g" d="M281 210q4 2 6 0"/>
+
+<!-- técnico 3: saluda desde la puerta del local -->
+<path d="M452 330l4-48" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M452 330l4-48" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/>
+<path d="M472 330l-2-48" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M472 330l-2-48" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M440 334h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M464 334h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M448 284l2-64 30 0 2 64Z" fill="#9DB7E0"/>
+<path class="g" d="M460 226v50M470 226v50" stroke="#FFFFFF"/>
+<path d="M480 228l18-26 4-22" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M480 228l18-26 4-22" fill="none" stroke="#9DB7E0" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="502" cy="176" r="6" fill="#FFFFFF"/>
+<path d="M450 230l-10 26" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round"/>
+<path d="M450 230l-10 26" fill="none" stroke="#9DB7E0" stroke-width="8" stroke-linecap="round"/>
+<circle class="k" cx="440" cy="258" r="6" fill="#FFFFFF"/>
+<circle class="k" cx="464" cy="206" r="12" fill="#FFFFFF"/>
+<path class="k" d="M450 204a14 14 0 0 1 28 0Z" fill="#1E2438"/>
+<rect class="k" x="448" y="202" width="32" height="5" rx="2" fill="#1E2438"/>
+<circle cx="467" cy="210" r="1.6" fill="#1E2438"/>
+<circle cx="473" cy="210" r="1.6" fill="#1E2438"/>
+<path class="g" d="M467 216q4 2 6 0"/>
+
+<!-- sol y nubes de trazo -->
+<circle class="k" cx="580" cy="46" r="18" fill="#9DB7E0"/>
+<path class="g" d="M60 60c8-18 36-18 40 0h14c12 0 12 20 0 20H50c-14 0-14-20 0-20Z"/>
+<path class="g" d="M300 78c8-18 36-18 40 0h14c12 0 12 20 0 20H290c-14 0-14-20 0-20Z"/>
+</svg>

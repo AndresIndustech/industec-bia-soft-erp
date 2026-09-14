@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360" width="480" height="360" role="img" aria-label="Ilustración: un asesor de INDUSTEC y el administrador de un local revisan en una tableta qué horno conviene, junto a un equipo nuevo recién desembalado.">
+<style>
+  .k{stroke:#1E2438;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .g{stroke:#1E2438;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;fill:none}
+  .m{font-family:"Segoe Script","Bradley Hand","Comic Sans MS","Chalkboard SE",cursive;font-weight:700;fill:#1E2438}
+</style>
+<rect width="480" height="360" fill="#FBE9C8"/>
+<rect x="0" y="268" width="480" height="92" fill="#F6A23A"/>
+<path class="k" d="M0 268H480" fill="none"/>
+
+<!-- horno nuevo, con la caja abierta al lado -->
+<rect class="k" x="290" y="120" width="120" height="148" fill="#E9EEF5"/>
+<rect class="k" x="300" y="132" width="100" height="70" rx="4" fill="#48537E"/>
+<rect class="k" x="308" y="140" width="84" height="54" rx="3" fill="#9DB7E0"/>
+<path class="g" d="M316 156h68M316 170h68M316 184h68"/>
+<rect class="k" x="300" y="212" width="100" height="14" rx="3" fill="#C9D3E3"/>
+<circle class="k" cx="316" cy="244" r="8" fill="#CC504B"/>
+<circle class="k" cx="342" cy="244" r="8" fill="#1E2438"/>
+<rect class="k" x="362" y="238" width="30" height="12" rx="3" fill="#F5C542"/>
+<!-- caja de embalaje abierta -->
+<path class="k" d="M416 268V196h58v72Z" fill="#C98B5E"/>
+<path class="k" d="M416 196l-22-18h58l22 18Z" fill="#7A4A2A"/>
+<path class="g" d="M430 210v40M445 210v40"/>
+<!-- plástico / cinta -->
+<path class="g" d="M420 232h50" stroke="#F5C542"/>
+
+<!-- asesor con tableta (izquierda) -->
+<path d="M118 268l4-56" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M118 268l4-56" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path d="M140 268l-6-56" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M140 268l-6-56" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M106 272h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M132 272h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M112 216l2-72 34-2 4 74Z" fill="#48537E"/>
+<path class="k" d="M118 212l2-58 22 0 2 58Z" fill="#E8722A"/>
+<path class="g" d="M126 160v44M136 160v44" stroke="#FBE9C8"/>
+<!-- brazos sosteniendo la tableta -->
+<path d="M148 154l30 22 22-6" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M148 154l30 22 22-6" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M114 156l-4 34 26 4" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M114 156l-4 34 26 4" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="200" cy="170" r="6" fill="#F2B48A"/>
+<circle class="k" cx="138" cy="196" r="6" fill="#F2B48A"/>
+<!-- tableta con el plano del horno -->
+<rect class="k" x="150" y="172" width="58" height="42" rx="4" fill="#1E2438"/>
+<rect class="k" x="155" y="177" width="48" height="32" fill="#E9EEF5"/>
+<rect class="g" x="162" y="183" width="22" height="18" stroke="#48537E"/>
+<path class="g" d="M190 186h8M190 194h8M190 202h8" stroke="#CC504B"/>
+<!-- cabeza -->
+<circle class="k" cx="132" cy="132" r="12" fill="#C98B5E"/>
+<path class="k" d="M120 128a12 12 0 0 1 24 0l-2 4-6-4-8 3-6-1Z" fill="#1E2438"/>
+<circle cx="136" cy="134" r="1.6" fill="#1E2438"/>
+<circle cx="141" cy="134" r="1.6" fill="#1E2438"/>
+<path class="g" d="M137 140q4 2 6 0"/>
+
+<!-- administrador del local, mirando la tableta y señalando el horno -->
+<path d="M226 268l-2-56" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M226 268l-2-56" fill="none" stroke="#1E2438" stroke-width="9" stroke-linecap="round"/>
+<path d="M246 268l0-56" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M246 268l0-56" fill="none" stroke="#1E2438" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M214 272h24a5 5 0 0 0 0-10h-18Z" fill="#7A4A2A"/>
+<path class="k" d="M238 272h24a5 5 0 0 0 0-10h-18Z" fill="#7A4A2A"/>
+<path class="k" d="M220 216l0-72 34 0 2 72Z" fill="#CC504B"/>
+<path class="k" d="M226 214l2-52 20 0 2 52Z" fill="#FFF3D6"/>
+<path class="g" d="M232 164v-14h12v14"/>
+<!-- brazo que señala el horno -->
+<path d="M254 156l24 4 14-4" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M254 156l24 4 14-4" fill="none" stroke="#CC504B" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="294" cy="156" r="6" fill="#F2B48A"/>
+<path class="g" d="M298 154l10-2"/>
+<!-- otro brazo -->
+<path d="M222 158l-12 26" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round"/>
+<path d="M222 158l-12 26" fill="none" stroke="#CC504B" stroke-width="8" stroke-linecap="round"/>
+<circle class="k" cx="210" cy="186" r="6" fill="#F2B48A"/>
+<!-- cabeza -->
+<circle class="k" cx="238" cy="132" r="12" fill="#F2B48A"/>
+<path class="k" d="M226 130a12 12 0 0 1 24 0Z" fill="#7A4A2A"/>
+<circle cx="234" cy="135" r="1.6" fill="#1E2438"/>
+<circle cx="240" cy="135" r="1.6" fill="#1E2438"/>
+<path class="g" d="M234 141q3 2 6 0"/>
+
+<!-- frases -->
+<text class="m" font-size="20" transform="rotate(-5 120 50)" x="22" y="50">¿Qué equipo te conviene?</text>
+<text class="m" font-size="17" transform="rotate(3 360 96)" x="262" y="96">Instalado y en marcha</text>
+<text class="m" font-size="16" transform="rotate(-3 120 320)" x="30" y="322">Capacitamos a tu equipo</text>
+</svg>

@@ -18,15 +18,16 @@
 <meta property="og:title" content="Contacto | INDUSTEC">
 <meta property="og:description" content="Para empresas y cadenas · WhatsApp y teléfono 099 788 7709 · servicioalcliente@industec.me">
 <meta property="og:url" content="https://darkviolet-armadillo-872352.hostingersite.com/contacto/">
-<meta property="og:image" content="https://darkviolet-armadillo-872352.hostingersite.com/assets/img/og-industec-cadenas-v3.jpg">
+<meta property="og:image" content="https://darkviolet-armadillo-872352.hostingersite.com/assets/img/og-industec-cadenas-v4.jpg">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="INDUSTEC: mantenimiento de cocinas profesionales para cadenas de restaurantes y hoteles">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/assets/css/estilos.css?v=5561037b">
+<link rel="preload" href="/assets/fonts/barlow-bold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/css/estilos.css?v=dcc6c927">
 <script>document.documentElement.classList.add('js');</script>
-<script src="/assets/js/sitio.js?v=c4bf515b" defer></script>
+<script src="/assets/js/sitio.js?v=26dec5c1" defer></script>
 </head>
 <body class="con-barra">
 <a class="saltar" href="#contenido">Saltar al contenido</a>
@@ -49,7 +50,10 @@
         <li><a href="/servicios/">Servicios</a></li>
         <li><a href="/contacto/" aria-current="page">Contacto</a></li>
       </ul>
-      <a class="boton boton--acceso" href="/acceso/"><span class="ico ico-candado" aria-hidden="true"></span>Acceso al sistema</a>
+      <div class="nav__contacto">
+        <a class="boton boton--secundario boton--chico nav__tel" href="tel:+593997887709"><span class="ico ico-tel" aria-hidden="true"></span>Emergencias 24/7 · 099 788 7709</a>
+        <a class="boton boton--wa boton--chico" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20empresa." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>Escríbenos por WhatsApp<span class="sr"> (se abre WhatsApp)</span></a>
+      </div>
     </nav>
   </div>
 </header>
@@ -78,7 +82,7 @@
             <div class="burbuja burbuja--botones">
               <h2 class="burbuja__pregunta" id="t-canales">¿Por dónde prefieres conversar?</h2>
               <div class="charla-principal">
-                <a class="boton boton--primario" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20empresa." target="_blank" rel="noopener" aria-describedby="nota-wa"><span class="ico ico-wa" aria-hidden="true"></span>Escribir por WhatsApp<span class="sr"> (se abre WhatsApp)</span></a>
+                <a class="boton boton--wa" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20empresa." target="_blank" rel="noopener" aria-describedby="nota-wa"><span class="ico ico-wa" aria-hidden="true"></span>Escribir por WhatsApp<span class="sr"> (se abre WhatsApp)</span></a>
                 <p class="charla-principal__nota" id="nota-wa">Tu primer mensaje ya va escrito: solo tienes que enviarlo.</p>
               </div>
               <ul class="charla-botones">
@@ -141,10 +145,10 @@
             <p class="burbuja__autor">INDUSTEC</p>
             <h3 class="consejo__titulo">Para atenderte más rápido, ten a mano:</h3>
             <ul class="consejo__lista">
-              <li><img src="/assets/img/iconos/etiqueta.svg" width="22" height="22" alt="">La marca y el modelo del equipo</li>
-              <li><img src="/assets/img/iconos/sintoma.svg" width="22" height="22" alt="">Qué está pasando y desde cuándo</li>
-              <li><img src="/assets/img/iconos/camara.svg" width="22" height="22" alt="">Una foto del equipo y de su placa</li>
-              <li><img src="/assets/img/iconos/ubicacion.svg" width="22" height="22" alt="">La ubicación de tu local</li>
+              <li><span class="ico ico-etiqueta" aria-hidden="true"></span>La marca y el modelo del equipo</li>
+              <li><span class="ico ico-sintoma" aria-hidden="true"></span>Qué está pasando y desde cuándo</li>
+              <li><span class="ico ico-camara" aria-hidden="true"></span>Una foto del equipo y de su placa</li>
+              <li><span class="ico ico-ubicacion" aria-hidden="true"></span>La ubicación de tu local</li>
             </ul>
           </div>
         </div>
@@ -211,8 +215,9 @@
         </div>
         <div class="form-final">
           <div class="form-acciones">
-            <button class="boton boton--primario" type="submit" value="whatsapp"><span class="ico ico-wa" aria-hidden="true"></span>Enviar por WhatsApp</button>
-            <button class="boton boton--secundario" type="submit" value="correo"><span class="ico ico-correo" aria-hidden="true"></span>Enviar por correo</button>
+            <!-- Enlaces reales (no un clic sintético): el JS solo actualiza el href con el mensaje armado y frena el clic si falta un dato. -->
+            <a class="boton boton--wa" id="enviar-wa" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20informaci%C3%B3n%20sobre%20sus%20servicios%20para%20mi%20empresa." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>Enviar por WhatsApp<span class="sr"> (se abre WhatsApp)</span></a>
+            <a class="boton boton--secundario" id="enviar-correo" href="mailto:servicioalcliente@industec.me?subject=Solicitud%20desde%20la%20web"><span class="ico ico-correo" aria-hidden="true"></span>Enviar por correo</a>
           </div>
           <div aria-live="polite">
             <p class="aviso-urgente" id="aviso-urgente" hidden>Si es urgente, llámanos: <a href="tel:+593997887709">099 788 7709</a></p>
@@ -247,7 +252,7 @@
         </ol>
       </div>
       <div class="atencion__foto">
-        <img src="/assets/img/portada-cine-2-640.webp" width="640" height="482" alt="Técnico de INDUSTEC revisando freidoras en una cocina profesional" fetchpriority="low" decoding="async">
+        <img src="/assets/img/ilus/equipo-monocromo.svg" width="640" height="400" alt="Ilustración: el equipo técnico de INDUSTEC baja de la camioneta de servicio frente a un local, con la escalera, la caja de herramientas y un repuesto" loading="lazy" decoding="async">
       </div>
     </div>
   </section>
@@ -259,7 +264,7 @@
           <h2 id="t-consultoria">Consultoría integral gratuita</h2>
           <p>Cuéntanos el proyecto de tu empresa o cadena y te orientamos sin costo.</p>
         </div>
-        <a class="boton boton--primario" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20solicitar%20la%20consultor%C3%ADa%20integral%20gratuita%20para%20mi%20empresa." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>Pedir mi consultoría gratuita<span class="sr"> (se abre WhatsApp)</span></a>
+        <a class="boton boton--wa" href="https://wa.me/593997887709?text=Hola%20INDUSTEC%2C%20les%20escribo%20desde%20su%20p%C3%A1gina%20web.%20Quiero%20solicitar%20la%20consultor%C3%ADa%20integral%20gratuita%20para%20mi%20empresa." target="_blank" rel="noopener"><span class="ico ico-wa" aria-hidden="true"></span>Pedir mi consultoría gratuita<span class="sr"> (se abre WhatsApp)</span></a>
       </div>
     </div>
   </section>

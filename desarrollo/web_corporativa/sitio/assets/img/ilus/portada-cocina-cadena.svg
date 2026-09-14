@@ -1,0 +1,224 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 712 536" width="712" height="536" role="img" aria-label="Ilustración: la cocina de un local de cadena en plena operación. Un técnico de INDUSTEC mide una freidora con el multímetro, otro revisa la campana de extracción, un tercero llega con un repuesto, y el administrador del local señala la freidora que no calienta; al lado, la cámara fría y el mantenedor de calor.">
+<!-- Estilo In Tune (DIRECCION_ARTE.md): trazo negro uniforme, color plano, figuras estilizadas en acción,
+     frases manuscritas. Sin degradados, sin filtros, sin opacidad. Todo dibujado a mano en este archivo. -->
+<style>
+  .k{stroke:#1E2438;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .g{stroke:#1E2438;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;fill:none}
+  .m{font-family:"Segoe Script","Bradley Hand","Comic Sans MS","Chalkboard SE",cursive;font-weight:700;fill:#1E2438}
+</style>
+<!-- fondo: pared crema y piso naranja -->
+<rect width="712" height="536" fill="#FBE9C8"/>
+<rect x="0" y="392" width="712" height="144" fill="#F6A23A"/>
+<path class="k" d="M0 392H712" fill="none"/>
+<!-- zócalo y rejilla de desagüe -->
+<rect class="k" x="300" y="500" width="120" height="14" rx="3" fill="#E8722A"/>
+<path class="g" d="M310 507h100M330 500v14M350 500v14M370 500v14M390 500v14"/>
+
+<!-- ===== campana de extracción con ducto ===== -->
+<rect class="k" x="330" y="22" width="34" height="70" fill="#E9EEF5"/>
+<path class="k" d="M262 92H432L452 150H242Z" fill="#E9EEF5"/>
+<rect class="k" x="256" y="150" width="190" height="16" fill="#C9D3E3"/>
+<!-- filtros -->
+<path class="g" d="M280 104l-10 38M300 104l-10 38M320 104l-10 38M340 104l-10 38M360 104l-10 38M380 104l-10 38M400 104l-10 38M420 104l-10 38"/>
+<!-- luz de la campana -->
+<rect class="k" x="326" y="166" width="46" height="8" rx="4" fill="#F5C542"/>
+
+<!-- ===== cámara fría (izquierda) ===== -->
+<rect class="k" x="26" y="118" width="128" height="274" fill="#9DB7E0"/>
+<path class="k" d="M90 118V392" fill="none"/>
+<rect class="k" x="36" y="128" width="46" height="120" rx="4" fill="#E9EEF5"/>
+<rect class="k" x="98" y="128" width="46" height="120" rx="4" fill="#E9EEF5"/>
+<rect class="k" x="36" y="256" width="46" height="126" rx="4" fill="#E9EEF5"/>
+<rect class="k" x="98" y="256" width="46" height="126" rx="4" fill="#E9EEF5"/>
+<!-- manijas -->
+<rect class="k" x="76" y="180" width="8" height="46" rx="4" fill="#1E2438"/>
+<rect class="k" x="96" y="180" width="8" height="46" rx="4" fill="#1E2438"/>
+<!-- pantalla de temperatura -->
+<rect class="k" x="44" y="100" width="92" height="18" rx="3" fill="#1E2438"/>
+<text x="90" y="114" font-family="Consolas,monospace" font-size="12" font-weight="700" fill="#F5C542" text-anchor="middle">-18 °C</text>
+<!-- copos -->
+<path class="g" d="M120 300l0 22M110 306l20 10M130 306l-20 10" stroke="#48537E"/>
+
+<!-- ===== batería de freidoras (centro, bajo la campana) ===== -->
+<g>
+  <rect class="k" x="238" y="240" width="72" height="152" fill="#E9EEF5"/>
+  <rect class="k" x="246" y="248" width="56" height="34" fill="#F5C542"/>
+  <path class="g" d="M252 262h44M258 270h32"/>
+  <rect class="k" x="262" y="222" width="24" height="30" rx="3" fill="#C9D3E3"/>
+  <path class="g" d="M274 222V204"/>
+  <circle class="k" cx="274" cy="200" r="6" fill="#CC504B"/>
+  <rect class="k" x="248" y="300" width="52" height="48" rx="3" fill="#C9D3E3"/>
+  <circle class="k" cx="264" cy="324" r="7" fill="#1E2438"/>
+  <circle class="k" cx="284" cy="324" r="7" fill="#F5C542"/>
+</g>
+<g>
+  <rect class="k" x="314" y="240" width="72" height="152" fill="#E9EEF5"/>
+  <rect class="k" x="322" y="248" width="56" height="34" fill="#F5C542"/>
+  <path class="g" d="M328 262h44M334 270h32"/>
+  <rect class="k" x="338" y="222" width="24" height="30" rx="3" fill="#C9D3E3"/>
+  <path class="g" d="M350 222V204"/>
+  <circle class="k" cx="350" cy="200" r="6" fill="#CC504B"/>
+  <rect class="k" x="324" y="300" width="52" height="48" rx="3" fill="#C9D3E3"/>
+  <circle class="k" cx="340" cy="324" r="7" fill="#1E2438"/>
+  <circle class="k" cx="360" cy="324" r="7" fill="#F5C542"/>
+</g>
+<g>
+  <rect class="k" x="390" y="240" width="72" height="152" fill="#E9EEF5"/>
+  <rect class="k" x="398" y="248" width="56" height="34" fill="#F5C542"/>
+  <path class="g" d="M404 262h44M410 270h32"/>
+  <rect class="k" x="414" y="222" width="24" height="30" rx="3" fill="#C9D3E3"/>
+  <path class="g" d="M426 222V204"/>
+  <circle class="k" cx="426" cy="200" r="6" fill="#CC504B"/>
+  <rect class="k" x="400" y="300" width="52" height="48" rx="3" fill="#C9D3E3"/>
+  <circle class="k" cx="416" cy="324" r="7" fill="#1E2438"/>
+  <circle class="k" cx="436" cy="324" r="7" fill="#F5C542"/>
+</g>
+<!-- freidora 1 apagada: la que no calienta (señal roja) -->
+<rect class="k" x="246" y="248" width="56" height="34" fill="#C9D3E3"/>
+<path class="g" d="M252 262h44M258 270h32"/>
+<circle class="k" cx="284" cy="324" r="7" fill="#CC504B"/>
+
+<!-- ===== mantenedor de calor (derecha) ===== -->
+<rect class="k" x="488" y="232" width="104" height="160" fill="#E9EEF5"/>
+<rect class="k" x="496" y="242" width="88" height="34" fill="#F5C542"/>
+<rect class="k" x="496" y="284" width="88" height="34" fill="#F5C542"/>
+<rect class="k" x="496" y="326" width="88" height="34" fill="#F5C542"/>
+<path class="g" d="M506 259h68M506 301h68M506 343h68" stroke="#E8722A"/>
+<rect class="k" x="512" y="368" width="56" height="12" rx="3" fill="#1E2438"/>
+<!-- vapor -->
+<path class="g" d="M520 222c-6-10 6-14 0-24M540 222c-6-10 6-14 0-24M560 222c-6-10 6-14 0-24" stroke="#48537E"/>
+
+<!-- ===== mesa de acero con caja de herramientas (derecha) ===== -->
+<rect class="k" x="608" y="300" width="94" height="10" fill="#C9D3E3"/>
+<path class="g" d="M616 310V392M694 310V392"/>
+<rect class="k" x="628" y="270" width="52" height="30" rx="4" fill="#CC504B"/>
+<path class="g" d="M642 270v-8h24v8"/>
+<path class="g" d="M628 284h52"/>
+
+<!-- ===== técnico 1: agachado midiendo la freidora con el multímetro ===== -->
+<!-- pierna trasera y delantera -->
+<path d="M214 380l-4-40 20-14" fill="none" stroke="#1E2438" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M214 380l-4-40 20-14" fill="none" stroke="#48537E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M186 388l10-44 34-18" fill="none" stroke="#1E2438" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M186 388l10-44 34-18" fill="none" stroke="#48537E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<!-- botas -->
+<path class="k" d="M176 392h26a6 6 0 0 0 0-12h-18Z" fill="#1E2438"/>
+<path class="k" d="M204 392h26a6 6 0 0 0 0-12h-18Z" fill="#1E2438"/>
+<!-- torso inclinado (overol azul + chaleco naranja) -->
+<path class="k" d="M214 336l16-50 30-6 8 36-30 22Z" fill="#48537E"/>
+<path class="k" d="M226 334l10-40 22-4 4 28-22 16Z" fill="#E8722A"/>
+<path class="g" d="M236 296l-6 26M250 292l-2 22" stroke="#FBE9C8"/>
+<!-- brazo hacia la freidora con el multímetro -->
+<path d="M258 292l24 18 6-28" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M258 292l24 18 6-28" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="288" cy="282" r="6" fill="#F2B48A"/>
+<!-- multímetro en la otra mano -->
+<path d="M238 300l-20 14" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round"/>
+<path d="M238 300l-20 14" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round"/>
+<rect class="k" x="196" y="306" width="26" height="34" rx="4" fill="#F5C542"/>
+<rect class="k" x="201" y="311" width="16" height="10" fill="#E9EEF5"/>
+<path class="g" d="M204 330h10M222 318l14-4" stroke="#CC504B"/>
+<!-- cabeza con gorra roja -->
+<circle class="k" cx="262" cy="276" r="12" fill="#F2B48A"/>
+<path class="k" d="M250 272a12 12 0 0 1 24 0Z" fill="#CC504B"/>
+<path class="k" d="M274 272h12l-2 4H274Z" fill="#CC504B"/>
+<circle cx="266" cy="279" r="1.6" fill="#1E2438"/>
+<circle cx="271" cy="278" r="1.6" fill="#1E2438"/>
+<path class="g" d="M267 285q4 2 6-1"/>
+
+<!-- ===== técnico 2: subido en la escalera revisando la campana ===== -->
+<!-- escalera -->
+<path class="g" d="M470 392l14-160M512 392l-14-160M478 350h30M482 320h24M486 290h20M490 260h16"/>
+<!-- piernas -->
+<path d="M488 296l4 52" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M488 296l4 52" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path d="M500 296l-2 52" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M500 296l-2 52" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M484 354h16a5 5 0 0 0 0-10h-12Z" fill="#1E2438"/>
+<path class="k" d="M492 354h16a5 5 0 0 0 0-10h-12Z" fill="#1E2438"/>
+<!-- torso -->
+<path class="k" d="M480 300l4-62 30 0 2 62Z" fill="#48537E"/>
+<path class="k" d="M486 296l2-52 20 0 2 52Z" fill="#E8722A"/>
+<path class="g" d="M494 250v40M504 250v40" stroke="#FBE9C8"/>
+<!-- brazo levantado con paño hacia el filtro -->
+<path d="M510 244l14-34 4-50" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M510 244l14-34 4-50" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="528" cy="158" r="6" fill="#C98B5E"/>
+<path class="k" d="M520 150l16-2 6 8-10 12-14-6Z" fill="#F5C542"/>
+<!-- otro brazo agarrado a la escalera -->
+<path d="M484 246l-12 30" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round"/>
+<path d="M484 246l-12 30" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round"/>
+<circle class="k" cx="472" cy="278" r="6" fill="#C98B5E"/>
+<!-- cabeza con casco -->
+<circle class="k" cx="500" cy="226" r="12" fill="#C98B5E"/>
+<path class="k" d="M486 224a14 14 0 0 1 28 0Z" fill="#F5C542"/>
+<rect class="k" x="484" y="222" width="32" height="5" rx="2" fill="#F5C542"/>
+<circle cx="496" cy="230" r="1.6" fill="#1E2438"/>
+<circle cx="503" cy="230" r="1.6" fill="#1E2438"/>
+<path class="g" d="M496 236q4 2 7 0"/>
+
+<!-- ===== técnico 3: llega de la derecha, a zancadas, con un repuesto ===== -->
+<!-- piernas en zancada -->
+<path d="M630 392l14-52 16-10" fill="none" stroke="#1E2438" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M630 392l14-52 16-10" fill="none" stroke="#48537E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M690 388l-16-44-14-14" fill="none" stroke="#1E2438" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M690 388l-16-44-14-14" fill="none" stroke="#48537E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path class="k" d="M614 396h26a6 6 0 0 0 0-12h-18Z" fill="#1E2438"/>
+<path class="k" d="M682 394h24a6 6 0 0 0 0-12h-16Z" fill="#1E2438"/>
+<!-- torso -->
+<path class="k" d="M646 332l6-66 30 2 2 64Z" fill="#48537E"/>
+<path class="k" d="M652 328l4-54 20 2 2 52Z" fill="#E8722A"/>
+<path class="g" d="M662 278v42M672 280v40" stroke="#FBE9C8"/>
+<!-- brazos sosteniendo la caja del repuesto -->
+<path d="M652 280l-22 22 6 6" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M652 280l-22 22 6 6" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M680 284l-6 26" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round"/>
+<path d="M680 284l-6 26" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round"/>
+<rect class="k" x="626" y="298" width="48" height="30" rx="3" fill="#FFF3D6"/>
+<path class="g" d="M626 313h48M650 298v30"/>
+<circle class="k" cx="638" cy="308" r="5" fill="#7A4A2A"/>
+<circle class="k" cx="674" cy="310" r="5" fill="#7A4A2A"/>
+<!-- cabeza con gorra -->
+<circle class="k" cx="666" cy="252" r="12" fill="#7A4A2A"/>
+<path class="k" d="M654 248a12 12 0 0 1 24 0Z" fill="#CC504B"/>
+<path class="k" d="M640 250h14l0 4H642Z" fill="#CC504B"/>
+<circle cx="662" cy="254" r="1.6" fill="#1E2438"/>
+<circle cx="668" cy="254" r="1.6" fill="#1E2438"/>
+<path class="g" d="M663 260q3 2 6 0"/>
+<!-- líneas de movimiento -->
+<path class="g" d="M700 300h10M702 318h12M700 336h8" stroke="#CC504B"/>
+
+<!-- ===== administrador del local: camisa y delantal, señala la freidora ===== -->
+<path d="M168 392l-4-56" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M168 392l-4-56" fill="none" stroke="#1E2438" stroke-width="9" stroke-linecap="round"/>
+<path d="M150 392l4-56" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M150 392l4-56" fill="none" stroke="#1E2438" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M140 396h22a5 5 0 0 0 0-10h-16Z" fill="#7A4A2A"/>
+<path class="k" d="M160 396h22a5 5 0 0 0 0-10h-16Z" fill="#7A4A2A"/>
+<!-- camisa y delantal -->
+<path class="k" d="M144 342l2-68 32-2 2 70Z" fill="#CC504B"/>
+<path class="k" d="M150 340l2-50 20 0 2 50Z" fill="#FFF3D6"/>
+<path class="g" d="M156 290v-16h12v16"/>
+<!-- brazo que señala -->
+<path d="M178 286l24-14 16 2" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M178 286l24-14 16 2" fill="none" stroke="#CC504B" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="218" cy="274" r="6" fill="#F2B48A"/>
+<path class="g" d="M222 272l10-4"/>
+<!-- brazo en la cadera -->
+<path d="M146 286l-14 24 12 6" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M146 286l-14 24 12 6" fill="none" stroke="#CC504B" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<!-- cabeza, pelo mancha -->
+<circle class="k" cx="162" cy="258" r="12" fill="#F2B48A"/>
+<path class="k" d="M150 254a12 12 0 0 1 24 0l-2 6-6-6-8 4-6-2Z" fill="#1E2438"/>
+<circle cx="166" cy="260" r="1.6" fill="#1E2438"/>
+<circle cx="172" cy="260" r="1.6" fill="#1E2438"/>
+<path class="g" d="M166 266q4 3 7 0"/>
+
+<!-- ===== frases manuscritas ===== -->
+<text class="m" font-size="21" transform="rotate(-6 150 60)" x="20" y="60">¿La freidora no calienta?</text>
+<text class="m" font-size="20" transform="rotate(4 600 74)" x="500" y="74">Llegamos hoy</text>
+<text class="m" font-size="19" transform="rotate(-4 560 200)" x="470" y="200">Campana limpia</text>
+<text class="m" font-size="18" transform="rotate(3 570 450)" x="468" y="454">Todo en una sola visita</text>
+<text class="m" font-size="17" transform="rotate(-5 90 436)" x="24" y="438">Cámara fría a punto</text>
+<text class="m" font-size="18" transform="rotate(2 300 452)" x="220" y="458">Mantenimiento programado</text>
+</svg>

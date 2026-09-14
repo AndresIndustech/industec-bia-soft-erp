@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360" width="480" height="360" role="img" aria-label="Ilustración: un técnico de INDUSTEC llega corriendo con su caja de herramientas a una freidora que dejó de funcionar, de día o de noche, con un reloj que marca el servicio de emergencia.">
+<style>
+  .k{stroke:#1E2438;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .g{stroke:#1E2438;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;fill:none}
+  .m{font-family:"Segoe Script","Bradley Hand","Comic Sans MS","Chalkboard SE",cursive;font-weight:700;fill:#FFF3D6}
+</style>
+<rect width="480" height="360" fill="#CC504B"/>
+<rect x="0" y="268" width="480" height="92" fill="#973531"/>
+<path class="k" d="M0 268H480" fill="none"/>
+
+<!-- reloj de pared: emergencia a cualquier hora -->
+<circle class="k" cx="70" cy="76" r="34" fill="#FFF3D6"/>
+<circle cx="70" cy="76" r="3" fill="#1E2438"/>
+<path class="g" d="M70 76V52M70 76l16 10"/>
+<path class="g" d="M70 46v6M70 100v6M40 76h6M94 76h6"/>
+
+<!-- freidora parada, con señal de alerta -->
+<rect class="k" x="300" y="136" width="90" height="132" fill="#E9EEF5"/>
+<rect class="k" x="310" y="146" width="70" height="34" fill="#C9D3E3"/>
+<path class="g" d="M318 160h54M324 168h42"/>
+<rect class="k" x="332" y="116" width="26" height="30" rx="3" fill="#C9D3E3"/>
+<path class="g" d="M345 116V98"/>
+<circle class="k" cx="345" cy="94" r="6" fill="#1E2438"/>
+<rect class="k" x="316" y="198" width="58" height="44" rx="3" fill="#C9D3E3"/>
+<circle class="k" cx="334" cy="220" r="7" fill="#1E2438"/>
+<circle class="k" cx="356" cy="220" r="7" fill="#1E2438"/>
+<!-- globo de alerta -->
+<path class="k" d="M386 84h60a10 10 0 0 1 10 10v30a10 10 0 0 1-10 10h-30l-12 12v-12h-18a10 10 0 0 1-10-10V94a10 10 0 0 1 10-10Z" fill="#F5C542"/>
+<path d="M416 92v22" stroke="#1E2438" stroke-width="5" stroke-linecap="round"/>
+<circle cx="416" cy="123" r="3.2" fill="#1E2438"/>
+<!-- humo del aceite frío / chispas -->
+<path class="g" d="M320 130c-6-10 6-14 0-24" stroke="#1E2438"/>
+
+<!-- técnico corriendo con la caja de herramientas (zancada larga) -->
+<path d="M130 264l24-54 30-8" fill="none" stroke="#1E2438" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M130 264l24-54 30-8" fill="none" stroke="#48537E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M236 258l-24-40-28-16" fill="none" stroke="#1E2438" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M236 258l-24-40-28-16" fill="none" stroke="#48537E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path class="k" d="M112 270h26a6 6 0 0 0 0-12h-18Z" fill="#1E2438"/>
+<path class="k" d="M228 264h26a6 6 0 0 0 0-12h-18Z" fill="#1E2438"/>
+<!-- torso inclinado hacia adelante -->
+<path class="k" d="M178 204l14-64 30 6-6 64Z" fill="#48537E"/>
+<path class="k" d="M186 200l10-52 20 4-4 52Z" fill="#E8722A"/>
+<path class="g" d="M198 152l-4 42M208 154l-2 40" stroke="#FBE9C8"/>
+<!-- brazo adelante con la caja -->
+<path d="M220 150l30 10 6 22" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M220 150l30 10 6 22" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="256" cy="184" r="6" fill="#C98B5E"/>
+<rect class="k" x="236" y="188" width="46" height="30" rx="4" fill="#F5C542"/>
+<path class="g" d="M250 188v-8h18v8M236 202h46"/>
+<!-- brazo atrás -->
+<path d="M190 152l-28 16" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round"/>
+<path d="M190 152l-28 16" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round"/>
+<circle class="k" cx="160" cy="170" r="6" fill="#C98B5E"/>
+<!-- cabeza con gorra hacia adelante -->
+<circle class="k" cx="216" cy="128" r="12" fill="#C98B5E"/>
+<path class="k" d="M204 124a12 12 0 0 1 24 0Z" fill="#1E2438"/>
+<path class="k" d="M228 124h14l-2 4h-12Z" fill="#1E2438"/>
+<circle cx="220" cy="130" r="1.6" fill="#1E2438"/>
+<circle cx="226" cy="130" r="1.6" fill="#1E2438"/>
+<path class="g" d="M220 136q4 2 7-1"/>
+<!-- líneas de velocidad -->
+<path class="g" d="M120 176h22M112 194h26M120 212h18" stroke="#FFF3D6"/>
+
+<!-- frases claras sobre el rojo -->
+<text class="m" font-size="22" transform="rotate(-4 260 52)" x="150" y="52">Llegamos ya</text>
+<text class="m" font-size="17" transform="rotate(3 220 100)" x="150" y="104">De día o de noche</text>
+<text class="m" font-size="17" transform="rotate(-2 300 322)" x="230" y="326">Repuesto garantizado</text>
+</svg>

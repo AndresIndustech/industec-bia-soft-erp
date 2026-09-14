@@ -1,7 +1,7 @@
 /* INDUSTEC · comportamiento del sitio.
    Sin dependencias, sin cookies, sin almacenamiento en el navegador y sin llamadas de red.
-   El formulario de /contacto/ solo arma el mensaje y lo abre en WhatsApp o en el correo
-   de quien lo escribe: no guarda ni envía nada a ningún servidor. */
+   El formulario de /contacto/ solo arma el mensaje y lo pone en dos enlaces reales (WhatsApp y correo)
+   que la persona pulsa: no guarda ni envía nada a ningún servidor. */
 (function () {
   'use strict';
 
@@ -99,7 +99,8 @@
   ];
   var previa = porId('vista-previa-texto');
   var aviso = porId('aviso-urgente');
-  var canalPulsado = 'whatsapp';
+  var enlaceWa = porId('enviar-wa');
+  var enlaceCorreo = porId('enviar-correo');
 
   var linea = function (el) { return el.value.replace(/\s+/g, ' ').trim(); };
   var parrafo = function (el) {
@@ -124,9 +125,18 @@
     return l.join('\n');
   };
 
+  /* Los dos enlaces de envío son enlaces de verdad: cada vez que se escribe, su href lleva el mensaje
+     tal como está. Sin clic sintético ni ventana emergente: funciona igual en Safari de iPhone. */
   var actualizar = function () {
+    var mensaje = armar(false);
     if (previa) previa.textContent = armar(true);
     if (aviso) aviso.hidden = campos.necesidad.value !== 'Reparación o emergencia';
+    if (enlaceWa) enlaceWa.href = 'https://wa.me/' + NUMERO + '?text=' + encodeURIComponent(mensaje);
+    if (enlaceCorreo) {
+      enlaceCorreo.href = 'mailto:' + CORREO +
+        '?subject=' + encodeURIComponent('Solicitud desde la web: ' + (campos.necesidad.value || 'consulta') + ' - ' + linea(campos.empresa)) +
+        '&body=' + encodeURIComponent(mensaje.replace(/\n/g, '\r\n'));
+    }
   };
 
   var esValido = function (item) {
@@ -169,34 +179,18 @@
   };
   form.addEventListener('input', alEditar);
   form.addEventListener('change', alEditar);
-  form.addEventListener('click', function (e) {
-    var b = e.target.closest && e.target.closest('button[type="submit"]');
-    if (b) canalPulsado = b.value;
-  });
 
-  /* Abre el enlace como lo haría un clic normal: WhatsApp en otra pestaña, el correo en su programa. */
-  var abrir = function (url, otraPestana) {
-    var a = document.createElement('a');
-    a.href = url;
-    if (otraPestana) { a.target = '_blank'; a.rel = 'noopener'; }
-    a.hidden = true;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  /* Si falta un dato, el enlace no se abre: se marcan los campos y el foco va al primero. */
+  var frenarSiFalta = function (e) {
+    if (!validar()) { e.preventDefault(); }
   };
+  if (enlaceWa) enlaceWa.addEventListener('click', frenarSiFalta);
+  if (enlaceCorreo) enlaceCorreo.addEventListener('click', frenarSiFalta);
 
+  /* Enter en un campo: como pulsar «Enviar por WhatsApp». */
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    var canal = (e.submitter && e.submitter.value) || canalPulsado;
-    if (!validar()) return;
-    var mensaje = armar(false);
-    if (canal === 'correo') {
-      abrir('mailto:' + CORREO +
-        '?subject=' + encodeURIComponent('Solicitud desde la web: ' + campos.necesidad.value + ' - ' + linea(campos.empresa)) +
-        '&body=' + encodeURIComponent(mensaje.replace(/\n/g, '\r\n')), false);
-    } else {
-      abrir('https://wa.me/' + NUMERO + '?text=' + encodeURIComponent(mensaje), true);
-    }
+    if (validar() && enlaceWa) enlaceWa.click();
   });
 
   actualizar();

@@ -6,11 +6,11 @@ Sitio estático (HTML + CSS + JavaScript, sin frameworks ni paso de compilación
 - Solo publica lo que ya es público en www.industec.me.
 - Lo que espera el visto bueno de César está en `NOTAS_PARA_CESAR.md` y **no** está en el HTML.
 
-**Estado al 11 de septiembre de 2026**:
+**Estado al 13 de septiembre de 2026**:
 
-- La primera versión está **publicada** en la raíz del dominio temporal y verificada por hash (sección 8).
-- La **segunda entrega del mismo día** está **integrada y verificada en local, lista para publicar** (sección 9). Es el pedido de César: que la web se lea como proveedor técnico de cadenas y no como servicio para el hogar, con los logos de clientes y marcas. Incluye las correcciones de la revisión previa a publicar (sección 9.7): entre otras, los 20 clientes de la web actual, no 17.
-- **Al publicarla hay que borrar dos archivos del servidor** (sección 9.4).
+- La **tercera entrega** es el **rediseño de imagen y navegación (T2.17)**: ilustraciones propias en el estilo fijado por Andrés (sección 10 y `DIRECCION_ARTE.md`), tipografía Barlow autoalojada, el azul del logo como color de marca y el rojo solo como acento y urgencia, WhatsApp como botón primario del menú, los servicios antes que los logos y los logos en una franja compacta. Los textos son los mismos de la segunda entrega (aprobados); cambia la forma.
+- Las dos entregas anteriores del 11 de septiembre (secciones 8 y 9) quedaron publicadas y verificadas por hash.
+- Lo que espera el visto bueno de César sigue en `NOTAS_PARA_CESAR.md`.
 
 ---
 
@@ -23,10 +23,12 @@ web_corporativa/
 ├── LEEME.md                     este archivo
 ├── sitio.sha256                 manifiesto SHA-256 de lo que se SUBE (lo escribe verificar-sitio.mjs --manifiesto)
 ├── sitio.publicado.sha256       manifiesto de lo PUBLICADO, base de la regla de caché (lo escribe verificar-publicacion.mjs al terminar en OK)
+├── DIRECCION_ARTE.md            el estilo de las ilustraciones (In Tune industrial) y dónde va cada una
 ├── herramientas/
 │   ├── verificar-sitio.mjs          verificación antes de subir (--sellar pone el ?v= de CSS y JS)
 │   ├── verificar-publicacion.mjs    compara por hash lo publicado contra sitio/
 │   ├── capturar-sitio.mjs           pruebas y capturas en Edge sin ventana (390, 1024 y 1440 px)
+│   ├── publicar_sitio.py            sube sitio/ por SSH y lo verifica (--si para hacerlo de verdad)
 │   ├── generar_imagenes.py          fotos del sitio (WebP sin metadatos) desde fuentes/fotos/
 │   └── generar_og.py                imagen para redes desde fuentes/og/og.html (captura con Edge)
 ├── fuentes/                     NO se publica: originales de las imágenes
@@ -44,14 +46,16 @@ web_corporativa/
     └── assets/
         ├── css/estilos.css      se pide como estilos.css?v=<hash> (sección 4)
         ├── js/sitio.js          se pide como sitio.js?v=<hash>
+        ├── fonts/               Barlow 600 y 700 (OFL.txt al lado), subconjunto latino en woff2, 24 KB en total
         └── img/
             ├── logo-industec.png y .webp, favicon.svg, favicon-32.png, apple-touch-icon.png
-            ├── og-industec-cadenas-v2.jpg             imagen para redes (1200 × 630)
-            ├── portada-tecnico-freidoras-640.webp     foto de la portada (y -712.webp, la nativa)
+            ├── og-industec-cadenas-v4.jpg             imagen para redes (1200 × 630), con la ilustración de la portada
+            ├── ilus/                                  7 ilustraciones SVG a mano (portada, 5 servicios, escena monocroma)
+            ├── portada-cine-2-640.webp                la foto real del técnico (servicios y contacto)
             ├── trabajo/                               4 fotos de «Nuestro trabajo» (640 × 480)
             ├── clientes/                              20 logos de clientes (96 px de alto)
             ├── marcas/                                18 logos de marcas de equipos (96 px de alto)
-            └── iconos/                                37 SVG propios en el rojo #CC504B
+            └── iconos/                                37 SVG propios; se usan como máscara CSS y toman el color del texto
 ```
 
 **No hay, y es a propósito:**
@@ -148,16 +152,18 @@ web_corporativa/
   - El verificador falla si un archivo cambió desde la **última publicación** y se sigue pidiendo con el mismo nombre y sin `?v=`, o si un `?v=` no coincide con el archivo. La última publicación es `sitio.publicado.sha256`, que solo reescribe `verificar-publicacion.mjs` al terminar en OK; `sitio.sha256` es la lista de lo que se sube. Antes eran un solo archivo y, al regenerarlo antes de publicar, la regla comparaba contra lo que aún no estaba publicado.
 - **Imágenes**: se regeneran con `python herramientas/generar_imagenes.py` (fotos) y `python herramientas/generar_og.py` (imagen para redes), sin metadatos. Nada se enlaza a Zyro ni a Pexels.
 - **Logos**: la lista, el orden, el nombre (texto alternativo) y los recortes están en `fuentes/logos/procesar.py`. Se regeneran con `python fuentes/logos/procesar.py` (reproduce byte a byte los vigentes), se copian `fuentes/logos/clientes/` y `marcas/` a `sitio/assets/img/` y el HTML se ajusta al manifiesto. El verificador exige los 20 clientes en la portada y en servicios y las 18 marcas en servicios, en el orden del manifiesto, con su nombre como `alt`, `width` y `height` con la proporción del archivo, y `class="compacto"` en los cuadrados o verticales; y que cada archivo del sitio sea copia exacta del de `fuentes/logos`.
-- **Colores** (en `:root` de `estilos.css`):
+- **Colores** (en `:root` de `estilos.css`; regla del rediseño del 13 de septiembre de 2026, tres papeles que no se mezclan):
 
-  | Color | Código | Uso |
-  |---|---|---|
-  | Rojo de marca | `#CC504B` | Solo íconos, bordes y títulos grandes: da 4,36:1 sobre blanco |
-  | Rojo de texto | `#B5413C` | Texto rojo pequeño y botones con texto blanco (5,55:1) |
-  | Azul del logo | `#48537E` | «Acceso al sistema», la línea que filtra al particular y detalles |
-  | Verde de WhatsApp | `#117A3F` | Barra del celular y botón flotante (5,4:1 con blanco) |
+  | Papel | Color | Código | Uso |
+  |---|---|---|---|
+  | Marca | Azul del logo y su escala | `#48537E` · `#363F63` · `#232A45` · `#E6E9F2` · `#F3F5FA` | Titulares, íconos, botones neutros, fondos suaves y oscuros, pasos, chips |
+  | Acento y urgencia | Rojo de marca / rojo de texto | `#CC504B` / `#B5413C` | La barra de las etiquetas, el bloque del correctivo, la franja de emergencia, la pastilla 24/7. Nada más |
+  | Solo WhatsApp | Verde | `#117A3F` | Todo botón que abre WhatsApp (menú, portada, servicios, cierre, barra del celular, flotante) |
+  | Ilustraciones | Crema y naranja | `#FBE9C8` · `#F6A23A` | Solo dentro de los SVG y como fondo de espera de sus tarjetas |
 
-- **Íconos**: están en `assets/img/iconos/`, con trazo de 2 px en rejilla de 24 y el rojo `#CC504B`. Los de contenido van como `<img alt="">`. Los de interfaz (WhatsApp, teléfono, candado, flecha, menú, información, freidora, locales) se usan como máscara CSS y toman el color del texto.
+- **Tipografía**: titulares, cifras, botones y etiquetas en **Barlow** (600 y 700, OFL, autoalojada en `assets/fonts/`, `font-display: swap`); el cuerpo en la fuente del sistema. La variable es `--titulos`.
+- **Íconos**: están en `assets/img/iconos/`, con trazo de 2 px en rejilla de 24. Desde el rediseño **todos** se usan como máscara CSS (`<span class="ico ico-nombre" aria-hidden="true">`), así toman el color del texto: azul en los círculos claros, blanco sobre el azul oscuro y el rojo. Cada archivo tiene su clase `.ico-*` en `estilos.css`.
+- **Ilustraciones**: `assets/img/ilus/`, dibujadas a mano en SVG según `DIRECCION_ARTE.md` (ahí está la tabla de cuál va dónde). Al cambiar una, cambia también la imagen para redes (`python herramientas/generar_og.py`) y, si el CDN ya la sirvió con ese nombre, el nombre del archivo.
 - **Después de cualquier cambio**, ejecutar `node herramientas/verificar-sitio.mjs` (con `--sellar` si cambió el CSS o el JS).
 - **Cifras nuevas**: primero pasan por `NOTAS_PARA_CESAR.md`. Ninguna va directo al HTML.
 - **Palabras vetadas**: el verificador falla si aparece «hogar», «casa», «doméstico/a», «particular», «electrodoméstico», «domicilio», «residencial», «vivienda» o «línea blanca» fuera de la línea que aclara que no se atiende a particulares, y si «servicio técnico autorizado» o «distribuidor oficial» aparece fuera del aviso de las marcas. Tampoco se escribe «cocina industrial»: en Ecuador también se llama así a la cocina a gas que se compra para la casa; se dice «cocina profesional». El verificador no lee el texto que va dentro de una imagen: por eso al logo de Menestras del Negro se le quitó el lema «Como preparado en casa.».
@@ -469,4 +475,64 @@ Y, en mensajes aparte esa misma tarde: reponer las marcas que se habían retirad
 - ninguna foto real muestra línea fría ni ventilación (solo freidoras y mantenedores); falta pedirle a César 2 o 3 fotos de refrigeración o de una campana;
 - el avatar de la conversación de contacto es el favicon, no una foto del equipo;
 - el «legado de más de 40 años» se redacta distinto en portada, Nosotros y servicios (NOTAS, B9 sigue abierto);
-- `sitio.publicado.sha256` se actualiza recién cuando se publique esta ronda (sección 8).
+- `sitio.publicado.sha256` se actualiza recién cuando se publique esta ronda (sección 8). *(Se publicó; ver la sección 10.)*
+
+---
+
+## 10. Tercera entrega, 13 de septiembre de 2026: el rediseño de imagen y navegación (T2.17)
+
+**Qué pidió Andrés (12 de septiembre de 2026):** un rediseño moderno e intuitivo que exhiba y venda mejor el servicio **con la información que ya tiene** (los textos aprobados no cambian), e ilustraciones en el estilo de las portadas de *In Tune* (trazo negro limpio, color plano, figuras estilizadas en acción, frases manuscritas) **en contexto industrial y de servicio técnico**. La guía está en `DIRECCION_ARTE.md`. Lo que la auditoría del 12 de septiembre encontró y esto resuelve: la oferta enterrada bajo 38 logos, el acceso del personal como único botón destacado del menú, el rojo como botón principal y como urgencia a la vez, tipografía solo del sistema, 18 íconos iguales en círculos rosados, la consultoría gratuita como enlace subrayado y Nosotros sin una sola imagen.
+
+### 10.1 Qué cambió
+
+- **Ilustraciones** (`assets/img/ilus/`, siete SVG a mano, todas por debajo de 15 KB, con `role="img"` y `aria-label`): la portada (la cocina de un local de cadena con tres técnicos en acción y el administrador del local), una viñeta por servicio (la del correctivo sobre rojo) y una escena monocroma del equipo bajando de la camioneta para Nosotros y Contacto. Tabla completa en `DIRECCION_ARTE.md`. La imagen para redes pasa a `og-industec-cadenas-v4.jpg`.
+- **Sistema visual**: Barlow 600/700 autoalojada (24 KB) para titulares, cifras, botones y etiquetas; el azul del logo y su escala como color de marca; el rojo solo como acento y urgencia; el verde solo en WhatsApp; los 37 íconos como máscara CSS. Tres registros de sección: venta a dos columnas con etiqueta e ilustración, prueba en banda (cifras y logos) y apoyo en rejilla compacta.
+- **Portada y navegación**: en el menú, «Escríbenos por WhatsApp» (verde) y, en escritorio, «Emergencias 24/7 · 099 788 7709»; «Acceso del personal» solo al pie. Primera pantalla con la ilustración y dos botones: la consultoría integral gratuita (WhatsApp) y las emergencias 24/7 (llamar). Orden nuevo: portada → confianza («Desde 2010» · «+40 años» · «24/7» · «Un solo proveedor», los mismos hechos) → **Qué hacemos** (cinco tarjetas con su viñeta) → A quién servimos → Nuestro trabajo → Por qué un proveedor integral → **clientes y marcas en una sola franja** (gris, color al pasar, con sus dos notas) → cierre. En servicios, cada servicio va a dos columnas con su viñeta, alternando lados. Nosotros lleva la escena monocroma en el encabezado y la foto de la línea de despacho en la historia. Contacto conserva la conversación de la ronda 3 con el sistema visual nuevo.
+- **Formulario de contacto**: «Enviar por WhatsApp» y «Enviar por correo» son **enlaces reales** cuyo `href` lleva el mensaje armado en cada tecla; si falta un dato, el clic se frena y se marcan los campos. Ya no hay clic sintético sobre un enlace oculto (W-12). `capturar-sitio.mjs` prueba ese comportamiento.
+- **Retirados del sitio**: `portada-cocina-cadena-frontal.svg` y `og-industec-cadenas-v3.jpg` (los borró `publicar_sitio.py` al publicar).
+
+### 10.2 Verificación en local
+
+`node herramientas/verificar-sitio.mjs --sellar --manifiesto`: **OK: sin fallos**; 104 archivos, 932,9 KB (límite 1.536 KB); 38 logos en la portada y en servicios; los 7 mensajes de WhatsApp (el verificador cuenta 8 porque el formulario de contacto parte del mensaje general y lo reemplaza por el armado; es el mismo texto). `node herramientas/capturar-sitio.mjs`: **PROBLEMAS: ninguno**; sin desbordes ni fallos de contraste a 390 y 1440 px; menú, formulario (los cuatro errores con los campos vacíos, el foco al primero, WhatsApp y correo con el mensaje exacto, 0 almacenamiento, 0 cookies), ancla bajo la cabecera, movimiento reducido y modo sin JavaScript en verde; el título de la portada entra con la ilustración en un teléfono de 667 px. Los dos hallazgos de la primera corrida se corrigieron antes de publicar: el sello «Servicio de emergencia 24/7» salía blanco sobre blanco (la regla `.servicio--urgente p` pintaba el `<p>` del sello) y la prueba del formulario buscaba los botones viejos.
+
+### 10.3 Publicación (13 de septiembre de 2026, desde el PC de Andrés)
+
+`python herramientas/publicar_sitio.py --si`:
+
+```
+sitio/: 104 archivos · en el servidor: 95
+subir (18):  acceso/index.html, assets/css/estilos.css, assets/fonts/barlow-bold.woff2, assets/fonts/barlow-semibold.woff2, assets/fonts/OFL.txt, assets/img/ilus/equipo-monocromo.svg, assets/img/ilus/portada-cocina-cadena.svg, assets/img/ilus/servicio-asesoria.svg, assets/img/ilus/servicio-correctivo.svg, assets/img/ilus/servicio-planificacion.svg, assets/img/ilus/servicio-predictivo.svg, assets/img/ilus/servicio-preventivo.svg, assets/img/og-industec-cadenas-v4.jpg, assets/js/sitio.js, contacto/index.html, index.html, nosotros/index.html, servicios/index.html
+borrar (2): assets/img/portada-cocina-cadena-frontal.svg, assets/img/og-industec-cadenas-v3.jpg
+
+disco del servidor: 104 de 104 cuadran por hash
+755 .
+755 ot
+sin .htaccess en la raíz
+web: 5 páginas y 58 recursos comprobados en dos codificaciones · /ot/login.php 200
+  aviso: /assets/img/apple-touch-icon.png (gzip): el CDN recomprime las imágenes
+  aviso: /assets/img/logo-industec.png (identity): el CDN recomprime las imágenes
+OK: publicado y verificado.
+```
+
+`NODE_OPTIONS=--use-system-ca node herramientas/verificar-publicacion.mjs` (resumen; los ⚠ son los de siempre: los PNG, el JPG y el `robots.txt` los cambia el CDN):
+
+```
+✓ /assets/css/estilos.css?v=dcc6c927 (como lo pide el HTML)   [cache-control=public, max-age=604800 · x-hcdn-cache-status=MISS]
+✓ /assets/js/sitio.js?v=26dec5c1 (como lo pide el HTML)       [cache-control=public, max-age=604800 · x-hcdn-cache-status=MISS]
+✓ / sirve el index.html subido · ✓ /nosotros/ · ✓ /servicios/ · ✓ /contacto/ · ✓ /acceso/   [x-hcdn-cache-status=DYNAMIC]
+✓ /nosotros redirige a /nosotros/ (HTTP 301)
+✓ /ot/login.php responde (HTTP 200)
+✓ assets/img/og-industec-cadenas-v3.jpg: ya no está en el servidor (HTTP 404)
+✓ assets/img/portada-cocina-cadena-frontal.svg: ya no está en el servidor (HTTP 404)
+
+OK: lo publicado coincide con sitio/, un visitante recibe lo mismo y el sistema sigue respondiendo (4 diferencia(s) que pone el CDN, marcadas con ⚠).
+Registrado: sitio.publicado.sha256 (104 archivos)
+```
+
+Y aparte, con `curl`: `/ot/login.php` → 200 y `/ot/catalogos/locales.json` → 403, que es el criterio de T2.17.4.
+
+### 10.4 Pendiente
+
+- La **prueba a mano en un celular** (sección 2, paso 5) y la vista previa del enlace en WhatsApp con la imagen v4: las hace Andrés.
+- Las cinco URL propias por servicio (SEO, W-11) y cualquier foto o dato nuevo requieren su aprobación (y las fotos, la de César: NOTAS B2).
+- Cuando César confirme los colores del uniforme o pida otro equipo en la ilustración, se edita el SVG a mano (es la fuente) y se regenera la imagen para redes con un nombre nuevo.

@@ -312,9 +312,13 @@ async function pruebasMovil(cdp) {
   cdp.on('Network.requestWillBeSent', anotar);
   await evaluar(cdp, `HTMLAnchorElement.prototype.click = function () { (window.__abiertos = window.__abiertos || []).push({ href: this.href, target: this.target, rel: this.rel }); }; true`);
   const previaInicial = await evaluar(cdp, `document.getElementById('vista-previa-texto').textContent`);
-  const vacio = await evaluar(cdp, `(() => { document.querySelector('button[value="whatsapp"]').click();
-    return { errores: ['e-nombre','e-empresa','e-necesidad','e-detalle'].map(id => !document.getElementById(id).hidden), invalido: document.getElementById('f-empresa').getAttribute('aria-invalid'), describedbyEmpresa: document.getElementById('f-empresa').getAttribute('aria-describedby'), foco: document.activeElement.id, abiertos: (window.__abiertos || []).length }; })()`);
-  const soloNombre = await evaluar(cdp, `(() => { const e = document.getElementById('f-nombre'); e.value = 'María Prueba'; e.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('button[value="whatsapp"]').click(); return { foco: document.activeElement.id, errorEmpresa: !document.getElementById('e-empresa').hidden, abiertos: (window.__abiertos || []).length }; })()`);
+  // Desde el rediseño (13-sep-2026) los dos envíos son enlaces reales (#enviar-wa, #enviar-correo): el JS pone el
+  // mensaje en su href y frena el clic si falta un dato. Aquí se dispara un clic de verdad (cancelable) y se mira
+  // si quedó prevenido; con los campos vacíos no debe navegar.
+  const pulsar = `(() => { const a = document.getElementById('enviar-wa'); return !a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); })()`;
+  const vacio = await evaluar(cdp, `(() => { const prevenido = ${pulsar};
+    return { errores: ['e-nombre','e-empresa','e-necesidad','e-detalle'].map(id => !document.getElementById(id).hidden), invalido: document.getElementById('f-empresa').getAttribute('aria-invalid'), describedbyEmpresa: document.getElementById('f-empresa').getAttribute('aria-describedby'), foco: document.activeElement.id, abiertos: prevenido ? 0 : 1 }; })()`);
+  const soloNombre = await evaluar(cdp, `(() => { const e = document.getElementById('f-nombre'); e.value = 'María Prueba'; e.dispatchEvent(new Event('input', { bubbles: true })); const prevenido = ${pulsar}; return { foco: document.activeElement.id, errorEmpresa: !document.getElementById('e-empresa').hidden, abiertos: prevenido ? 0 : 1 }; })()`);
   await evaluar(cdp, `document.getElementById('f-nombre').scrollIntoView({ block: 'start', behavior: 'instant' }); window.scrollBy({ top: -90, behavior: 'instant' }); true`);
   await capturar(cdp, `${CAPTURAS}/_formulario-errores-390.png`);
   const lleno = await evaluar(cdp, `(() => {
@@ -325,10 +329,9 @@ async function pruebasMovil(cdp) {
     const aviso = !document.getElementById('aviso-urgente').hidden;
     const erroresVisibles = ['e-nombre','e-empresa','e-necesidad','e-detalle'].filter(id => !document.getElementById(id).hidden);
     const primeraOpcion = document.getElementById('f-necesidad').options[1].text;
-    window.__abiertos = [];
-    document.querySelector('button[value="whatsapp"]').click();
-    document.querySelector('button[value="correo"]').click();
-    return { previa, aviso, erroresVisibles, primeraOpcion, abiertos: window.__abiertos, almacenamiento: localStorage.length + sessionStorage.length, cookies: document.cookie }; })()`);
+    const wa = document.getElementById('enviar-wa'), correo = document.getElementById('enviar-correo');
+    const abiertos = [{ href: wa.href, target: wa.target, rel: wa.rel }, { href: correo.href, target: correo.target, rel: correo.rel }];
+    return { previa, aviso, erroresVisibles, primeraOpcion, abiertos, almacenamiento: localStorage.length + sessionStorage.length, cookies: document.cookie }; })()`);
   const esperado = 'Hola INDUSTEC, les escribo desde su página web.\nNombre: María Prueba\nEmpresa: Cadena de prueba\nNecesito: Reparación o emergencia\nDetalle: La freidora no calienta.\nDesde ayer en la mañana.';
   const waEsperado = 'https://wa.me/593997887709?text=' + encodeURIComponent(esperado);
   const mailEsperado = 'mailto:servicioalcliente@industec.me?subject=' + encodeURIComponent('Solicitud desde la web: Reparación o emergencia - Cadena de prueba') + '&body=' + encodeURIComponent(esperado.replace(/\n/g, '\r\n'));

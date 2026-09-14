@@ -1,8 +1,8 @@
 # Genera la imagen para redes (1200 x 630) a partir de fuentes/og/og.html.
 # Captura la página con Edge sin ventana y la guarda como JPEG sin metadatos en
-# sitio/assets/img/og-industec-cadenas-v3.jpg. La v3 (11-sep-2026) lleva en la tarjeta la ilustración de la
-# portada (portada-cocina-cadena-frontal.svg) en lugar de la foto de las freidoras; la v2 había cambiado el
-# ícono de la freidora, que se leía como una caja de regalo.
+# sitio/assets/img/og-industec-cadenas-v4.jpg. La v4 (13-sep-2026, T2.17) lleva en la tarjeta la ilustración
+# de la portada en el estilo In Tune (ilus/portada-cocina-cadena.svg); la v3 llevaba la ilustración anterior y la
+# v2, la foto de las freidoras.
 # JPEG y no PNG: WhatsApp no muestra las vistas previas muy pesadas. Con la ilustración, en calidad 88 y sin
 # submuestreo de color (4:4:4, para que el rojo y el azul no se corran en los filos del dibujo), el JPEG pesa
 # unos 140 KB y el PNG, unos 159 KB (11-sep-2026).
@@ -21,7 +21,7 @@ from PIL import Image
 
 W = Path(__file__).resolve().parent.parent
 FUENTE = W / 'fuentes' / 'og' / 'og.html'
-DESTINO = W / 'sitio' / 'assets' / 'img' / 'og-industec-cadenas-v3.jpg'
+DESTINO = W / 'sitio' / 'assets' / 'img' / 'og-industec-cadenas-v4.jpg'
 EDGE = r'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'
 
 perfil = Path(tempfile.mkdtemp(prefix='edge_og_'))

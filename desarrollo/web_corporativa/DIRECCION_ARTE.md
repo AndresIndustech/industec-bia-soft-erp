@@ -29,12 +29,28 @@ sombras ni degradados, con una paleta corta y frases manuscritas flotando alrede
 - No hay nada que se lea como cocina de casa: ni cocinas de cuatro hornillas domésticas, ni
   refrigeradoras de hogar, ni delantales floreados. Es la cocina de un local de cadena.
 
-## Dónde se usa
+## Dónde se usa (hecho el 13 de septiembre de 2026, T2.17.1)
 
-1. **Portada** (`/`): la escena cálida principal, con frases flotantes.
-2. **Servicios** (`/servicios/`): una viñeta por servicio (asesoría, preventivo, predictivo,
-   correctivo/emergencia, planificación), todas con el mismo trazo y la misma paleta.
-3. **Nosotros** y **Contacto**: una escena secundaria monocroma (trazo negro y azul claro).
-4. **Imagen para redes** (`og-*.jpg`): la portada, renderizada a 1200 × 630.
+Las siete ilustraciones viven en `sitio/assets/img/ilus/`, dibujadas a mano en SVG (sin herramienta
+generadora: cada archivo es la fuente), con `role="img"` y `aria-label` que describe la escena, y
+todas por debajo de 15 KB:
 
-Cada ilustración lleva `role="img"` y un `aria-label` que describe la escena.
+| Archivo | Dónde | Escena |
+|---|---|---|
+| `portada-cocina-cadena.svg` (712 × 536) | `/` (portada), `/servicios/` (encabezado) y la imagen para redes | La cocina de un local de cadena: campana con ducto, batería de tres freidoras (una apagada, con la luz roja), mantenedor de calor, cámara fría a −18 °C, mesa de acero; un técnico agachado midiendo la freidora con el multímetro, otro en la escalera limpiando el filtro de la campana, un tercero que llega a zancadas con un repuesto, y el administrador del local, con delantal, señalando la freidora. Frases: «¿La freidora no calienta?», «Llegamos hoy», «Campana limpia», «Todo en una sola visita», «Cámara fría a punto», «Mantenimiento programado» |
+| `servicio-asesoria.svg` (480 × 360) | `/` (tarjeta) y `/servicios/#asesoria` | Asesor con tableta y administrador del local frente a un horno nuevo recién desembalado |
+| `servicio-preventivo.svg` | `/` y `/servicios/#preventivo` | Técnico en la escalera con el filtro de la campana y el paño; calendario con la visita marcada; lista de chequeo |
+| `servicio-predictivo.svg` | `/` y `/servicios/#predictivo` | Técnico con la pinza amperimétrica en el compresor de la cámara fría y la gráfica de rendimiento en la tableta |
+| `servicio-correctivo.svg` | `/` y `/servicios/#correctivo` | Fondo rojo (es el bloque de urgencia): técnico corriendo con la caja de herramientas hacia una freidora parada, con el reloj de pared y el globo de alerta |
+| `servicio-planificacion.svg` | `/` y `/servicios/#planificacion` | Jefe técnico explicando en una pizarra los pasos de la solución de fondo; un cocinero del local y un técnico toman nota |
+| `equipo-monocromo.svg` (640 × 400) | `/nosotros/` (encabezado) y `/contacto/` («Así te atendemos») | Monocroma, trazo negro y un solo azul claro: el equipo baja de la camioneta de servicio frente al local con la escalera, la caja de herramientas y un repuesto |
+
+La imagen para redes (`og-industec-cadenas-v4.jpg`, 1200 × 630) se genera con `herramientas/generar_og.py`
+a partir de `fuentes/og/og.html`, que monta la portada en la tarjeta. Los textos manuscritos usan
+`<text>` con una fuente cursiva del sistema (Segoe Script, Bradley Hand, Comic Sans, Chalkboard) y un
+giro de 2 a 6 grados; los contornos son `stroke #1E2438` de 2 px con extremos redondeados, y las
+extremidades de las figuras van con dos trazos superpuestos (el negro más grueso debajo, el color
+encima), que es lo que da el contorno uniforme sin dibujar cada brazo como un polígono.
+
+Para revisarlas: `herramientas/capturar-sitio.mjs` las captura dentro de las páginas a 390 y 1440 px;
+para verlas sueltas basta abrir el SVG en Edge.

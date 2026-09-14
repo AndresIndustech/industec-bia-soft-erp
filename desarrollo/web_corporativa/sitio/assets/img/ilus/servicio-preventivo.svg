@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360" width="480" height="360" role="img" aria-label="Ilustración: un técnico de INDUSTEC limpia los filtros de una campana de extracción subido a una escalera, con el calendario de visitas programadas en la pared.">
+<style>
+  .k{stroke:#1E2438;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .g{stroke:#1E2438;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;fill:none}
+  .m{font-family:"Segoe Script","Bradley Hand","Comic Sans MS","Chalkboard SE",cursive;font-weight:700;fill:#1E2438}
+</style>
+<rect width="480" height="360" fill="#FBE9C8"/>
+<rect x="0" y="268" width="480" height="92" fill="#F6A23A"/>
+<path class="k" d="M0 268H480" fill="none"/>
+
+<!-- calendario en la pared -->
+<rect class="k" x="30" y="40" width="112" height="98" rx="4" fill="#FFF3D6"/>
+<rect class="k" x="30" y="40" width="112" height="20" fill="#CC504B"/>
+<path class="g" d="M46 68h80M46 86h80M46 104h80M46 122h80M66 60v78M86 60v78M106 60v78M126 60v78"/>
+<circle class="k" cx="96" cy="95" r="8" fill="#F5C542"/>
+<path class="g" d="M92 95l3 3 6-6" stroke="#1E2438"/>
+<circle class="k" cx="116" cy="113" r="8" fill="#9DB7E0"/>
+
+<!-- campana con ducto y filtros -->
+<rect class="k" x="284" y="36" width="30" height="24" fill="#E9EEF5"/>
+<path class="k" d="M214 60H384L404 116H194Z" fill="#E9EEF5"/>
+<rect class="k" x="206" y="116" width="186" height="14" fill="#C9D3E3"/>
+<path class="g" d="M232 72l-10 34M254 72l-10 34M276 72l-10 34M298 72l-10 34M320 72l-10 34M342 72l-10 34M364 72l-10 34"/>
+<!-- filtro sacado, en la mano -->
+
+<!-- plancha y freidora bajo la campana -->
+<rect class="k" x="212" y="196" width="80" height="72" fill="#E9EEF5"/>
+<rect class="k" x="218" y="188" width="68" height="12" rx="2" fill="#C9D3E3"/>
+<rect class="k" x="228" y="222" width="48" height="30" rx="3" fill="#C9D3E3"/>
+<circle class="k" cx="244" cy="238" r="6" fill="#1E2438"/>
+<circle class="k" cx="262" cy="238" r="6" fill="#F5C542"/>
+<rect class="k" x="300" y="196" width="80" height="72" fill="#E9EEF5"/>
+<rect class="k" x="308" y="204" width="64" height="28" fill="#F5C542"/>
+<path class="g" d="M314 218h52"/>
+<rect class="k" x="316" y="242" width="48" height="18" rx="3" fill="#C9D3E3"/>
+
+<!-- escalera -->
+<path class="g" d="M392 268l16-150M446 268l-16-150M400 236h36M404 206h28M408 176h22M412 148h16"/>
+<!-- técnico en la escalera con el filtro y el paño -->
+<path d="M412 178l6 50" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M412 178l6 50" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path d="M426 178l0 50" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M426 178l0 50" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M408 234h18a5 5 0 0 0 0-10h-12Z" fill="#1E2438"/>
+<path class="k" d="M420 234h18a5 5 0 0 0 0-10h-12Z" fill="#1E2438"/>
+<path class="k" d="M404 184l2-60 32 0 2 60Z" fill="#48537E"/>
+<path class="k" d="M410 180l2-50 20 0 2 50Z" fill="#E8722A"/>
+<path class="g" d="M418 136v40M428 136v40" stroke="#FBE9C8"/>
+<!-- brazo con el filtro hacia la campana -->
+<path d="M410 130l-30-20-10-14" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M410 130l-30-20-10-14" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="368" cy="94" r="6" fill="#F2B48A"/>
+<path class="k" d="M336 84l36-8 6 18-36 8Z" fill="#C9D3E3"/>
+<path class="g" d="M344 86l4 12M354 84l4 12M364 82l4 12"/>
+<!-- otro brazo con el paño amarillo -->
+<path d="M438 132l16 20-6 14" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M438 132l16 20-6 14" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="448" cy="166" r="6" fill="#F2B48A"/>
+<path class="k" d="M440 170l16-4 6 10-12 12-12-8Z" fill="#F5C542"/>
+<!-- cabeza con casco -->
+<circle class="k" cx="422" cy="112" r="12" fill="#F2B48A"/>
+<path class="k" d="M408 110a14 14 0 0 1 28 0Z" fill="#F5C542"/>
+<rect class="k" x="406" y="108" width="32" height="5" rx="2" fill="#F5C542"/>
+<circle cx="416" cy="116" r="1.6" fill="#1E2438"/>
+<circle cx="422" cy="116" r="1.6" fill="#1E2438"/>
+<path class="g" d="M416 122q4 2 7 0"/>
+<!-- brillos de limpio -->
+<path class="g" d="M330 44l0 12M324 50h12M360 34l0 10M355 39h10" stroke="#CC504B"/>
+
+<!-- lista de chequeo en el piso -->
+<rect class="k" x="40" y="180" width="70" height="88" rx="4" fill="#FFF3D6"/>
+<path class="g" d="M52 200h44M52 218h44M52 236h44M52 254h44" stroke="#C9D3E3"/>
+<path class="g" d="M50 198l4 4 6-6M50 216l4 4 6-6M50 234l4 4 6-6" stroke="#CC504B"/>
+<rect class="k" x="40" y="176" width="70" height="10" rx="3" fill="#48537E"/>
+
+<!-- frases -->
+<text class="m" font-size="20" transform="rotate(-4 250 30)" x="160" y="30">Visita programada</text>
+<text class="m" font-size="17" transform="rotate(4 220 160)" x="118" y="166">Limpieza y calibración</text>
+<text class="m" font-size="17" transform="rotate(-3 260 320)" x="170" y="322">Para que no falle</text>
+</svg>

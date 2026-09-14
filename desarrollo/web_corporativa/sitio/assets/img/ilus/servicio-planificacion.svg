@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360" width="480" height="360" role="img" aria-label="Ilustración: un jefe técnico de INDUSTEC explica en una pizarra, paso a paso, cómo se resuelve de raíz una falla que se repite, mientras un cocinero del local y un técnico toman nota.">
+<style>
+  .k{stroke:#1E2438;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .g{stroke:#1E2438;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;fill:none}
+  .m{font-family:"Segoe Script","Bradley Hand","Comic Sans MS","Chalkboard SE",cursive;font-weight:700;fill:#1E2438}
+</style>
+<rect width="480" height="360" fill="#FBE9C8"/>
+<rect x="0" y="268" width="480" height="92" fill="#F6A23A"/>
+<path class="k" d="M0 268H480" fill="none"/>
+
+<!-- pizarra con los pasos -->
+<rect class="k" x="248" y="44" width="200" height="140" rx="4" fill="#FFF3D6"/>
+<rect class="k" x="248" y="44" width="200" height="14" fill="#48537E"/>
+<circle class="k" cx="272" cy="86" r="10" fill="#CC504B"/>
+<circle class="k" cx="272" cy="118" r="10" fill="#E8722A"/>
+<circle class="k" cx="272" cy="150" r="10" fill="#F5C542"/>
+<path class="g" d="M290 86h120M290 118h96M290 150h110" stroke="#C9D3E3"/>
+<path class="g" d="M290 86h120M290 118h96M290 150h110"/>
+<path class="g" d="M272 96v12M272 128v12" stroke="#1E2438"/>
+<path class="g" d="M420 78l8 8 14-16" stroke="#CC504B"/>
+<!-- patas de la pizarra -->
+<path class="g" d="M290 184l-14 84M406 184l14 84"/>
+
+<!-- jefe técnico con tableta, señalando la pizarra -->
+<path d="M196 268l2-56" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M196 268l2-56" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path d="M218 268l-4-56" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M218 268l-4-56" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M184 272h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M210 272h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M190 216l2-72 34-2 2 74Z" fill="#48537E"/>
+<path class="k" d="M196 212l2-58 22 0 2 58Z" fill="#9DB7E0"/>
+<path class="g" d="M206 160v44M216 160v44" stroke="#FBE9C8"/>
+<!-- brazo que señala el paso -->
+<path d="M226 154l24-28 16-6" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M226 154l24-28 16-6" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="266" cy="118" r="6" fill="#F2B48A"/>
+<path class="g" d="M270 116l10-2"/>
+<!-- otro brazo con la tableta -->
+<path d="M192 158l-10 32 14 4" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M192 158l-10 32 14 4" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<rect class="k" x="186" y="184" width="34" height="24" rx="3" fill="#1E2438"/>
+<rect class="k" x="190" y="188" width="26" height="16" fill="#E9EEF5"/>
+<!-- cabeza -->
+<circle class="k" cx="210" cy="132" r="12" fill="#F2B48A"/>
+<path class="k" d="M198 128a12 12 0 0 1 24 0l-4 2-4-4-6 4-6-1Z" fill="#7A4A2A"/>
+<circle cx="214" cy="134" r="1.6" fill="#1E2438"/>
+<circle cx="219" cy="134" r="1.6" fill="#1E2438"/>
+<path class="g" d="M214 140q4 2 6 0"/>
+
+<!-- cocinero del local con gorro, tomando nota -->
+<path d="M78 268l0-54" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M78 268l0-54" fill="none" stroke="#1E2438" stroke-width="9" stroke-linecap="round"/>
+<path d="M98 268l2-54" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M98 268l2-54" fill="none" stroke="#1E2438" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M66 272h24a5 5 0 0 0 0-10h-18Z" fill="#7A4A2A"/>
+<path class="k" d="M90 272h24a5 5 0 0 0 0-10h-18Z" fill="#7A4A2A"/>
+<path class="k" d="M72 218l0-70 34 0 2 70Z" fill="#FFF3D6"/>
+<path class="k" d="M78 216l2-40 20 0 2 40Z" fill="#CC504B"/>
+<path class="g" d="M84 160h14M84 170h14" stroke="#C9D3E3"/>
+<!-- brazos con la libreta -->
+<path d="M104 160l22 18-2 12" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M104 160l22 18-2 12" fill="none" stroke="#FFF3D6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M76 162l-8 26 20 2" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M76 162l-8 26 20 2" fill="none" stroke="#FFF3D6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="124" cy="190" r="6" fill="#C98B5E"/>
+<rect class="k" x="92" y="182" width="34" height="26" rx="2" fill="#E9EEF5"/>
+<path class="g" d="M98 190h22M98 198h16" stroke="#C9D3E3"/>
+<!-- cabeza con gorro de cocina -->
+<circle class="k" cx="90" cy="134" r="12" fill="#C98B5E"/>
+<path class="k" d="M78 128a12 12 0 0 1 24 0Z" fill="#FFF3D6"/>
+<path class="k" d="M76 128c-2-14 4-24 14-24s16 10 14 24Z" fill="#FFF3D6"/>
+<circle cx="94" cy="136" r="1.6" fill="#1E2438"/>
+<circle cx="100" cy="136" r="1.6" fill="#1E2438"/>
+<path class="g" d="M94 142q4 2 6 0"/>
+
+<!-- técnico escuchando, con la libreta -->
+<path d="M150 268l-2-54" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M150 268l-2-54" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path d="M168 268l0-54" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M168 268l0-54" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M138 272h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M160 272h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M144 218l0-70 32 0 0 70Z" fill="#48537E"/>
+<path class="k" d="M150 216l2-52 18 0 2 52Z" fill="#E8722A"/>
+<path class="g" d="M158 164v44M166 164v44" stroke="#FBE9C8"/>
+<path d="M146 164l-6 30" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round"/>
+<path d="M146 164l-6 30" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round"/>
+<path d="M176 164l6 30" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round"/>
+<path d="M176 164l6 30" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round"/>
+<circle class="k" cx="140" cy="196" r="6" fill="#F2B48A"/>
+<circle class="k" cx="182" cy="196" r="6" fill="#F2B48A"/>
+<circle class="k" cx="160" cy="134" r="12" fill="#F2B48A"/>
+<path class="k" d="M148 130a12 12 0 0 1 24 0Z" fill="#CC504B"/>
+<path class="k" d="M172 130h12l-2 4h-10Z" fill="#CC504B"/>
+<circle cx="163" cy="136" r="1.6" fill="#1E2438"/>
+<circle cx="169" cy="136" r="1.6" fill="#1E2438"/>
+<path class="g" d="M163 142q4 2 6 0"/>
+
+<!-- frases -->
+<text class="m" font-size="20" transform="rotate(-4 120 46)" x="20" y="46">Solución definitiva</text>
+<text class="m" font-size="16" transform="rotate(3 120 92)" x="30" y="94">Y tu equipo aprende</text>
+<text class="m" font-size="17" transform="rotate(-2 300 322)" x="196" y="326">Sin volver a la misma falla</text>
+</svg>

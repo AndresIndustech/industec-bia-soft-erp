@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360" width="480" height="360" role="img" aria-label="Ilustración: un técnico de INDUSTEC mide el compresor de una cámara fría con una pinza amperimétrica y compara la lectura con la gráfica de rendimiento en su tableta.">
+<style>
+  .k{stroke:#1E2438;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+  .g{stroke:#1E2438;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;fill:none}
+  .m{font-family:"Segoe Script","Bradley Hand","Comic Sans MS","Chalkboard SE",cursive;font-weight:700;fill:#1E2438}
+</style>
+<rect width="480" height="360" fill="#FBE9C8"/>
+<rect x="0" y="268" width="480" height="92" fill="#F6A23A"/>
+<path class="k" d="M0 268H480" fill="none"/>
+
+<!-- cámara fría con el compresor arriba -->
+<rect class="k" x="40" y="96" width="140" height="172" fill="#9DB7E0"/>
+<path class="k" d="M110 96V268" fill="none"/>
+<rect class="k" x="50" y="106" width="52" height="150" rx="4" fill="#E9EEF5"/>
+<rect class="k" x="118" y="106" width="52" height="150" rx="4" fill="#E9EEF5"/>
+<rect class="k" x="96" y="160" width="8" height="40" rx="4" fill="#1E2438"/>
+<rect class="k" x="116" y="160" width="8" height="40" rx="4" fill="#1E2438"/>
+<!-- unidad condensadora (rejilla) -->
+<rect class="k" x="52" y="54" width="116" height="42" fill="#C9D3E3"/>
+<path class="g" d="M60 62v26M72 62v26M84 62v26M96 62v26M108 62v26M120 62v26M132 62v26M144 62v26M156 62v26"/>
+<circle class="k" cx="60" cy="48" r="5" fill="#CC504B"/>
+<!-- cables al compresor -->
+<path class="g" d="M168 76h30v40" stroke="#1E2438"/>
+<!-- copos -->
+<path class="g" d="M84 220v16M78 224l12 8M90 224l-12 8" stroke="#48537E"/>
+
+<!-- tableta grande con la gráfica (a la derecha, en la mesa) -->
+<rect class="k" x="330" y="180" width="110" height="10" fill="#C9D3E3"/>
+<path class="g" d="M338 190V268M432 190V268"/>
+<rect class="k" x="342" y="110" width="88" height="70" rx="5" fill="#1E2438"/>
+<rect class="k" x="348" y="116" width="76" height="58" fill="#E9EEF5"/>
+<path class="g" d="M356 166h64M356 166V124" stroke="#C9D3E3"/>
+<path class="g" d="M358 158l14-10 12 6 10-16 12 10 10-20" stroke="#CC504B"/>
+<circle class="k" cx="416" cy="128" r="4" fill="#F5C542"/>
+
+<!-- técnico con la pinza amperimétrica en el compresor -->
+<path d="M226 268l4-58" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M226 268l4-58" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path d="M256 268l-8-58" fill="none" stroke="#1E2438" stroke-width="13" stroke-linecap="round"/>
+<path d="M256 268l-8-58" fill="none" stroke="#48537E" stroke-width="9" stroke-linecap="round"/>
+<path class="k" d="M214 272h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M248 272h24a5 5 0 0 0 0-10h-18Z" fill="#1E2438"/>
+<path class="k" d="M220 214l4-70 34-2 2 72Z" fill="#48537E"/>
+<path class="k" d="M226 210l4-58 20 0 2 58Z" fill="#E8722A"/>
+<path class="g" d="M236 156v44M246 156v44" stroke="#FBE9C8"/>
+<!-- brazo largo hacia el compresor con la pinza -->
+<path d="M226 150l-26-30-14-30" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M226 150l-26-30-14-30" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="186" cy="88" r="6" fill="#7A4A2A"/>
+<!-- pinza amperimétrica -->
+<rect class="k" x="176" y="60" width="16" height="26" rx="4" fill="#F5C542"/>
+<path class="g" d="M184 60c-14-8-14-26 0-30 14 4 14 22 0 30" stroke="#1E2438"/>
+<rect class="k" x="178" y="70" width="12" height="8" fill="#E9EEF5"/>
+<!-- otro brazo mirando la tableta pequeña -->
+<path d="M258 156l26 16 18-10" fill="none" stroke="#1E2438" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M258 156l26 16 18-10" fill="none" stroke="#48537E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<circle class="k" cx="302" cy="162" r="6" fill="#7A4A2A"/>
+<rect class="k" x="290" y="166" width="40" height="28" rx="3" fill="#1E2438"/>
+<rect class="k" x="294" y="170" width="32" height="20" fill="#E9EEF5"/>
+<path class="g" d="M298 184l8-6 6 4 10-8" stroke="#CC504B"/>
+<!-- cabeza con gorra -->
+<circle class="k" cx="242" cy="130" r="12" fill="#7A4A2A"/>
+<path class="k" d="M230 126a12 12 0 0 1 24 0Z" fill="#CC504B"/>
+<path class="k" d="M216 128h14l0 4H218Z" fill="#CC504B"/>
+<circle cx="238" cy="132" r="1.6" fill="#1E2438"/>
+<circle cx="244" cy="132" r="1.6" fill="#1E2438"/>
+<path class="g" d="M238 138q4 2 7 0"/>
+
+<!-- frases -->
+<text class="m" font-size="20" transform="rotate(-4 330 54)" x="238" y="54">Antes de que falle</text>
+<text class="m" font-size="16" transform="rotate(3 380 92)" x="300" y="92">Señales a tiempo</text>
+<text class="m" font-size="17" transform="rotate(-3 150 322)" x="60" y="324">Más vida útil</text>
+</svg>
