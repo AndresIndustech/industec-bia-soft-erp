@@ -824,6 +824,46 @@ nuevo (NOTAS_PARA_CESAR). Prohibido: recursos externos, `.htaccess` en la raíz,
 
 ---
 
+### T2.18 · Archivo clasificado por zona y franquicia, y el enlace con «pedir copia»
+
+**Pedido de Andrés del 2026-09-13:** que el archivo de órdenes se organice y se mantenga al día
+en `SALIDAS IA\ARCHIVO OTS INDUSTEC\<ZONA>\<CADENA>\` —por zona y por franquicia (KFC y las
+demás), **como se llevaba antes a mano en Google Drive**—, tanto para el histórico ya reorganizado
+como para lo que se va reclasificando, y que «el sistema publicado de archivos» (el Archivo de
+`ordenes.php` / `ot_archivo`, T2.14.4) lea y cargue esos PDF.
+
+**Lo que ya existía y no se repitió:** el árbol canónico (`D:\RESPALDOS\ORDENES DE
+TRABAJO\<año>\<módulo>\<zona>\<cadena>\`, T1.6/T2.4) **ya** clasifica por zona y cadena — es la
+misma información, solo que no está donde la administración la ve a diario (`RESPALDOS` no está
+sincronizado con Drive, decisión del cliente del 2026-09-04: el histórico no cabe). Y el Archivo
+publicado (T2.14.4) **ya** tiene el mecanismo de «pedir copia» (`ot_archivo_solicitudes`) para
+cuando alguien necesita un PDF que solo vive en la estación — lo único que faltaba era quién
+atendiera esas solicitudes. **No se tocó nada de T2.14/T2.15**, ambas ya cerradas y con sus
+baterías en verde: esta tarea es dos scripts nuevos que leen de lo que ya existe.
+
+| # | Subtarea | Qué hace | Verificación exacta |
+|---|---|---|---|
+| **T2.18.1** | `t2_18_clasificar_archivo.py` | Espeja `D:\RESPALDOS\ORDENES DE TRABAJO\*\*\<ZONA>\<CADENA>\*.pdf` a `SALIDAS IA\ARCHIVO OTS INDUSTEC\<ZONA>\<CADENA>\`, aplanando año y módulo (Andrés pidió dos niveles). Simula por defecto; `--ejecutar` copia de verdad, con copiar→verificar por hash→recién renombrar (I-4). Es la MISMA corrida para el histórico completo y para lo que `t1_7_ingesta.py`/`t2_4_normalizar_nuevas.py` van sumando al árbol canónico: no distingue viejo de nuevo, solo lo que falta o cambió. Un nombre con tamaño distinto al del canónico **nunca se sobreescribe** (divergente, al manifiesto); un PDF que el canónico ya no tiene se reporta como huérfano y **nunca se borra solo** (I-2/I-3). Ignora toda carpeta que empiece por `_` (T2.15.3) | `t2_18_pruebas.py` sobre un árbol sintético (no toca datos reales): simulación no escribe nada; ejecución real copia y aplana; ignora `_ORIGEN_BUZON`; segunda corrida da 0 copiados/100% al día; una divergencia de tamaño se reporta y NO se sobreescribe; un huérfano se reporta y NO se borra. **Corrido el 2026-09-13: 6/6 en verde** |
+| **T2.18.2** | `t2_18_atender_pedidos_copia.py` + `hostinger_ssh.scp_subir()` (nuevo, simétrico a `scp_bajar`) | Lee por SSH (mismo contrato de `hostinger_ssh.py`, nunca toca producción) las solicitudes de `ot_archivo_solicitudes` sin atender; ubica el PDF (1º en el clasificado de T2.18.1, 2º buscando por nombre ahí mismo, 3º en `ot_archivo.fuente_ruta`); si lo encuentra, lo sube por `scp` a `ordenes_pdf/` de **darkviolet únicamente** y corre `archivo_indexar_cli.php --solo-pdf`; recién entonces marca `atendido_en`. Si no lo encuentra en ningún lado, la deja pendiente y lo dice — nunca marca atendida a ciegas. Simula por defecto; `--limite` (20 por omisión) tapa un lote inesperado. **No es la decisión D2** (subir los 5 GB completos sigue pendiente de Andrés): esto solo sube, una por una, las copias que alguien pidió de verdad con el botón | Simulación (sin `--ejecutar`) corrida en vivo el 2026-09-13 desde el PC contra darkviolet (solo lectura: ninguna fila se tocó): **1 solicitud real sin atender** (`OT-2503-K146-10354374-CNLJ`, origen CORREO, sin `fuente_ruta` — nunca se descargó del buzón, así que hoy no se puede completar ni con este script; queda para `t2_11_informes_ot.py` o pedirlo al local). El guardián de escritura de `hostinger_ssh.py` (ya probado en T2.15) impide que este script toque producción aunque se intentara |
+
+**Qué NO hace esta tarea, a propósito:** no decide D2 (subir el histórico completo a Hostinger),
+no cambia `saneamiento_nocturno.py` (T2.15, ya cerrada y verificada — añadir un paso ahí es una
+línea, pero se deja para cuando la estación confirme que el orden no le estorba a su ventana
+nocturna), y no borra nada: divergentes y huérfanos se reportan para que una persona decida.
+
+| Autónomo | Requiere aprobación de Andrés | Prohibido |
+|---|---|---|
+| Correr `t2_18_clasificar_archivo.py --ejecutar` sobre el árbol canónico real; correr `t2_18_atender_pedidos_copia.py --ejecutar` (sube solo lo que alguien ya pidió con el botón, a darkviolet) | Subir el histórico completo a Hostinger sin que medie «pedir copia» (sigue siendo D2); agregar el clasificador a `saneamiento_nocturno.py` | Tocar producción (`yellow-elephant`); borrar un divergente o un huérfano sin que Andrés lo pida en el momento (I-2/I-3) |
+
+**Pendiente de la estación** (esto no se pudo ejecutar desde el PC: `D:\RESPALDOS` y
+`D:\INDUSTECH IA` no existen aquí — ver §11b):
+1. `git merge` de la rama de esta tarea (ver el commit de cierre) y confirmar que `t2_18_pruebas.py` sigue en verde ahí.
+2. `python scripts/t2_18_clasificar_archivo.py` (simulación) para ver el conteo real contra los 7.070 del corpus, y recién entonces `--ejecutar`. Con ~5 GB por copiar, revisar antes que el Drive de INDUSTEC tenga espacio o que la sincronización de `SALIDAS IA` esté pausada mientras corre la primera carga completa (I-2: nunca hay que dejar a medias un archivo dentro de una carpeta sincronizada — este script sí hace copiar→verificar→recién-entonces-mover, pero un RAR de 1,5 GB ya mostró que el enlace a Drive de esa carpeta es real).
+3. Con eso corrido, `python scripts/t2_18_atender_pedidos_copia.py --ejecutar` para la única solicitud real pendiente y las que se acumulen; considerar si conviene una Tarea programada aparte (no la del saneamiento) para que corra cada hora, como el propio `archivo_indexar_cli.php` sugiere para el cron de hPanel.
+4. Decidir si conviene sumar el paso 2 al final de `saneamiento_nocturno.py` (una llamada, sin tocar lo demás) para que el clasificado quede al día solo, o si se prefiere seguir corriéndolo aparte.
+
+---
+
 # FASE 3 · DECISIÓN — Noviembre
 
 > **Cierra con:** tablero de decisión y equipo capaz de operarlo por su cuenta.
@@ -984,12 +1024,18 @@ cd "D:\INDUSTECH IA"          # en la estación; en el PC de Andrés, la copia d
 git fetch origin && git status --short && git log --oneline -5
 git rev-list --left-right --count master...origin/master     # 0  0 = al día
 git log --oneline master..origin/pc/pulido-2026-09-12 | wc -l   # > 0: el pulido del 12/13-sep NO está fusionado todavía
+git log --oneline master..origin/pc/archivo-zona-franquicia-2026-09-13 | wc -l   # > 0: T2.18 tampoco
 ```
 
-**Al 2026-09-13 el trabajo vive en la rama `pc/pulido-2026-09-12`** (diez
-commits sobre `master`, empujados). En la estación, lo primero es fusionarla:
-`git merge origin/pc/pulido-2026-09-12`. Sin eso, la estación despliega código
-viejo sobre el sitio de pruebas y corre scripts que ya no existen con ese contrato.
+**Al 2026-09-13 el trabajo vive en dos ramas, ambas empujadas y sin fusionar:**
+`pc/pulido-2026-09-12` (T2.14, T2.15, T2.17 — diez commits sobre `master`) y,
+encima de esa, `pc/archivo-zona-franquicia-2026-09-13` (T2.18, más chica: dos
+scripts nuevos y sus pruebas, nada de PHP ni de `app/publico/`). En la
+estación, lo primero es fusionar las dos: `git merge origin/pc/pulido-2026-09-12`
+y después `git merge origin/pc/archivo-zona-franquicia-2026-09-13`. Sin eso, la
+estación despliega código viejo sobre el sitio de pruebas y corre scripts que
+ya no existen con ese contrato — y no tiene el clasificador del archivo por
+zona/franquicia que pidió Andrés el 13.
 
 **No te fíes del disco.** El 2026-09-11 se escribió en este plan que la 007
 estaba pendiente y que `sw.js` iba en v3, cuando existía una rama **29 commits
@@ -1026,6 +1072,15 @@ en `desarrollo/sistema_ots/piloto/` (T2.14.8). Todo en la rama
 `pc/pulido-2026-09-12`, empujada. **Lo que falta ya no es construir: es
 fusionar la rama en la estación, hacer la lista de `ANTES_DE_EMPEZAR.md` y
 empezar el piloto real en UIO (I-8), que depende de Andrés.**
+
+**Sumado el 2026-09-13, en `pc/archivo-zona-franquicia-2026-09-13` (T2.18):**
+el archivo de OT ahora también se puede ver por zona y franquicia en
+`SALIDAS IA\ARCHIVO OTS INDUSTEC\`, como se llevaba antes en Drive, generado
+por script y no a mano; y hay un script que atiende de verdad los «pedir
+copia» del Archivo publicado subiendo el PDF puntual a darkviolet. Código y
+pruebas están hechos y en verde; lo que falta es que la estación fusione la
+rama y lo corra contra `D:\RESPALDOS` real (acción **F** de abajo) — desde el
+PC no se pudo, porque esa carpeta no existe aquí.
 
 ### Antes de dar nada por verificado
 
@@ -1085,6 +1140,13 @@ MySQL, las cinco URL por servicio de la web (SEO) y lo que César responda de
 de vuelta, y la parte B de `LEEME_ACCESO_HOSTINGER.md` con lo que se hace en
 producción **en bloque y una sola vez**. `t2_14_sembrar_correlativos.py
 --ejecutar` va ahí, con el sistema viejo detenido; en ensayo ya dio los números.
+
+**F. Fusionar y correr T2.18 en la estación** — *autónomo, no depende del
+piloto.* `git merge origin/pc/archivo-zona-franquicia-2026-09-13`, después
+`t2_18_clasificar_archivo.py` (simulación primero) y `t2_18_atender_pedidos_copia.py`
+para la solicitud real que ya está pendiente. El detalle completo, con lo que
+no se pudo probar desde el PC por no tener acceso a `D:\RESPALDOS`, está en la
+tarea T2.18 más arriba, sección «Pendiente de la estación».
 
 *Lo que en la versión anterior de esta sección eran las acciones A a D (las 4
 comprobaciones rotas de `prueba_48h.php`, `prueba_offline.mjs`, la copia
