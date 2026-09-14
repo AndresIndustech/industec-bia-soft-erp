@@ -194,6 +194,22 @@ def scp_bajar(remoto: str, local: Path, timeout: int = 900, env: dict | None = N
                        f"  stderr: {(r.stderr or '').strip()[:400]}")
 
 
+def scp_subir(local: Path, remoto: str, timeout: int = 900, env: dict | None = None) -> None:
+    """Sube UN archivo al servidor. Simétrico a `scp_bajar`: una sesión por
+    archivo, pensado para lotes chicos (p. ej. los PDF que alguien pidió por
+    "pedir copia" en el Archivo, no un volcado masivo). `remoto` es relativo al
+    home del usuario, igual que en el resto de este módulo."""
+    local = Path(local)
+    if not local.is_file():
+        raise ErrorSsh(f"no existe el archivo local a subir: {local}")
+    cmd = (["scp", "-P", str(PUERTO)] + opciones_base() +
+           [local.as_posix(), f"{destino(env)}:{remoto}"])
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    if r.returncode != 0:
+        raise ErrorSsh(f"scp fallo (codigo {r.returncode}) subiendo {local.name}\n"
+                       f"  stderr: {(r.stderr or '').strip()[:400]}")
+
+
 def lineas_get(pares) -> list[str]:
     """Las lineas `-get -p` de un lote sftp.
 
