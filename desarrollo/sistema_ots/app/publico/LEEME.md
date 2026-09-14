@@ -1,60 +1,54 @@
-# Captura de OT — formulario único (v1 para revisión)
+# `publico/` — lo que se sirve en `public_html/ot/`
 
-**Qué es:** la primera de las tres superficies del sistema nuevo
-([`DISENO_APP_OTS.md`](../../../DISENO_APP_OTS.md) §2) — la que usan los técnicos
-en el celular. Reemplaza a los **tres** formularios que hoy conviven en
-producción (`ot_normal_v3`, `ot_mantenimiento`, `ot_normal_otros`) por uno solo,
-según [`ESPECIFICACION_OT_UNICA.md`](../../../ESPECIFICACION_OT_UNICA.md).
+> Al día el 13 de septiembre de 2026 (T2.14.8). Son las tres superficies de [`DISENO_APP_OTS.md`](../../../DISENO_APP_OTS.md) §2 en una sola carpeta: la **app del técnico** (celular, PWA), la **mesa de servicio** (escritorio: administración, dirección, jefes de zona) y los **extremos** que consultan las pantallas y la estación. Sin framework: HTML, CSS y JS a mano, PHP 8.2 detrás.
 
-**Estado:** v1 **para revisar la interfaz**. Valida y arma el resumen; todavía
-**no** persiste en base, **no** genera PDF y **no** envía correo. Eso es
-T2.1.1–T2.1.6 y necesita la migración `003` aplicada.
+## La app del técnico (celular)
+
+| Archivo | Qué hace |
+|---|---|
+| `index.html` + `app.js` + `guia.js` | El formulario único por pasos: correctivo, preventivo u otro proveedor; el caso elegido de «mis órdenes» prellena local, equipo y tipo; administrador del local de los ya ingresados (`locales_admin`); «Equipo nuevo / no está en la lista» (`equipos_propuestos`); diagnóstico pre-redactado y repuestos estructurados; fotos, novedades, satisfacción, firma; revisar y enviar |
+| `reglas.js` + `reglas.fixture.mjs` | Las reglas del formato único del lado del navegador, atadas al fixture |
+| `cola.js` + `offline.js` + `sw.js` + `manifest.json` | La PWA: la orden se guarda entera en IndexedDB antes del primer intento y sale sola al reconectar (idempotente por UUID); `sw.js` sirve el armazón cache-first (**subir `VERSION` en cada despliegue de la app**; hoy `ot-industec-v10`) |
+| `mis.php` | La bandeja: Pendientes · Esperando · Atendidas (con el PDF) · Avisos (`nucleo/Avisos.php`); barra inferior |
+| `foto.php`, `envio.php`, `yo.php` | Recibe las fotos de una en una, recibe la orden (número, PDF, cola de correo; `Casos::atenderPorOrden`; resuelve el pendiente si la orden concluye), y la sesión del técnico |
+| `cronograma.html` + `cronograma.js` + `cronograma.css` + `cronograma.php` + `cronograma_accion.php` | El cronograma de preventivos por zona; kit, reagendar con motivo, cerrar, agendar (D15); enlaza al formulario prellenado |
+
+## La mesa de servicio (escritorio)
+
+| Archivo | Qué hace |
+|---|---|
+| `login.php`, `clave.php`, `salir.php` | Ingreso, cambio obligatorio de clave, cierre por POST; bloqueo de 15 min a los 5 fallos; sesión única con desplazamiento |
+| `panel.php` | «Lo que te toca ahora» por rol; para la administración, una columna por zona; cierre por falta de atención con confirmación (D5) |
+| `casos.php`, `asignacion.php` | El buzón de SAP con sus acciones (asignar, en revisión, derivar, veredicto, pedir seguimiento) y la asignación por bloques de zona con el equipo ordenado por carga |
+| `pendientes.php` | Repuestos y equipos sin concluir: el flujo D3 (solicitado → validado → registrado en SAP → veredicto de KFC → resuelto), hilo, insistencias, 48 h |
+| `novedades_visita.php` | Las novedades de las visitas y su decisión; registrar una desde la oficina |
+| `ordenes.php` + `pdf.php` | El Archivo de todas las zonas (`ot_archivo`), solo lectura para los cuatro roles (D1): ver, descargar, compartir con enlace firmado de 24 h, pedir copia |
+| `reportes.php` + `reporte_exportar.php` + `graficos.js` | El tablero por zona y mes, con Excel/PDF/PowerPoint (`nucleo/Reportes.php`, `nucleo/reporte_pdf.php`) |
+| `documentos.php` + `documento.php` + `documentos/.htaccess` | Aprendizaje: manuales, guías y comunicados con aprobación, versiones y acuses (D11) |
+| `equipos.php` | Los equipos nuevos propuestos por los técnicos: aprobar, rechazar, ya existía (D8) |
+| `usuarios.php`, `bitacora.php` | Cuentas por zona (crear, editar, nueva clave, ver actividad) y la bitácora con filtros y CSV |
+| `estilo.css`, `ui.js`, `busqueda.js`, `nucleo/Ui.php` | Un solo sistema de diseño para todas las pantallas; la barra y los avisos; el buscador por coincidencia parcial |
+
+## Los extremos y las herramientas de línea de órdenes
+
+| Archivo | Quién lo llama |
+|---|---|
+| `catalogos.php`, `novedades.php` (JSON del buzón, cada 30 s), `sync_casos.php` (la estación empuja los casos de SAP, firmado HMAC) | Las pantallas y la estación |
+| `aplicar_sql.php`, `verificar_esquema.php` | Migraciones (`../sql/`) y su comprobación |
+| `emitir_pendientes_cli.php`, `despachar_correo_cli.php` | Reemisión de PDF fallidos y despacho de la cola de correo (cron de hPanel al corte; hoy en modo PRUEBA nada sale) |
+| `archivo_indexar_cli.php`, `cronograma_importar_cli.php`, `purgar_cli.php`, `reconciliar_cli.php`, `alta_padron_cli.php` | La estación por SSH o el cron |
+| `minar.php` | Las consultas de detección sobre la bitácora |
+
+`instalar.php` y `alta_padron.php` son de instalación: no se despliegan.
 
 ## Correr en local
 
 ```bash
-cd "D:\INDUSTECH IA\desarrollo\sistema_ots\app\publico"
-"D:\SOFTWARE\PHP83\php.exe" -S 127.0.0.1:8021
+php -S 127.0.0.1:8021        # desde esta carpeta, con el PHP 8.2 portable o el de la estación
 ```
 
-Luego `http://127.0.0.1:8021/index.html`. El PHP local sirve
-[`catalogos.php`](catalogos.php), que lee los JSON que ya generó
-`t2_5_catalogos.py` en `SALIDAS IA\OTS\catalogos\` (100 locales, 1.173 activos,
-222 tipos, 19 técnicos).
+`catalogos.php` lee los JSON de `catalogos/` (aquí hay tres de ejemplo; los completos los publica `t2_5_catalogos.py`). Las pantallas con sesión necesitan la base: en local se usa `nucleo/config.ejemplo.php` contra una MariaDB propia.
 
-- `index.html?local=K146EC` — preselecciona un local (útil para revisar el
-  comportamiento en cascada).
-- `index.html?diag=1` — muestra en el pie si algún elemento se desborda del ancho.
+## Las reglas viven en tres lados
 
-## Archivos
-
-| Archivo | Qué hace |
-|---|---|
-| `index.html` | El formulario. Sin framework: se mantiene leyéndolo entero |
-| `estilo.css` | Lenguaje visual heredado **exacto** de los formularios de hoy (I-8) |
-| `reglas.js` | Las 30 reglas del formato único, del lado del navegador |
-| `reglas.fixture.mjs` | Corre el fixture compartido contra `reglas.js` |
-| `app.js` | Catálogos, listas en cascada, bloques repetibles, firma, validación |
-| `catalogos.php` | Sirve los catálogos (local: JSON de SALIDAS IA; producción: MySQL) |
-
-## Las reglas viven ahora en TRES lados — y el fixture las ata
-
-`reglas.js` (navegador) · `nucleo/Validacion.php` (servidor, **la que manda**) ·
-`agentes/scripts/t2_5_validacion.py` (ingesta e histórico). Los tres corren
-`pruebas/fixture_validacion.json`. Si uno se separa, el fixture lo delata:
-
-```bash
-node reglas.fixture.mjs
-"D:\SOFTWARE\PHP83\php.exe" ../pruebas/validacion_test.php
-cd ../../../agentes && .venv/Scripts/python.exe scripts/t2_5_validacion.py --fixture
-```
-
-Los tres deben decir **32/32**. Ninguna validación de cliente reemplaza a la del
-servidor (I-13): el navegador valida para que el técnico se entere en el momento,
-detrás de la freidora, y no después de subir 35 fotos.
-
-## Lo que cambia respecto al formulario de hoy
-
-Ver [`SALIDAS IA\OTS\REVISION_CAPTURA_v1.md`](../../../SALIDAS%20IA/OTS/REVISION_CAPTURA_v1.md)
-— campo por campo, qué se conserva, qué cambia y por qué, y las decisiones que
-faltan.
+`reglas.js` · `nucleo/Validacion.php` (la que manda) · `agentes/scripts/t2_5_validacion.py`. Los tres corren el mismo fixture (37 casos) — ver [`../LEEME.md`](../LEEME.md).

@@ -35,7 +35,7 @@
      v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
      recibe el numero de la orden. Con el armazon viejo el celular seguiria
      mandando la orden sin ellas. */
-const VERSION = 'ot-industec-v9';   // v9: la app del técnico entera (T2.14.1): index.html, app.js, cola.js, guia.js, offline.js, reglas.js y estilo.css (2026-09-13)
+const VERSION = 'ot-industec-v10';  // v10: estilo.css (§S3-§S5), cronograma.js/html/css que escribe y graficos.js accesible (2026-09-13)
 const ARMAZON = `${VERSION}-armazon`;
 const DATOS   = `${VERSION}-datos`;
 

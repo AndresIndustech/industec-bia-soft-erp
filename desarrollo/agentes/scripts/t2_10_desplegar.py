@@ -117,6 +117,8 @@ ARCHIVOS = [
     # comunicados con aprobación). `documento.php` es el único que sirve los
     # archivos de `documentos/`; su .htaccess niega el resto.
     "bitacora.php", "documentos.php", "documento.php", "documentos/.htaccess",
+    # T2.14.8: la confirmación de los equipos que los técnicos registran como nuevos (D8).
+    "equipos.php",
     # T2.14.5: los reportes por zona con exportación (Excel, PDF, PowerPoint) y
     # el cronograma que escribe.
     "reporte_exportar.php", "nucleo/Reportes.php", "nucleo/reporte_pdf.php", "cronograma_accion.php",

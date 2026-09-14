@@ -278,6 +278,21 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
           'El jefe de zona ya confirmó el diagnóstico y la vía. Falta anotar el número del requerimiento en SAP.',
           'pendientes.php?g=por_registrar', 'Registrar'];
   }
+  if ($esAdmin) {
+      // Equipos que un técnico registró como «nuevo / no está en la lista» (D8):
+      // ya se ofrecen en la lista del local, pero nadie los ha confirmado para
+      // el maestro. Sin la 009 la tabla no existe y la línea no aparece.
+      try {
+          $nEq = (int) ((Db::uno("SELECT COUNT(*) AS n FROM equipos_propuestos WHERE estado = 'PROPUESTO'") ?: [])['n'] ?? 0);
+      } catch (Throwable $e) {
+          $nEq = 0;
+      }
+      if ($nEq > 0) {
+          $tareas[] = ['', $nEq, 'equipos nuevos registrados por los técnicos, por confirmar',
+              'Un técnico marcó «Equipo nuevo / no está en la lista» en una orden. Ya se ofrece en la lista de ese local; falta aprobarlo para el maestro, o rechazarlo con motivo.',
+              'equipos.php?est=PROPUESTO', 'Confirmar'];
+      }
+  }
   ?>
 
   <h2 style="margin-top:4px">Lo que te toca ahora</h2>

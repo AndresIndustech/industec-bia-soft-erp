@@ -137,6 +137,18 @@ if (empty($d['novedades']['cnlj'])) {
     $d['novedades']['cnlj'] = (int) Db::uno('SELECT novedad_id FROM novedades WHERE novedad_uuid = ?', [$uuid])['novedad_id'];
 }
 
+// ---------------------------------------------------------- 4b. equipo propuesto
+// Un equipo «nuevo / no está en la lista» registrado por el técnico A (D8,
+// T2.14.8), para probar equipos.php. El uuid empieza por 99990000- como los
+// avisos sintéticos: deshacer_prueba.php lo borra por ese prefijo. Idempotente:
+// si ya existe vuelve a PROPUESTO para que la verificación lo decida de nuevo.
+Db::ejecutar("INSERT INTO equipos_propuestos
+                  (equipo_uuid, local_codigo, zona, tipo, marca, modelo, serie, propuesto_por)
+              VALUES ('99990000-0000-4000-8000-0000000000e1', 'G007EC', 'UIO',
+                      'PRUEBA: equipo de prueba (no es real)', 'MARCA DE PRUEBA', 'MODELO-1', 'SN-PRUEBA',
+                      (SELECT usuario_id FROM usuarios WHERE usuario = 'tec_prueba_uio_a'))
+              ON DUPLICATE KEY UPDATE estado = 'PROPUESTO', revisado_por = NULL, revisado_en = NULL, nota = NULL");
+
 // ------------------ 5. los técnicos de prueba en el padrón (con copia de antes)
 $tj = 'catalogos/tecnicos.json';
 if ($d['tecnicos_json'] === null) {

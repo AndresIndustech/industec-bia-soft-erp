@@ -1,6 +1,6 @@
 # App de gestión de INDUSTEC — roles, módulos y orden de construcción
 
-**Fecha:** 2026-09-08 · **Decide:** Andrés Basantes · **Estado:** propuesta para revisión
+**Fecha:** 2026-09-08 · **Decide:** Andrés Basantes · **Estado:** **ejecutado** (T2.12 a T2.14, del 2026-09-09 al 2026-09-13; es el diseño de referencia, no una propuesta). Lo que dice aquí «sin desplegar», «propuesta» o «HTTP 200 sin autenticación» describe el 2026-09-08: el PDF y los JSON cortan con 403 desde ese mismo día, y todo lo de abajo está en el sitio de pruebas. Lo vigente: `ESTADO.md` §1b y `PLAN_INDUSTEC.md` §T2.14 (decisiones D1–D16). El paquete del piloto: `desarrollo/sistema_ots/piloto/`.
 **Complementa:** [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) (las definiciones de KPI ya cerradas en §T2.2 se reusan, no se redefinen) y [`ARQUITECTURA_SISTEMA_OTS.md`](ARQUITECTURA_SISTEMA_OTS.md).
 
 ---

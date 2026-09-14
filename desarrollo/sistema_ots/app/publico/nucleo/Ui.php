@@ -67,6 +67,10 @@ final class Ui
         ['reportes.php',    'reportes.ver',       'Reportes',    null,        null],
         ['documentos.php',  'documentos.ver',     'Aprendizaje', null,        ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO']],
         ['usuarios.php',    ['usuarios.gestionar', 'usuarios.operativos'], 'Usuarios', null, null],
+        /* Los equipos que los técnicos registran como nuevos desde una orden (D8):
+           la administración los confirma aquí. El contador es lo que falta por
+           decidir. */
+        ['equipos.php',     'equipos.aprobar',    'Equipos nuevos', 'equipos', ['SUPERADMIN', 'ADMIN']],
         ['bitacora.php',    'bitacora.ver',       'Bitácora',    null,        ['SUPERADMIN', 'ADMIN']],
     ];
 
@@ -77,6 +81,8 @@ final class Ui
         'usuarios.php', 'index.html',
         // T2.14.4 (2026-09-13): el aprendizaje y la bitácora ya existen.
         'documentos.php', 'bitacora.php',
+        // T2.14.8 (2026-09-13): la confirmación de los equipos propuestos (D8).
+        'equipos.php',
     ];
 
     /** El técnico usa su bandeja, no el buzón de escritorio: son otra cosa. */

@@ -2,9 +2,13 @@
 -- 007 — Pendientes técnicos (el equipo que quedó sin concluir), su hilo de
 --       insistencias, y la captura de órdenes llenadas sin señal.
 --
--- ESTADO: ESCRITA, NO APLICADA. Cambia el esquema, así que requiere aprobación
--- explícita antes de correrla contra `u671729428_ots`. Se aplica con
--- `aplicar_sql.php` y se comprueba con las consultas del final.
+-- ESTADO: APLICADA en el sitio de pruebas (`u671729428_ots`, darkviolet) el
+-- 2026-09-11 con `aplicar_sql.php`, con respaldo previo en ~/respaldos y las 20
+-- comprobaciones del pie en verde (`verificar_007.php`); corrida dos veces sin
+-- duplicar. La 009 (2026-09-13) le añadió al ENUM de `pendientes` los estados
+-- del flujo con KFC (SOLICITADO, VALIDADO_JEFE, REGISTRADO_SAP, ESPERA_KFC,
+-- REPUESTO_ENVIADO, TALLER_INDUSTEC, OTRO_PROVEEDOR) al final, sin mover los de
+-- aquí. En producción (`yellow-elephant`) no existe: entra con el corte (T2.16).
 --
 -- ============================================================================
 -- LA REGLA DE NEGOCIO QUE ESTE ARCHIVO CONVIERTE EN TABLAS

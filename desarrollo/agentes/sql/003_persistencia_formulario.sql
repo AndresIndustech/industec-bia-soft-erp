@@ -1,8 +1,16 @@
 -- ============================================================================
 -- 003 - Preparar la base para que el formulario escriba directo (T2.1.1/T2.1.5)
 --
--- >>> NO APLICADA. Requiere aprobacion explicita: toca el esquema de la base
--- >>> de produccion (industec-escritura-mysql). Aqui esta razonada y lista.
+-- >>> ESTADO AL 2026-09-13: SUPERADA EN PARTE, NO APLICADA EN LA ESTACION.
+-- >>> La orden ya no nace en la base de la estacion sino en Hostinger: las
+-- >>> secciones 3, 4 y 5 (correlativos con reserva atomica, su semilla y la
+-- >>> cola de correo) las creo `app/sql/008_emision.sql` en `u671729428_ots`
+-- >>> el 2026-09-11, con otra forma (`correlativos.serie = 'MODULO:ZONA'`), y
+-- >>> la semilla real la escribe `t2_14_sembrar_correlativos.py` al corte.
+-- >>> Lo que sigue vigente para la estacion es la seccion 1 (`fuente` con
+-- >>> FORMULARIO_WEB, para cuando la ingesta tome filas de la app y no solo
+-- >>> PDF: T2.16 paso 7) y la 6 (vigencia de tecnicos, aplicada por la 004).
+-- >>> Se aplica con aprobacion explicita, con el corte.
 --
 -- Hay que aplicarla ANTES de la primera escritura en vivo del formulario.
 -- Hacerlo despues obliga a migrar filas ya escritas.

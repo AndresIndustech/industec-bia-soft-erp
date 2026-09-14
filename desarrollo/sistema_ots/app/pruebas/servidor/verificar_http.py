@@ -362,6 +362,37 @@ def main():
 
     (SALIDA / "resultado_http.json").write_text(json.dumps(resultados, ensure_ascii=False, indent=1), encoding="utf-8")
     fallas = [r for r in resultados if not r["ok"]]
+    print("\n== S8 · T2.14.8 · equipos nuevos propuestos por los técnicos (equipos.php) ==")
+    EQ = "99990000-0000-4000-8000-0000000000e1"          # lo siembra preparar_prueba.php
+    ejecutar("UPDATE equipos_propuestos SET estado = 'PROPUESTO', revisado_por = NULL, revisado_en = NULL, nota = NULL WHERE equipo_uuid = ?", [EQ])
+    st, cab, cuerpo = s["tec_prueba_uio_a"].pedir("equipos.php")
+    anotar("S8", "técnico: equipos.php → 403", st == 403, st, 403)
+    st, cab, cuerpo = s["jefe_prueba_uio"].pedir("equipos.php")
+    anotar("S8", "jefe de zona: equipos.php → 403", st == 403, st, 403)
+    st, cab, cuerpo = s["admin_prueba"].pedir("equipos.php?est=PROPUESTO")
+    anotar("S8", "administración: equipos.php lista el equipo de prueba «por confirmar»",
+           st == 200 and EQ in cuerpo and "por confirmar" in cuerpo and not [e for e in ERRORES_PHP if e in cuerpo],
+           f"{st} · uuid {'sí' if EQ in cuerpo else 'no'} · {len(cuerpo)} B")
+    st, cab, cuerpo = s["admin_prueba"].pedir("equipos.php", form={"accion": "aprobar", "uuid": EQ, "csrf": None})
+    anotar("S8", "administración: aprobar sin CSRF → 403", st == 403, st, 403)
+    st, cab, cuerpo = s["admin_prueba"].pedir("equipos.php", form={"accion": "rechazar", "uuid": EQ, "nota": ""})
+    fila = sql("SELECT estado FROM equipos_propuestos WHERE equipo_uuid = ?", [EQ])
+    anotar("S8", "administración: rechazar sin motivo no cambia el estado",
+           st in (302, 303) and bool(fila) and fila[0]["estado"] == "PROPUESTO", f"{st} · {fila}")
+    st, cab, cuerpo = s["admin_prueba"].pedir("equipos.php", form={"accion": "aprobar", "uuid": EQ})
+    fila = sql("SELECT estado, revisado_por FROM equipos_propuestos WHERE equipo_uuid = ?", [EQ])
+    bit = sql("SELECT COUNT(*) AS n FROM bitacora WHERE accion = 'EQUIPO_APROBAR' AND referencia = ? AND exito = 1", [EQ])
+    anotar("S8", "administración: aprobar → APROBADO, con quién y bitácora EQUIPO_APROBAR",
+           st in (302, 303) and bool(fila) and fila[0]["estado"] == "APROBADO" and fila[0]["revisado_por"] is not None and int(bit[0]["n"]) >= 1,
+           f"{st} · {fila} · bitácora {bit}")
+    st, cab, cuerpo = s["admin_prueba"].pedir("equipos.php", form={"accion": "rechazar", "uuid": EQ, "nota": "ya estaba decidido"})
+    fila = sql("SELECT estado FROM equipos_propuestos WHERE equipo_uuid = ?", [EQ])
+    anotar("S8", "administración: decidir dos veces no pisa la primera decisión",
+           st in (302, 303) and bool(fila) and fila[0]["estado"] == "APROBADO", f"{st} · {fila}")
+    st, cab, cuerpo = s["admin_prueba"].pedir("panel.php")
+    anotar("S8", "administración: el panel abre sin error con la tarea de equipos nuevos",
+           st == 200 and not [e for e in ERRORES_PHP if e in cuerpo], f"{st} · {len(cuerpo)} B")
+
     print(f"\n{len(resultados) - len(fallas)} de {len(resultados)} comprobaciones pasan; {len(fallas)} fallan")
     return 1 if fallas else 0
 

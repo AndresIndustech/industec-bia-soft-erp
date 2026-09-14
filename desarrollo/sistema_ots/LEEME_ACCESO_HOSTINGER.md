@@ -1,273 +1,113 @@
-# Acceso a Hostinger y despliegue de los parches
+# Acceso a Hostinger: lo vigente para el sitio de pruebas, y lo diferido al corte
 
-Guía operativa para Andrés. Cada paso trae **cómo se verifica que salió bien** —
-no "revisar que esté bien", sino una comprobación con respuesta objetiva.
+> Reescrito el 13 de septiembre de 2026 (T2.14.8). Antes era una guía de ocho pasos escrita el 6 de septiembre, cuando SSH no existía y el sistema nuevo no estaba desplegado; describía como pendiente lo ya hecho y como inmediato lo que se difirió a producción. Ahora tiene **dos partes que no se mezclan**: la **A**, lo que se usa hoy contra el sitio de pruebas, y la **B**, lo que solo se hace con el corte y con la autorización de Andrés en el momento.
 
-**Cuenta:** `u671729428` · **Sistema de OTs en producción:** `yellow-elephant-166233.hostingersite.com`
-(carpeta `ot/produccion/`; no se toca, regla 9) · **Sitio de pruebas del sistema nuevo:**
-`darkviolet-armadillo-872352.hostingersite.com` (`darkorchid` se descartó el 2026-09-08)
-
-> **Actualizado el 2026-09-10.** SSH ya está habilitado y en uso: `u671729428@82.25.73.181`,
-> puerto 65002, con una llave por equipo: la de la estación es `desarrollo\agentes\config\clave_hostinger`
-> (en hPanel, «industec») y la del PC de Andrés, `C:\Users\andre\.ssh\industec_hostinger_pc` («PC Andres»).
-> No hace falta generar otra en la estación: los pasos 1 y 2 quedan como referencia. `crontab`
-> no existe por SSH: los cron se revisan en hPanel → Avanzado → Cron Jobs. Donde los pasos 7.x
-> dicen `ot/pruebas/`, hoy es `ot/produccion/`. Los pasos 6 y 7 tocan producción: los ejecuta
-> Andrés. El servidor corre PHP 8.2.33.
+**Cuenta:** `u671729428` · **SSH:** `82.25.73.181`, puerto **65002** (no el 22) · **Producción** (formularios viejos): `yellow-elephant-166233.hostingersite.com`, carpeta `ot/produccion/` (**solo lectura**, regla 9 del `CLAUDE.md`) · **Sitio de pruebas** (el sistema nuevo y la web corporativa): `darkviolet-armadillo-872352.hostingersite.com`, carpeta `public_html/ot/` · PHP **8.2.33**, MariaDB 11.8, Hostinger Premium.
 
 ---
 
-## Paso 0 · Comprobar que el pipeline está sano (30 segundos, sin tocar nada)
+# Parte A · Lo vigente: el sitio de pruebas
 
-```bash
-cd "D:\INDUSTECH IA\desarrollogentes"
-.venv/Scripts/python.exe scripts/t2_4_pruebas.py
-```
+## A.1 Las llaves, una por equipo
 
-Trece comprobaciones sobre los puntos donde esto se rompería en silencio: nombres
-con espacios, archivos sin hash, líneas de error coladas como archivos, y la
-compuerta que impide borrar algo sin copia local. **No toca Hostinger ni escribe
-en la base.** Si alguna falla, no sigas.
+SSH está habilitado desde el 9 de septiembre de 2026 con **una llave por equipo**, registradas en hPanel → Avanzado → Acceso SSH → Claves SSH:
 
----
-
-## Paso 1 · Habilitar SSH (5 minutos, en hPanel)
-
-SSH viene **desactivado por defecto**. Sin él no hay descarga automática ni purga verificada.
-
-1. hPanel → el sitio → **Avanzado → Acceso SSH** → activar.
-2. Anota lo que muestra: **IP del servidor**, **puerto** (Hostinger usa `65002`,
-   no el 22) y **usuario** (`u671729428`).
-3. En la misma página, pestaña **Claves SSH** → *Añadir nueva clave*.
-
-En la estación, generar el par de claves (la privada nunca sale de este PC):
-
-```bash
-ssh-keygen -t ed25519 -f "$HOME/.ssh/industec_hostinger" -C "estacion-industec" -N ""
-cat "$HOME/.ssh/industec_hostinger.pub"
-```
-
-Pega el contenido de `.pub` en hPanel. **La privada no se sube a ningún lado ni
-entra a git.**
-
-**Verificación:** este comando debe imprimir la ruta del home y nada más.
-
-```bash
-ssh -i ~/.ssh/industec_hostinger -p 65002 -o BatchMode=yes u671729428@<IP> "pwd && sha256sum --version | head -1"
-```
-
-Si pide contraseña, la clave no quedó registrada. Si responde `pwd` y la versión
-de `sha256sum`, está listo — y de paso queda confirmado que el servidor tiene la
-herramienta con la que se verifican los hashes.
-
----
-
-## Paso 2 · Guardar las credenciales en `config/.env`
-
-Añade estas cinco líneas al final de `D:\INDUSTECH IA\desarrollo\agentes\config\.env`
-(ese archivo está fuera de git por `.gitignore`; verifícalo con `git check-ignore -v`):
-
-```ini
-HOSTINGER_USER=u671729428
-HOSTINGER_HOST=<la IP que muestra hPanel>
-HOSTINGER_PORT=65002
-HOSTINGER_DOCROOT=/home/u671729428/domains/yellow-elephant-166233.hostingersite.com/public_html
-HOSTINGER_SSH_KEY=C:/Users/indus/.ssh/industec_hostinger
-```
-
-**Verificación:**
-
-```bash
-cd "D:\INDUSTECH IA\desarrollo\agentes"
-.venv/Scripts/python.exe scripts/t2_4_sync_hostinger.py --inventario
-```
-
-Debe listar los 5 módulos con su conteo de PDFs. **No descarga nada.** Si un
-módulo da error de ruta, la que está mal es `HOSTINGER_DOCROOT`.
-
----
-
-## Paso 3 · Antes que nada: revisar el cron
-
-Esta es la comprobación más urgente de todas. `otras_funcionalidades/cleanup.php`
-borra **todo** `uploads/` y `registros/` sin filtro de antigüedad y sin verificar
-que exista copia. Si estuviera en un cron, puede dispararse esta noche.
-
-```bash
-ssh -i ~/.ssh/industec_hostinger -p 65002 u671729428@<IP> "crontab -l"
-```
-
-Y en hPanel → **Avanzado → Cron Jobs**.
-
-- **Si `cleanup.php` NO aparece:** perfecto, no hay urgencia. Igual conviene
-  **borrar el archivo** para que nadie lo programe por error más adelante.
-- **Si aparece:** desactívalo **hoy**, antes de la primera sincronización.
-  El plan Premium solo trae respaldo **semanal** (el diario es un add-on de pago),
-  así que un disparo equivocado se lleva hasta 7 días de OTs sin red debajo.
-
----
-
-## Paso 4 · Primera descarga completa
-
-```bash
-cd "D:\INDUSTECH IA\desarrollo\agentes"
-.venv/Scripts/python.exe scripts/t2_4_sync_hostinger.py
-```
-
-Baja los ~1.952 PDFs (~1,41 GB) a `D:\RESPALDOS\_ORIGEN_SISTEMA\`, verificando
-cada uno por SHA-256 contra el hash que calcula el propio servidor. Un archivo
-que no cuadra no entra al espejo: va a `_cuarentena_hash\`.
-
-**Verificación — las tres cifras deben cuadrar:**
-
-```bash
-.venv/Scripts/python.exe scripts/t2_4_sync_hostinger.py --inventario
-```
-
-En la segunda corrida, `bajados` debe dar **0** y `ya verificados` debe igualar
-al conteo remoto. Si no, algo falló y **la purga no debe correrse**.
-
----
-
-## Paso 5 · Promover al árbol canónico y meterlo a la base
-
-```bash
-.venv/Scripts/python.exe scripts/t2_4_normalizar_nuevas.py            # simula
-.venv/Scripts/python.exe scripts/t2_4_normalizar_nuevas.py --ejecutar # copia
-.venv/Scripts/python.exe scripts/t1_7_ingesta.py                      # a la base
-```
-
-Probado en seco contra los 1.952 nombres reales: **resuelve el 98,4%**.
-Los 31 que no, con motivo escrito en `SALIDAS IA\OTS\NORMALIZACION_*.csv`:
-
-| No resuelto | Cuántos | Por qué |
+| Equipo | Llave privada | Nombre en hPanel |
 |---|---|---|
-| Envíos con POST vacío | 22 | No son órdenes de trabajo: son los `OT-0023---.pdf` |
-| Módulo `ot_normal_otros` | 6 | No captura zona ni aviso; hay que decidir si entra a la base |
-| Local ilegible | 3 | `RestauranteElvita`, `MENESTRASDELNEGRO`, `kh073` — decide una persona |
+| La estación de INDUSTEC | `desarrollo\agentes\config\clave_hostinger` (fuera de git) | «industec» |
+| El PC de Andrés | `C:\Users\andre\.ssh\industec_hostinger_pc` | «PC Andres» |
+
+Los scripts de la estación las resuelven solos (`hostinger_ssh.py`: `INDUSTEC_LLAVE_SSH` en el entorno o `config/clave_hostinger`); las pruebas y el desplegador, con `INDUSTEC_LLAVE_SSH`. **La privada no se copia a otro equipo ni entra a git.** Si se necesita un tercer equipo, se genera otro par y se registra otra llave; no se comparte una.
+
+**Comprobación** (desde cualquiera de los dos):
+
+```bash
+ssh -i <llave> -p 65002 -o BatchMode=yes u671729428@82.25.73.181 "pwd && php -v | head -1"
+```
+
+Debe imprimir el home y `PHP 8.2.33`. Desde la estación: `.venv\Scripts\python.exe scripts\hostinger_ssh.py --probar`.
+
+`crontab` no existe por SSH: los cron se ven y se programan en hPanel → Avanzado → Cron Jobs (hoy no hay ninguno del sistema nuevo).
+
+## A.2 Qué hay en el servidor y qué no se toca
+
+```
+~/                                        el home; nada de aquí se sirve por web
+  respaldos/                              volcados, herramientas de prueba, claves_prueba.json (0600)
+  lib/ot/vendor/                          dompdf, PHPMailer, PhpSpreadsheet, PhpPresentation (composer)
+  domains/darkviolet-…/public_html/       la web corporativa (raíz) y…
+    ot/                                   el sistema nuevo (lo que hay en app/publico/)
+      nucleo/config.php                   credenciales y secretos: INTOCABLE, no viaja en despliegues
+      catalogos/, ordenes_pdf/, ordenes_fotos/, documentos/   datos: 403 por web, salen por PHP
+  domains/yellow-elephant-…/public_html/ot/produccion/        el sistema viejo: SOLO LECTURA
+```
+
+Reglas que hacen cumplir las herramientas: el desplegador aborta si el destino nombra `yellow-elephant`; `hostinger_ssh.py` rechaza cualquier escritura cuyo guion mencione el docroot de producción; nada lee ni pega el contenido de `config.php`; ningún correo sale de darkviolet (`emision_modo = PRUEBA`, cola `RETENIDO`).
+
+## A.3 Desplegar código
+
+```bash
+cd desarrollo/agentes
+set INDUSTEC_LLAVE_SSH=C:\Users\andre\.ssh\industec_hostinger_pc   # o la de la estación
+set INDUSTEC_SSH_USER=u671729428
+set PYTHONUTF8=1
+.venv/Scripts/python.exe scripts/t2_10_desplegar.py panel.php nucleo/Ui.php   # archivos concretos
+.venv/Scripts/python.exe scripts/t2_10_desplegar.py --todo                    # la lista blanca entera
+```
+
+Sube por SFTP, **verifica por hash** cada archivo en el disco del servidor y comprueba lo que la web entrega. Solo suben los archivos de la lista blanca `ARCHIVOS`; lo que no está ahí (CLI, `.sql`, herramientas de prueba) va por `scp`:
+
+```bash
+scp -P 65002 -i <llave> app/sql/010_x.sql u671729428@82.25.73.181:domains/darkviolet-armadillo-872352.hostingersite.com/public_html/ot/sql/
+scp -P 65002 -i <llave> app/pruebas/servidor/*.php u671729428@82.25.73.181:respaldos/
+```
+
+Si cambió algo de la app del técnico (`index.html`, `app.js`, `estilo.css`, `cola.js`…), **sube `VERSION` en `sw.js`**: sin eso el celular sigue sirviendo el armazón viejo desde su caché.
+
+## A.4 Migraciones
+
+```bash
+ssh … "cd domains/darkviolet-…/public_html/ot && php aplicar_sql.php sql/010_sesiones_sin_sesion.sql && php verificar_esquema.php"
+```
+
+`aplicar_sql.php` corre el archivo sentencia a sentencia y lo anota en `migraciones`; `verificar_esquema.php` comprueba bloque por bloque (007, 008, 009, 010) y termina en TODO OK. Antes de una migración que cambie el esquema: **volcado previo** (`t2_4_volcado_bd.py` desde la estación, o `mysqldump` por SSH a `~/respaldos/`). Las aplicadas al 13 de septiembre de 2026: 001 a 010 en darkviolet.
+
+## A.5 Probar contra el servidor
+
+`app/pruebas/servidor/LEEME.md`: `preparar_prueba.php` (en el servidor), las siete baterías `verificar_*.py` (desde el PC o la estación; 311 comprobaciones el 13 de septiembre), `capturar_pantallas.mjs`, y `deshacer_prueba.php` al terminar. Las claves de las cuentas de prueba viven solo en `~/respaldos/claves_prueba.json` y los scripts las leen por SSH.
+
+## A.6 Lo que la estación hace cada noche
+
+`t2_4_sync_hostinger.py` espeja el sistema viejo (solo lectura) y `ordenes_pdf/`, `ordenes_fotos/` del sitio de pruebas; `t2_4_volcado_bd.py` baja el volcado verificado de la base; `t2_15_exportar_archivo.py --empujar` publica el catálogo histórico en el Archivo. Todo dentro de `saneamiento_nocturno.py` (`desarrollo/agentes/scripts/SANEAMIENTO.md`). La **purga** del servidor no está en la cadena y exige dos copias y autorización del momento.
+
+## A.7 Comprobación rápida de que todo está sano (2 minutos)
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" https://darkviolet-armadillo-872352.hostingersite.com/ot/login.php            # 200
+curl -s -o /dev/null -w "%{http_code}\n" https://darkviolet-armadillo-872352.hostingersite.com/ot/catalogos/locales.json # 403
+curl -s -o /dev/null -w "%{http_code}\n" https://darkviolet-armadillo-872352.hostingersite.com/ot/nucleo/config.php    # 403
+ssh … "cd domains/darkviolet-…/public_html/ot && php verificar_esquema.php | tail -1"                                    # TODO OK
+```
 
 ---
 
-## Paso 6 · Purga nocturna (solo con autorización del momento)
+# Parte B · Diferido al corte (T2.16): producción se toca una sola vez, en bloque
 
-```bash
-.venv/Scripts/python.exe scripts/t2_4_purga_hostinger.py    # SIMULA, no borra
-```
+Decisión del 10 de septiembre de 2026: **`yellow-elephant` no se modifica durante el piloto**. Lo de abajo estaba en la guía anterior como pasos 6 y 7 «urgentes»; se hace **con el corte**, con respaldo previo del sitio y de la base, y cada paso con autorización de Andrés en el momento. El orden y los caminos de vuelta están en `PLAN_INDUSTEC.md` §T2.16.
 
-Lee el informe. Solo entonces, y solo si lo autorizas en ese momento:
+| # | Qué | Por qué se difirió | Cómo se verifica |
+|---|---|---|---|
+| B.1 | `.htaccess` en `uploads/`, `registros/` y `contadores/` de los cinco módulos viejos (`parches/uploads.htaccess`) | El acceso web a los PDF ya quedó **cerrado el 8 de septiembre** con el `.htaccess` de `ot/produccion/`; lo que falta es el cierre por carpeta, que es cosmético mientras el general esté | `curl -I …/uploads/` → 403 |
+| B.2 | Borrar `phpinfo.php` y `debug_firma.txt` de `ot_mantenimiento` | Publican rutas y una firma; tocan producción | 404 en ambos |
+| B.3 | `display_errors = 0` en los cinco `config.php` | Toca producción | Un warning provocado no muestra rutas |
+| B.4 | `guardas.php` junto a cada `submit.php` (`parches/guardas.php`): rechaza GET, valida la zona | Toca la lógica del formulario viejo en pleno uso | GET → 405; POST con `zona=../x` → 400; el contador no sube |
+| B.5 | **Rotar la contraseña SMTP** de `reclutamiento@industec.me`, que está en texto plano en los cinco `config.php`, y moverla a `~/secretos.ini` leído con `parse_ini_file()` | Cambia el correo que firma las órdenes a KFC: se hace con el envío de prueba del corte (T2.16 paso 3) | Un envío de prueba llega con la clave nueva |
+| B.6 | Purga de PDF del servidor viejo (`t2_4_purga_hostinger.py --ejecutar --confirmo-borrado`) | Exige la segunda copia (`SEGUNDA_COPIA` en `.env`, el equipo Veeam/TrueNAS) que aún no existe; sin ella solo informa | «0 borrables, motivo: sin segunda copia» hoy; con la copia, las cinco compuertas por archivo |
+| B.7 | PDF y fotos del sistema nuevo **fuera del docroot** (D12) | Cambia rutas del servidor en medio del piloto | `pdf.php` sigue sirviendo; la ruta directa da 404 |
+| B.8 | Segundo usuario MySQL sin `DROP/ALTER` para la web | Cambia `config.php`, que es intocable durante el piloto | La app funciona con el usuario nuevo; `DROP` rechazado |
+| B.9 | Cron de hPanel: reemisor cada 10 min, despachador de correo cada 5, `archivo_indexar_cli.php` cada hora, `purgar_cli.php` semanal | Mientras `emision_modo = PRUEBA` no hace falta; el reemisor se dispara de forma oportunista al recibir | hPanel muestra los cuatro; la cola vacía a los 5 min |
+| B.10 | `emision_modo = PRODUCCION`, destinatarios reales (`correo_fijos`, `correo_por_zona`), `enlace_secreto` propio | Es el interruptor del corte | Un envío a un buzón interno antes de habilitar a los locales |
+| B.11 | Sembrar los correlativos reales con `t2_14_sembrar_correlativos.py --ejecutar` (sistema viejo detenido) | Sembrar con el viejo emitiendo genera duplicados; el script aborta si el contador se mueve entre dos lecturas | El acta en `SALIDAS IA\OTS\correlativos_sembrados_*.json`; la primera orden nueva continúa la numeración |
+| B.12 | Dominio definitivo y retiro de los formularios viejos al día 8 sin envíos | Es el final del corte | El formulario viejo se conserva 30 días sin enlace |
 
-```bash
-.venv/Scripts/python.exe scripts/t2_4_purga_hostinger.py --ejecutar --confirmo-borrado
-```
-
-Un archivo se borra únicamente si pasa **cuatro compuertas**: existe copia
-local, el SHA-256 recalculado coincide, tiene más de 30 días, y el propio
-servidor confirma el hash en el instante del borrado. Cualquiera que falle, se
-queda. Tope de 400 archivos por corrida como freno ante un bug.
-
-> **El argumento no es el espacio.** Son 1,41 GB de 20 GB y ~2.000 archivos de
-> 400.000 inodos: por espacio no hace falta purgar nada. Las razones reales, que
-> sí se sostienen, son que los PDFs están públicos con datos personales y firmas
-> de empleados de KFC, y que el contrato de hosting prohíbe usar el servicio
-> como repositorio de archivos.
-
----
-
-## Paso 7 · Parches de seguridad al sistema actual
-
-Ninguno cambia lo que ve o hace el técnico. Despliega **primero solo en UIO**,
-verifica 48 h, y recién entonces al resto.
-
-### 7.1 Bloquear el acceso web a los PDFs — *lo más urgente*
-
-Sube `parches/uploads.htaccess` **renombrado a `.htaccess`** a cada
-`uploads/`, `registros/` y `contadores/` de los 5 módulos.
-
-**Verificación:** antes debe dar `200`, después `403`.
-
-```bash
-curl -s -o /dev/null -w "%{http_code}\n" \
-  https://yellow-elephant-166233.hostingersite.com/ot/pruebas/ot_normal_v3/uio/uploads/
-```
-
-Y una OT concreta también debe pasar a `403`. Que el técnico envíe una orden de
-prueba y le llegue el correo con el PDF adjunto: eso confirma que no se rompió nada.
-
-### 7.2 Borrar lo que sobra
-
-```bash
-ssh -i ~/.ssh/industec_hostinger -p 65002 u671729428@<IP> \
-  "cd <DOCROOT>/ot && rm -f produccion/ot_mantenimiento/phpinfo.php produccion/ot_mantenimiento/debug_firma.txt"
-```
-
-`phpinfo.php` publica rutas absolutas, versión de PHP y variables del servidor
-—es el primer archivo que busca cualquier escáner—. `debug_firma.txt` es una
-firma manuscrita capturada, volcada a un `.txt` público.
-
-### 7.3 Apagar `display_errors`
-
-En los 5 `config.php`, cambiar `ini_set('display_errors', 1);` por `0`.
-Dejar `log_errors` en `1`. Hoy filtra rutas absolutas a cualquiera que provoque
-un warning.
-
-### 7.4 Enganchar `guardas.php`
-
-Sube `parches/guardas.php` junto a cada `submit.php`. En `submit.php`, dos cambios:
-
-```php
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/guardas.php';        // <-- añadir esta línea
-```
-
-```php
-$zona = $campos['zona'] ?? '';                // <-- reemplazar por:
-$zona = zona_valida($campos['zona'] ?? '');
-```
-
-> En `ot_normal_otros` **no** se aplica el segundo cambio: ese formulario no
-> captura zona.
-
-**Verificación:**
-
-| Prueba | Resultado esperado |
-|---|---|
-| `curl -I .../uio/submit.php` (un GET) | `405`, y el contador **no** sube |
-| Enviar una OT normal desde el formulario | Igual que siempre: PDF y correo |
-| `curl -X POST -d "zona=../../x" .../submit.php` | `400`, ningún archivo escrito |
-
-Antes y después de las pruebas, comparar el contador — solo debe haber subido
-por el envío legítimo:
-
-```bash
-ssh ... "cat <DOCROOT>/ot/pruebas/ot_normal_v3/uio/contadores/counter_UIO.txt"
-```
-
-### 7.5 Rotar la contraseña SMTP
-
-La contraseña de `reclutamiento@industec.me` está **en texto plano en 5
-copias de `config.php` dentro de `public_html`**, y también en la copia local en
-`ENTRADAS IA`. Es la cuenta que firma todos los correos hacia Grupo KFC.
-
-Cámbiala en Titan, y guarda la nueva **fuera de `public_html`**, en
-`/home/u671729428/secretos.ini`, leído desde `config.php` con `parse_ini_file()`.
-Hostinger permite leer fuera del docroot; lo que no permite es servirlo por web.
-
----
-
-## Paso 8 · Automatizar
-
-Programador de tareas de Windows, en la estación (no en Hostinger: allí no hay
-Python, solo VPS lo tiene).
-
-| Hora Ecuador | Qué corre | Por qué a esa hora |
-|---|---|---|
-| 21:30 | `t2_4_sync_hostinger.py` | Terminada la jornada de campo |
-| 21:50 | `t2_4_normalizar_nuevas.py --ejecutar` | Con el espejo ya verificado |
-| 22:00 | `t1_7_ingesta.py` | Ordenes nuevas en la base para el plan del día siguiente |
-| 02:00 | `t2_4_purga_hostinger.py` (**sin** `--ejecutar`) | Deja el informe listo para revisar |
-
-La purga **real** no se automatiza mientras no lleve varias semanas de informes
-limpios. Aprobar un plan no autoriza ejecutar un borrado.
-
-> Si algún día se programa desde el cron de Hostinger, recuerda que corre en
-> **UTC**: las 02:00 de Ecuador son las `0 7 * * *`.
+Lo que ya **no** está pendiente de esta guía: habilitar SSH (hecho), generar llaves (hechas), las variables `HOSTINGER_*` en `.env` (sustituidas por `hostinger_ssh.py`), la primera descarga completa (el espejo corre cada noche), revisar `cleanup.php` (borrado el 8 de septiembre; no había cron), y el cierre general del acceso web a los PDF (hecho el 8 de septiembre).

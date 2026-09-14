@@ -45,6 +45,10 @@ try {
     $n1 = Db::ejecutar("DELETE FROM ot_capturadas WHERE usuario_id IN ($en)", $ids);
     $n2 = Db::ejecutar("DELETE FROM pendientes WHERE abierto_por IN ($en) OR activo_fijo LIKE 'PRUEBA-%'", $ids);
     $n3 = Db::ejecutar("DELETE FROM novedades WHERE reportada_por IN ($en) OR novedad_uuid LIKE '99990000-%'", $ids);
+    // Los equipos propuestos por las cuentas de prueba (T2.14.8): no son equipos reales.
+    try {
+        Db::ejecutar("DELETE FROM equipos_propuestos WHERE propuesto_por IN ($en) OR equipo_uuid LIKE '99990000-%'", $ids);
+    } catch (Throwable $e) { /* sin la 009 no existe la tabla */ }
     $ns = 0;
     foreach ($d['sinteticos'] ?? [] as $aviso) {
         $ns += Db::ejecutar("DELETE FROM casos_gestion WHERE aviso = ? AND aviso LIKE '9999%'", [(string) $aviso]);

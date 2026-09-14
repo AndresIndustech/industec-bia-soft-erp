@@ -1,0 +1,179 @@
+[
+ {
+  "rol": "admin",
+  "ruta": "panel.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\panel_php.png",
+  "http": 200,
+  "titulo": "Inicio · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 0
+ },
+ {
+  "rol": "admin",
+  "ruta": "casos.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\casos_php.png",
+  "http": 200,
+  "titulo": "Buzón de casos · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 314
+ },
+ {
+  "rol": "admin",
+  "ruta": "casos.php?est=NUEVO",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\casos_sin_asignar.png",
+  "http": 200,
+  "titulo": "Buzón de casos · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 19
+ },
+ {
+  "rol": "admin",
+  "ruta": "asignacion.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\asignacion_php.png",
+  "http": 200,
+  "titulo": "Asignación · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 1672
+ },
+ {
+  "rol": "admin",
+  "ruta": "asignacion.php?zona=UIO",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\asignacion_uio.png",
+  "http": 200,
+  "titulo": "Asignación · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 582
+ },
+ {
+  "rol": "admin",
+  "ruta": "pendientes.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\pendientes_php.png",
+  "http": 200,
+  "titulo": "Repuestos y equipos · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 0
+ },
+ {
+  "rol": "admin",
+  "ruta": "novedades_visita.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\novedades_visita_php.png",
+  "http": 200,
+  "titulo": "Novedades · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 0
+ },
+ {
+  "rol": "admin",
+  "ruta": "ordenes.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\ordenes_php.png",
+  "http": 200,
+  "titulo": "Archivo de órdenes · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 71
+ },
+ {
+  "rol": "admin",
+  "ruta": "ordenes.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\ordenes_compartir.png",
+  "http": 200,
+  "titulo": "Archivo de órdenes · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "antes": "abierto",
+  "anonimizados": 71
+ },
+ {
+  "rol": "admin",
+  "ruta": "reportes.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\reportes_php.png",
+  "http": 200,
+  "titulo": "Reportes · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 86
+ },
+ {
+  "rol": "admin",
+  "ruta": "reportes.php?zona=UIO",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\reportes_uio.png",
+  "http": 200,
+  "titulo": "Reportes · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 30
+ },
+ {
+  "rol": "admin",
+  "ruta": "cronograma.html",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\cronograma_html.png",
+  "http": 200,
+  "titulo": "Cronograma de preventivos · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 0
+ },
+ {
+  "rol": "admin",
+  "ruta": "documentos.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\documentos_php.png",
+  "http": 200,
+  "titulo": "Aprendizaje · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 0
+ },
+ {
+  "rol": "admin",
+  "ruta": "equipos.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\equipos_php.png",
+  "http": 200,
+  "titulo": "Equipos nuevos · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 0
+ },
+ {
+  "rol": "admin",
+  "ruta": "usuarios.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\usuarios_php.png",
+  "http": 200,
+  "titulo": "Usuarios y permisos · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 39
+ },
+ {
+  "rol": "admin",
+  "ruta": "bitacora.php",
+  "archivo": "D:\\PROYECTOS IA\\AGENTES INDUSTECH\\entrada\\desarrollador\\INDUSTEC\\INDUSTECH IA\\INDUSTECH IA\\desarrollo\\sistema_ots\\piloto\\capturas\\admin\\bitacora_php.png",
+  "http": 200,
+  "titulo": "Bitácora · B.IA Soft ERP",
+  "alto": 900,
+  "error_php": false,
+  "ok": true,
+  "anonimizados": 113
+ }
+]

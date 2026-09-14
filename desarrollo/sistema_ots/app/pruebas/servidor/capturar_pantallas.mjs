@@ -14,6 +14,16 @@
    admin_prueba, jefe_prueba_uio y tec_prueba_uio_a). No escribe nada en la base.
 
    Uso:  node capturar_pantallas.mjs [--solo admin|jefe|tecnico] [--salida <carpeta>]
+                                     [--recorte] [--anonimizar] [--piloto]
+     --recorte     captura solo lo que cabe en la ventana (para las hojas del
+                   piloto: un PNG de 150 KB, no una tira de 8.000 px).
+     --anonimizar  antes de capturar reemplaza en la página los nombres, usuarios
+                   y correos del personal real (los lee de la base por SSH; no
+                   se escriben en ningún archivo) por «Técnico 1», «Jefe de
+                   zona 2»… Las hojas del piloto no llevan datos de una persona
+                   real (T2.14.8).
+     --piloto      el juego de pantallas de las tres hojas (con filtros, diálogos
+                   abiertos y la pantalla de ingreso).
    Variables: INDUSTEC_NAVEGADOR, INDUSTEC_LLAVE_SSH. Sale con 1 si alguna pantalla
    trae un error de PHP o no carga. */
 import { spawn, spawnSync } from 'node:child_process';
@@ -43,6 +53,9 @@ const args = process.argv.slice(2);
 const solo = args.includes('--solo') ? args[args.indexOf('--solo') + 1] : null;
 const SALIDA = args.includes('--salida') ? args[args.indexOf('--salida') + 1]
   : join(process.env.INDUSTEC_PRUEBAS_SALIDA || tmpdir(), 'industec-capturas');
+const RECORTE = args.includes('--recorte');
+const ANONIMIZAR = args.includes('--anonimizar');
+const PILOTO = args.includes('--piloto');
 
 /* Qué abre cada rol y en qué tamaño. Las pantallas nuevas se agregan aquí:
    si una ruta no existe todavía en el servidor, la captura queda con «404» y
@@ -65,11 +78,113 @@ const ROLES = {
   admin_movil: { usuario: 'admin_prueba', ancho: 390, alto: 844, rutas: ['panel.php', 'asignacion.php', 'pendientes.php'] },
 };
 
+/* Las pantallas de las tres hojas del piloto (T2.14.8). Cada ruta puede llevar
+   un nombre de archivo propio (`nombre`) y un guion que se corre en la página
+   antes de capturar (`antes`: abrir un diálogo, desplazarse a una tabla). */
+const CLIC = (regex) => `(() => { const b = [...document.querySelectorAll('button, a.btn')].find(x => ${regex}.test(x.textContent.trim())); if (b) { b.click(); return 'abierto'; } return 'sin boton'; })()`;
+const PILOTO_ROLES = {
+  admin: { usuario: 'admin_prueba', ancho: 1400, alto: 900, rutas: [
+    { ruta: 'panel.php' },
+    { ruta: 'casos.php' },
+    { ruta: 'casos.php?est=NUEVO', nombre: 'casos_sin_asignar' },
+    { ruta: 'asignacion.php' },
+    { ruta: 'asignacion.php?zona=UIO', nombre: 'asignacion_uio' },
+    { ruta: 'pendientes.php' },
+    { ruta: 'novedades_visita.php' },
+    { ruta: 'ordenes.php' },
+    { ruta: 'ordenes.php', nombre: 'ordenes_compartir', antes: CLIC('/^Compartir/') },
+    { ruta: 'reportes.php' },
+    { ruta: 'reportes.php?zona=UIO', nombre: 'reportes_uio' },
+    { ruta: 'cronograma.html' },
+    { ruta: 'documentos.php' },
+    { ruta: 'equipos.php' },
+    { ruta: 'usuarios.php' },
+    { ruta: 'bitacora.php' },
+  ] },
+  jefe: { usuario: 'jefe_prueba_uio', ancho: 1400, alto: 900, rutas: [
+    { ruta: 'panel.php' },
+    { ruta: 'casos.php' },
+    { ruta: 'asignacion.php' },
+    { ruta: 'asignacion.php', nombre: 'asignacion_por_repartir',
+      antes: "(() => { const t = document.querySelector('table.repartir'); if (t) { t.scrollIntoView({block: 'start'}); return 'ok'; } return 'sin tabla'; })()" },
+    { ruta: 'pendientes.php' },
+    { ruta: 'pendientes.php', nombre: 'pendientes_validar', antes: CLIC('/^Validar/') },
+    { ruta: 'novedades_visita.php' },
+    { ruta: 'cronograma.html' },
+    { ruta: 'reportes.php' },
+    { ruta: 'ordenes.php' },
+    { ruta: 'documentos.php' },
+  ] },
+  tecnico: { usuario: 'tec_prueba_uio_a', ancho: 390, alto: 844, rutas: [
+    { ruta: 'mis.php' },
+    { ruta: 'mis.php?t=avisos', nombre: 'mis_avisos' },
+    { ruta: 'mis.php?t=atendidas', nombre: 'mis_atendidas' },
+    { ruta: 'index.html' },
+    { ruta: 'pendientes.php' },
+    { ruta: 'ordenes.php' },
+    { ruta: 'cronograma.html' },
+    { ruta: 'documentos.php' },
+  ] },
+  // La pantalla de entrada, sin sesión.
+  entrada: { usuario: null, ancho: 390, alto: 844, rutas: [
+    { ruta: 'login.php', nombre: 'ingreso' },
+  ] },
+};
+
 function ssh(cmd) {
   const r = spawnSync('ssh', [...SSH, cmd], { encoding: 'utf8', timeout: 120000 });
   if (r.status !== 0) { throw new Error('ssh: ' + (r.stderr || '').trim().slice(0, 200)); }
   return r.stdout;
 }
+
+/* Los nombres, usuarios y correos del personal real, leídos de la base del sitio
+   de pruebas para reemplazarlos en la página antes de capturar. Se quedan en
+   memoria: no se escriben en ningún archivo. Las cuentas de prueba se conservan
+   tal cual (no son personas). */
+function personalReal() {
+  const php = 'require "nucleo/Db.php"; echo json_encode(Db::todos("SELECT usuario, nombre, correo, rol, zona FROM usuarios WHERE usuario NOT LIKE \'%prueba%\' ORDER BY rol, zona, usuario"));';
+  const salida = ssh(`cd domains/${HOST}/public_html/ot && php -r ${JSON.stringify(php)}`);
+  const filas = JSON.parse(salida);
+  const contador = {};
+  const mapa = [];
+  for (const f of filas) {
+    const rol = { TECNICO: 'Técnico', JEFE_ZONA: 'Jefe de zona', ADMIN: 'Administración', SUPERADMIN: 'Dirección' }[f.rol] || 'Persona';
+    contador[rol] = (contador[rol] || 0) + 1;
+    const alias = `${rol} ${contador[rol]}`;
+    if (f.nombre && f.nombre.length > 3) { mapa.push([f.nombre, alias]); }
+    if (f.usuario && f.usuario.length > 3) { mapa.push([f.usuario, alias.toLowerCase().replace(/[^a-z0-9]+/g, '_')]); }
+    if (f.correo) { mapa.push([f.correo, 'correo@ejemplo.ec']); }
+  }
+  // Los más largos primero, para que «Nombre Apellido» se reemplace antes que «Nombre».
+  mapa.sort((a, b) => b[0].length - a[0].length);
+  return mapa;
+}
+
+/* Reemplaza en los nodos de texto, en value/title/placeholder/aria-label y en
+   los <input> con valor. Devuelve cuántos reemplazos hizo. */
+const GUION_ANONIMIZAR = (mapa) => `(() => {
+  const mapa = ${JSON.stringify(mapa)};
+  const correo = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}/g;
+  let n = 0;
+  const cambiar = (t) => {
+    let v = t;
+    for (const [de, a] of mapa) { if (v.includes(de)) { v = v.split(de).join(a); n++; } }
+    if (correo.test(v)) { v = v.replace(correo, 'correo@ejemplo.ec'); n++; }
+    correo.lastIndex = 0;
+    return v;
+  };
+  const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const nodos = [];
+  while (w.nextNode()) { nodos.push(w.currentNode); }
+  for (const t of nodos) { const v = cambiar(t.nodeValue); if (v !== t.nodeValue) { t.nodeValue = v; } }
+  for (const el of document.querySelectorAll('[value],[title],[placeholder],[aria-label]')) {
+    for (const at of ['value', 'title', 'placeholder', 'aria-label']) {
+      if (el.hasAttribute(at)) { const v = cambiar(el.getAttribute(at)); if (v !== el.getAttribute(at)) { el.setAttribute(at, v); } }
+    }
+    if (el.tagName === 'INPUT' && el.value) { const v = cambiar(el.value); if (v !== el.value) { el.value = v; } }
+  }
+  return n;
+})()`;
 
 class Navegador {
   constructor(perfil, ancho, alto) { this.perfil = perfil; this.ancho = ancho; this.alto = alto; }
@@ -140,7 +255,9 @@ class Navegador {
 
   async captura(archivo) {
     // Página completa: se mide el alto real y se captura más allá de la ventana.
-    const alto = Math.min(8000, Math.max(this.alto, Number(await this.ev('document.documentElement.scrollHeight')) || this.alto));
+    // Con --recorte, solo la ventana: lo que ve la persona sin desplazarse.
+    const alto = RECORTE ? this.alto
+      : Math.min(8000, Math.max(this.alto, Number(await this.ev('document.documentElement.scrollHeight')) || this.alto));
     const r = await this.send('Page.captureScreenshot', {
       format: 'png', captureBeyondViewport: true,
       clip: { x: 0, y: 0, width: this.ancho, height: alto, scale: 1 },
@@ -185,20 +302,25 @@ let fallas = 0;
 mkdirSync(SALIDA, { recursive: true });
 if (!NAVEGADOR) { console.error('no hay Edge ni Chrome; define INDUSTEC_NAVEGADOR'); process.exit(1); }
 const claves = JSON.parse(ssh('cat ~/respaldos/claves_prueba.json')).claves;
+const mapaPersonal = ANONIMIZAR ? personalReal() : [];
+if (ANONIMIZAR) { console.log(`anonimizar: ${mapaPersonal.length} cadenas del personal real se reemplazan antes de capturar`); }
 
-for (const [rol, def] of Object.entries(ROLES)) {
+for (const [rol, def] of Object.entries(PILOTO ? PILOTO_ROLES : ROLES)) {
   if (solo && rol !== solo) { continue; }
   const carpeta = join(SALIDA, rol);
   mkdirSync(carpeta, { recursive: true });
   const perfil = mkdtempSync(join(tmpdir(), 'industec-cap-'));
   const nav = new Navegador(perfil, def.ancho, def.alto);
-  console.log(`== ${rol} (${def.usuario}, ${def.ancho}×${def.alto}) ==`);
+  console.log(`== ${rol} (${def.usuario || 'sin sesión'}, ${def.ancho}×${def.alto}) ==`);
   try {
     await nav.abrir();
-    const donde = await entrar(nav, def.usuario, claves[def.usuario]);
-    if (String(donde).includes('login')) { throw new Error('no pudo entrar: sigue en ' + donde); }
-    for (const ruta of def.rutas) {
-      const nombre = ruta.replace(/[^a-z0-9]+/gi, '_').replace(/_+$/, '') + '.png';
+    if (def.usuario) {
+      const donde = await entrar(nav, def.usuario, claves[def.usuario]);
+      if (String(donde).includes('login')) { throw new Error('no pudo entrar: sigue en ' + donde); }
+    }
+    for (const item of def.rutas) {
+      const ruta = typeof item === 'string' ? item : item.ruta;
+      const nombre = ((typeof item === 'object' && item.nombre) || ruta.replace(/[^a-z0-9]+/gi, '_').replace(/_+$/, '')) + '.png';
       const archivo = join(carpeta, nombre);
       let fila = { rol, ruta, archivo, http: null, titulo: '', alto: 0, error_php: false, ok: false };
       try {
@@ -207,14 +329,16 @@ for (const [rol, def] of Object.entries(ROLES)) {
         fila.titulo = String(await nav.ev('document.title'));
         const texto = String(await nav.ev('document.body ? document.body.innerText.slice(0, 20000) : ""'));
         fila.error_php = ERRORES_PHP.test(texto);
+        if (typeof item === 'object' && item.antes) { fila.antes = String(await nav.ev(item.antes)); await sleep(1500); }
+        if (ANONIMIZAR) { fila.anonimizados = Number(await nav.ev(GUION_ANONIMIZAR(mapaPersonal))); }
         fila.alto = await nav.captura(archivo);
-        fila.ok = !fila.error_php && (fila.http === null || fila.http < 500) && !fila.titulo.includes('Ingreso');
+        fila.ok = !fila.error_php && (fila.http === null || fila.http < 500) && (!fila.titulo.includes('Ingreso') || !def.usuario);
       } catch (e) {
         fila.titulo = 'ERROR: ' + e.message;
       }
       if (!fila.ok) { fallas++; }
       indice.push(fila);
-      console.log(`  ${fila.ok ? 'OK   ' : 'FALLA'} ${ruta.padEnd(28)} http=${fila.http ?? '?'} alto=${fila.alto} ${fila.error_php ? 'ERROR PHP ' : ''}${fila.titulo.slice(0, 60)}`);
+      console.log(`  ${fila.ok ? 'OK   ' : 'FALLA'} ${ruta.padEnd(28)} http=${fila.http ?? '?'} alto=${fila.alto} ${fila.error_php ? 'ERROR PHP ' : ''}${fila.antes ? '[' + fila.antes + '] ' : ''}${fila.anonimizados ? `anon=${fila.anonimizados} ` : ''}${fila.titulo.slice(0, 60)}`);
     }
   } catch (e) {
     fallas++;
