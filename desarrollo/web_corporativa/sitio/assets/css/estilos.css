@@ -183,7 +183,6 @@ main:focus { outline: none; }
 /* Urgencia: el rojo solo aquí (y en la franja de emergencia). */
 .boton--urgente { background: var(--rojo-texto); color: #fff; box-shadow: 0 6px 16px rgba(181, 65, 60, .25); }
 .boton--urgente:hover { background: var(--rojo-oscuro); color: #fff; }
-.boton--chico { min-height: 44px; padding: .55em 1.05em; font-size: .95rem; }
 
 .acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 @media (max-width: 519px) { .acciones .boton { flex: 1 1 100%; } }
@@ -244,8 +243,6 @@ main:focus { outline: none; }
   font-family: var(--titulos); color: var(--tinta); font-size: 1.05rem; font-weight: 600; text-decoration: none;
 }
 .nav__lista a[aria-current="page"] { color: var(--azul); font-weight: 700; }
-.nav__contacto { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-.nav__contacto .boton { flex: 1 1 200px; }
 
 @media (min-width: 960px) {
   .cabecera__fila { flex-wrap: nowrap; }
@@ -262,8 +259,6 @@ main:focus { outline: none; }
     content: ""; position: absolute; left: 13px; right: 13px; bottom: 5px;
     height: 2px; border-radius: 2px; background: var(--rojo);
   }
-  .nav__contacto { margin: 0; gap: 8px; }
-  .nav__contacto .boton { flex: none; }
 }
 
 /* ---------- Portada (inicio): la ilustración en tarjeta, con la placa de distintivos debajo ---------- */
