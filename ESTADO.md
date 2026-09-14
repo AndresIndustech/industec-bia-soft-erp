@@ -40,7 +40,7 @@ del rediseño.
 | Pieza | Estado | Cifra verificada |
 |---|---|---|
 | Corpus histórico saneado | ✅ | **7.070** órdenes en el árbol canónico + 5 informes técnicos + 25 de otros clientes |
-| Base de datos poblada | ✅ | **7.069 órdenes activas** · 9.071 equipos · 100 locales · 145 alias · 6.450 avisos SAP · 19 técnicos |
+| Base de datos poblada | ✅ | **7.118 órdenes activas** (era 7.069 hasta el 2026-09-13: `t2_18_rescatar_buzon.py` recuperó 53 OTs que llevaban 4 días en `_DEL_BUZON` sin clasificar ni ingestar — ver T2.18 en el plan) · 9.071 equipos · 100 locales · 145 alias · 6.450 avisos SAP · 19 técnicos |
 | Auditor de calidad (Agente 1) | ✅ | 2.644 observaciones abiertas, con veredicto editable por la administración |
 | Consolidador de plan de zona (Agente 2) | ⚠️ v1 | 87,3% de coincidencia celda a celda en el piloto UIO |
 | **Histórico en formato de planificación** | ✅ | **39 planes mensuales** de correctivo (7.863 filas, 3 zonas × 13 meses) + **seguimiento de preventivos** de 96 locales, reconstruidos desde las OTs y SAP. LOCAL, FECHA DE INICIO y ESTADO al 100%; EQUIPO al 99,5% |
@@ -333,7 +333,8 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| **T2.14 · Pulido para las pruebas del cliente, T2.15, T2.17** | Conversación desde el PC de Andrés — rama `pc/pulido-2026-09-12` en GitHub | 2026-09-12 (noche) | **Escribe en toda `app/publico/`, `app/sql/009`, `app/pruebas/`, `desarrollo/agentes/scripts/` (T2.15) y `desarrollo/web_corporativa/sitio/` (T2.17)**; aplica la 009 y despliega al sitio de pruebas. **Mientras esta fila siga aquí, la estación no despliega ni edita `app/publico/`**: al fusionar la rama verá el resultado. Plan en `PLAN_INDUSTEC.md` T2.14–T2.17; informe en `AUDITORIA_2026-09-12.md` |
+| ~~T2.14 · Pulido para las pruebas del cliente, T2.15, T2.17~~ | Conversación desde el PC de Andrés — rama `pc/pulido-2026-09-12` en GitHub | 2026-09-12 (noche) | ✅ **Fusionada en `master` el 2026-09-13** por la estación (ff, sin conflictos), junto con `pc/archivo-zona-franquicia-2026-09-13` (T2.18) |
+| **T2.18 · Pendiente de la estación** (clasificar archivo + atender pedidos de copia) | Conversación de la estación | 2026-09-13 | **Escribe en `SALIDAS IA\ARCHIVO OTS INDUSTEC\`** (nueva) y sube PDF a `darkviolet` por SCP. Solo lee `D:\RESPALDOS` y la tabla `ot_archivo_solicitudes` de darkviolet |
 | ~~T2.5 · Captura — formulario único, v1 para revisión~~ | Conversación "app captura v1" | 2026-09-08 | ✅ Terminada y en §1b. El formulario único está desplegado y preguntado por pasos |
 | ~~Buscador de órdenes y avisos por coincidencia parcial~~ | Conversación "cotejo SAP" | 2026-09-10 | ✅ **Commiteado el 2026-09-12 por la estación, con tres defectos corregidos** — ver la fila del buscador en §1b. Si esa conversación sigue viva: `Ui::normalizarBusqueda()` **cambió de implementación** (tabla de 123 entradas generada, no las 16 a mano) y `prueba_contratos.mjs` ahora ejecuta el PHP de verdad. Toma lo de `master` antes de seguir. Lo que **no** se commiteó son sus dos scripts de SAP (`t2_11`, `t2_12`): siguen sin seguimiento y con hallazgos abiertos, abajo |
 | T2.12 · **solo queda T2.12.12**, las tres hojas de capacitación | Libre — nadie la tiene tomada | 2026-09-10 | **Escribe** en `SALIDAS IA\OTS\`, una hoja por rol. Todo lo demás de T2.12 está hecho y desplegado, incluida la verificación por rol (87 comprobaciones con ingreso real). Es la acción **D** de §11b |
