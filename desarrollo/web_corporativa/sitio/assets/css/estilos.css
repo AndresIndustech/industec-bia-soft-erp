@@ -246,7 +246,6 @@ main:focus { outline: none; }
 .nav__lista a[aria-current="page"] { color: var(--azul); font-weight: 700; }
 .nav__contacto { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
 .nav__contacto .boton { flex: 1 1 200px; }
-.nav__tel { display: inline-flex; }
 
 @media (min-width: 960px) {
   .cabecera__fila { flex-wrap: nowrap; }
@@ -266,7 +265,6 @@ main:focus { outline: none; }
   .nav__contacto { margin: 0; gap: 8px; }
   .nav__contacto .boton { flex: none; }
 }
-@media (min-width: 960px) and (max-width: 1119px) { .nav__tel { display: none; } }
 
 /* ---------- Portada (inicio): la ilustración en tarjeta, con la placa de distintivos debajo ---------- */
 .portada {
