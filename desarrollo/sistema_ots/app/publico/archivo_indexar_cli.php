@@ -69,7 +69,7 @@ try {
 
 $DIR_PDF = __DIR__ . '/ordenes_pdf';
 $ZONAS = ['UIO', 'LARB', 'CNLJ', 'OTRA'];
-$cuenta = ['pdf' => 0, 'app' => 0, 'correo' => 0, 'historico' => 0, 'saltados' => 0];
+$cuenta = ['pdf' => 0, 'app' => 0, 'correo' => 0, 'cierre' => 0, 'historico' => 0, 'saltados' => 0];
 
 /** Lo que ya se sabe de cada OT indexada: para no recalcular huellas ni pisar datos. */
 $previo = [];
@@ -220,6 +220,38 @@ if (!$opt['solo_pdf']) {
         }
     }
 
+    // --- (e) la orden de cierre que guarda la gestión del caso -----------------
+    /* La reconciliación y la app dejan la orden de cierre en `casos_gestion`
+       aunque el informe ya no esté en `atenciones.json`, que es una ventana.
+       El 2026-09-14 eran 19 de las 67 órdenes de cierre las que no estaban en
+       el índice: el Archivo no las encontraba ni buscando el aviso (10354415,
+       10354383). El técnico solo se toma si salió del informe (`tecnico_auto`):
+       el que asignó una persona no es necesariamente quien firmó la orden. */
+    foreach (Db::todos(
+        "SELECT g.aviso, g.zona, g.ot_cierre, g.atendido_en, g.tecnico_auto, u.nombre AS tecnico
+           FROM casos_gestion g LEFT JOIN usuarios u ON u.usuario_id = g.asignado_a
+          WHERE g.ot_cierre IS NOT NULL AND g.ot_cierre <> ''"
+    ) as $g) {
+        $ot = strtoupper(trim((string) $g['ot_cierre']));
+        if (!preg_match(Emision::PATRON_OT, $ot)) { $cuenta['saltados']++; continue; }
+        if (isset($previo[$ot]) && $previo[$ot]['origen'] === 'APP') { continue; }
+        $n = partesDelNombre($ot);
+        $loc = strtoupper((string) ($n['local'] ?? ''));
+        // El correo nombra el local sin «EC» (K061) y el maestro con él (K061EC).
+        $l = $locales[$loc] ?? $locales[$loc . 'EC'] ?? null;
+        guardar([
+            'id_industec' => $ot,
+            'zona' => in_array((string) $g['zona'], $ZONAS, true) ? (string) $g['zona'] : $n['zona'],
+            'local_codigo' => $loc ?: null,
+            'local_nombre' => $l['nombre'] ?? null, 'cadena' => $l['cadena'] ?? null,
+            'aviso' => (string) $g['aviso'], 'dia' => $n['dia'],
+            'fecha_atencion' => preg_match('/^\d{4}-\d{2}-\d{2}/', (string) $g['atendido_en'], $m) ? $m[0] : null,
+            'tecnico' => (int) $g['tecnico_auto'] === 1 && $g['tecnico'] ? mb_substr((string) $g['tecnico'], 0, 160) : null,
+            'origen' => 'CORREO', 'en_servidor' => Emision::existePdf($ot) ? 1 : 0,
+        ]);
+        $cuenta['cierre']++;
+    }
+
     // --- (d) el catálogo histórico de la estación -----------------------------
     if ($opt['catalogo'] !== null) {
         $json = json_decode((string) @file_get_contents($opt['catalogo']), true);
@@ -254,8 +286,8 @@ if (!$opt['solo_pdf']) {
 }
 
 $tot = Db::uno('SELECT COUNT(*) n, SUM(en_servidor) s FROM ot_archivo');
-printf("PDF en el servidor: %d · emitidas por la app sin PDF: %d · del correo: %d · del histórico: %d · saltados: %d\n",
-       $cuenta['pdf'], $cuenta['app'], $cuenta['correo'], $cuenta['historico'], $cuenta['saltados']);
+printf("PDF en el servidor: %d · emitidas por la app sin PDF: %d · del correo: %d · de la gestión: %d · del histórico: %d · saltados: %d\n",
+       $cuenta['pdf'], $cuenta['app'], $cuenta['correo'], $cuenta['cierre'], $cuenta['historico'], $cuenta['saltados']);
 printf("índice: %d órdenes, %d con el PDF aquí\n", (int) ($tot['n'] ?? 0), (int) ($tot['s'] ?? 0));
 try {
     Db::ejecutar(

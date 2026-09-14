@@ -419,6 +419,86 @@ final class Casos
     }
 
     /**
+     * Todos los documentos de cada caso, relacionados por AVISO.
+     *
+     * Hasta el 2026-09-14 el buzón pintaba solo lo que traía `atenciones.json`,
+     * y la orden de cierre que dejan la reconciliación y la app en
+     * `casos_gestion.ot_cierre` no salía: 38 de los 67 casos con orden de
+     * cierre se veían «sin atender» en la misma fila que decía «atendido ·
+     * técnico (del informe)» (avisos 10354415 y 10354383, LARB). Y un mismo
+     * informe llega con dos nombres —`OT-2488-K061-10351229-CNLJ` por el correo
+     * y `OT-2488-K061EC-10351229-CNLJ` en el árbol canónico—, así que la
+     * relación se hace por el aviso y no por el nombre exacto de la orden.
+     *
+     * Cuatro fuentes, sin repetir una orden: el índice del Archivo
+     * (`ot_archivo`), la orden de cierre, lo que llegó por correo y lo que
+     * emitió la app (`ot_capturadas`, que trae también lo que sigue en curso).
+     * Si el PDF está en el servidor lo dice `Emision::existePdf()` en el
+     * momento, no `ot_archivo.en_servidor`, que solo se refresca al indexar.
+     *
+     * @param string[] $avisos los avisos que se van a pintar
+     * @return array<string,array<int,array{ot:string,fecha:?string,cierre:bool,pdf:bool}>>
+     */
+    public static function documentos(array $avisos, array $gestion, array $aten): array
+    {
+        require_once __DIR__ . '/Emision.php';
+        // El aviso llega con y sin ceros a la izquierda según la fuente
+        // (`000010352936` en SAP, `10352936` en el nombre de la orden).
+        $clave = static fn($a): string => ltrim(trim((string) $a), '0');
+        $quiero = [];
+        foreach ($avisos as $a) {
+            if ($clave($a) !== '') { $quiero[$clave($a)] = (string) $a; }
+        }
+        $docs = [];
+        $poner = static function (string $k, string $ot, ?string $fecha, bool $cierre) use (&$docs, $quiero): void {
+            $ot = strtoupper(trim($ot));
+            if ($ot === '' || !isset($quiero[$k])) { return; }
+            $aviso = $quiero[$k];
+            $f = $docs[$aviso][$ot] ?? ['ot' => $ot, 'fecha' => null, 'cierre' => false];
+            if ($f['fecha'] === null && $fecha !== null && preg_match('/^\d{4}-\d{2}-\d{2}/', $fecha, $m)) {
+                $f['fecha'] = $m[0];
+            }
+            $f['cierre'] = $f['cierre'] || $cierre;
+            $docs[$aviso][$ot] = $f;
+        };
+
+        try {
+            foreach (Db::todos("SELECT id_industec, aviso, fecha_atencion FROM ot_archivo
+                                 WHERE aviso IS NOT NULL AND aviso <> ''") as $r) {
+                $poner($clave($r['aviso']), (string) $r['id_industec'], $r['fecha_atencion'], false);
+            }
+        } catch (Throwable $e) { /* sin la 009 no hay índice: quedan las otras tres fuentes */ }
+
+        foreach ($gestion as $aviso => $g) {
+            if (!empty($g['ot_cierre'])) {
+                $poner($clave($aviso), (string) $g['ot_cierre'], $g['atendido_en'] ?? null, true);
+            }
+        }
+        foreach ($aten as $aviso => $a) {
+            foreach ($a['ots'] ?? [] as $o) {
+                $poner($clave($aviso), (string) ($o['ot'] ?? ''), $o['fecha'] ?? null,
+                       ($o['estado_ot'] ?? '') === 'Cerrada');
+            }
+        }
+        try {
+            foreach (Db::todos("SELECT id_industec, aviso, emitida_en FROM ot_capturadas
+                                 WHERE id_industec IS NOT NULL AND aviso IS NOT NULL AND aviso <> ''
+                                   AND estado IN ('EMITIDA','ENVIADA','NUMERADA','FALLIDA','PROCESADA')") as $r) {
+                $poner($clave($r['aviso']), (string) $r['id_industec'], $r['emitida_en'], false);
+            }
+        } catch (Throwable $e) { /* ot_capturadas llega con la 008 */ }
+
+        $out = [];
+        foreach ($docs as $aviso => $porOt) {
+            $lista = [];
+            foreach ($porOt as $f) { $lista[] = $f + ['pdf' => Emision::existePdf($f['ot'])]; }
+            usort($lista, static fn($x, $y) => [(string) $x['fecha'], $x['ot']] <=> [(string) $y['fecha'], $y['ot']]);
+            $out[$aviso] = $lista;
+        }
+        return $out;
+    }
+
+    /**
      * Etiqueta legible del estado.
      *
      * La lista completa vive en `Ui::ESTADOS` y esto delega ahí a propósito.

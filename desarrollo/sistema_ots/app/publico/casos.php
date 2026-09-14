@@ -383,6 +383,25 @@ $gestion  = Casos::gestion();
 $zonaAlc  = Auth::zonaAlcance();
 $todos = Casos::enAlcance($fuente['datos'] ?? [], $gestion);
 
+/* La atención de cada caso sale de TODAS sus fuentes, no solo de
+   `atenciones.json`. Hasta el 2026-09-14 un caso con su orden de cierre en la
+   gestión —la que dejan la app y la reconciliación— figuraba «sin atender» en
+   la columna, en el filtro, en el orden y en los contadores: 38 de los 67
+   casos con orden de cierre (10354415 y 10354383, LARB). Se completa
+   `$porAviso` aquí, una vez, para que esas cuatro cosas lean lo mismo. */
+$docs = Casos::documentos(array_map(fn($c) => (string) ($c['aviso'] ?? ''), $todos), $gestion, $porAviso);
+foreach ($todos as $c) {
+    $av = (string) ($c['aviso'] ?? '');
+    $conCierre = !empty($gestion[$av]['ot_cierre']);
+    if (!isset($porAviso[$av]) && ($conCierre || !empty($docs[$av]))) {
+        $porAviso[$av] = ['estado_industec' => $conCierre ? 'CERRADA' : 'EN_CURSO',
+                          'ots' => [], 'tecnicos' => [], 'sin_identificar' => []];
+    } elseif ($conCierre) {
+        $porAviso[$av]['estado_industec'] = 'CERRADA';
+    }
+}
+$atencion = static fn(string $av): ?string => $porAviso[$av]['estado_industec'] ?? null;
+
 Auth::bitacora('CONSULTAR', 'buzon', 'casos', 'alcance=' . ($zonaAlc ?? 'todas')
              . ' visibles=' . count($todos));
 
@@ -818,41 +837,44 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                 <span class="desc"><?= Ui::edad($c['fecha_creacion'] ?? null) ?></span>
               </td>
               <td>
-                <?php $a = $porAviso[$c['aviso'] ?? ''] ?? null; ?>
-                <?php if ($a === null): ?>
+                <?php
+                /* La atención sale de TODAS las fuentes del caso (Casos::documentos),
+                   no solo de `atenciones.json`: con solo esa, un caso con su orden
+                   de cierre en la gestión salía «sin atender» (10354415, 10354383). */
+                $av0 = (string) ($c['aviso'] ?? '');
+                $a   = $porAviso[$av0] ?? null;
+                $ats = $atencion($av0);
+                ?>
+                <?php if ($ats === null): ?>
                   <span class="sub">sin atender</span>
                   <span class="desc mono">creado <?= e($c['fecha_creacion'] ?? '—') ?></span>
                 <?php else: ?>
-                  <span class="chip <?= $a['estado_industec'] === 'CERRADA' ? 'cerrada' : 'curso' ?>">
-                    <?= $a['estado_industec'] === 'CERRADA' ? 'con orden de cierre' : 'atendido, en curso' ?>
+                  <span class="chip <?= $ats === 'CERRADA' ? 'cerrada' : 'curso' ?>">
+                    <?= $ats === 'CERRADA' ? 'con orden de cierre' : 'atendido, en curso' ?>
                   </span>
-                  <?php foreach ($a['ots'] as $o): ?>
-                    <?php
-                    /* `atenciones.json` cataloga la orden en cuanto el informe llega por
-                       correo; que el PDF ya esté copiado a ordenes_pdf/ en el servidor es
-                       otra cosa (mismo caso que documenta Emision::existePdf). Antes este
-                       enlace se armaba a ciegas y caía en el 404 «El PDF de esa orden no
-                       está en el servidor.» -- mis.php y ordenes.php ya preguntaban primero;
-                       aquí faltaba el mismo guardado. */
-                    $tienePdf = Emision::existePdf((string) $o['ot']);
-                    ?>
+                  <?php foreach ($docs[$av0] ?? [] as $d): ?>
+                    <?php /* El enlace solo si el PDF está en el servidor: armado a
+                             ciegas caía en «El PDF de esa orden no está en el
+                             servidor.» (00870b4). Todos los documentos del aviso,
+                             aunque sean dos nombres del mismo informe. */ ?>
                     <span class="desc mono">
-                      <?php if (Auth::puede('ots.pdf') && $tienePdf): ?>
-                        <a href="pdf.php?ot=<?= rawurlencode((string) $o['ot']) ?>"
-                           target="_blank" rel="noopener"><?= e($o['ot']) ?></a>
+                      <?php if (Auth::puede('ots.pdf') && $d['pdf']): ?>
+                        <a href="pdf.php?ot=<?= rawurlencode($d['ot']) ?>"
+                           target="_blank" rel="noopener"><?= e($d['ot']) ?></a>
                       <?php else: ?>
-                        <?= e($o['ot']) ?>
+                        <?= e($d['ot']) ?>
                       <?php endif; ?>
-                      · <?= e(substr((string) $o['fecha'], 0, 10)) ?>
-                      <?php if (Auth::puede('ots.pdf') && !$tienePdf): ?>
+                      <?= $d['fecha'] !== null ? '· ' . e($d['fecha']) : '' ?>
+                      <?php if ($d['cierre']): ?><b>· cierre</b><?php endif; ?>
+                      <?php if (Auth::puede('ots.pdf') && !$d['pdf']): ?>
                         <span class="derivado">PDF no cargado al archivo todavía</span>
                       <?php endif; ?>
                     </span>
                   <?php endforeach; ?>
-                  <?php if ($a['tecnicos']): ?>
+                  <?php if (!empty($a['tecnicos'])): ?>
                     <span class="desc"><?= e(implode(' · ', $a['tecnicos'])) ?></span>
                   <?php endif; ?>
-                  <?php foreach ($a['sin_identificar'] as $s): ?>
+                  <?php foreach (($a['sin_identificar'] ?? []) as $s): ?>
                     <span class="desc" style="color:#92400e">firma sin identificar: <?= e($s) ?></span>
                   <?php endforeach; ?>
                 <?php endif; ?>
@@ -922,6 +944,22 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                       · <?= e($g['tecnico_nombre']) ?><?= $g['tecnico_auto'] ? ' (del informe)' : '' ?>
                     <?php endif; ?>
                   </span>
+                  <?php /* El informe con el que se atendió, junto al botón que lo
+                           cierra en SAP: la administradora lo necesita para
+                           registrarlo y antes tenía que ir a buscarlo al Archivo
+                           (pedido de Andrés, 2026-09-14). Solo administración:
+                           es su mano del cierre de dos manos. */ ?>
+                  <?php if (!empty($g['ot_cierre']) && Auth::puede('casos.veredicto')): ?>
+                    <?php $oc = (string) $g['ot_cierre']; ?>
+                    <span class="desc">informe:
+                      <?php if (Auth::puede('ots.pdf') && Emision::existePdf($oc)): ?>
+                        <a class="mono" href="pdf.php?ot=<?= rawurlencode($oc) ?>" target="_blank" rel="noopener"><?= e($oc) ?></a>
+                      <?php else: ?>
+                        <span class="mono"><?= e($oc) ?></span>
+                        <span class="derivado">PDF no cargado al archivo todavía</span>
+                      <?php endif; ?>
+                    </span>
+                  <?php endif; ?>
                   <?php if (!empty($g['revision_motivo']) && $est === 'EN_REVISION'): ?>
                     <span class="desc" style="color:#92400e"><?= e($g['revision_motivo']) ?></span>
                   <?php endif; ?>
