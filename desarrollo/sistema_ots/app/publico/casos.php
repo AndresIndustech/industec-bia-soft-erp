@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Casos.php';
 require_once __DIR__ . '/nucleo/Ui.php';   // Ui::coincide() se usa al filtrar, antes de pintar
 require_once __DIR__ . '/nucleo/Pendientes.php';   // el cierre de dos manos mira si queda un pendiente vivo (ASG-01)
+require_once __DIR__ . '/nucleo/Emision.php';   // Emision::existePdf() antes de ofrecer el enlace (ver bloque de abajo)
 
 /**
  * casos.php — Buzón de casos: lo que KFC pide por el correo de SAP.
@@ -826,14 +827,26 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                     <?= $a['estado_industec'] === 'CERRADA' ? 'con orden de cierre' : 'atendido, en curso' ?>
                   </span>
                   <?php foreach ($a['ots'] as $o): ?>
+                    <?php
+                    /* `atenciones.json` cataloga la orden en cuanto el informe llega por
+                       correo; que el PDF ya esté copiado a ordenes_pdf/ en el servidor es
+                       otra cosa (mismo caso que documenta Emision::existePdf). Antes este
+                       enlace se armaba a ciegas y caía en el 404 «El PDF de esa orden no
+                       está en el servidor.» -- mis.php y ordenes.php ya preguntaban primero;
+                       aquí faltaba el mismo guardado. */
+                    $tienePdf = Emision::existePdf((string) $o['ot']);
+                    ?>
                     <span class="desc mono">
-                      <?php if (Auth::puede('ots.pdf')): ?>
+                      <?php if (Auth::puede('ots.pdf') && $tienePdf): ?>
                         <a href="pdf.php?ot=<?= rawurlencode((string) $o['ot']) ?>"
                            target="_blank" rel="noopener"><?= e($o['ot']) ?></a>
                       <?php else: ?>
                         <?= e($o['ot']) ?>
                       <?php endif; ?>
                       · <?= e(substr((string) $o['fecha'], 0, 10)) ?>
+                      <?php if (Auth::puede('ots.pdf') && !$tienePdf): ?>
+                        <span class="derivado">PDF no cargado al archivo todavía</span>
+                      <?php endif; ?>
                     </span>
                   <?php endforeach; ?>
                   <?php if ($a['tecnicos']): ?>
