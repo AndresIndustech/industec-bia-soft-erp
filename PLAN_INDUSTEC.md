@@ -1064,10 +1064,11 @@ y se devuelven con `git stash pop`. Después, `t2_4_sync_hostinger.py --probar`
 solo) y `t2_4_pruebas.py`.
 
 **B. La lista de `desarrollo/sistema_ots/piloto/ANTES_DE_EMPEZAR.md`** — *diez
-pasos con su comprobación; los 2, 3, 4 y 9 son de Andrés.* Las siete baterías en
-verde, `deshacer_prueba.php`, la decisión sobre las órdenes 90xx, las cuentas de
-UIO y sus claves (`CUENTAS.md`), la Tarea programada del saneamiento y
-`SEGUNDA_COPIA` en `.env`.
+pasos con su comprobación; quedan los 4 y 9, de Andrés.* Los pasos 2 (retirar
+los datos de prueba) y 3 (decisión sobre las órdenes 90xx: se borran) **ya están
+hechos, el 2026-09-13** — cifra verificada en `ESTADO.md` §1b. Faltan las
+cuentas de UIO y sus claves (`CUENTAS.md`), la Tarea programada del saneamiento
+y `SEGUNDA_COPIA` en `.env`.
 
 **C. El piloto real en UIO** — *requiere a Andrés, y es I-8.* Con las tres hojas
 del paquete (técnico, jefe de zona, administración) y el guion de cinco días de

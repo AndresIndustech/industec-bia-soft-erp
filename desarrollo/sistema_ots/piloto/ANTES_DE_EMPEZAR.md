@@ -26,23 +26,22 @@ python verificar_seguridad.py
 
 ## 2. Retirar los datos de prueba del servidor
 
-Las baterías dejan cuentas de prueba (`tec_prueba_uio_a`, `tec_prueba_uio_b`, `jefe_prueba_uio`, `jefe_prueba_cnlj`, `admin_prueba`), dos casos reales de UIO asignados a una cuenta de prueba, avisos sintéticos `9999xxxx`, un pendiente y una novedad marcados PRUEBA. Todo eso se revierte con un solo comando, por SSH, desde la carpeta `ot/` del sitio de pruebas:
+✅ **Hecho el 2026-09-13 (noche), a pedido explícito de Andrés.** Las baterías dejaban cuentas de prueba (`tec_prueba_uio_a`, `tec_prueba_uio_b`, `jefe_prueba_uio`, `jefe_prueba_cnlj`, `admin_prueba`), dos casos reales de UIO asignados a una cuenta de prueba, avisos sintéticos `9999xxxx`, cuatro pendientes y dos novedades marcados PRUEBA, y 72 órdenes de la serie 9000. Se revirtió con un solo comando, por SSH, desde la carpeta `ot/` del sitio de pruebas:
 
 ```bash
 cd domains/darkviolet-armadillo-872352.hostingersite.com/public_html/ot
 php ~/respaldos/deshacer_prueba.php
 ```
 
-**Comprobación:** en `Usuarios` las cinco cuentas de prueba aparecen **inactivas**; en el `Buzón` no queda ningún aviso que empiece por `9999`; los dos casos de UIO vuelven a «sin asignar» (o a quien los tenía). Si hace falta volver a correr las baterías más adelante, `preparar_prueba.php` lo deja todo como estaba y `deshacer_prueba.php` lo vuelve a retirar.
+**Comprobado:** con respaldo previo (`mysqldump` manual a `~/respaldos/darkviolet_bd_antes_limpieza_prueba_20260914_022707.sql.gz`, 144 009 bytes, credenciales leídas de `nucleo/config.php` sin imprimirlas), el script devolvió «órdenes de prueba borradas: 72 · del Archivo: 66 · pendientes: 4 · novedades: 2 · casos devueltos: 2 · avisos sintéticos borrados: 2 · cuentas desactivadas: 5». Verificado después, por consulta directa: las 5 cuentas de prueba están **inactivas** (no borradas: la bitácora las referencia), 0 filas de `ot_capturadas`, `ot_archivo` solo tiene sus 143 filas reales (`origen = CORREO`), y los avisos `10353767`/`10353788` (los **dos casos reales de UIO** que estaban mal asignados a `tec_prueba_uio_a`) volvieron a **0 filas en `casos_gestion`**: no existían ahí antes de la prueba, así que quedan otra vez como cualquier aviso sin abrir del catálogo del buzón, listos para que el jefe de zona los asigne de verdad. **No se borró ningún dato real**, solo la asignación y el rastro que dejó la prueba.
 
-## 3. Las órdenes de la serie de pruebas (decisión de Andrés)
+**Hallazgo y corrección de paso:** `deshacer_prueba.php` no limpiaba `ot_archivo` (el índice que llena `archivo_indexar_cli.php`), así que las 66 órdenes ya indexadas sobrevivían con el PDF ya borrado del disco — un enlace roto en la pantalla «Archivo». Corregido en el propio script (commit `3a5b284` en `pc/pulido-2026-09-12`, subido a GitHub) y en el servidor: ahora `deshacer_prueba.php` también borra de `ot_archivo` las órdenes que borra de `ot_capturadas`. Detalle en `desarrollo/sistema_ots/app/pruebas/servidor/LEEME.md`.
 
-Las órdenes emitidas por las baterías llevan números de la serie **9000** (`CORRECTIVO:UIO` está en 9071). Son fáciles de distinguir y **no chocan** con la numeración real, que se siembra al corte desde los contadores del sistema viejo (`t2_14_sembrar_correlativos.py`, hoy en 1856 para UIO).
+Si hace falta volver a correr las baterías más adelante, `preparar_prueba.php` lo deja todo como estaba y `deshacer_prueba.php` (ya corregido) lo vuelve a retirar completo, Archivo incluido.
 
-- Dejarlas: el Archivo las muestra con su número 90xx y el técnico verá órdenes «de prueba» entre las suyas hasta que se borren.
-- Borrarlas: es una decisión sobre datos del servidor y la toma Andrés. Se hace por SQL sobre `ot_capturadas` (y sus PDF en `ordenes_pdf/`), con el volcado del día antes.
+## 3. Las órdenes de la serie de pruebas — decisión tomada
 
-Mientras no se decida, **quedan**. En las hojas del piloto se explica que las órdenes 90xx son de prueba.
+✅ **Resuelto el 2026-09-13: Andrés pidió borrarlas**, no dejarlas. Las órdenes emitidas por las baterías llevaban números de la serie **9000** (`CORRECTIVO:UIO` llegó a 9072). No chocaban con la numeración real, que se siembra al corte desde los contadores del sistema viejo (`t2_14_sembrar_correlativos.py`, en ensayo: 1856 para UIO), pero tampoco hacía falta dejarlas para el piloto. Se borraron con el paso 2 de arriba (`ot_capturadas` + `ot_archivo`, con su PDF), con el volcado previo ya mencionado. El contador de la serie de pruebas (`correlativos`, fila `CORRECTIVO:UIO`) se dejó en 9072 a propósito: es solo un contador, no dato de cliente, y el próximo uso de prueba sigue en 9073 sin chocar con nada; si se prefiere reiniciarlo a 9000 antes del piloto, es un `DELETE` de una fila y se puede pedir aparte.
 
 ## 4. Las cuentas de UIO
 
@@ -99,8 +98,8 @@ No es requisito para empezar, pero conviene que corra desde la primera noche: es
 | # | Paso | Comprobación | Hecho |
 |---|---|---|---|
 | 1 | Siete baterías en verde | 0 fallos en cada una | ☐ |
-| 2 | `deshacer_prueba.php` | cuentas de prueba inactivas, sin avisos 9999 | ☐ |
-| 3 | Decisión sobre las órdenes 90xx | anotada en ESTADO.md | ☐ |
+| 2 | `deshacer_prueba.php` | cuentas de prueba inactivas, sin avisos 9999 | ✅ 2026-09-13 |
+| 3 | Decisión sobre las órdenes 90xx | anotada en ESTADO.md | ✅ 2026-09-13 — se borraron |
 | 4 | Cuentas de UIO activas | 1 jefe + 5 técnicos + administración | ☐ |
 | 5 | Padrón y catálogos al día | buscador de locales con 100 locales | ☐ |
 | 6 | Buzón de SAP llegando | «Cómo va el buzón» con hora de hoy | ☐ |
