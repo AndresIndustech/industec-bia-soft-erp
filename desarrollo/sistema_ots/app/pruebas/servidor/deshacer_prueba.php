@@ -12,6 +12,11 @@ declare(strict_types=1);
  * - Devuelve los dos casos del técnico A a como estaban antes.
  * - Borra los avisos sintéticos (9999xxxx) de T2.13.2 y T2.13.3: no son del cliente.
  * - Restaura catalogos/tecnicos.json desde su copia.
+ * - Borra de `ot_archivo` (origen APP) las mismas órdenes que borra de
+ *   ot_capturadas: sin esto, la pantalla «Archivo» seguía mostrando las
+ *   órdenes 90xx con el enlace roto (el PDF ya no está en disco) después de
+ *   correr este script. Detectado y corregido el 2026-09-13 al limpiar el
+ *   sitio de pruebas antes del piloto: 66 filas de ot_archivo sobrevivían.
  */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require getcwd() . '/nucleo/Db.php';
@@ -28,8 +33,10 @@ $en = implode(',', array_fill(0, count($ids), '?'));
 // después de confirmar la base. Sin la 008 no hay nada de esto.
 $hay008 = Db::uno("SHOW TABLES LIKE 'ot_fotos'") !== null;
 $archivos = [];
+$idIndustec = [];
 if ($hay008) {
     foreach (Db::todos("SELECT id_industec FROM ot_capturadas WHERE usuario_id IN ($en) AND id_industec IS NOT NULL", $ids) as $r) {
+        $idIndustec[] = $r['id_industec'];
         $archivos[] = 'ordenes_pdf/' . $r['id_industec'] . '.pdf';
     }
     foreach (Db::todos("SELECT ruta FROM ot_fotos WHERE usuario_id IN ($en)", $ids) as $r) {
@@ -69,10 +76,19 @@ try {
     }
     $nu = Db::ejecutar("UPDATE usuarios SET activo = 0, sesion_token = NULL, fecha_baja = CURDATE()
                          WHERE usuario_id IN ($en)", $ids);
+    // Mismo alcance que el borrado de ot_capturadas (arriba): las órdenes que
+    // ya se habían indexado al Archivo (archivo_indexar_cli.php) no desaparecen
+    // solas de ot_archivo. Sin esto la pantalla «Archivo» sigue mostrando las
+    // 90xx con un PDF que ya no existe en disco.
+    $narch = 0;
+    if ($idIndustec) {
+        $enArch = implode(',', array_fill(0, count($idIndustec), '?'));
+        $narch = Db::ejecutar("DELETE FROM ot_archivo WHERE id_industec IN ($enArch) AND origen = 'APP'", $idIndustec);
+    }
     Db::ejecutar("INSERT INTO bitacora (accion, entidad, referencia, estado_despues, exito, detalle, datos, ip, equipo)
                   VALUES ('PRUEBA_DESHACER', 'prueba', 'T2.12.4-6', 'REVERTIDA', 1, ?, ?, '', 'CLI por SSH (PC de Andrés)')",
                  ['Se revirtieron las cuentas y los datos de prueba del alcance por rol',
-                  json_encode(compact('n1', 'nf', 'n2', 'n3', 'nc', 'ns', 'nu'))]);
+                  json_encode(compact('n1', 'nf', 'n2', 'n3', 'nc', 'ns', 'nu', 'narch'))]);
     $pdo->commit();
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }
@@ -96,5 +112,5 @@ if (!empty($d['tecnicos_json']) && is_file($d['tecnicos_json'])) {
 }
 @unlink("$R/claves_prueba.json");
 unlink($DES);
-echo "órdenes de prueba borradas: $n1 · pendientes: $n2 · novedades: $n3 · casos devueltos: $nc · "
-   . "avisos sintéticos borrados: $ns · cuentas desactivadas: $nu\n";
+echo "órdenes de prueba borradas: $n1 · del Archivo: $narch · pendientes: $n2 · novedades: $n3 · "
+   . "casos devueltos: $nc · avisos sintéticos borrados: $ns · cuentas desactivadas: $nu\n";

@@ -14,7 +14,7 @@ producción.
 | `verificar_007.php` | servidor, desde `ot/` | Los dos bloques de verificación del pie de la 007, con PASA/FALLA | No: sus pruebas de escritura van en una transacción que se revierte |
 | `revertir_007.php` | servidor, desde `ot/` | Deshace la 007 (solo si algo salió mal) | Sin `--si` solo dice lo que haría; se niega si las tablas tienen filas, salvo `--forzar` |
 | `preparar_prueba.php` | servidor, desde `ot/` | Crea o renueva 5 cuentas de prueba, asigna 2 casos de UIO al técnico A, le crea 2 avisos sintéticos fuera del catálogo (99990011 abierto y 99990012 atendido sin orden de cierre) y deja datos de prueba en UIO y CNLJ | Sí, y todo queda en `~/respaldos/prueba_deshacer.json` |
-| `deshacer_prueba.php` | servidor, desde `ot/` | Revierte lo anterior: desactiva las cuentas, borra lo que crearon y los avisos sintéticos, y devuelve los casos | Sí |
+| `deshacer_prueba.php` | servidor, desde `ot/` | Revierte lo anterior: desactiva las cuentas, borra lo que crearon (incluida su copia ya indexada en `ot_archivo`, corregido el 2026-09-13) y los avisos sintéticos, y devuelve los casos | Sí |
 | `alcance_cli.php` | servidor, desde `ot/` | Qué ve un usuario, con las mismas funciones que las pantallas | No |
 | `verificar_http.py` | PC o estación | Entra con las cuentas de prueba y comprueba pantallas, alcance, POST fabricados y la orden de la app | Sí: órdenes de prueba de las cuentas de prueba |
 | `verificar_ciclo.py` | PC o estación | El ciclo completo de un caso: trabado → veredicto → vía → resuelto | Sí: un pendiente de prueba |
@@ -55,6 +55,13 @@ en `~/respaldos/claves_prueba.json` (0600) y los scripts de Python las leen por 
   orden necesitan el local y los equipos que trae el catálogo del buzón. Se devuelven a como
   estaban con `deshacer_prueba.php`. No dejarlo corriendo sin necesidad. Desde T2.13.3 crea además
   avisos sintéticos `9999xxxx`, que no existen en SAP y se borran enteros al deshacer.
+- **`deshacer_prueba.php` no limpiaba `ot_archivo`** (hallazgo del 2026-09-13, al retirar los datos
+  de prueba antes del piloto): la pantalla «Archivo» se llena aparte, con `archivo_indexar_cli.php`,
+  y esas filas sobrevivían al deshacer con el PDF ya borrado del disco — un enlace roto. Corregido:
+  ahora borra de `ot_archivo` (solo `origen = 'APP'`) los mismos `id_industec` que borra de
+  `ot_capturadas`. Si vuelve a pasar (por ejemplo tras una prueba corrida sin `preparar_prueba.php`
+  de por medio), verificar con `SELECT origen, tecnico, COUNT(*) FROM ot_archivo WHERE tecnico LIKE
+  'Prueba %' GROUP BY 1,2` antes de dar el sitio por limpio.
 - Agrega los técnicos de prueba a `catalogos/tecnicos.json`, con copia previa: `envio.php` exige
   que quien firma esté en el padrón. Si la estación empuja el padrón en medio, se pierden y la
   orden de prueba da 400; basta con volver a preparar.
