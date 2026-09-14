@@ -31,6 +31,13 @@ node_modules/
 *.xlsx
 *.csv
 
+# --- Volcados de la base operativa ------------------------------------------
+# Llevan datos reales de clientes (KFC y otras cadenas). Nunca al repositorio,
+# aunque queden guardados dentro de una carpeta del proyecto por comodidad.
+*.sql.gz
+*.sql.gz.sha256
+respaldo_bd_*/
+
 # Claves SSH y secretos del hosting. La privada de Hostinger vive en
 # %USERPROFILE%\.ssh y no tiene por que acercarse al repositorio, pero si
 # alguien la copia aqui por comodidad, que git no la deje entrar.
