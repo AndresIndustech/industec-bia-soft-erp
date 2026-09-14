@@ -1272,6 +1272,7 @@ sobre-contó el backlog 8× en T1.11.
 | ~~Sacar el proyecto del único disco~~ | ✅ **Hecho el 2026-09-10:** remoto privado `AndresIndustech/industec-bia-soft-erp`. La base y el árbol canónico siguen en un solo disco hasta el TrueNAS |
 | ~~Desplegar los arreglos que ya afectan al sitio en uso y corregir las 2 filas «ASIGNADO» sin técnico~~ | ✅ **Hecho el 2026-09-10** con aprobación de Andrés: `sw.js` v4, `pdf.php`, `nucleo/Reconciliar.php`, `nucleo/Auth.php` y los dos `.htaccess`; huérfanas a NUEVO. `login.php` y `usuarios.php` suben con T2.12.3 porque necesitan el `Ui.php` y el `estilo.css` del rediseño. Ver [`AUDITORIA_2026-09-10.md`](AUDITORIA_2026-09-10.md) §3 |
 | Delegado de protección de datos ante la SPDP | Trámite: gratis, en línea, guía en `TRAMITE_DELEGADO_DATOS.md`. **El plazo venció hace más de 8 meses** |
+| **Recuperar el PDF de `OT-2488-K061-10351229-CNLJ`** (aviso `10351229` / crudo `000010351229`, local `K061EC` Mall del Río Cuenca, zona CNLJ, cadena KFC; cerrada por informe el 2026-09-11, reportada por Andrés el 2026-09-13 — el clic caía en el 404 de `pdf.php`, causa ya corregida en `casos.php`, ver §11b «errores que ya se pagaron» #16) | **La estación, con acceso a `D:\RESPALDOS`** (no accesible desde este PC ni desde el PC de Andrés). Buscar el archivo en la carpeta canónica `D:\RESPALDOS\ORDENES DE TRABAJO\2026\CORRECTIVO\CNLJ\KFC\` (o por el aviso `10351229`/`000010351229` dentro del texto del PDF, con `industec-extraccion-pdf`) y subirlo por scp como `ordenes_pdf/OT-2488-K061-10351229-CNLJ.pdf` en el sitio de pruebas (mismo nombre exacto, sensible a mayúsculas); después `php archivo_indexar_cli.php --solo-pdf` por SSH para que el Archivo lo indexe. Si no aparece en la carpeta canónica, el informe nunca llegó a bajarse del buzón — mismo cuadro que `OT-2503-K146-10354374-CNLJ`, hallado el 2026-09-13 sin `fuente_ruta` al simular `t2_18_atender_pedidos_copia.py` contra darkviolet — y hace falta revisarlo con `t2_11_informes_ot.py` o pedir una copia nueva al local. La rama `pc/archivo-zona-franquicia-2026-09-13` (T2.18, del propio Andrés, **sin fusionar con `pc/pulido-2026-09-12` ni con `master`**) ya trae construido y probado en simulación justo este mecanismo (`t2_18_clasificar_archivo.py` + `t2_18_atender_pedidos_copia.py`, que atiende la cola `ot_archivo_solicitudes` del botón «Pedir copia»): fusionarla y correrla contra el `D:\RESPALDOS` real es más rápido que resolver este caso a mano |
 
 ### Entorno
 
@@ -1359,6 +1360,19 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     avanzar sin fusionar. **El disco local no es el estado del proyecto**, y
     escribir el plan sin mirar las ramas manda a la siguiente conversación a
     repetir trabajo hecho.
+16. **Corregir un hallazgo en una sola pantalla que lo repite, y no buscar las demás.**
+    `Emision::existePdf()` se creó para H-02 (`mis.php` pintaba «Ver PDF» sin
+    comprobar que el archivo existiera) y se aplicó ahí y en `ordenes.php`. Nadie
+    volvió a revisar el resto de las pantallas que arman `pdf.php?ot=…`, y
+    `casos.php` —el buzón, la pantalla que más gente abre— se quedó con el mismo
+    hueco: el número de la orden de cierre enlazaba siempre a `pdf.php`, con o sin
+    archivo, y caía en el 404 «El PDF de esa orden no está en el servidor.»
+    Reportado por Andrés el 2026-09-13 (caso `OT-2488-K061-10351229-CNLJ`),
+    corregido el mismo día en `casos.php` (commit `00870b4`,
+    `pc/pulido-2026-09-12`). **La corrección de un patrón no está completa hasta
+    que se verifica en todos los sitios donde el patrón se repite**: `grep -rn
+    "pdf.php?ot="` sobre `app/publico` es el comando, y da seis sitios; verificar
+    los seis, no solo el que reportaron.
 
 ### Lo que no se toca, nunca
 
