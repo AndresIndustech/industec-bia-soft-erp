@@ -135,7 +135,7 @@ def desde_mariadb() -> list[dict]:
 
 def empujar(json_local: Path) -> int:
     env = leer_env()
-    llave = os.environ.get("INDUSTEC_LLAVE_SSH") or env.get("INDUSTEC_LLAVE_SSH") or str(Path.home() / ".ssh" / "industec_hostinger_pc")
+    llave = os.environ.get("INDUSTEC_LLAVE_SSH") or env.get("INDUSTEC_LLAVE_SSH") or str(Path(__file__).resolve().parents[1] / "config" / "clave_hostinger")
     usuario = os.environ.get("INDUSTEC_SSH_USER") or env.get("INDUSTEC_SSH_USER") or "u671729428"
     host = os.environ.get("INDUSTEC_SSH_HOST") or env.get("INDUSTEC_SSH_HOST") or SSH_HOST
     remoto_app = os.environ.get("INDUSTEC_REMOTO_APP") or env.get("INDUSTEC_REMOTO_APP") or REMOTO_APP

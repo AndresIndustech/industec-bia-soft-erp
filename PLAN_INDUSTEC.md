@@ -1204,16 +1204,23 @@ para la solicitud real que ya está pendiente. El detalle completo, con lo que
 no se pudo probar desde el PC por no tener acceso a `D:\RESPALDOS`, está en la
 tarea T2.18 más arriba, sección «Pendiente de la estación».
 
-**G. Fusionar la rama del 2026-09-14 y cargar todos los PDF (T2.19)** — *autónomo, en la
-estación; lo decidió Andrés el 2026-09-14.* `git fetch origin && git merge
-origin/pc/documentos-y-otros-trabajos-2026-09-14` (trae también el pulido y T2.18: con esta basta,
-y reemplaza a A y F en lo que toca a fusionar). Después, desde `desarrollo/agentes`:
-`.venv/Scripts/python.exe scripts/t2_19_pruebas.py` (16/16); `scripts/t2_19_subir_pdfs.py` en
-simulación —anotar cuántos faltan, las colisiones y los nombres fuera de patrón—;
-`--ejecutar --limite 500` para medir; `--ejecutar` para el resto; y
-`t2_15_exportar_archivo.py --desde-mariadb --empujar` para que el Archivo tenga el catálogo con su
-módulo. Criterio: en el buzón, 10354415, 10354383 y 10351229 abren su PDF; en el Archivo, «Solo en
-la estación» cerca de 0. El saneamiento nocturno ya trae el paso `pdfs` para lo nuevo.
+**G. Fusionar la rama del 2026-09-14 y cargar todos los PDF (T2.19)** — ✅ **hecho el
+2026-09-18.** Fusionada `pc/documentos-y-otros-trabajos-2026-09-14` en `master` (trae también el
+pulido y T2.18), fast-forward limpio. `t2_19_pruebas.py`: 16/16. `t2_19_subir_pdfs.py`: simulación
+7.172 por subir, 0 colisiones, 0 fuera de patrón; `--ejecutar --limite 500` (500/500) y `--ejecutar`
+para el resto (6.672/6.672, 0 fallidos): **7.287 de 7.287 PDF de la estación ahora en el servidor.**
+`t2_15_exportar_archivo.py --desde-mariadb --empujar`: 7.118 órdenes exportadas, índice en 7.356
+filas, `en_servidor=1` en 7.287 (69 sin PDF, de origen CORREO/GESTIÓN sin archivo local — no es la
+carga de T2.19, es lo que ya faltaba en la estación). **Bug encontrado y corregido en el camino:**
+`t2_15_exportar_archivo.py` traía el fallback de la llave SSH apuntando a la ruta del PC en vez de
+`config/clave_hostinger` de la estación (inconsistente con `t2_10_desplegar.py`); primer intento de
+`--empujar` falló por esto, corregido y reintentado con éxito. **Criterio verificado:** los avisos
+10354415, 10354383 y 10351229 tienen su PDF en `ordenes_pdf/` del servidor y su fila en `ot_archivo`
+con `en_servidor=1` y `ruta` válida (verificado por SSH, no solo por el log del script). El
+saneamiento nocturno ya trae el paso `pdfs` para lo nuevo. **Sigue sin hacer** (no era parte de esta
+acción): el `--ejecutar` de `t2_18_clasificar_archivo.py` (la vista por zona/franquicia en
+`SALIDAS IA\ARCHIVO OTS INDUSTEC`, bloqueada por espacio en `G:\Mi unidad`) y los 4 conflictos de
+correlativo en `_DEL_BUZON` — ver T2.18 más arriba.
 
 *Lo que en la versión anterior de esta sección eran las acciones A a D (las 4
 comprobaciones rotas de `prueba_48h.php`, `prueba_offline.mjs`, la copia
