@@ -140,6 +140,7 @@ if ($formato === 'xlsx') {
         ['Preventivo: cumplidos a tiempo', $pre['fuente'] === null ? 'sin cronograma' : ($pre['pct_a_tiempo'] === null ? 'sin dato' : $pre['pct_a_tiempo'] . '%'), 'contra el plan acordado con KFC'],
         ['Novedades con aviso en SAP', $nov['con_aviso'], 'de ' . $nov['total'] . ' reportadas'],
         ['Órdenes en el archivo', $r['archivo']['total'] ?? 'sin índice', 'índice del archivo general'],
+        ['Otros trabajos autorizados', count($r['otros_trabajos']), 'fuera del área, por acuerdo con KFC (hoja «Otros trabajos»)'],
     ], ['A' => 34, 'B' => 16, 'C' => 48]);
     $f = $tabla($ws, $f, ['Antigüedad de lo abierto', 'Casos'], array_map(fn($x) => [$x['e'], $x['v']], $r['edad']));
 
@@ -205,6 +206,17 @@ if ($formato === 'xlsx') {
     $f = $tabla($ws, 5, ['Local', 'Casos'], array_map(fn($x) => [$x['e'], $x['v']], $r['locales']), ['A' => 14, 'B' => 12, 'C' => 40]);
     $f = $tabla($ws, $f, ['Locales que repiten (5 o más)', 'Casos'], array_map(fn($l, $c) => [$l, $c], array_keys($r['reincidentes']), $r['reincidentes']));
     $tabla($ws, $f, ['Qué se pide', 'Casos'], array_map(fn($x) => [$x['e'], $x['v']], $r['tipos']));
+
+    // --- Otros trabajos (011): los extras para KFC, autorizados por la administración ---
+    $ws = $hoja($ss, 'Otros trabajos');
+    $ws->setCellValue('A5', 'Trabajos fuera del área de INDUSTEC hechos por acuerdo con Grupo KFC y autorizados por la administración. '
+        . (int) $r['otros_por_decidir'] . ' casos fuera del área esperan decisión.'
+        . (($r['archivo']['modulo_otros'] ?? 0) ? ' Órdenes del módulo «Otros» en el Archivo: ' . (int) $r['archivo']['modulo_otros'] . '.' : ''));
+    $ws->getStyle('A5')->getFont()->setSize(9)->setItalic(true);
+    $tabla($ws, 6, ['AVISO', 'FECHA', 'LOCAL', 'NOMBRE DEL LOCAL', 'ZONA', 'TRABAJO', 'ORDEN', 'ESTATUS', 'ACUERDO CON KFC', 'AUTORIZÓ', 'AUTORIZADO EL'],
+           array_map(fn($o) => [$o['aviso'], $o['fecha'], $o['local'], $o['local_nombre'], $o['zona'], $o['trabajo'], $o['ot'],
+                                $o['estatus'], $o['acuerdo'], $o['autorizo'], $o['autorizado_en']], $r['otros_trabajos']),
+           ['A' => 14, 'B' => 12, 'C' => 10, 'D' => 28, 'E' => 8, 'F' => 24, 'G' => 32, 'H' => 16, 'I' => 50, 'J' => 26, 'K' => 14]);
 
     $ss->setActiveSheetIndex(0);
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -341,6 +353,19 @@ if ($pre['fuente'] === null) {
 }
 
 // 7. Novedades y cierre
+// --- Otros trabajos (011): los extras para KFC, autorizados por la administración ---
+$slide = $p->createSlide(); $cabecera($slide, 'Otros trabajos para Grupo KFC');
+$otr = $r['otros_trabajos'];
+$texto($slide, count($otr) . ' trabajos fuera del área de INDUSTEC, hechos por acuerdo con Grupo KFC y autorizados por la administración'
+    . (($r['archivo']['modulo_otros'] ?? 0) ? '; además, ' . (int) $r['archivo']['modulo_otros'] . ' órdenes del módulo «Otros», extras dentro del mismo trato.' : '.'),
+    36, 110, $W - 72, 40, 12, false, $GRIS);
+if ($otr) {
+    $tablaP($slide, ['Aviso', 'Local', 'Zona', 'Trabajo', 'Orden', 'Acuerdo con KFC'],
+            array_map(fn($o) => [$o['aviso'], $o['local'], $o['zona'], $o['trabajo'], $o['ot'] !== '' ? $o['ot'] : '—', $o['acuerdo']],
+                      array_slice($otr, 0, 10)),
+            36, 160, $W - 72, [90, 70, 60, 170, 200, 298]);
+}
+
 $slide = $p->createSlide(); $cabecera($slide, 'Qué hace fallar los equipos, y cierre');
 if ($nov['por_area']) {
     $tablaP($slide, ['Área', 'Novedades'], array_map(fn($x) => [$x['e'], $x['v']], array_slice($nov['por_area'], 0, 8)), 36, 120, 420, [300, 120]);

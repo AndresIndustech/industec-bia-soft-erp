@@ -149,6 +149,14 @@ function reportePdfHtml(array $r, array $u): string
   </tr></table>
 <?php endif; ?>
 
+<?php /* Otros trabajos (011): los extras para KFC, autorizados por la administración. */ ?>
+<?php $otr = $r['otros_trabajos'] ?? []; $modOtros = (int) ($r['archivo']['modulo_otros'] ?? 0); ?>
+<h2>Otros trabajos para Grupo KFC</h2>
+<p class="sub"><?= $n(count($otr)) ?> trabajos fuera del área de INDUSTEC, hechos por acuerdo con Grupo KFC y autorizados por la administración<?= $modOtros ? '; además, ' . $n($modOtros) . ' órdenes del módulo «Otros», extras dentro del mismo trato' : '' ?>.</p>
+<?= $tabla(array_map(fn($o) => [$o['aviso'], trim($o['local'] . ' ' . $o['local_nombre']), $o['zona'], $o['trabajo'],
+                                $o['ot'] !== '' ? $o['ot'] : '—', $o['acuerdo']], $otr),
+           ['Aviso', 'Local', 'Zona', 'Trabajo', 'Orden', 'Acuerdo con KFC']) ?>
+
 <h2 class="salto">Casos abiertos (plan de zona)</h2>
 <p class="sub">Semáforo: <?php foreach ($SEM as $k => $c): ?><span class="sem" style="background:<?= $c ?>"></span><?= $e($SEM_T[$k]) ?> &nbsp; <?php endforeach; ?></p>
 <?php if (!$r['casos_abiertos']): ?>

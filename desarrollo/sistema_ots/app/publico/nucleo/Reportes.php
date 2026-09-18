@@ -88,11 +88,33 @@ final class Reportes
             }
         }
 
+        // «Otros trabajos» (011): lo que INDUSTEC hizo para KFC fuera de su
+        // área, autorizado por la administradora. Se reporta aparte, como extra.
+        $otros = []; $otrosPorDecidir = 0;
+
         foreach ($casos as $c) {
             $aviso  = (string) ($c['aviso'] ?? '');
             $g      = $gestion[$aviso] ?? [];
             $estado = (string) ($g['estado'] ?? 'NUEVO');
             $porEstado[$estado] = ($porEstado[$estado] ?? 0) + 1;
+
+            if (($g['otro_trabajo'] ?? null) === 'AUTORIZADO') {
+                $otros[] = [
+                    'aviso'         => $aviso,
+                    'local'         => trim((string) ($c['local'] ?? '')),
+                    'local_nombre'  => (string) ($c['local_nombre'] ?? ''),
+                    'zona'          => (string) ($c['zona'] ?? ''),
+                    'fecha'         => substr((string) ($c['fecha_creacion'] ?? ''), 0, 10),
+                    'trabajo'       => (string) ($c['caso'] ?? ''),
+                    'ot'            => (string) ($g['ot_cierre'] ?? ''),
+                    'estatus'       => Ui::etiquetaEstado($estado),
+                    'acuerdo'       => (string) ($g['otro_trabajo_motivo'] ?? ''),
+                    'autorizo'      => (string) ($g['otro_trabajo_nombre'] ?? ''),
+                    'autorizado_en' => substr((string) ($g['otro_trabajo_en'] ?? ''), 0, 10),
+                ];
+            } elseif (Casos::otroTrabajoPorDecidir($c, $g ?: null)) {
+                $otrosPorDecidir++;
+            }
 
             $z = (string) ($c['zona'] ?? '');
             if (isset($porZona[$z])) { $porZona[$z]++; } else { $sinZona++; }
@@ -234,6 +256,9 @@ final class Reportes
             'preventivo' => $preventivo,
             'casos_abiertos' => $casosAbiertos,
             'archivo' => $archivo,
+            // 011: los extras autorizados, y los fuera del área que esperan decisión.
+            'otros_trabajos' => $otros,
+            'otros_por_decidir' => $otrosPorDecidir,
         ];
     }
 
@@ -349,7 +374,13 @@ final class Reportes
                 $mesN = (int) (Db::uno("SELECT COUNT(*) n FROM ot_archivo WHERE $donde AND DATE_FORMAT(fecha_atencion, '%Y-%m') = ?",
                                        array_merge($par, [$mes]))['n'] ?? 0);
             }
-            return ['total' => (int) ($tot['n'] ?? 0), 'en_servidor' => (int) ($tot['s'] ?? 0), 'mes' => $mesN];
+            // Las órdenes del módulo «Otros»: extras que INDUSTEC hace para KFC dentro
+            // del mismo trato (Andrés, 2026-09-14). Van con los «otros trabajos».
+            $sqlOtros = "SELECT COUNT(*) n FROM ot_archivo WHERE $donde AND modulo = 'OTROS'";
+            $parOtros = $par;
+            if ($mes !== null) { $sqlOtros .= " AND DATE_FORMAT(fecha_atencion, '%Y-%m') = ?"; $parOtros[] = $mes; }
+            return ['total' => (int) ($tot['n'] ?? 0), 'en_servidor' => (int) ($tot['s'] ?? 0), 'mes' => $mesN,
+                    'modulo_otros' => (int) (Db::uno($sqlOtros, $parOtros)['n'] ?? 0)];
         } catch (Throwable $e) {
             return null;
         }

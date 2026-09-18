@@ -110,16 +110,43 @@ final class Casos
         $filas = Db::todos(
             'SELECT g.*, t.nombre AS tecnico_nombre, t.usuario AS tecnico_usuario,
                     a.nombre AS asignador_nombre, v.nombre AS veredicto_nombre,
-                    r.nombre AS revision_nombre
+                    r.nombre AS revision_nombre, o.nombre AS otro_trabajo_nombre
                FROM casos_gestion g
                LEFT JOIN usuarios t ON t.usuario_id = g.asignado_a
                LEFT JOIN usuarios a ON a.usuario_id = g.asignado_por
                LEFT JOIN usuarios v ON v.usuario_id = g.veredicto_por
-               LEFT JOIN usuarios r ON r.usuario_id = g.revision_por'
+               LEFT JOIN usuarios r ON r.usuario_id = g.revision_por
+               LEFT JOIN usuarios o ON o.usuario_id = g.otro_trabajo_por'
         );
         $out = [];
         foreach ($filas as $f) { $out[$f['aviso']] = $f; }
         return $out;
+    }
+
+    /**
+     * ¿El caso parece fuera del área de INDUSTEC? Lo dicen las alertas de
+     * `config/alcance_trabajos.json`: CON_ALERTA, y POR_CONFIRMAR para los
+     * tipos que todavía no tienen criterio. No decide nada: señala dónde hace
+     * falta la decisión de la administradora (011, «otros trabajos»).
+     */
+    public static function fueraDeArea(array $c): bool
+    {
+        return in_array((string) ($c['estado_alerta'] ?? ''), ['CON_ALERTA', 'POR_CONFIRMAR'], true);
+    }
+
+    /**
+     * Fuera del área y sin decidir: la ÚNICA definición, para el panel, el
+     * buzón y los reportes. Deja de estarlo cuando la administradora lo
+     * autoriza —o no— como «otro trabajo» (hubo acuerdo con KFC), o cuando lo
+     * cierra como «no nos compete» y le pide a KFC que lo derive. Un caso ya
+     * RESUELTO también entra: el 10351229 (Mant. Constructivo, CNLJ) se atendió
+     * y se cerró sin que nadie decidiera si era un extra.
+     */
+    public static function otroTrabajoPorDecidir(array $c, ?array $g): bool
+    {
+        return self::fueraDeArea($c)
+            && empty($g['otro_trabajo'])
+            && ($g['estado'] ?? 'NUEVO') !== 'NO_COMPETE';
     }
 
     /**
@@ -414,6 +441,86 @@ final class Casos
                 'fecha_creacion' => substr((string) ($g['creado_en'] ?? ''), 0, 10),
                 'fecha_estimada' => '', 'estado_alerta' => '', 'estado_gestion' => $g['estado'],
             ];
+        }
+        return $out;
+    }
+
+    /**
+     * Todos los documentos de cada caso, relacionados por AVISO.
+     *
+     * Hasta el 2026-09-14 el buzón pintaba solo lo que traía `atenciones.json`,
+     * y la orden de cierre que dejan la reconciliación y la app en
+     * `casos_gestion.ot_cierre` no salía: 38 de los 67 casos con orden de
+     * cierre se veían «sin atender» en la misma fila que decía «atendido ·
+     * técnico (del informe)» (avisos 10354415 y 10354383, LARB). Y un mismo
+     * informe llega con dos nombres —`OT-2488-K061-10351229-CNLJ` por el correo
+     * y `OT-2488-K061EC-10351229-CNLJ` en el árbol canónico—, así que la
+     * relación se hace por el aviso y no por el nombre exacto de la orden.
+     *
+     * Cuatro fuentes, sin repetir una orden: el índice del Archivo
+     * (`ot_archivo`), la orden de cierre, lo que llegó por correo y lo que
+     * emitió la app (`ot_capturadas`, que trae también lo que sigue en curso).
+     * Si el PDF está en el servidor lo dice `Emision::existePdf()` en el
+     * momento, no `ot_archivo.en_servidor`, que solo se refresca al indexar.
+     *
+     * @param string[] $avisos los avisos que se van a pintar
+     * @return array<string,array<int,array{ot:string,fecha:?string,cierre:bool,pdf:bool}>>
+     */
+    public static function documentos(array $avisos, array $gestion, array $aten): array
+    {
+        require_once __DIR__ . '/Emision.php';
+        // El aviso llega con y sin ceros a la izquierda según la fuente
+        // (`000010352936` en SAP, `10352936` en el nombre de la orden).
+        $clave = static fn($a): string => ltrim(trim((string) $a), '0');
+        $quiero = [];
+        foreach ($avisos as $a) {
+            if ($clave($a) !== '') { $quiero[$clave($a)] = (string) $a; }
+        }
+        $docs = [];
+        $poner = static function (string $k, string $ot, ?string $fecha, bool $cierre) use (&$docs, $quiero): void {
+            $ot = strtoupper(trim($ot));
+            if ($ot === '' || !isset($quiero[$k])) { return; }
+            $aviso = $quiero[$k];
+            $f = $docs[$aviso][$ot] ?? ['ot' => $ot, 'fecha' => null, 'cierre' => false];
+            if ($f['fecha'] === null && $fecha !== null && preg_match('/^\d{4}-\d{2}-\d{2}/', $fecha, $m)) {
+                $f['fecha'] = $m[0];
+            }
+            $f['cierre'] = $f['cierre'] || $cierre;
+            $docs[$aviso][$ot] = $f;
+        };
+
+        try {
+            foreach (Db::todos("SELECT id_industec, aviso, fecha_atencion FROM ot_archivo
+                                 WHERE aviso IS NOT NULL AND aviso <> ''") as $r) {
+                $poner($clave($r['aviso']), (string) $r['id_industec'], $r['fecha_atencion'], false);
+            }
+        } catch (Throwable $e) { /* sin la 009 no hay índice: quedan las otras tres fuentes */ }
+
+        foreach ($gestion as $aviso => $g) {
+            if (!empty($g['ot_cierre'])) {
+                $poner($clave($aviso), (string) $g['ot_cierre'], $g['atendido_en'] ?? null, true);
+            }
+        }
+        foreach ($aten as $aviso => $a) {
+            foreach ($a['ots'] ?? [] as $o) {
+                $poner($clave($aviso), (string) ($o['ot'] ?? ''), $o['fecha'] ?? null,
+                       ($o['estado_ot'] ?? '') === 'Cerrada');
+            }
+        }
+        try {
+            foreach (Db::todos("SELECT id_industec, aviso, emitida_en FROM ot_capturadas
+                                 WHERE id_industec IS NOT NULL AND aviso IS NOT NULL AND aviso <> ''
+                                   AND estado IN ('EMITIDA','ENVIADA','NUMERADA','FALLIDA','PROCESADA')") as $r) {
+                $poner($clave($r['aviso']), (string) $r['id_industec'], $r['emitida_en'], false);
+            }
+        } catch (Throwable $e) { /* ot_capturadas llega con la 008 */ }
+
+        $out = [];
+        foreach ($docs as $aviso => $porOt) {
+            $lista = [];
+            foreach ($porOt as $f) { $lista[] = $f + ['pdf' => Emision::existePdf($f['ot'])]; }
+            usort($lista, static fn($x, $y) => [(string) $x['fecha'], $x['ot']] <=> [(string) $y['fecha'], $y['ot']]);
+            $out[$aviso] = $lista;
         }
         return $out;
     }

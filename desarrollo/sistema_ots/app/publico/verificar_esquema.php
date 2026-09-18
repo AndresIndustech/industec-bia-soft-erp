@@ -183,6 +183,10 @@ if ($hay009) {
               (int) $db->query('SELECT COUNT(*) FROM migraciones')->fetchColumn(), fn($n) => $n >= 9);
     echo "\nmigracion 010\n";
     comprobar('sesiones_log.evento admite SIN_SESION', $hay010 ? 'si' : 'no', 'si');
+    // La 011 es la marca «otros trabajos» (decisión de Andrés del 2026-09-14).
+    echo "\nmigracion 011\n";
+    $cols011 = array_column($db->query("SHOW COLUMNS FROM casos_gestion LIKE 'otro_trabajo%'")->fetchAll(), 'Field');
+    comprobar('casos_gestion lleva la marca de otros trabajos (4 columnas)', count($cols011), 4);
     // La semilla (009_semilla_diagnosticos.sql) va aparte: si no se aplicó, aquí se ve.
     comprobar('familias de equipo (semilla)',
               (int) $db->query('SELECT COUNT(*) FROM familias_equipo')->fetchColumn(), fn($n) => $n >= 20);
