@@ -40,7 +40,7 @@ del rediseño.
 | Pieza | Estado | Cifra verificada |
 |---|---|---|
 | Corpus histórico saneado | ✅ | **7.070** órdenes en el árbol canónico + 5 informes técnicos + 25 de otros clientes |
-| **Robot del correo → informes nuevos** | ⚠️ **cadena cortada** (auditado el 2026-09-18) | Lee e identifica, y el estatus del caso **sí** se actualiza. Pero **104 informes varados** en `_ORIGEN_BUZON`: 0 clasificados, 0 en `ots`, 0 en el servidor; y **76 casos cerrados figuran pendientes** por estar su informe en `Trash`. Detalle en **§1c**; qué hacer, en el plan **T2.21** |
+| **Robot del correo → informes nuevos** | ⚠️ **media cadena reparada el 2026-09-19** | **Ya no se pierden los cierres que la administradora borra:** el robot lee `INBOX`, `Trash` e `INFORMES OT` (T2.21.1). El propio servidor registró el salto en la corrida programada de las 00:23 — `empujado (atenciones): HTTP 200 ok n=193 antes=122`. Sigue rota la otra mitad: **105 informes varados** en `_ORIGEN_BUZON` (0 clasificados, 0 en `ots`, 0 en el servidor), a la espera del `--ejecutar` que autoriza Andrés. Detalle en **§1c**; qué hacer, en el plan **T2.21** |
 | Base de datos poblada | ✅ | **7.118 órdenes activas** (era 7.069 hasta el 2026-09-13: `t2_18_rescatar_buzon.py` recuperó 53 OTs que llevaban 4 días en `_DEL_BUZON` sin clasificar ni ingestar — ver T2.18 en el plan) · 9.071 equipos · 100 locales · 145 alias · 6.450 avisos SAP · 19 técnicos |
 | Auditor de calidad (Agente 1) | ✅ | 2.644 observaciones abiertas, con veredicto editable por la administración |
 | Consolidador de plan de zona (Agente 2) | ⚠️ v1 | 87,3% de coincidencia celda a celda en el piloto UIO |
@@ -56,6 +56,41 @@ del rediseño.
 
 ---
 
+## 1b-bis. T2.21.1 cerrado y comprobado en producción (2026-09-19)
+
+El robot abría solo `INBOX`, de las 10 carpetas de la cuenta. Ahora abre una
+lista blanca declarada en el código —`INBOX`, `Trash`, `INFORMES OT`— con el
+motivo de cada exclusión escrito al lado, para que nadie la «optimice» de
+vuelta. Todas con EXAMINE y `BODY.PEEK[]`: no se restaura, no se mueve y no se
+borra un correo, tampoco en `Trash` (I-2, I-3).
+
+**Medido a mano antes de commitear** (`--sin-pdf`, contra el buzón real):
+
+| | Solo INBOX | INBOX + Trash + INFORMES OT |
+|---|---|---|
+| Informes leídos | 591 | **748** |
+| Casos pendientes con atención | 122 | **193** |
+| Ya cerradas por INDUSTEC | 31 | **106** |
+
+**Comprobado después en la corrida programada**, sin intervención de nadie: la
+Tarea «INDUSTEC - Informes de OT» corrió a las 00:23 y el servidor devolvió
+`HTTP 200 ok tipo=atenciones n=193 antes=122`. Es el propio servidor diciendo
+de cuánto a cuánto subió.
+
+**Y la prueba de que el agujero era real, capturada en vivo el 2026-09-19:**
+entre la tercera y la cuarta corrida del día, `INBOX` bajó de 587 a 579 y
+`Trash` subió de 157 a 167 — la administradora borró correos mientras el robot
+trabajaba, y el total leído no cayó (744 → 746) porque la papelera los recogió.
+Con el código de ayer, esos ocho informes se habrían perdido y sus casos
+seguirían figurando pendientes.
+
+**Prueba negativa en verde:** `grep -nE "M\.(store|copy|move|expunge)" scripts/t2_*.py`
+no devuelve nada, y los seis `select()` del proyecto llevan `readonly=True`.
+
+`INFORMES OT` existe en la cuenta y está **vacía**: confirmado, nadie escribe ahí.
+
+---
+
 ## 1c. La cadena del correo, medida el 2026-09-18 (auditoría de T2.21)
 
 Andrés pidió validar si el robot del correo identifica los informes nuevos, los
@@ -68,7 +103,7 @@ está en `PLAN_INDUSTEC.md` T2.21; aquí van solo las cifras.**
 | **Identifica los informes nuevos** | ⚠️ a medias | **918** informes en `INBOX` (de `reclutamiento@industec.me`, ventana de 90 días), y de ahí **581 leídos → 129 con PDF bajado**. Pero los scripts abren **1 de las 10 carpetas** de la cuenta: en `Trash` hay **157 informes, 123 con «Estado de OT: Cerrada», y 76 de casos que el sitio sigue mostrando pendientes**. La carpeta **`INFORMES OT` ya existe y está vacía**: nadie la lee |
 | **Los clasifica en el respaldo** | ❌ no | **104 PDF en `D:\RESPALDOS\_ORIGEN_BUZON`** (33 UIO, 17 LARB, 54 CNLJ): **0** con archivo en el árbol canónico bajo su propio correlativo, **0** con fila en `ots` por (correlativo, zona), **99** sin ningún rastro. `ots.fuente='IMAP_EN_VIVO'` → **0 de 7.469** (las 7.469 son `DRIVE_HISTORICO`). El árbol canónico no recibe un archivo desde el **2026-09-13 22:22**. Los 104 son documentos únicos: **0 duplicados por hash** contra los 18.188 PDF de todo `D:\RESPALDOS` |
 | **Los sube y enlaza al caso, con su estatus** | ⚠️ enlaza, no sube | El enlace por número de aviso funciona y la distinción «INDUSTEC atendió» ≠ «SAP cerró» **se respeta** (`Ui::ESTADOS`, chip «atendido, en curso» / «con orden de cierre»). Pero **0 de 104 PDF están en el servidor**: `t2_19_subir_pdfs.py` recorre `ORDENES DE TRABAJO` + `_DEL_BUZON` (7.123 + 164 = 7.287) y su simulación dice «faltan: 0» sin haberlos visto. **19 casos** con «PDF no cargado al archivo todavía», **3 de ellos órdenes de cierre** (avisos 10355449, 10355399, 10355488) |
-| **Se ve en el buzón del técnico y su historial** | ⚠️ llega poco | La atención sí llega: **121 casos** con atención, **88 en bandeja** entre 13 personas, **31 en historial**. El aislamiento por técnico y por zona **está bien** (el bug de los 300 casos de la zona está cerrado). Pero «Las mías» del Archivo devuelve **1 fila de 7.118** —y esa única es de un JEFE_ZONA, así que para los 16 técnicos da **0**—, porque `ot_archivo.tecnico` guarda la firma cruda del PDF (**403 firmas para 19 personas**) y el filtro compara con el nombre del padrón. **21 de las 40 personas del padrón no tienen usuario del sistema** |
+| **Se ve en el buzón del técnico y su historial** | ⚠️ llega poco | La atención sí llega: **121 casos** con atención, **88 en bandeja** entre 13 personas, **31 en historial**. El aislamiento por técnico y por zona **está bien** (el bug de los 300 casos de la zona está cerrado). Pero «Las mías» del Archivo está roto porque `ot_archivo.tecnico` guarda la firma cruda del PDF y el filtro compara con el nombre del padrón. **21 de las 40 personas del padrón no tienen usuario del sistema.** ⚠️ **La cifra «1 fila de 7.118 / 0 para los 16 técnicos» es FALSA** — la desmintió la verificación contra el servidor del 2026-09-19, ver §1c-bis |
 | **¿Corre, y se notaría si se para?** | ⚠️ corre a medias | Tareas programadas: **2 de 3**. «Informes de OT» cada 3 h (última 15:23:10, resultado 0) y «Vigilante del buzon» viva desde el 2026-09-15 12:43:08. **«Saneamiento nocturno» no existe** y nunca corrió: 0 filas en `bitacora` con `agente='saneamiento'`, 0 logs `saneamiento-*.log`, `estado_nocturno.json` inexistente. Eso deja **4 de los 7 pasos** (normalizar, ingesta, archivo, pdfs) sin correr nunca en cadena. **13 empujes fallaron** el 2026-09-18 por corte de TLS y `t2_11` salió con **código 0** en todos: el Programador registró éxito. **0 mecanismos de alerta** en todo el proyecto |
 
 **Dos hallazgos que la verificación tumbó** — no hay que arreglarlos: el
@@ -279,6 +314,41 @@ Los tres titulares:
 límite de sesión): es investigación seria en fuente primaria, no un hecho
 cerrado. Antes de actuar sobre esto, un abogado ecuatoriano de la materia tiene
 que confirmarlo.
+
+---
+
+## 1c-bis. Lo que la auditoría solo leyó en código, medido ya contra el servidor (2026-09-19)
+
+Es la deuda de I-7 que §1c dejaba anotada («nadie leyó la base del servidor ni
+abrió una pantalla»). Consultado en **solo lectura** sobre darkviolet, con el
+PHP por stdin: ningún archivo queda en el servidor y son todos `SELECT`.
+
+| Qué | Cifra verificada |
+|---|---|
+| `casos_gestion` | **1.021 casos**: 775 `CERRADO_SIN_ATENCION`, 125 `ASIGNADO`, 115 `ATENDIDO`, 4 `RESUELTO`, 2 `NUEVO`. 120 traen orden de cierre |
+| `ot_archivo` | **7.356 filas**, **7.287** con el PDF en el servidor — confirma la cifra de T2.19 |
+| Firmas de técnico | **425 distintas** para 22 usuarios. Solo **12** calzan exacto con un usuario; **413 quedan huérfanas y arrastran 7.144 filas** |
+| Usuarios del sistema | 16 `TECNICO`, 3 `JEFE_ZONA`, 2 `SUPERADMIN`, 1 `ADMIN` |
+
+**Dos cosas que esta verificación corrigió, y que estaban mal escritas:**
+
+1. **«Las mías» NO devuelve 1 fila.** Reproducido el filtro exacto de
+   `ordenes.php:149` (`a.tecnico LIKE '%{usuarios.nombre}%'`) usuario por
+   usuario: **suma 239 filas de 7.356**. Nueve técnicos ven 0; el resto ve
+   entre 9 y 33. Sigue roto —es el 3,2%— pero el diagnóstico anterior («1 fila,
+   y esa de un JEFE_ZONA») es falso, y sobre un dato falso se construye la
+   solución equivocada.
+2. **La tabla `tecnicos` no existe en el servidor:**
+   `SQLSTATE[42S02] Table 'u671729428_ots.tecnicos' doesn't exist`. El criterio
+   de **T2.21.5** dice «exportar la persona resuelta contra `tecnicos`»: esa
+   tabla es **local**, así que la resolución se hace en la estación y se
+   exporta ya resuelta. Allá no hay contra qué resolver.
+
+**La causa de «Las mías», aislada:** `usuarios.nombre` guarda el nombre legal
+completo (`Pablo Andrés Ortiz Villarruel`) y `ot_archivo.tecnico` guarda lo que
+el técnico firmó en el PDF (`Sergio Torres`, `Henry Melendrez`,
+`Diego Meléndrez`). El `LIKE '%nombre completo%'` solo acierta cuando el PDF
+trae el nombre entero, que es la minoría.
 
 ---
 
