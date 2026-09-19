@@ -84,6 +84,31 @@ CASOS = SALIDA / "casos_sap.json"
 # t2_12). Una sola fuente: config/.env.
 EMISOR = cargar_env().get("EMISOR_OT", "reclutamiento@industec.me")
 
+# T2.21.1 -- LAS CARPETAS SE DECLARAN, NO SE DAN POR SUPUESTAS.
+#
+# Hasta el 2026-09-18 este script abria "INBOX" y nada mas. La cuenta tiene 10
+# carpetas, y en `Trash` habia 157 informes: 123 con "Estado de OT: Cerrada" y
+# 76 de casos que el sitio seguia mostrando PENDIENTES. No era un fallo del
+# servidor: la administradora borra los informes porque el buzon pesa, y lo que
+# ella borraba el robot ya no lo veia nunca mas. El correo es transporte, no
+# almacenamiento. `INFORMES OT` ya existia, vacia: nadie escribia ahi ni la leia.
+#
+# LEER NO ES TOCAR: todas se abren con EXAMINE (readonly=True) y BODY.PEEK[].
+# No se restaura, no se mueve y no se borra un solo correo, tampoco en Trash
+# (I-2, I-3; directiva del cliente del 2026-09-08).
+CARPETAS = [
+    "INBOX",          # donde llegan
+    "Trash",          # donde acaban cuando la administradora limpia
+    "INFORMES OT",    # la que ya existe en la cuenta para archivarlos
+]
+# Fuera de la lista, con su motivo -- para que la proxima corrida no tenga que
+# volver a averiguar por que: `Sent` es lo que INDUSTEC envia, no lo que recibe;
+# `Spam` y `Drafts` no traen informes emitidos; `Scheduled`, `Archive` y
+# `Borrador` estaban vacias el 2026-09-18; `INBOX/SIR (1) (1)` es una carpeta
+# duplicada por un cliente de correo, no una carpeta de trabajo.
+CARPETAS_FUERA = ["Sent", "Spam", "Drafts", "Scheduled", "Archive", "Borrador",
+                  "INBOX/SIR (1) (1)"]
+
 # Cada PDF pesa entre 300 KB y 1 MB, y el tecnico de una orden ya emitida no
 # cambia nunca. Sin esta cache, cada corrida vuelve a bajar los mismos ~60 MB
 # para llegar al mismo resultado, y programarla cada pocas horas seria absurdo.
@@ -250,15 +275,56 @@ def resolver_varios(parte, padron):
 
 
 
-def leer_informes(M, dias):
-    """Cuerpos de todos los informes de la ventana. Un FETCH por lote."""
+def entrecomillar(carpeta: str) -> str:
+    """`INFORMES OT` lleva espacio: sin comillas el servidor corta la sesion."""
+    return '"%s"' % carpeta if " " in carpeta else carpeta
+
+
+def seleccionar(M, carpeta: str) -> bool:
+    """EXAMINE (solo lectura) sobre la carpeta, recordando cual esta abierta.
+
+    Recordarla no es una optimizacion cosmetica: `tecnico_del_pdf()` baja los
+    PDF uno por uno y sin esto haria un SELECT por PDF.
+    """
+    if getattr(M, "_carpeta_abierta", None) == carpeta:
+        return True
+    ok, _ = M.select(entrecomillar(carpeta), readonly=True)
+    if ok != "OK":
+        return False
+    M._carpeta_abierta = carpeta
+    return True
+
+
+def leer_informes(M, dias, carpetas=None):
+    """Cuerpos de todos los informes de la ventana, en TODAS las carpetas.
+
+    Devuelve (informes, sin_parsear, por_carpeta). Cada informe se lleva su
+    `carpeta`: el numero de mensaje IMAP es relativo a la carpeta abierta, asi
+    que un id sin su carpeta apunta a otro correo -- y bajaria el PDF de otra
+    orden.
+    """
+    informes, sin_parsear, por_carpeta = [], [], {}
+    for carpeta in (carpetas or CARPETAS):
+        if not seleccionar(M, carpeta):
+            # Que una carpeta no exista en la cuenta no es un fallo de la
+            # corrida: se dice y se sigue con las demas (I-7).
+            por_carpeta[carpeta] = None
+            continue
+        antes = len(informes)
+        leer_carpeta(M, dias, carpeta, informes, sin_parsear)
+        por_carpeta[carpeta] = len(informes) - antes
+    return informes, sin_parsear, por_carpeta
+
+
+def leer_carpeta(M, dias, carpeta, informes, sin_parsear):
+    """Cuerpos de todos los informes de la ventana en la carpeta ya abierta.
+    Un FETCH por lote."""
     criterio = ["FROM", EMISOR]
     if dias:
         criterio += ["SINCE", (date.today() - timedelta(days=dias)).strftime("%d-%b-%Y")]
     ok, d = M.search(None, *criterio)
-    ids = d[0].split()
+    ids = d[0].split() if ok == "OK" and d and d[0] else []
 
-    informes, sin_parsear = [], []
     vistos = set()
     for i in range(0, len(ids), 60):
         lote = ids[i:i + 60]
@@ -274,7 +340,8 @@ def leer_informes(M, dias):
                 continue
             m_id = re.match(rb"\s*(\d+)\s+\(", it[0] or b"")
             if not m_id:
-                sin_parsear.append({"id_imap": "?", "inicio": "respuesta IMAP sin numero de mensaje"})
+                sin_parsear.append({"id_imap": "?", "carpeta": carpeta,
+                                     "inicio": "respuesta IMAP sin numero de mensaje"})
                 continue
             n = m_id.group(1)
             vistos.add(n)
@@ -282,10 +349,14 @@ def leer_informes(M, dias):
             t = (cuerpo or b"").decode("utf-8", "replace")
             m = re.search(r"nueva OT:\s*(\S+)", t)
             if not m:
-                sin_parsear.append({"id_imap": n.decode(), "inicio": t.strip()[:90]})
+                sin_parsear.append({"id_imap": n.decode(), "carpeta": carpeta,
+                                     "inicio": t.strip()[:90]})
                 continue
             informes.append({
                 "id_imap": n.decode(),
+                # Sin la carpeta, el id apunta a otro correo: la numeracion es
+                # por carpeta, no de la cuenta.
+                "carpeta": carpeta,
                 "ot": m.group(1),
                 "aviso": campo(t, "ORDEN SAP"),
                 "estado_ot": campo(t, "Estado de OT"),
@@ -300,9 +371,8 @@ def leer_informes(M, dias):
     # Compuerta: si el servidor no devolvio todos los que dijo tener, se dice.
     faltantes = [x.decode() for x in ids if x not in vistos]
     if faltantes:
-        sin_parsear.append({"id_imap": ",".join(faltantes[:20]),
+        sin_parsear.append({"id_imap": ",".join(faltantes[:20]), "carpeta": carpeta,
                             "inicio": f"{len(faltantes)} correos que el SEARCH listo y el FETCH no devolvio"})
-    return informes, sin_parsear
 
 
 def cargar_cache():
@@ -320,7 +390,7 @@ def guardar_cache(c):
 
 
 
-def tecnico_del_pdf(M, id_imap, ot=None):
+def tecnico_del_pdf(M, id_imap, ot=None, carpeta="INBOX"):
     """Baja el PDF, lo GUARDA y saca el «Técnico Asignado».
 
     Guardarlo no es un extra: el sistema tiene que poder mostrarle al técnico el
@@ -328,6 +398,10 @@ def tecnico_del_pdf(M, id_imap, ot=None):
     una conexion IMAP por clic. Se guarda con el nombre canonico de la orden,
     que es como lo pide `pdf.php`.
     """
+    # El id es relativo a su carpeta: hay que abrir la misma en la que se leyo
+    # el informe o se baja el adjunto de otra orden.
+    if not seleccionar(M, carpeta):
+        return None, f"no se pudo abrir la carpeta {carpeta}"
     ok, dd = M.fetch(id_imap.encode(), "(BODY.PEEK[])")
     if ok != "OK":
         return None, "no se pudo traer el correo"
@@ -362,6 +436,9 @@ def tecnico_del_pdf(M, id_imap, ot=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dias", type=int, default=90, help="ventana hacia atras")
+    ap.add_argument("--carpetas", nargs="+", metavar="CARPETA", default=None,
+                     help=f"carpetas del buzon a leer (por omision: {', '.join(CARPETAS)}). "
+                          "Sirve para medir que aporta cada una; siempre en solo lectura")
     ap.add_argument("--sin-pdf", action="store_true",
                     help="no baja PDFs; queda sin el nombre del tecnico")
     ap.add_argument("--empujar", action="store_true",
@@ -392,17 +469,21 @@ def main():
     M = imaplib.IMAP4_SSL(env["IMAP_HOST"], int(env["IMAP_PORT"]))
     M.login(env["IMAP_USER"], env["IMAP_PASSWORD"])
     try:
-        # readonly=True -> EXAMINE. El servidor no puede cambiar banderas.
-        ok, _ = M.select("INBOX", readonly=True)
-        if ok != "OK":
-            sys.exit("no se pudo abrir INBOX en solo lectura")
-
-        informes, sin_parsear = leer_informes(M, args.dias)
+        # readonly=True -> EXAMINE en cada carpeta. El servidor no puede cambiar
+        # banderas, ni siquiera la de leido.
+        informes, sin_parsear, por_carpeta = leer_informes(M, args.dias, args.carpetas)
+        for carpeta, n in por_carpeta.items():
+            if n is None:
+                print(f"  carpeta {carpeta:<14}: NO EXISTE en la cuenta, se omite")
+            else:
+                print(f"  carpeta {carpeta:<14}: {n} informes")
+        if all(n is None for n in por_carpeta.values()):
+            sys.exit("no se pudo abrir ninguna carpeta del buzon en solo lectura")
         print(f"informes de OT leidos          : {len(informes)}")
         if sin_parsear:
             print(f"  AVISO: {len(sin_parsear)} correos no se pudieron parsear:")
             for s in sin_parsear[:5]:
-                print(f"     imap#{s['id_imap']}  {s['inicio']!r}")
+                print(f"     {s.get('carpeta', '?')}#{s['id_imap']}  {s['inicio']!r}")
 
         # Solo los que tocan un caso que hoy figura pendiente. Se cruza por la
         # forma canonica del numero (sin ceros de delante); si cruza asi pero no
@@ -434,8 +515,12 @@ def main():
             # La cache se guarda por OT, no por numero de mensaje IMAP: los
             # numeros de secuencia cambian cuando alguien borra un correo, y
             # entonces la cache apuntaria a otra orden.
+            # Ordenados por carpeta para no hacer un SELECT por PDF: seleccionar()
+            # recuerda cual esta abierta.
+            faltan.sort(key=lambda i: i.get("carpeta") or "INBOX")
             for n, inf in enumerate(faltan, 1):
-                tec, err = tecnico_del_pdf(M, inf["id_imap"], inf["ot"])
+                tec, err = tecnico_del_pdf(M, inf["id_imap"], inf["ot"],
+                                            inf.get("carpeta") or "INBOX")
                 cache[inf["ot"]] = {"tecnico": tec, "error": err}
                 bajados += 1
                 if n % 25 == 0 or n == len(faltan):

@@ -24,13 +24,22 @@ Ademas, antes de promover cualquier archivo, cruza el aviso contra `ots.correlat
 archivo, NO se promueve -- se reporta como CONFLICTO_CORRELATIVO para que una persona
 decida cual de los dos correlativos es el correcto.
 
-NO BORRA NADA de `_DEL_BUZON` (I-2): ese es un paso aparte, manual, para cuando Andres
+NO BORRA NADA del origen (I-2): ese es un paso aparte, manual, para cuando Andres
 confirme que ya no hace falta la copia de respaldo. Solo promueve al arbol canonico lo
 que resuelve sin ambiguedad y no colisiona con nada existente.
+
+REUTILIZADO POR T2.21 (2026-09-18): el mismo mecanismo -resolver() contra el maestro,
+copiar->verificar por hash->nunca borrar- promueve tambien lo que cae en
+`D:\\RESPALDOS\\_ORIGEN_BUZON` (los informes que t2_11_informes_ot.py baja del correo en
+vivo, 104 varados a esa fecha). Es la misma clase de carpeta que _DEL_BUZON: PDFs con
+nombre ya generado por el sistema (a veces sin el sufijo EC del local) que ninguna
+ingesta recogia. Por eso el origen se parametriza en vez de escribir un segundo script
+que duplique el mismo criterio de resolucion (I-5, ver `industec-archivos-canonicos`).
 
 Uso (simula por defecto):
     .venv/Scripts/python.exe scripts/t2_18_rescatar_buzon.py
     .venv/Scripts/python.exe scripts/t2_18_rescatar_buzon.py --ejecutar
+    .venv/Scripts/python.exe scripts/t2_18_rescatar_buzon.py --origen "D:\\RESPALDOS\\_ORIGEN_BUZON"
 
 Despues de `--ejecutar`, correr `t1_7_ingesta.py` para que lo promovido entre a la base
 (este script no toca la base: solo el arbol de archivos, igual que `t2_4_normalizar_nuevas.py`).
@@ -49,10 +58,14 @@ from t2_4_normalizar_nuevas import resolver, cargar_maestro, conectar, sha256_de
 from comun import RESPALDOS, SALIDAS, cargar_env  # noqa: E402
 
 CANONICO = RESPALDOS / "ORDENES DE TRABAJO"
-BUZON = CANONICO / "_DEL_BUZON"
+BUZON = CANONICO / "_DEL_BUZON"                # T2.18: los 164 originales
+ORIGEN_BUZON = RESPALDOS / "_ORIGEN_BUZON"     # T2.21: los que baja t2_11 del correo en vivo
 INFORMES = SALIDAS
 
 RE_ZONA = re.compile(r"-([A-Za-z]+)\.pdf$")
+# (correlativo, aviso) tal como vienen en el nombre crudo, antes de resolver nada:
+# sirve para detectar dos archivos del mismo lote que declaran el mismo aviso.
+RE_CORR_AVISO = re.compile(r"^OT-(\d{3,5})-[^-]*-(\d{8})-")
 
 
 def modulo_dir_de(nombre: str) -> str | None:
@@ -68,12 +81,16 @@ def modulo_dir_de(nombre: str) -> str | None:
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Rescata los PDF de _DEL_BUZON que nunca se clasificaron. Por defecto simula.")
+        description="Rescata los PDF de una carpeta de buzon que nunca se clasificaron. "
+                    "Por defecto simula.")
     ap.add_argument("--ejecutar", action="store_true", help="copia de verdad")
+    ap.add_argument("--origen", type=Path, default=BUZON,
+                     help=f"carpeta a rescatar (por defecto {BUZON}). T2.21 usa {ORIGEN_BUZON}")
     args = ap.parse_args()
+    origen = args.origen
 
-    if not BUZON.is_dir():
-        sys.exit(f"No existe {BUZON}")
+    if not origen.is_dir():
+        sys.exit(f"No existe {origen}")
 
     env = cargar_env(("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"))
     cnx = conectar(env)
@@ -87,8 +104,23 @@ def main():
         por_aviso.setdefault(str(aviso), set()).add(corr)
     cur.close()
 
-    archivos = sorted(p for p in BUZON.glob("*.pdf") if p.is_file())
-    print(f"_DEL_BUZON: {len(archivos)} PDF\n")
+    archivos = sorted(p for p in origen.glob("*.pdf") if p.is_file())
+    print(f"{origen}: {len(archivos)} PDF\n")
+
+    # Conflicto de correlativo DENTRO del propio lote (I-11). El cruce contra `ots`
+    # de mas abajo solo ve los avisos que YA estan en la base; no ve dos archivos de
+    # esta misma carpeta que declaren el mismo aviso con correlativos distintos.
+    # Medido en `_ORIGEN_BUZON` el 2026-09-18: 4 avisos asi (10354785, 10353502,
+    # 10355047, 10354784), 8 archivos. Ninguno de sus correlativos esta todavia en
+    # la base, asi que sin esta pasada resolver() los promovia los 8 como OT
+    # independientes -- que es exactamente elegir por orden de llegada. Van los dos
+    # de cada par a revision humana: no se autorresuelve (decision cerrada de T2.21).
+    por_aviso_lote: dict[str, set[int]] = {}
+    for p in archivos:
+        m = RE_CORR_AVISO.match(p.name)
+        if m:
+            por_aviso_lote.setdefault(m.group(2), set()).add(int(m.group(1)))
+    conflicto_en_lote = {av for av, corrs in por_aviso_lote.items() if len(corrs) > 1}
 
     promovidos, ya_estaban, colisiones, conflictos, no_resueltos = [], [], [], [], []
 
@@ -106,6 +138,14 @@ def main():
 
         m = re.match(r"^OT-(\d{4})-[^-]+-(\d{8})-", canon)
         corr_canon, aviso_canon = (int(m.group(1)), m.group(2)) if m else (None, None)
+
+        if aviso_canon and aviso_canon in conflicto_en_lote:
+            conflictos.append({"origen": p.name, "canonico": canon,
+                                "motivo": f"el aviso {aviso_canon} aparece en este mismo lote "
+                                          f"con los correlativos "
+                                          f"{sorted(por_aviso_lote[aviso_canon])}: dos archivos "
+                                          f"distintos dicen ser la misma orden"})
+            continue
 
         if aviso_canon and aviso_canon in por_aviso and corr_canon not in por_aviso[aviso_canon]:
             conflictos.append({"origen": p.name, "canonico": canon,
@@ -161,7 +201,7 @@ def main():
 
     INFORMES.mkdir(parents=True, exist_ok=True)
     sello = datetime.now().strftime("%Y%m%dT%H%M%S")
-    inf = INFORMES / f"RESCATE_DEL_BUZON_{sello}.csv"
+    inf = INFORMES / f"RESCATE_{origen.name}_{sello}.csv"
     with open(inf, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         w.writerow(["estado", "archivo_origen", "nombre_canonico", "destino", "detalle"])
