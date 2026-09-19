@@ -79,7 +79,10 @@ from comun import BASE, ENV_PATH, RESPALDOS, SALIDAS, abrir_log, cargar_env, emp
 
 SALIDA = SALIDAS / "catalogos"
 CASOS = SALIDA / "casos_sap.json"
-EMISOR = "reclutamiento@industec.me"
+# Antes hardcodeado aqui y otra vez en t2_12_cotejo_sap_abiertas.py, con el
+# mismo valor escrito a mano dos veces (hallazgo de la auditoria T2.21 sobre
+# t2_12). Una sola fuente: config/.env.
+EMISOR = cargar_env().get("EMISOR_OT", "reclutamiento@industec.me")
 
 # Cada PDF pesa entre 300 KB y 1 MB, y el tecnico de una orden ya emitida no
 # cambia nunca. Sin esta cache, cada corrida vuelve a bajar los mismos ~60 MB
