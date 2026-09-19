@@ -913,6 +913,62 @@ fuera de KFC— es otra evaluación y un reporte interno aparte, secundario: no 
 
 ---
 
+### T2.21 · Cerrar la cadena del correo: del informe al árbol, a la base y al caso (2026-09-18)
+
+**De dónde sale:** Andrés pidió el 2026-09-18 validar si el robot del correo
+identifica los informes nuevos, los clasifica en el respaldo, los enlaza al caso
+abierto y los muestra en el buzón del técnico. La auditoría (26 agentes, 21
+completados; el detalle y las cifras en `ESTADO.md` §1c) encontró la cadena
+**cortada en dos sitios**, y el corte no es intermitente: es estructural.
+
+**El cuadro medido, para no volver a levantarlo:** `t2_11_informes_ot.py` sí lee
+el correo y sí empuja `atenciones.json` (6 corridas el 2026-09-18, 129 informes
+sobre 121 casos), y el enlace por número de aviso funciona — la distinción
+«INDUSTEC atendió» ≠ «SAP cerró» se respeta en el código y en la pantalla, así
+que **ahí no hay riesgo frente a KFC**. Lo que está roto es el resto: **104
+informes en `_ORIGEN_BUZON`, 0 clasificados, 0 en `ots`, 0 en el servidor**, y
+**76 casos cerrados invisibles porque su informe está en `Trash`**.
+
+**Decisiones ya cerradas, para que no las tome el agente en ejecución:**
+
+- El promotor **no se escribe de cero**: se parametriza el origen de
+  `t2_18_rescatar_buzon.py` (hoy `BUZON = CANONICO / "_DEL_BUZON"`, línea 52) y
+  se vuelve un paso del nocturno. Ya reutiliza `resolver()` y por hash, y ya
+  rescató 53 OTs: el criterio está probado.
+- **Se renombra a canónico ANTES de ingestar.** Los nombres del correo vienen sin
+  el sufijo `EC` del local (`K167`, no `K167EC`) y **0 de 49 códigos existen en
+  `locales`**: apuntar la ingesta a la carpeta sin renombrar haría fallar las 104
+  filas por clave ajena.
+- **Los conflictos no se autorresuelven** (I-10/I-11). Dentro del propio
+  `_ORIGEN_BUZON` hay 4 avisos con dos correlativos distintos y contenido
+  distinto (10354785, 10353502, 10355047, 10354784): esos 8 archivos van a
+  revisión humana el primer día, y eso **no es un fallo del promotor**.
+- **`avisos_sap` está fuera de cobertura** (I-12): `MAX(aviso)=10351627`, y solo
+  4 de los 100 avisos del buzón están en la tabla. El cruce por centro de coste
+  no está disponible para 96 de 100, así que el promotor **resuelve por el
+  maestro de locales y declara «fuera de cobertura SAP»**, nunca manda los 96 a
+  cuarentena por eso.
+- **Las carpetas del buzón se declaran explícitamente.** Entran `INBOX`,
+  `Trash` e `INFORMES OT`; `Spam`, `Sent`, `Drafts`, `Scheduled`, `Archive`,
+  `Borrador` e `INBOX/SIR (1) (1)` quedan fuera, y la lista va en el código con
+  su motivo. Leer `Trash` es solo lectura igual que el resto (EXAMINE + PEEK):
+  **no se restaura ni se mueve nada** (I-2, I-3).
+
+| # | Subtarea | Qué hace | Criterio de aceptación exacto |
+|---|---|---|---|
+| **T2.21.1** | Leer las carpetas que faltan | Lista blanca de carpetas en `t2_6`, `t2_11` y `t2_9`, con contador por carpeta en el resumen. EXAMINE + `BODY.PEEK[]` en todas | `t2_11_informes_ot.py --sin-pdf` imprime una línea por carpeta leída, y los **76 casos** hoy pendientes cuyo informe de cierre está en `Trash` pasan a tener atención. Prueba negativa: `grep -nE "M\.(store\|copy\|move\|expunge)" scripts/t2_*.py` no devuelve nada |
+| **T2.21.2** | Promover `_ORIGEN_BUZON` al árbol canónico | `--origen` en `t2_18_rescatar_buzon.py`, renombrado a canónico por maestro antes de copiar, manifiesto reversible (I-5), copiar→verificar por hash→**no borrar** (I-2) | Simulación: de los 104, dice cuántos promueve, cuántos van a revisión y por qué, con los 8 del conflicto de correlativo identificados por nombre. Tras `--ejecutar` + `t1_7_ingesta.py`: `SELECT COUNT(*) FROM ots WHERE fuente='IMAP_EN_VIVO'` > 0 — **hoy da 0 de 7.469** |
+| **T2.21.3** | Que el PDF llegue al servidor | El promotor deja el archivo dentro de `ORDENES DE TRABAJO`, que es lo que `t2_19_subir_pdfs.py` ya recorre. No se toca `t2_19` | `t2_19_subir_pdfs.py` en simulación pasa de «faltan: 0» a «faltan: 104», y tras `--ejecutar` los 3 informes de cierre sin PDF (avisos 10355449, 10355399, 10355488) abren desde el buzón. Verificado por SSH, no por el log del script |
+| **T2.21.4** | Que un fallo de empuje se note | `return empujar(...)` en `t2_11:546` y `sys.exit(1)`; reintento con espera en `comun.empujar()`; el `.bat` revisa el código de salida | Con el endpoint apagado a propósito, `t2_11 --empujar` sale con **1** y la Tarea programada registra un resultado distinto de 0. Hoy: 13 fallos de TLS el 2026-09-18 y `LastTaskResult 0` en todos |
+| **T2.21.5** | «Las mías» del Archivo | `t2_15_exportar_archivo.py` exporta también la **persona resuelta** contra `tecnicos`, junto a la firma cruda; `ordenes.php` filtra por esa columna, no por `LIKE '%nombre%'` | El filtro pasa de **1 fila de 7.118** a las órdenes reales de cada técnico (Ortiz 359, Perdomo 586, Meléndrez 1.063 repartidas entre los dos hermanos) |
+| **T2.21.6** | Lo que quedó sin verificar | Cerrar contra el servidor lo que esta auditoría solo pudo leer en el código: `casos_gestion`, `ot_archivo`, y las pantallas con una sesión real. Y refutar los 4 hallazgos de captación que quedaron sin refutador | Cada uno con su salida pegada. Lo que siga sin comprobarse **se dice** (I-7) |
+
+| Autónomo | Requiere aprobación de Andrés | Prohibido |
+|---|---|---|
+| Escribir y correr en **simulación** todo lo de arriba; leer cualquier carpeta del buzón con EXAMINE; commitear el código | El `--ejecutar` de T2.21.2 (mueve 104 archivos al árbol y escribe en `ots`); el `--ejecutar` de T2.21.3 (sube 104 PDF al servidor); resolver los 8 conflictos de correlativo; crear la Tarea programada del nocturno | Restaurar, mover o borrar un correo del buzón; borrar nada de `_ORIGEN_BUZON` ni de `_DEL_BUZON` aunque ya esté promovido; autorresolver un conflicto de correlativo; tocar `G:\Mi unidad` |
+
+---
+
 # FASE 3 · DECISIÓN — Noviembre
 
 > **Cierra con:** tablero de decisión y equipo capaz de operarlo por su cuenta.
@@ -1061,7 +1117,7 @@ Las tareas T1.9 a T1.11 avanzan en paralelo conforme se desbloqueen sus dependen
 
 ---
 
-## 11b. Arranque para una conversación nueva — al 2026-09-14
+## 11b. Arranque para una conversación nueva — al 2026-09-18
 
 > Esta sección existe para que quien abra una conversación nueva pueda **empezar
 > a ejecutar sin preguntar nada**. Se actualiza cada vez que cambia lo que sigue.
@@ -1138,6 +1194,21 @@ SAP»; el Archivo indexa las órdenes de cierre; y «otros trabajos» (T2.20, mi
 cosas **desplegadas y verificadas** en darkviolet. La subida de **todos** los PDF (T2.19) está
 escrita y probada contra el servidor; falta correrla en la estación (acción **G**). Andrés revocó D2.
 
+**Sumado el 2026-09-18 — la auditoría del robot del correo (T2.21).** Andrés pidió validar la
+cadena completa: correo → clasificación en el respaldo → enlace al caso abierto → buzón e historial
+del técnico. **Lo que funciona:** el robot lee el correo cada 3 h, cruza por número de aviso, empuja
+`atenciones.json` y el estatus del caso se mueve a «atendido» **sin fingir que SAP cerró** — la
+distinción `avisos_sap.estatus_general` se respeta en el código y en la pantalla, así que frente a
+KFC no hay riesgo. **Lo que está roto, y es lo urgente:** los informes se depositan en
+`_ORIGEN_BUZON`, una carpeta que **ningún consumidor lee** (104 varados, 0 clasificados, 0 en `ots`
+—`fuente='IMAP_EN_VIVO'` sigue en 0 de 7.469—, 0 en el servidor); y los scripts abren solo `INBOX`,
+así que **76 casos ya cerrados figuran pendientes** porque su informe está en `Trash`. El árbol
+canónico no recibe un archivo desde el **2026-09-13 22:22**. Es la acción **H** y la tarea
+**T2.21**; los errores nº 18 y 19 explican cómo se llegó aquí. **Dos cifras de `ESTADO.md` quedaron
+corregidas por esta auditoría:** los «69 sin PDF» de T2.19 **no** eran «sin archivo local» (los
+archivos están en `_ORIGEN_BUZON`), y `prueba_48h.php` ya da **120·0**, no los 4 fallos que §5.2b
+sigue anunciando.
+
 ### Antes de dar nada por verificado
 
 Las baterías **están todas en verde al 2026-09-13**, y esa es la línea base que
@@ -1164,8 +1235,22 @@ python verificar_seguridad.py   # 28 · 0
 
 ### La siguiente acción, concreta
 
-**Escoge por este orden.** Las tres primeras son autónomas y no dependen de
-nadie; la cuarta y la quinta requieren a Andrés.
+**Empieza por H: es la única que está perdiendo datos ahora mismo.** Después,
+escoge por este orden; las tres primeras son autónomas y no dependen de nadie;
+la cuarta y la quinta requieren a Andrés.
+
+**H. T2.21 · Cerrar la cadena del correo** — *autónomo hasta el `--ejecutar`, y
+es lo más urgente que hay.* La auditoría del 2026-09-18 midió que el robot lee
+el correo y actualiza el estatus del caso, pero **los informes no llegan a
+ninguna parte más**: 104 varados en `D:\RESPALDOS\_ORIGEN_BUZON` (0 clasificados,
+0 en `ots`, 0 en el servidor, ~20 nuevos al día desde el 2026-09-14), y **76
+casos ya cerrados que el sitio muestra pendientes** porque su informe está en
+`Trash` y los scripts solo abren `INBOX`. La tarea T2.21 más arriba trae las seis
+subtareas con su criterio y las decisiones de diseño ya cerradas — **léela antes
+de tocar código, porque el promotor ya existe** (`t2_18_rescatar_buzon.py`, con
+la carpeta clavada en la vieja) y el error nº 18 explica cómo se llegó aquí.
+Empieza por T2.21.1 (leer `Trash`, que destapa los 76 sin mover un archivo) y
+T2.21.2 en simulación. Nada de `--ejecutar` sin Andrés.
 
 **A. Fusionar `pc/pulido-2026-09-12` en `master`** — *en la estación; es
 mecánico, pero tiene que ser lo primero.* Si `git merge` se niega por cambios
@@ -1522,6 +1607,33 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     el arreglo `00870b4` estaba confirmado y empujado, pero **nunca se había
     desplegado**. El `sha256sum` del archivo vivo contra `git show
     <commit>:<ruta>` de cada versión dice cuál está arriba.
+18. **Cambiar la carpeta donde un script deposita, sin mover a sus
+    consumidores.** El 2026-09-13, T2.15.3 mandó a `t2_11_informes_ot.py` a
+    guardar los informes del correo en `_ORIGEN_BUZON` en vez de
+    `ORDENES DE TRABAJO\_DEL_BUZON`, para que la ingesta dejara de tomarlos con
+    nombre crudo. El cambio era correcto y su criterio de aceptación —
+    `SELECT COUNT(*) FROM ots WHERE ruta_pdf LIKE '%_ORIGEN%'` → 0 — **pasa
+    hoy**. Lo que nunca se escribió es la puerta que reemplazaba a la que se
+    cerró: ningún script promueve `_ORIGEN_BUZON` al árbol canónico, y los dos
+    consumidores que existían (`t2_18_rescatar_buzon.py:52` y
+    `t2_19_subir_pdfs.py:77-78`) quedaron mirando la carpeta vieja. Resultado
+    medido el 2026-09-18: **104 informes varados, 0 clasificados, 0 en `ots`, 0
+    en el servidor**, creciendo ~20 al día. Y es la **segunda vez con la misma
+    forma**: el 2026-09-13 el proyecto ya pagó esto con `_DEL_BUZON` (53 OTs
+    cuatro días sin entrar) y lo cerró con un rescatador de un solo uso. **Un
+    criterio de aceptación que comprueba que algo NO entra no comprueba que
+    entre por otro lado.** Al mover un destino: `grep -rn "<carpeta vieja>"` y
+    reapuntar a cada consumidor en el mismo commit, y el criterio se escribe
+    sobre el destino final del dato, no sobre la carpeta intermedia.
+19. **Leer un solo buzón IMAP y creer que es «el correo».** Los tres scripts
+    abren `INBOX` y nada más. La cuenta tiene 10 carpetas: el 2026-09-18 había
+    **157 informes en `Trash`, 123 con «Estado de OT: Cerrada», y 76 de ellos
+    de casos que el sitio seguía mostrando pendientes** — trabajo hecho que el
+    sistema daba por no hecho, porque alguien archiva el correo a diario. Y ya
+    existe una carpeta **`INFORMES OT`** vacía que nadie lee: el día que la
+    administración empiece a usarla, lo que muevan ahí desaparece. Antes de
+    afirmar «el robot lee el correo», listar las carpetas (`M.list()`) y decidir
+    explícitamente cuáles entran y cuáles no.
 
 ### Lo que no se toca, nunca
 

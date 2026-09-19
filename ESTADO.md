@@ -3,7 +3,7 @@
 > **Empieza por aquí.** Este archivo dice dónde vamos; [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) dice qué hay que construir y con qué criterios.
 > Si vas a trabajar, **anótate primero en §5 (Trabajo en paralelo)** antes de tocar nada.
 
-**Última actualización:** 2026-09-13
+**Última actualización:** 2026-09-18
 **Fase en curso:** 2 · Automatización — **construida y desplegada en el sitio de pruebas; lo que sigue es el piloto en UIO** (paquete en `desarrollo/sistema_ots/piloto/`). La Fase 1 quedó cerrada
 **Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
 
@@ -40,6 +40,7 @@ del rediseño.
 | Pieza | Estado | Cifra verificada |
 |---|---|---|
 | Corpus histórico saneado | ✅ | **7.070** órdenes en el árbol canónico + 5 informes técnicos + 25 de otros clientes |
+| **Robot del correo → informes nuevos** | ⚠️ **cadena cortada** (auditado el 2026-09-18) | Lee e identifica, y el estatus del caso **sí** se actualiza. Pero **104 informes varados** en `_ORIGEN_BUZON`: 0 clasificados, 0 en `ots`, 0 en el servidor; y **76 casos cerrados figuran pendientes** por estar su informe en `Trash`. Detalle en **§1c**; qué hacer, en el plan **T2.21** |
 | Base de datos poblada | ✅ | **7.118 órdenes activas** (era 7.069 hasta el 2026-09-13: `t2_18_rescatar_buzon.py` recuperó 53 OTs que llevaban 4 días en `_DEL_BUZON` sin clasificar ni ingestar — ver T2.18 en el plan) · 9.071 equipos · 100 locales · 145 alias · 6.450 avisos SAP · 19 técnicos |
 | Auditor de calidad (Agente 1) | ✅ | 2.644 observaciones abiertas, con veredicto editable por la administración |
 | Consolidador de plan de zona (Agente 2) | ⚠️ v1 | 87,3% de coincidencia celda a celda en el piloto UIO |
@@ -54,6 +55,79 @@ del rediseño.
 **Reparto de las órdenes activas:** CNLJ 2.589 · LARB 2.498 · UIO 1.978 · OTRA 4 — · Correctivo 6.349 · Preventivo 720
 
 ---
+
+## 1c. La cadena del correo, medida el 2026-09-18 (auditoría de T2.21)
+
+Andrés pidió validar si el robot del correo identifica los informes nuevos, los
+clasifica en el respaldo, los enlaza al caso abierto y los muestra en el buzón
+del técnico. Se auditó con 26 agentes (21 completados). **Qué construir con esto
+está en `PLAN_INDUSTEC.md` T2.21; aquí van solo las cifras.**
+
+| Etapa | Veredicto | Cifra verificada |
+|---|---|---|
+| **Identifica los informes nuevos** | ⚠️ a medias | **918** informes en `INBOX` (de `reclutamiento@industec.me`, ventana de 90 días), y de ahí **581 leídos → 129 con PDF bajado**. Pero los scripts abren **1 de las 10 carpetas** de la cuenta: en `Trash` hay **157 informes, 123 con «Estado de OT: Cerrada», y 76 de casos que el sitio sigue mostrando pendientes**. La carpeta **`INFORMES OT` ya existe y está vacía**: nadie la lee |
+| **Los clasifica en el respaldo** | ❌ no | **104 PDF en `D:\RESPALDOS\_ORIGEN_BUZON`** (33 UIO, 17 LARB, 54 CNLJ): **0** con archivo en el árbol canónico bajo su propio correlativo, **0** con fila en `ots` por (correlativo, zona), **99** sin ningún rastro. `ots.fuente='IMAP_EN_VIVO'` → **0 de 7.469** (las 7.469 son `DRIVE_HISTORICO`). El árbol canónico no recibe un archivo desde el **2026-09-13 22:22**. Los 104 son documentos únicos: **0 duplicados por hash** contra los 18.188 PDF de todo `D:\RESPALDOS` |
+| **Los sube y enlaza al caso, con su estatus** | ⚠️ enlaza, no sube | El enlace por número de aviso funciona y la distinción «INDUSTEC atendió» ≠ «SAP cerró» **se respeta** (`Ui::ESTADOS`, chip «atendido, en curso» / «con orden de cierre»). Pero **0 de 104 PDF están en el servidor**: `t2_19_subir_pdfs.py` recorre `ORDENES DE TRABAJO` + `_DEL_BUZON` (7.123 + 164 = 7.287) y su simulación dice «faltan: 0» sin haberlos visto. **19 casos** con «PDF no cargado al archivo todavía», **3 de ellos órdenes de cierre** (avisos 10355449, 10355399, 10355488) |
+| **Se ve en el buzón del técnico y su historial** | ⚠️ llega poco | La atención sí llega: **121 casos** con atención, **88 en bandeja** entre 13 personas, **31 en historial**. El aislamiento por técnico y por zona **está bien** (el bug de los 300 casos de la zona está cerrado). Pero «Las mías» del Archivo devuelve **1 fila de 7.118** —y esa única es de un JEFE_ZONA, así que para los 16 técnicos da **0**—, porque `ot_archivo.tecnico` guarda la firma cruda del PDF (**403 firmas para 19 personas**) y el filtro compara con el nombre del padrón. **21 de las 40 personas del padrón no tienen usuario del sistema** |
+| **¿Corre, y se notaría si se para?** | ⚠️ corre a medias | Tareas programadas: **2 de 3**. «Informes de OT» cada 3 h (última 15:23:10, resultado 0) y «Vigilante del buzon» viva desde el 2026-09-15 12:43:08. **«Saneamiento nocturno» no existe** y nunca corrió: 0 filas en `bitacora` con `agente='saneamiento'`, 0 logs `saneamiento-*.log`, `estado_nocturno.json` inexistente. Eso deja **4 de los 7 pasos** (normalizar, ingesta, archivo, pdfs) sin correr nunca en cadena. **13 empujes fallaron** el 2026-09-18 por corte de TLS y `t2_11` salió con **código 0** en todos: el Programador registró éxito. **0 mecanismos de alerta** en todo el proyecto |
+
+**Dos hallazgos que la verificación tumbó** — no hay que arreglarlos: el
+historial del técnico **no** se recorta a 90 días (`casos_gestion` acumula), y
+los 2 casos sin técnico **sí** dejan rastro (`Casos::sinAsignar()` los ofrece
+para asignar a mano).
+
+**Tres cifras de este documento que la auditoría corrigió:**
+
+1. Los «**69 sin PDF**» de la fila de T2.19 **no** eran «de origen CORREO/GESTIÓN
+   sin archivo local». Los archivos **sí están** en la estación, en
+   `_ORIGEN_BUZON`, y `t2_19` no mira esa carpeta.
+2. **§5.2b está vencido en su primera fila:** `prueba_48h.php` da hoy **120·0**,
+   no «96 · 4 fallos». Alguien la arregló y no lo anotó.
+3. El «pedir copia» de `OT-2503-K146-10354374-CNLJ` que §1b da por pendiente
+   («nunca se descargó del buzón») **ya está**: el informe de ese aviso está en
+   `_ORIGEN_BUZON` y en el árbol canónico. El pedido se puede cerrar.
+
+**Lo que NO se pudo comprobar, y hay que cerrar en T2.21.6 (I-7):**
+
+- **Los cuatro refutadores de la dimensión de captación cayeron por límite de
+  sesión.** Dos de sus hallazgos se verificaron a mano y **quedan confirmados**:
+  el del `Trash` (la salida de arriba) y el tráfico ajeno — en la ventana de 90
+  días el `INBOX` tiene 4.912 mensajes, de los cuales 591 de `reclutamiento`,
+  939 de `sgerente@kfc.com.ec` y **3.382 de otros remitentes, 302 con adjunto
+  PDF, para los que el robot no tiene ni un contador**. Ojo: 302 es **techo de
+  tráfico ignorado, no cifra de informes perdidos** — nadie abrió esos PDF para
+  saber cuántos son informes de cierre y cuántos firmas o fotos. Siguen **sin
+  refutar**: los 2 informes con parseo fallido que el resumen publica como
+  `informes_no_parseados: 0`, el nombre truncado en el primer espacio
+  (`OT-0179-M055-10340532-Dia`) y la comparación con el literal `Cerrada`.
+- **Nadie leyó la base del servidor ni abrió una pantalla.** Todo lo de
+  `casos_gestion`, `ot_archivo` y las pantallas es lectura de código cruzada con
+  la base local y los JSON que la estación empuja. Hace falta SSH.
+- **No se determinó la causa del corte de TLS.** 11 de los 13 fallos caen en la
+  ventana 12:33–17:05, la misma en que se subieron 6.672 PDF al mismo host:
+  correlación, no causa comprobada.
+
+**Una decisión pendiente para Andrés, encontrada de paso:**
+`t2_11_informes_ot.py` lleva **+35 / −2 líneas sin commitear** (la función
+`num_aviso()`, que cruza el aviso ignorando los ceros de la izquierda) y es
+**la copia del disco la que corre cada 3 h** por la Tarea programada. O sea:
+producción ejecuta código que no está en el repositorio, el PC de Andrés no lo
+tiene, y un `checkout` limpio en la estación cambiaría el comportamiento sin que
+nadie sepa qué se perdió. El cambio parece correcto y útil, pero es de la
+conversación «cotejo SAP» y §5.2b le tiene hallazgos abiertos, así que **esta
+auditoría no lo commiteó**: lo decide Andrés. Los otros dos hallazgos de §5.2b
+sobre esos scripts **siguen abiertos**: la compuerta de cuadre I-10 de
+`t2_12:286-289` sigue siendo tautológica, y `%TEMP%\_cotejo_sap.xlsx` con
+órdenes abiertas de SAP del cliente sigue ahí desde el **2026-09-10** (8 días,
+14.743 bytes, sin cifrar y fuera de las rutas del proyecto — cuenta para el
+riesgo LOPDP). `EMISOR_OT` no está en `.env`, pero **no rompe nada**: la línea
+158 tiene el remitente por omisión.
+
+Toda la auditoría fue de **solo lectura**: IMAP con EXAMINE + `BODY.PEEK[]`,
+cero `INSERT/UPDATE/DELETE`, cero `--ejecutar` y cero `--empujar`. Nada de
+`G:\Mi unidad`, del árbol canónico ni del servidor se tocó. Efecto lateral
+declarado: la simulación de `t2_18_rescatar_buzon.py` escribió por diseño su
+manifiesto en `SALIDAS IA\OTS\RESCATE_DEL_BUZON_*.csv`, que es escritura libre.
 
 ## 1b. Lo construido — continuidad de datos y sistema nuevo
 
@@ -342,6 +416,8 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 | ~~T2.5 · Captura — formulario único, v1 para revisión~~ | Conversación "app captura v1" | 2026-09-08 | ✅ Terminada y en §1b. El formulario único está desplegado y preguntado por pasos |
 | ~~Buscador de órdenes y avisos por coincidencia parcial~~ | Conversación "cotejo SAP" | 2026-09-10 | ✅ **Commiteado el 2026-09-12 por la estación, con tres defectos corregidos** — ver la fila del buscador en §1b. Si esa conversación sigue viva: `Ui::normalizarBusqueda()` **cambió de implementación** (tabla de 123 entradas generada, no las 16 a mano) y `prueba_contratos.mjs` ahora ejecuta el PHP de verdad. Toma lo de `master` antes de seguir. Lo que **no** se commiteó son sus dos scripts de SAP (`t2_11`, `t2_12`): siguen sin seguimiento y con hallazgos abiertos, abajo |
 | T2.12 · **solo queda T2.12.12**, las tres hojas de capacitación | Libre — nadie la tiene tomada | 2026-09-10 | **Escribe** en `SALIDAS IA\OTS\`, una hoja por rol. Todo lo demás de T2.12 está hecho y desplegado, incluida la verificación por rol (87 comprobaciones con ingreso real). Es la acción **D** de §11b |
+| ~~Auditoría del robot del correo~~ | Conversación "auditoría correo→informes" (estación) | 2026-09-18 | ✅ **Terminada el 2026-09-18.** Cifras en §1c; qué construir, en `PLAN_INDUSTEC.md` **T2.21** (acción **H** de §11b). No tocó nada: solo lectura |
+| **T2.21 · Cerrar la cadena del correo** | Libre — nadie la tiene tomada | 2026-09-18 | Cuando se tome: **escribe en el árbol canónico y en `ots`** (T2.21.2 + ingesta), así que choca con `t1_7_ingesta.py`, con los scripts de T1.6b y con `t2_4_normalizar_nuevas.py --ejecutar`. Va de a uno. T2.21.1 (leer `Trash`) y las simulaciones no bloquean nada |
 | Sitio web corporativo industec.me | Conversación "web corporativa industec.me" | 2026-09-10 | La **raíz** del sitio de pruebas (`public_html/`), con archivos nuevos. **No toca `public_html/ot/`**, ni la base, ni el árbol canónico. ⚠ **Ojo, 2026-09-12:** el sitio ya está publicado y versionado desde el PC en `desarrollo/web_corporativa/`. El `desarrollo/sitio_web/` de la estación es una **segunda copia sin commitear** (215 archivos, 22 MB de imágenes): decidir cuál queda antes de commitear ninguna de las dos |
 
 > **El aviso de «no despliegues a `public_html/ot/`» se retiró el 2026-09-12**,
@@ -514,3 +590,4 @@ Cada una lleva la evidencia real de qué se rompió y el comando exacto que comp
 | 2026-09-12 | **El buscador, desplegado, y el repositorio unificado y empujado.** Se subieron `busqueda.js`, `nucleo/Ui.php`, `casos.php`, `ordenes.php` y `sw.js` al sitio de pruebas, con el desplegador nuevo que ya compara **lo que entrega la web** y no el disco. Comprobado aparte: hash idéntico en `busqueda.js`, y `nucleo/Ui.php`, `config.php` y `catalogos/locales.json` siguen en **403**. `master` empujado a GitHub (32 commits de una vez) y sincronizado. §11b del plan reescrita para que la siguiente consola arranque sin preguntar: cinco acciones ordenadas, las tres primeras autónomas, empezando por las **4 comprobaciones rotas de `prueba_48h.php`** que la fusión destapó |
 | 2026-09-13 | **Bug reportado por Andrés: el número de la orden de cierre, en el buzón (`casos.php`), abría un 404** («El PDF de esa orden no está en el servidor») en vez del PDF — caso `OT-2488-K061-10351229-CNLJ` (aviso 10351229, K061EC Mall del Río Cuenca, CNLJ). Causa: `casos.php` armaba `pdf.php?ot=…` para cada orden de `atenciones.json` sin comprobar antes con `Emision::existePdf()`, el mismo guardado que **ya** llevaban `mis.php` (desde H-02) y `ordenes.php` — un hueco que la auditoría del 2026-09-12 no encontró porque no miró esa pantalla. **Corregido** (commit `00870b4`, `pc/pulido-2026-09-12`, empujado): ahora, sin PDF, se ve el número en texto y «PDF no cargado al archivo todavía», igual que en `mis.php`. **Auditadas las seis pantallas/scripts que arman `pdf.php?ot=…`** (`grep -rn 'pdf.php?ot=' app/publico`): las otras cinco (`mis.php` ×3, `ordenes.php`, `app.js`) ya estaban correctamente guardadas — `casos.php` era el único hueco. Lección #16 en PLAN §11b. **El caso concreto sigue sin PDF en el servidor** — no es un bug de código, es que la orden se cerró por informe de correo y ese informe no está copiado a `ordenes_pdf/`; instrucciones exactas para recuperarlo en PLAN_INDUSTEC.md, tabla «Lo que está bloqueado, y por quién». De paso se encontró que la rama `pc/archivo-zona-franquicia-2026-09-13` (T2.18, de Andrés, **sin fusionar**) ya construyó y probó en simulación el mecanismo que resuelve justamente esto (clasificación del árbol canónico + atención automática de «pedir copia»), y detectó un caso gemelo sin resolver, `OT-2503-K146-10354374-CNLJ`. **También se confirmó que el Archivo (`ordenes.php`) todavía no se actualiza solo**: el cron de hPanel para `archivo_indexar_cli.php` (y los otros tres) sigue sin programarse — fila ya existente en §3 de este documento —, así que hoy depende de que alguien lo corra a mano o por el `--empujar` de `t2_15_exportar_archivo.py` |
 | 2026-09-14 | **Buzón, Archivo y «otros trabajos», por pedido de Andrés con capturas.** (1) En el buzón de la administración los casos atendidos no mostraban su informe y decían «sin atender» junto a «atendido · técnico (del informe)»: la atención se leía solo de `atenciones.json` y la orden de cierre vivía en `casos_gestion`. Ahora se juntan por aviso las cuatro fuentes y el informe de cierre sale junto a «Ya lo cerré en SAP» (820 → 784 sin atender; índice 143 → 164; 0 cierres fuera del índice). El `casos.php` vivo era el de `014b529`: **el arreglo `00870b4` nunca se había desplegado** y subió con este cambio. (2) **Decisiones de Andrés:** subir **todo** el histórico y lo nuevo cada noche, **solo desde la estación** (revoca D2; producción sigue de solo lectura); «otros trabajos» como **marca aparte del estado** que decide siempre la administradora; el módulo OTROS del sistema viejo son **extras de KFC dentro del mismo trato** y cuentan como otros trabajos; «otros clientes» es otro reporte, interno. (3) T2.20 desplegada con la 011; T2.19 escrita y probada contra una carpeta de prueba del servidor. **No verificado:** la acción «Otro trabajo» y las descargas Excel/PowerPoint con una sesión real — las cuentas de prueba se borraron el mismo día a pedido de Andrés y recrearlas deja rastro en la bitácora; se verificó con `php -l`, con 302 sin sesión y con `Reportes::calcular()` y el HTML del PDF bajo un superadmin en memoria. El venv del PC apunta al Python de la estación: `t2_10` corre con el Python del sistema. Rama `pc/documentos-y-otros-trabajos-2026-09-14` (lleva dentro `pc/pulido-2026-09-12` y T2.18) |
+| 2026-09-18 | **Auditoría de la cadena del correo, pedida por Andrés: ¿identifica los informes nuevos, los clasifica, los enlaza al caso y se ven en el buzón del técnico?** 26 agentes, 21 completados; los 4 refutadores de la dimensión de captación y el crítico de completitud **cayeron por límite de sesión**, y sus dos hallazgos grandes se verificaron a mano. **Lo que funciona:** el robot lee el correo cada 3 h, cruza por aviso, empuja `atenciones.json`, y el estatus del caso se mueve a «atendido» **sin fingir que SAP cerró** — frente a KFC no hay riesgo. **Lo que está roto:** `t2_11` deposita en `_ORIGEN_BUZON` y **ningún consumidor lee esa carpeta** (los cinco posibles arrancan en `ORDENES DE TRABAJO`, de donde está fuera): **104 informes varados, 0 clasificados, 0 en `ots`, 0 en el servidor**, desde el 2026-09-14 y creciendo ~20 al día; `ots.fuente='IMAP_EN_VIVO'` sigue en **0 de 7.469**. Y los scripts abren **1 de las 10 carpetas** del buzón: en `Trash` hay 157 informes, 123 «Cerrada», **76 de casos que el sitio muestra pendientes**. Causa de fondo: el 2026-09-13 T2.15.3 movió el destino de descarga y **los dos consumidores quedaron mirando la carpeta vieja** — el promotor ya existe (`t2_18_rescatar_buzon.py`), solo está clavado en `_DEL_BUZON`. Es la **segunda vez con la misma forma** (el 2026-09-13 ya pasó con `_DEL_BUZON` y 53 OTs). **Refutados, no arreglar:** el historial del técnico no se recorta a 90 días, y los 2 casos sin técnico sí dejan rastro. **Tres cifras de este documento corregidas:** los «69 sin PDF» de T2.19 no eran «sin archivo local», `prueba_48h.php` da 120·0 (no 96·4) y el «pedir copia» de `OT-2503-K146-10354374-CNLJ` ya está. Resultado: lecciones **18 y 19** en PLAN §11b, tarea **T2.21** con seis subtareas y las decisiones de diseño ya cerradas, y acción **H** al frente de §11b. Cifras completas en §1c. **Todo fue solo lectura:** IMAP con EXAMINE + `BODY.PEEK[]`, cero escrituras en base, cero `--ejecutar`, cero `--empujar` |
