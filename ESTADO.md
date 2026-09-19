@@ -107,15 +107,18 @@ para asignar a mano).
   ventana 12:33–17:05, la misma en que se subieron 6.672 PDF al mismo host:
   correlación, no causa comprobada.
 
-**Una decisión pendiente para Andrés, encontrada de paso:**
-`t2_11_informes_ot.py` lleva **+35 / −2 líneas sin commitear** (la función
-`num_aviso()`, que cruza el aviso ignorando los ceros de la izquierda) y es
-**la copia del disco la que corre cada 3 h** por la Tarea programada. O sea:
-producción ejecuta código que no está en el repositorio, el PC de Andrés no lo
-tiene, y un `checkout` limpio en la estación cambiaría el comportamiento sin que
-nadie sepa qué se perdió. El cambio parece correcto y útil, pero es de la
-conversación «cotejo SAP» y §5.2b le tiene hallazgos abiertos, así que **esta
-auditoría no lo commiteó**: lo decide Andrés. Los otros dos hallazgos de §5.2b
+**Una cosa que se encontró de paso y quedó resuelta:**
+`t2_11_informes_ot.py` llevaba **+35 / −2 líneas sin commitear** (la función
+`num_aviso()`, que cruza el aviso ignorando los ceros de la izquierda) y era
+**la copia del disco la que corría cada 3 h** por la Tarea programada:
+producción ejecutaba código que no estaba en el repositorio y el PC de Andrés no
+lo tenía. ✅ **Commiteado el 2026-09-18 por decisión de Andrés** (`f6ac8ca`).
+**Lo que sigue sin verificarse de ese cambio:** el camino nuevo no se ha
+ejercitado ni una vez — `grep "cruzaron por el numero"` sobre todos los logs da
+**0 apariciones**, así que del 09-13 al 09-18 ningún informe necesitó la
+normalización. Solo está comprobado que compila y que las 6 corridas del 18-sep
+pasaron por el archivo sin fallar; falta un caso real con ceros a la izquierda.
+Los otros dos hallazgos de §5.2b
 sobre esos scripts **siguen abiertos**: la compuerta de cuadre I-10 de
 `t2_12:286-289` sigue siendo tautológica, y `%TEMP%\_cotejo_sap.xlsx` con
 órdenes abiertas de SAP del cliente sigue ahí desde el **2026-09-10** (8 días,
@@ -490,7 +493,7 @@ retiran, pero no se quedan así. Las otras tres pasan limpias: `prueba_contratos
 | Qué | Por qué no entró | Hallazgo concreto |
 |---|---|---|
 | `desarrollo/sitio_web/` (215 archivos) | **Duplica** `desarrollo/web_corporativa/`, que ya está versionado y publicado desde el PC | **22 MB de imágenes** (202 archivos, el 99,2% del peso) que git no suelta nunca: el `.git` pasaría de 11 a ~33 MB y deshacerlo exige reescribir el historial. Y `assets/opt/` (6,8 MB) lo **regenera** `optimizar_imagenes.py` desde los originales: versionar las dos copias es guardar lo mismo dos veces. No tiene `index.html`. Y `publico/contacto.php:35` redirige a `contacto.html`, que **no existe**: publicarlo deja un formulario cuyo acuse de recibo da 404 |
-| `t2_11_informes_ot.py` y `t2_12_cotejo_sap_abiertas.py` | Son de la conversación «cotejo SAP» y el encargo de hoy era el buscador | **La compuerta de cuadre de I-10 es tautológica** (`t2_12:286-289`): `en_buzon` y `fuera` se cuentan como complementarios sobre la misma lista, así que `en_buzon + fuera != len(filas)` **no puede darse nunca** — imprime «Cuadre: OK» y esa garantía no existe. Además `t2_12:68-69` copia el export a `%TEMP%\_cotejo_sap.xlsx` y **nunca lo borra**: queda una copia de datos del cliente fuera de las carpetas del proyecto, y eso cuenta para el riesgo LOPDP. Y `EMISOR_OT` no existe en `config/.env`, así que el parámetro «configurable» siempre cae al valor del código, duplicado en `t2_11:82` |
+| ~~`t2_11_informes_ot.py`~~ y `t2_12_cotejo_sap_abiertas.py` | Eran de la conversación «cotejo SAP» y el encargo de aquel día era el buscador. **`t2_11` ya entró el 2026-09-18** (`f6ac8ca`), porque la auditoría de T2.21 encontró que la Tarea programada corría la copia sin commitear; `t2_12` **sigue fuera**, con sus tres hallazgos de abajo | **La compuerta de cuadre de I-10 es tautológica** (`t2_12:286-289`): `en_buzon` y `fuera` se cuentan como complementarios sobre la misma lista, así que `en_buzon + fuera != len(filas)` **no puede darse nunca** — imprime «Cuadre: OK» y esa garantía no existe. Además `t2_12:68-69` copia el export a `%TEMP%\_cotejo_sap.xlsx` y **nunca lo borra**: queda una copia de datos del cliente fuera de las carpetas del proyecto, y eso cuenta para el riesgo LOPDP. Y `EMISOR_OT` no existe en `config/.env`, así que el parámetro «configurable» siempre cae al valor del código, duplicado en `t2_11:82` |
 
 ### 5.2 Qué choca con qué
 
