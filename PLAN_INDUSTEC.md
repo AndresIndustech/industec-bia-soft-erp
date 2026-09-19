@@ -1128,26 +1128,29 @@ Las tareas T1.9 a T1.11 avanzan en paralelo conforme se desbloqueen sus dependen
 cd "D:\INDUSTECH IA"          # en la estación; en el PC de Andrés, la copia del repo bajo entrada/desarrollador/INDUSTEC/
 git fetch origin && git status --short && git log --oneline -5
 git rev-list --left-right --count master...origin/master     # 0  0 = al día
-git log --oneline master..origin/pc/pulido-2026-09-12 | wc -l   # > 0: el pulido del 12/13-sep NO está fusionado todavía
-git log --oneline master..origin/pc/archivo-zona-franquicia-2026-09-13 | wc -l   # > 0: T2.18 tampoco
+for b in pc/pulido-2026-09-12 pc/archivo-zona-franquicia-2026-09-13 pc/documentos-y-otros-trabajos-2026-09-14 pc/auditoria-2026-09-10; do
+  git merge-base --is-ancestor origin/$b master && echo "$b: ya fusionada" || echo "$b: PENDIENTE"
+done
 ```
 
-**Al 2026-09-13 el trabajo vive en dos ramas, ambas empujadas y sin fusionar:**
-`pc/pulido-2026-09-12` (T2.14, T2.15, T2.17 — diez commits sobre `master`) y,
-encima de esa, `pc/archivo-zona-franquicia-2026-09-13` (T2.18, más chica: dos
-scripts nuevos y sus pruebas, nada de PHP ni de `app/publico/`). En la
-estación, lo primero es fusionar las dos: `git merge origin/pc/pulido-2026-09-12`
-y después `git merge origin/pc/archivo-zona-franquicia-2026-09-13`. Sin eso, la
-estación despliega código viejo sobre el sitio de pruebas y corre scripts que
-ya no existen con ese contrato — y no tiene el clasificador del archivo por
-zona/franquicia que pidió Andrés el 13.
+**Al 2026-09-18 las cuatro ramas `pc/*` ya están fusionadas en `master`** y
+`master` está 0/0 con `origin/master` (verificado con el bucle de arriba). No
+hay ninguna fusión pendiente: la de `pc/documentos-y-otros-trabajos-2026-09-14`
+(acción **G**, hecha el 2026-09-14) traía dentro `pc/pulido-2026-09-12` y
+`pc/archivo-zona-franquicia-2026-09-13` de arrastre. **Las acciones A y F de
+más abajo seguían describiendo esas dos fusiones como pendientes** —texto que
+dejó de actualizarse cuando G las absorbió— y ya están corregidas.
 
-**No te fíes del disco.** El 2026-09-11 se escribió en este plan que la 007
-estaba pendiente y que `sw.js` iba en v3, cuando existía una rama **29 commits
-por delante** donde las dos cosas ya estaban hechas. Eso mandó trabajo repetido
-y dejó el plan mintiendo dos días (error nº 15). Si `git status` muestra
-archivos sin commitear que no reconoces, mira §5.2b de `ESTADO.md` antes de
-tocarlos: hay cosas dejadas fuera **a propósito**.
+**No te fíes del disco, tampoco de este plan.** El 2026-09-11 se escribió aquí
+que la 007 estaba pendiente y que `sw.js` iba en v3, cuando existía una rama
+**29 commits por delante** donde las dos cosas ya estaban hechas (error nº 15).
+Y el 2026-09-18 esta misma sección seguía mandando a fusionar dos ramas que ya
+llevaban cuatro días fusionadas: nadie llegó a repetir el trabajo porque el
+`git merge-base --is-ancestor` de arriba se corrió antes de tocar nada, que es
+justamente el hábito que evita repetirlo. Corre siempre esa comprobación antes
+de creerle a la prosa de esta sección. Si `git status` muestra archivos sin
+commitear que no reconoces, mira §5.2b de `ESTADO.md` antes de tocarlos: hay
+cosas dejadas fuera **a propósito**.
 
 ### Qué leer, y en qué orden
 
@@ -1252,12 +1255,14 @@ la carpeta clavada en la vieja) y el error nº 18 explica cómo se llegó aquí.
 Empieza por T2.21.1 (leer `Trash`, que destapa los 76 sin mover un archivo) y
 T2.21.2 en simulación. Nada de `--ejecutar` sin Andrés.
 
-**A. Fusionar `pc/pulido-2026-09-12` en `master`** — *en la estación; es
-mecánico, pero tiene que ser lo primero.* Si `git merge` se niega por cambios
-locales en `ESTADO.md` u otro archivo, se apartan con `git stash push -- <archivo>`
-y se devuelven con `git stash pop`. Después, `t2_4_sync_hostinger.py --probar`
-(el contrato SSH cambió: `hostinger_ssh.py` resuelve la llave de la estación
-solo) y `t2_4_pruebas.py`.
+**A. Fusionar `pc/pulido-2026-09-12` en `master`** — ✅ **ya está, sin que esta
+sección lo dijera.** La fusión de `pc/documentos-y-otros-trabajos-2026-09-14`
+del 2026-09-14 (acción **G**) traía dentro `pc/pulido-2026-09-12`, así que
+llegó de arrastre. **Verificado el 2026-09-18** con
+`git merge-base --is-ancestor origin/pc/pulido-2026-09-12 master` (sale 0, es
+decir sí). Esta fila se dejó de actualizar cuando G absorbió su trabajo — el
+mismo tipo de plan-mintiendo-por-desactualizado que el error nº 15 de más
+abajo, solo que sin costo esta vez porque nadie llegó a repetir la fusión.
 
 **B. La lista de `desarrollo/sistema_ots/piloto/ANTES_DE_EMPEZAR.md`** — *diez
 pasos con su comprobación; quedan los 4 y 9, de Andrés.* Los pasos 2 (retirar
@@ -1282,9 +1287,12 @@ de vuelta, y la parte B de `LEEME_ACCESO_HOSTINGER.md` con lo que se hace en
 producción **en bloque y una sola vez**. `t2_14_sembrar_correlativos.py
 --ejecutar` va ahí, con el sistema viejo detenido; en ensayo ya dio los números.
 
-**F. Fusionar y correr T2.18 en la estación** — *autónomo, no depende del
-piloto.* `git merge origin/pc/archivo-zona-franquicia-2026-09-13`, después
-`t2_18_clasificar_archivo.py` (simulación primero) y `t2_18_atender_pedidos_copia.py`
+**F. Correr T2.18 en la estación** — *autónomo, no depende del piloto.* **La
+fusión ya está** (`pc/archivo-zona-franquicia-2026-09-13` también llegó de
+arrastre con G, verificado igual que en A: `git merge-base --is-ancestor`
+confirma que es ancestro de `master`). Lo que falta es correr los scripts, no
+fusionar nada: `t2_18_clasificar_archivo.py` (simulación primero, bloqueada
+hasta ahora por espacio en `G:\Mi unidad`) y `t2_18_atender_pedidos_copia.py`
 para la solicitud real que ya está pendiente. El detalle completo, con lo que
 no se pudo probar desde el PC por no tener acceso a `D:\RESPALDOS`, está en la
 tarea T2.18 más arriba, sección «Pendiente de la estación».
