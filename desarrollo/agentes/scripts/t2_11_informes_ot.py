@@ -101,6 +101,16 @@ def campo(texto, etiqueta):
     return m.group(1).strip() if m else None
 
 
+def num_aviso(s):
+    """La forma canonica de un numero de aviso: solo digitos, sin los ceros de
+    delante. El informe de OT escribe 'ORDEN SAP: 10353660' y el buzon a veces
+    trae '000010353660' -- es el mismo aviso. Esto NO es emparejar por parecido:
+    es llevar las dos formas de escribir el mismo numero a una sola. Un numero
+    con un digito de mas o de menos sigue sin cruzar, y eso se reporta."""
+    d = re.sub(r"\D", "", str(s or ""))
+    return d.lstrip("0") or ("0" if d else "")
+
+
 def _norma(s):
     s = unicodedata.normalize("NFD", str(s or ""))
     s = "".join(c for c in s if unicodedata.category(c) != "Mn")
@@ -363,6 +373,13 @@ def main():
         sys.exit(f"Falta {CASOS}. Corre antes t2_6_imap_avisos.py")
     casos = json.loads(CASOS.read_text(encoding="utf-8"))
     pendientes = {c["aviso"]: c for c in casos["datos"] if c.get("aviso")}
+    # Indice por la forma canonica del numero, para cruzar aunque una fuente
+    # traiga los ceros de delante y la otra no.
+    pend_por_num = {}
+    for c in casos["datos"]:
+        n = num_aviso(c.get("aviso"))
+        if n:
+            pend_por_num.setdefault(n, c["aviso"])
     print(f"casos pendientes segun el buzon: {len(pendientes)}")
 
     padron = cargar_padron()
@@ -384,9 +401,25 @@ def main():
             for s in sin_parsear[:5]:
                 print(f"     imap#{s['id_imap']}  {s['inicio']!r}")
 
-        # Solo los que tocan un caso que hoy figura pendiente.
-        relevantes = [i for i in informes if i["aviso"] in pendientes]
+        # Solo los que tocan un caso que hoy figura pendiente. Se cruza por la
+        # forma canonica del numero (sin ceros de delante); si cruza asi pero no
+        # literalmente, se deja el aviso tal como lo tiene el buzon para que
+        # todo lo demas siga usando una sola clave.
+        relevantes, casi = [], []
+        for i in informes:
+            if i["aviso"] in pendientes:
+                relevantes.append(i)
+                continue
+            equiv = pend_por_num.get(num_aviso(i["aviso"]))
+            if equiv:
+                casi.append((i["aviso"], equiv))
+                i["aviso"] = equiv
+                relevantes.append(i)
         print(f"informes sobre casos pendientes: {len(relevantes)}")
+        if casi:
+            print(f"  {len(casi)} cruzaron por el numero sin los ceros de delante:")
+            for crudo, norm in casi[:8]:
+                print(f"     informe {crudo!r} -> caso {norm!r}")
 
         tecnicos_ok = fallos = bajados = 0
         if not args.sin_pdf:
