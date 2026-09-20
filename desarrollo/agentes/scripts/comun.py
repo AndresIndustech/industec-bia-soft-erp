@@ -47,7 +47,11 @@ from pathlib import Path
 # --- Rutas --------------------------------------------------------------------
 BASE = Path(__file__).resolve().parents[1]            # desarrollo/agentes
 RAIZ = BASE.parents[1]                                # raiz del repositorio
-ENV_PATH = BASE / "config" / ".env"
+# El .env real. `INDUSTEC_ENV_PATH` lo sustituye, y existe para una sola cosa:
+# poder apuntar el empuje a un endpoint apagado y comprobar que el script sale
+# con 1 (T2.21.4), sin editar el .env de produccion ni dejarlo a medio revertir
+# si la prueba se corta.
+ENV_PATH = Path(os.environ.get("INDUSTEC_ENV_PATH") or (BASE / "config" / ".env"))
 CONFIG = BASE / "config"
 LOGS = BASE / "logs"
 SALIDAS = RAIZ / "SALIDAS IA" / "OTS"
@@ -160,7 +164,8 @@ def abrir_log(nombre: str) -> Path:
 
 # --- Empuje firmado a Hostinger ------------------------------------------------
 def empujar(env: dict, contenido: bytes, tipo: str = "casos",
-            agente: str = "industec-estacion", log=print, timeout: int = 60) -> bool:
+            agente: str = "industec-estacion", log=print, timeout: int = 60,
+            intentos: int = 3, espera: int = 15) -> bool:
     """Manda un JSON al endpoint de Hostinger (sync_casos.php), firmado.
 
     Es la copia CANONICA: la de t2_9 (sin X-Industec-Tipo) y la de t2_11 (con
@@ -179,6 +184,15 @@ def empujar(env: dict, contenido: bytes, tipo: str = "casos",
 
     `log` es la funcion con la que se informa (print, o el log() con hora del
     vigilante). Devuelve True solo con HTTP 200.
+
+    POR QUE REINTENTA (T2.21.4). El 2026-09-18 se perdieron 13 empujes seguidos
+    por cortes de TLS del hosting (`SSLEOFError` / `ConnectionResetError`): el
+    servidor no estaba caido, la conexion se cortaba a mitad. Un solo intento
+    convierte un tropiezo de segundos en varias horas de pantalla desactualizada,
+    porque el proximo empuje recien sale con la siguiente novedad del buzon. Se
+    reintenta con espera creciente (15 s, 30 s) y SOLO ante fallos de transporte:
+    un HTTP 4xx no se reintenta -- lo que esta mal es el envio, y repetirlo mil
+    veces no lo arregla. Un 5xx si, que es el servidor teniendo un mal momento.
     """
     url = (env.get("SYNC_URL") or "").strip()
     secreto = (env.get("SYNC_SECRETO") or "").strip()
@@ -186,27 +200,40 @@ def empujar(env: dict, contenido: bytes, tipo: str = "casos",
         log("SYNC_URL o SYNC_SECRETO no estan en config/.env: no se empuja")
         return False
 
-    ts = str(int(time.time()))
-    firma = hmac.new(secreto.encode(), ts.encode() + b"." + contenido,
-                     hashlib.sha256).hexdigest()
-    pedido = urllib.request.Request(
-        url, data=contenido, method="POST",
-        headers={"Content-Type": "application/json",
-                 "X-Industec-Ts": ts,
-                 "X-Industec-Firma": firma,
-                 "X-Industec-Tipo": tipo,
-                 "User-Agent": f"{agente}/1.0"})
-    try:
-        ctx = ssl.create_default_context()          # certificado verificado
-        with urllib.request.urlopen(pedido, timeout=timeout, context=ctx) as r:
-            cuerpo = r.read(500).decode("utf-8", "replace")
-            log(f"empujado ({tipo}): HTTP {r.status} {cuerpo.strip()[:160]}")
-            return r.status == 200
-    except urllib.error.HTTPError as e:
-        log(f"ERROR del servidor al empujar {tipo}: HTTP {e.code} "
-            f"{e.read(300).decode('utf-8', 'replace').strip()[:160]}")
-    except Exception as e:
-        log(f"ERROR al empujar {tipo}: {type(e).__name__}: {e}")
+    ctx = ssl.create_default_context()              # certificado verificado
+    for intento in range(1, max(1, intentos) + 1):
+        # La firma se rehace en cada intento: lleva la hora dentro y el servidor
+        # rechaza todo lo que se aparte mas de 5 minutos de su reloj. Reusar la
+        # del primer intento haria fallar el ultimo por "firma vencida".
+        ts = str(int(time.time()))
+        firma = hmac.new(secreto.encode(), ts.encode() + b"." + contenido,
+                         hashlib.sha256).hexdigest()
+        pedido = urllib.request.Request(
+            url, data=contenido, method="POST",
+            headers={"Content-Type": "application/json",
+                     "X-Industec-Ts": ts,
+                     "X-Industec-Firma": firma,
+                     "X-Industec-Tipo": tipo,
+                     "User-Agent": f"{agente}/1.0"})
+        try:
+            with urllib.request.urlopen(pedido, timeout=timeout, context=ctx) as r:
+                cuerpo = r.read(500).decode("utf-8", "replace")
+                log(f"empujado ({tipo}): HTTP {r.status} {cuerpo.strip()[:160]}")
+                return r.status == 200
+        except urllib.error.HTTPError as e:
+            detalle = e.read(300).decode("utf-8", "replace").strip()[:160]
+            log(f"ERROR del servidor al empujar {tipo}: HTTP {e.code} {detalle}")
+            if e.code < 500:
+                return False                        # el envio esta mal: no insistas
+            motivo = f"HTTP {e.code}"
+        except Exception as e:
+            motivo = f"{type(e).__name__}: {e}"
+            log(f"ERROR al empujar {tipo}: {motivo}")
+        if intento < max(1, intentos):
+            pausa = espera * intento                # 15 s, 30 s
+            log(f"   reintento {intento + 1}/{intentos} de {tipo} en {pausa}s ({motivo})")
+            time.sleep(pausa)
+    log(f"AGOTADOS los {intentos} intentos de empujar {tipo}: el sitio NO tiene este dato")
     return False
 
 

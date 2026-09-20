@@ -631,8 +631,17 @@ def main():
             print(f"     {f!r}")
     print(f"\n{destino}")
     if args.empujar:
-        empujar(cargar_env(), destino.read_bytes(), "atenciones")
+        # T2.21.4 - EL CODIGO DE SALIDA TIENE QUE DOLER. Hasta el 2026-09-18 el
+        # resultado de empujar() se descartaba: los 13 empujes que se perdieron
+        # ese dia por cortes de TLS dejaron `LastTaskResult 0` en el Programador
+        # y `returncode 0` para el vigilante, asi que nadie se entero de que el
+        # sitio mostraba datos viejos. Si el empuje no llego, esta corrida
+        # FRACASO, por mas que el JSON local haya quedado perfecto.
+        if not empujar(cargar_env(), destino.read_bytes(), "atenciones"):
+            print("FALLO el empuje de atenciones: el sitio NO tiene este dato")
+            return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

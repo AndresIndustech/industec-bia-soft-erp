@@ -39,6 +39,12 @@ USO:
     .venv/Scripts/python.exe scripts/t2_4_sync_hostinger.py               # sincroniza todo
     .venv/Scripts/python.exe scripts/t2_4_sync_hostinger.py --inventario  # solo mira, no baja
     .venv/Scripts/python.exe scripts/t2_4_sync_hostinger.py --modulo uio --modulo app_pdf
+    .venv/Scripts/python.exe scripts/t2_4_sync_hostinger.py --recientes 60  # solo lo ultimo
+
+DISPARO AUTOMATICO (T2.21.7): el vigilante del buzon lo llama con `--recientes`
+cada vez que entra un correo. El correo es la señal de que hay una OT nueva;
+este script trae el archivo. Un `--recientes` deja un `manifiesto_parcial_*`,
+que NO autoriza a purgar nada: solo vio una ventana de minutos del servidor.
 """
 from __future__ import annotations
 
@@ -47,6 +53,7 @@ import csv
 import json
 import shlex
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -62,6 +69,10 @@ DESTINO = RESPALDOS / "_ORIGEN_SISTEMA"
 DESTINO_APP = RESPALDOS / "_ORIGEN_APP"
 MANIFIESTOS = DESTINO / "_manifiestos"
 CUARENTENA = DESTINO / "_cuarentena_hash"
+CANDADO = DESTINO / "_sincronizando.lock"
+# Una corrida completa de los 2.323 PDFs tarda horas con este enlace; un candado
+# mas corto se venceria a mitad de camino y dejaria entrar a una segunda.
+CANDADO_VENCE_SEG = 8 * 3600
 
 # El docroot del sistema viejo, relativo al home. SOLO LECTURA: `hostinger_ssh`
 # rechaza cualquier comando que lo nombre y parezca escribir.
@@ -129,7 +140,7 @@ def ssh_ejecutar(env: dict, comando: str, timeout: int = 300) -> str:
     return H.ssh(comando, timeout=timeout, env=env)
 
 
-def inventario_remoto(env: dict, modulo: str):
+def inventario_remoto(env: dict, modulo: str, recientes_min: int = 0):
     """Lista los archivos remotos con su tamano y su sha256, en una sola llamada.
 
     Se pide el hash desde el servidor porque es la unica forma de verificar la
@@ -139,14 +150,22 @@ def inventario_remoto(env: dict, modulo: str):
     El `|| true` evita que un directorio vacio haga fallar todo el modulo: un
     modulo sin archivos es un estado legitimo. Los nombres salen relativos al
     directorio (`%P`), con su subcarpeta cuando la hay (las fotos de la app).
+
+    `recientes_min` acota la mirada a lo modificado en esos minutos (`-mmin`).
+    Existe para el disparo del vigilante (T2.21.7): hashear en el servidor los
+    906 PDFs de CNLJ cada vez que entra un correo es gastar CPU ajena para
+    descubrir que no cambio nada. Con la ventana, el inventario mira tres o
+    cuatro archivos. OJO: lo que devuelve NO es el estado completo del modulo,
+    asi que el manifiesto que sale de ahi no autoriza ninguna purga.
     """
     remoto = ruta_remota(env, modulo)
     patron, prof = patron_de(modulo)
+    ventana = f"-mmin -{int(recientes_min)} " if recientes_min else ""
     salida = ssh_ejecutar(env, (
         f"cd {shlex.quote(remoto)} 2>/dev/null || exit 7; "
-        f"find . -maxdepth {prof} -type f -name {shlex.quote(patron)} -printf '%s\\t%P\\n'; "
+        f"find . -maxdepth {prof} -type f {ventana}-name {shlex.quote(patron)} -printf '%s\\t%P\\n'; "
         f"echo '---SEPARADOR---'; "
-        f"find . -maxdepth {prof} -type f -name {shlex.quote(patron)} -print0 | xargs -0 -r sha256sum 2>/dev/null || true"),
+        f"find . -maxdepth {prof} -type f {ventana}-name {shlex.quote(patron)} -print0 | xargs -0 -r sha256sum 2>/dev/null || true"),
         timeout=900)
 
     if "---SEPARADOR---" not in salida:
@@ -194,13 +213,14 @@ def contar_locales(destino: Path, patron: str) -> int:
                if not any(parte.startswith("_") for parte in p.relative_to(destino).parts[:-1]))
 
 
-def sincronizar_modulo(env: dict, modulo: str, solo_inventario: bool) -> dict:
+def sincronizar_modulo(env: dict, modulo: str, solo_inventario: bool,
+                       recientes_min: int = 0) -> dict:
     destino = destino_de(modulo)
     destino.mkdir(parents=True, exist_ok=True)
     patron, _ = patron_de(modulo)
     locales_antes = contar_locales(destino, patron)
 
-    remotos, sin_hash = inventario_remoto(env, modulo)
+    remotos, sin_hash = inventario_remoto(env, modulo, recientes_min)
     print(f"  remoto : {len(remotos)} archivos" +
           (f"  ({len(sin_hash)} sin hash, se omiten)" if sin_hash else ""))
 
@@ -220,7 +240,9 @@ def sincronizar_modulo(env: dict, modulo: str, solo_inventario: bool) -> dict:
     print(f"  local  : {ya_ok} ya verificados, {len(pendientes)} por bajar" +
           (f", {len(divergentes)} DIVERGENTES (el servidor los reescribio; van a _divergentes)" if divergentes else ""))
 
-    sospechoso = locales_antes > 0 and len(remotos) == 0
+    # Con ventana, "0 remotos" es lo NORMAL (nadie emitio una OT en esos
+    # minutos): dispararia la alarma de "movieron la carpeta" en cada corrida.
+    sospechoso = locales_antes > 0 and len(remotos) == 0 and not recientes_min
     if sospechoso:
         print(f"  SOSPECHOSO: el espejo tenia {locales_antes} archivos y el servidor devuelve 0. "
               f"No se toca nada; revisar si movieron la carpeta.")
@@ -309,20 +331,54 @@ def main() -> None:
                     help="limita a uno o varios modulos (por defecto, todos)")
     ap.add_argument("--sin-auxiliares", action="store_true", help="no baja contadores ni logs")
     ap.add_argument("--sin-app", action="store_true", help="no espeja lo que emite la app nueva")
+    ap.add_argument("--recientes", type=int, default=0, metavar="MINUTOS",
+                    help="solo mira lo modificado en los ultimos N minutos. Para el disparo "
+                         "del vigilante: barato, pero el manifiesto que deja es PARCIAL y no "
+                         "autoriza purgar nada")
     args = ap.parse_args()
 
+    # UNA SOLA SINCRONIZACION A LA VEZ. Desde T2.21.7 esto lo dispara el
+    # vigilante con cada correo, y una corrida larga a mano puede solaparse con
+    # ella: las dos bajarian al mismo `_bajando/` y una podria promover al
+    # espejo el archivo a medio escribir de la otra. El candado es un directorio
+    # porque `mkdir` es atomico en Windows y en Linux sin ayuda de nadie.
+    CANDADO.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        CANDADO.mkdir()
+    except FileExistsError:
+        edad = time.time() - CANDADO.stat().st_mtime
+        if edad < CANDADO_VENCE_SEG:
+            print(f"Ya hay otra sincronizacion en curso (candado de hace {edad / 60:.0f} min). "
+                  f"No se baja nada en esta corrida.")
+            return
+        print(f"Habia un candado de hace {edad / 3600:.1f} h: la corrida anterior murio "
+              f"sin soltarlo. Se toma y se sigue.")
+        CANDADO.touch()
+    try:
+        correr(args)
+    finally:
+        try:
+            CANDADO.rmdir()
+        except OSError:
+            pass
+
+
+def correr(args) -> None:
     env = cargar_env()
     modulos = args.modulo or (list(MODULOS) if args.sin_app else TODOS)
     inicio = datetime.now(timezone.utc)
     print(f"Sincronizacion de Hostinger -> {DESTINO} y {DESTINO_APP}")
     print(f"  servidor : {H.destino(env)}:{H.PUERTO}")
-    print(f"  modo     : {'SOLO INVENTARIO' if args.inventario else 'DESCARGA'}\n")
+    modo = "SOLO INVENTARIO" if args.inventario else "DESCARGA"
+    if args.recientes:
+        modo += f" (solo lo modificado en los ultimos {args.recientes} min; manifiesto PARCIAL)"
+    print(f"  modo     : {modo}\n")
 
     resultados, errores = [], 0
     for m in modulos:
         print(f"[{m}]")
         try:
-            r = sincronizar_modulo(env, m, args.inventario)
+            r = sincronizar_modulo(env, m, args.inventario, args.recientes)
             resultados.append(r)
             if r["fallidos"]:
                 print(f"  FALLIDOS: {len(r['fallidos'])}")
@@ -342,7 +398,12 @@ def main() -> None:
     # el hash verificado, ningun archivo puede borrarse del servidor.
     MANIFIESTOS.mkdir(parents=True, exist_ok=True)
     sello = inicio.strftime("%Y%m%dT%H%M%SZ")
-    csv_path = MANIFIESTOS / f"manifiesto_{sello}.csv"
+    # Un manifiesto de una ventana de minutos NO dice nada de los archivos que
+    # quedaron fuera de ella. Se nombra distinto a proposito: si se llamara
+    # igual, la purga podria tomar el ultimo archivo del directorio y creer que
+    # tiene delante el estado completo del servidor.
+    prefijo = "manifiesto_parcial" if args.recientes else "manifiesto"
+    csv_path = MANIFIESTOS / f"{prefijo}_{sello}.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["modulo", "archivo", "sha256", "bytes", "verificado_local", "ruta_local", "divergente"])
@@ -363,7 +424,10 @@ def main() -> None:
     resumen = {
         "inicio_utc": inicio.isoformat(),
         "fin_utc": datetime.now(timezone.utc).isoformat(),
-        "modo": "inventario" if args.inventario else "descarga",
+        "modo": ("inventario" if args.inventario else "descarga") +
+                (f"_parcial_{args.recientes}min" if args.recientes else ""),
+        "ventana_minutos": args.recientes or None,
+        "autoriza_purga": not args.recientes,
         "servidor": H.destino(env),
         "manifiesto_csv": str(csv_path),
         "modulos": [{k: v for k, v in r.items() if k != "archivos"} for r in resultados],

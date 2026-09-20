@@ -37,6 +37,11 @@ COMO LO HACE, Y POR QUE ASI
    Hostinger nunca la ve, así que quien comprometa el hosting no se lleva el
    acceso al buzón de la empresa.
 
+6. Y BAJA EL PDF DE PRODUCCION EN EL ACTO (T2.21.7). El correo es la SEÑAL de
+   que hay una orden nueva; el archivo bueno esta en el servidor. Como
+   `uploads/` del sistema viejo solo conserva ~3 meses, cada aviso dispara
+   tambien el espejo a D:/RESPALDOS, que es el unico almacenamiento definitivo.
+
 5. INTENTA EMPUJAR SOLO SI CAMBIO ALGO: compara el hash del archivo. Pero el
    lector sella dentro la hora del barrido, así que en la práctica casi siempre
    empuja (anotado en la auditoría del 2026-09-10; no rompe nada, solo sobra).
@@ -55,27 +60,27 @@ Uso:
 
 import argparse
 import hashlib
-import hmac
 import imaplib
 import json
 import select
 import socket
-import ssl
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
 # Las rutas salen de la ubicación de este archivo: en la estación dan lo mismo
 # que antes (D:\INDUSTECH IA\...) y en otra copia del proyecto no apuntan a una
 # unidad que no existe.
+sys.path.insert(0, str(Path(__file__).parent))
+from comun import empujar as empujar_firmado  # noqa: E402
+
 BASE = Path(__file__).resolve().parents[1]
 ENV_PATH = BASE / "config" / ".env"
 LECTOR = BASE / "scripts" / "t2_6_imap_avisos.py"
 INFORMES = BASE / "scripts" / "t2_11_informes_ot.py"
+ESPEJO = BASE / "scripts" / "t2_4_sync_hostinger.py"
 PYTHON = BASE / ".venv" / "Scripts" / "python.exe"
 SALIDA = BASE.parents[1] / "SALIDAS IA" / "OTS" / "catalogos" / "casos_sap.json"
 ESTADO = BASE / "config" / "vigilante_estado.json"
@@ -88,6 +93,11 @@ IDLE_MINUTOS = 9
 # Si el barrido se dispara, no se vuelve a disparar hasta pasado esto. Sin
 # freno, una tanda de 20 correos seguidos lanzaria 20 barridos encimados.
 ESPERA_MINIMA_SEG = 45
+# Ventana que se le pide a produccion, en minutos. El piso evita pedir "los
+# ultimos 2 minutos" cuando llegan dos correos seguidos y perder un PDF que el
+# sistema escribio un momento antes del aviso. El techo (3 dias) evita que, tras
+# una parada larga, la primera corrida mande a hashear el directorio entero.
+ESPEJO_VENTANA_MIN, ESPEJO_VENTANA_MAX = 60, 3 * 24 * 60
 REINTENTO_INICIAL, REINTENTO_MAXIMO = 10, 600
 
 
@@ -113,45 +123,16 @@ def cargar_env() -> dict:
 # Empuje a Hostinger
 # ---------------------------------------------------------------------------
 def empujar(env: dict, contenido: bytes) -> bool:
+    """Manda el catalogo al endpoint de Hostinger, firmado.
+
+    Es un envoltorio sobre `comun.empujar`, que es la copia CANONICA. Antes
+    habia aqui una copia entera del empuje que ya habia divergido de la de
+    t2_11 (le faltaba la cabecera X-Industec-Tipo) y que, sobre todo, no
+    reintentaba: el 2026-09-18 trece empujes se perdieron por cortes de TLS y
+    el vigilante los dio por buenos. Una sola implementacion, un solo arreglo.
     """
-    Manda el catálogo al endpoint de Hostinger, firmado.
-
-    LA FIRMA ES LO QUE PROTEGE EL ENDPOINT. No hay sesión de por medio -- esto
-    es máquina a máquina-- así que la única prueba de que el envío viene de la
-    estación es un HMAC-SHA256 sobre `timestamp.cuerpo` con un secreto que solo
-    conocen los dos lados. Va la marca de tiempo DENTRO de lo firmado para que
-    un envío capturado no se pueda reenviar mañana: el servidor rechaza todo lo
-    que se aparte más de 5 minutos de su reloj.
-
-    Sin el timestamp firmado, cualquiera que grabe un POST válido podría
-    repetirlo para revertir el buzón a un estado viejo.
-    """
-    url = env.get("SYNC_URL", "").strip()
-    secreto = env.get("SYNC_SECRETO", "").strip()
-    if not url or not secreto:
-        log("SYNC_URL o SYNC_SECRETO no están en config/.env: no se empuja")
-        return False
-
-    ts = str(int(time.time()))
-    firma = hmac.new(secreto.encode(), ts.encode() + b"." + contenido,
-                     hashlib.sha256).hexdigest()
-    pedido = urllib.request.Request(
-        url, data=contenido, method="POST",
-        headers={"Content-Type": "application/json",
-                 "X-Industec-Ts": ts,
-                 "X-Industec-Firma": firma,
-                 "User-Agent": "industec-vigilante/1.0"})
-    try:
-        ctx = ssl.create_default_context()          # certificado verificado
-        with urllib.request.urlopen(pedido, timeout=45, context=ctx) as r:
-            cuerpo = r.read(500).decode("utf-8", "replace")
-            log(f"empujado: HTTP {r.status} {cuerpo.strip()[:160]}")
-            return r.status == 200
-    except urllib.error.HTTPError as e:
-        log(f"ERROR del servidor: HTTP {e.code} {e.read(300).decode('utf-8','replace').strip()[:160]}")
-    except Exception as e:
-        log(f"ERROR al empujar: {type(e).__name__}: {e}")
-    return False
+    return empujar_firmado(env, contenido, tipo="casos",
+                           agente="industec-vigilante", log=log, timeout=45)
 
 
 def procesar_informes(dias: int) -> bool:
@@ -183,6 +164,66 @@ def procesar_informes(dias: int) -> bool:
         if linea.strip().startswith(("casos pendientes con atencion", "empujado",
                                      "ERROR", "AVISO", "SIN tecnico")):
             log(f"   {linea.strip()}")
+    return True
+
+
+def espejar_produccion() -> bool:
+    """Baja de produccion los PDFs nuevos, en el mismo instante en que el correo
+    avisa que existen (T2.21.7).
+
+    POR QUE PRODUCCION Y NO EL CORREO. Los dos traen el mismo documento, pero no
+    son igual de buenos como fuente:
+
+      el correo      es la SEÑAL: llega en segundos y dice que hay algo nuevo
+      produccion     es la FUENTE: el archivo tal como el sistema lo emitio,
+                     sin pasar por codificacion de adjunto, y esta completo
+                     aunque el correo se haya quedado en el camino
+
+    Y ninguno de los dos es almacenamiento: `uploads/` del sistema viejo se
+    conserva ~3 meses y despues se limpia solo. El unico definitivo es
+    D:\\RESPALDOS. De ahi que esto corra pegado al aviso y no una vez al dia:
+    cada hora sin espejo es material que solo existe en un servidor que lo va a
+    borrar.
+
+    LA VENTANA SE CALCULA, NO SE FIJA. Se pide al servidor lo modificado desde
+    el ultimo espejo exitoso, con media hora de margen. Si el vigilante estuvo
+    caido cuatro dias, la primera corrida al volver pide cuatro dias; una
+    ventana fija de una hora se habria saltado todo lo demas en silencio.
+
+    NO ES CRITICA. Si falla, se anota y se sigue: la pantalla de la
+    administracion no depende de esto, y el proximo aviso lo reintenta con una
+    ventana mas ancha (el sello solo se mueve cuando la corrida sale bien).
+    """
+    desde = None
+    if ESTADO.is_file():
+        try:
+            desde = datetime.fromisoformat(
+                json.loads(ESTADO.read_text(encoding="utf-8"))["ultimo_espejo_utc"])
+        except Exception:
+            desde = None
+    if desde is None:
+        minutos = ESPEJO_VENTANA_MAX
+    else:
+        transcurridos = (datetime.now(timezone.utc) - desde).total_seconds() / 60
+        minutos = int(min(max(transcurridos + 30, ESPEJO_VENTANA_MIN), ESPEJO_VENTANA_MAX))
+
+    log(f"espejando lo que produccion emitio en los ultimos {minutos} min...")
+    r = subprocess.run([str(PYTHON), str(ESPEJO), "--sin-app", "--sin-auxiliares",
+                        "--recientes", str(minutos)],
+                       cwd=str(BASE), capture_output=True, text=True, timeout=3600)
+    for linea in (r.stdout or "").splitlines():
+        if linea.startswith(("Bajados", "Fallidos", "Divergentes")) and not linea.endswith(": 0"):
+            log(f"   {linea.strip()}")
+    if r.returncode != 0:
+        log(f"AVISO: el espejo de produccion salio con {r.returncode} "
+            f"(no frena el ciclo; se reintenta con el proximo aviso)")
+        for linea in (r.stdout or "").strip().splitlines()[-3:]:
+            log(f"   {linea}")
+        return False
+    ESTADO.parent.mkdir(parents=True, exist_ok=True)
+    ESTADO.write_text(json.dumps(
+        {"ultimo_espejo_utc": datetime.now(timezone.utc).isoformat()},
+        indent=1), encoding="utf-8")
     return True
 
 
@@ -399,6 +440,7 @@ def main() -> None:
     # ahí dentro hay casos nuevos Y órdenes cerradas que nadie ha procesado.
     barrer_y_empujar(env, args.dias)
     procesar_informes(args.dias)
+    espejar_produccion()
 
     espera = REINTENTO_INICIAL
     ultimo = 0.0
@@ -415,6 +457,7 @@ def main() -> None:
                 log("reconectado: se barre lo que pudo llegar mientras tanto")
                 barrer_y_empujar(env, args.dias)
                 procesar_informes(args.dias)
+                espejar_produccion()
                 ultimo = time.monotonic()
             primera = False
             conteo = contar(M)
@@ -435,6 +478,10 @@ def main() -> None:
                     # caso recién llegado no encontraría el caso.
                     barrer_y_empujar(env, args.dias)
                     procesar_informes(args.dias)
+                    # Al final de los tres: es lo unico que no mira nadie en
+                    # pantalla, y es lo mas lento. Primero se actualiza lo que
+                    # la administracion esta viendo.
+                    espejar_produccion()
                     ultimo = time.monotonic()
                     conteo = contar(M)
                 else:
