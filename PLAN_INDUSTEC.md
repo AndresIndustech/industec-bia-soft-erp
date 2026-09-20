@@ -1236,6 +1236,37 @@ python verificar_reportes.py    # 36 · 0
 python verificar_seguridad.py   # 28 · 0
 ```
 
+### Arranque inmediato al 2026-09-20 — antes de leer el resto de esta sección
+
+**Se cortó a media tarea por límite de sesión (`resets 2:50pm`), dos veces seguidas.** Dos agentes
+quedaron picados:
+
+1. **El programador de "producción como fuente"** dejó `comun.py`, `informes.bat`,
+   `t2_11_informes_ot.py`, `t2_4_sync_hostinger.py` y `t2_9_buzon_vigilante.py` **modificados en el
+   disco de la estación, sin commitear y sin una sola verificación corrida.** Antes de fiarte de esos
+   cambios: `git diff` completo, leerlo entero, y solo entonces decidir si se corrige, se prueba y se
+   commitea, o se descarta con `git checkout --` (nada se pierde: nunca llegó a estar en el árbol
+   canónico ni en la base). **No lo asumas andando** — es el mismo error nº 15 de más abajo.
+2. **El workflow de 5 lentes + refutadores** terminó 14 de 16 agentes; los dos últimos (un
+   refutador y la síntesis) murieron por el mismo límite. Sus hallazgos SIN sintetizar quedan en
+   `journal.jsonl` del run `wf_0987ea74-def`. Antes de repetirlo entero, lee ese journal — puede que
+   ya alcance sin gastar otra tanda de agentes.
+
+**Lo que SÍ quedó cerrado, commiteado y empujado, y no hay que repetir** (commits `1697357`,
+`28320d6`): T2.21.1 (el robot lee `INBOX`+`Trash`+`INFORMES OT`, comprobado en producción con
+`n=193 antes=122`) y T2.21.2 en simulación (92 promovibles / 13 a revisión, sobre los 105 de
+`_ORIGEN_BUZON`). Detalle completo en `ESTADO.md` §1b-bis y §1c-bis.
+
+**Lo que se descubrió y cambia el diseño:** producción (yellow-elephant) SÍ tiene los informes —
+2.323 PDF en los 5 módulos del sistema viejo, 0 bajados aquí, mismos documentos que llegan por
+correo— pero **tampoco es almacenamiento permanente** (`uploads/` rota a ~3 meses, según el propio
+docstring de `t2_4_sync_hostinger.py`). El diseño correcto no es "producción en vez de correo": es
+espejar producción a `D:\RESPALDOS` a tiempo, con la cadena que ya existe
+(`t2_4_sync_hostinger.py` → `t2_4_normalizar_nuevas.py` → árbol → `t1_7_ingesta.py`) y que nunca se
+corrió en esta estación.
+
+---
+
 ### La siguiente acción, concreta
 
 **Empieza por H: es la única que está perdiendo datos ahora mismo.** Después,
