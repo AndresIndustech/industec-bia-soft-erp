@@ -962,10 +962,91 @@ informes en `_ORIGEN_BUZON`, 0 clasificados, 0 en `ots`, 0 en el servidor**, y
 | **T2.21.4** | Que un fallo de empuje se note | `return empujar(...)` en `t2_11:546` y `sys.exit(1)`; reintento con espera en `comun.empujar()`; el `.bat` revisa el código de salida | Con el endpoint apagado a propósito, `t2_11 --empujar` sale con **1** y la Tarea programada registra un resultado distinto de 0. Hoy: 13 fallos de TLS el 2026-09-18 y `LastTaskResult 0` en todos |
 | **T2.21.5** | «Las mías» del Archivo | `t2_15_exportar_archivo.py` exporta también la **persona resuelta** contra `tecnicos`, junto a la firma cruda; `ordenes.php` filtra por esa columna, no por `LIKE '%nombre%'` | El filtro pasa de **1 fila de 7.118** a las órdenes reales de cada técnico (Ortiz 359, Perdomo 586, Meléndrez 1.063 repartidas entre los dos hermanos) |
 | **T2.21.6** | Lo que quedó sin verificar | Cerrar contra el servidor lo que esta auditoría solo pudo leer en el código: `casos_gestion`, `ot_archivo`, y las pantallas con una sesión real. Y refutar los 4 hallazgos de captación que quedaron sin refutador | Cada uno con su salida pegada. Lo que siga sin comprobarse **se dice** (I-7) |
+| **T2.21.7** | Producción como fuente de informes, además del correo | Confirmado el 2026-09-19/20: producción (`yellow-elephant`) tiene los mismos 2.323 PDF del sistema viejo, con documentos que el correo nunca trajo (246 nuevos de verdad, ver más abajo). `t2_9_buzon_vigilante.py` ya dispara `t2_4_sync_hostinger.py --recientes N` al detectar un correo — el correo es la SEÑAL, producción la FUENTE, porque `uploads/` rota a ~3 meses y tampoco es permanente | `_ORIGEN_SISTEMA` con el espejo completo (verificado: 2.323/2.323, 0 fallidos, 0 divergentes); el vigilante deja `manifiesto_parcial_*` sin autorizar purga (`autoriza_purga: false` en el resumen) |
+
+**T2.21.4 verificado el 2026-09-20**, con el criterio exacto del plan: endpoint apagado a propósito
+(`INDUSTEC_ENV_PATH` a un `.env` con `SYNC_URL` inválida), `t2_11 --empujar` reintenta 3 veces (15 s,
+30 s) y sale con **código 1** — antes salía con 0 y el Programador registraba éxito con datos sin
+llegar al sitio.
+
+**Solape medido por hash entre producción y lo que ya teníamos** (2026-09-20, cuadre exacto:
+1.970+107+246 = 2.323): de los 2.323 PDF de producción, **1.970 ya estaban en el árbol canónico**,
+**107 ya estaban en `_ORIGEN_BUZON`** (llegados por correo) y **246 son documentos nuevos de
+verdad** que ni el árbol ni el correo tenían. La fuente nueva sí aporta.
+
+### T2.21 — cinco hallazgos verificados por refutación adversarial (2026-09-20), que cambian T2.21.2/T2.21.3
+
+Un workflow de 5 lentes + refutadores independientes (14 de 16 agentes completados; el
+`journal.jsonl` del run `wf_0987ea74-def` tiene el detalle completo con comandos y salidas). Estos
+**cinco sobrevivieron** a su refutador — **no se descartan, hay que resolverlos antes de correr
+`--ejecutar` sobre T2.21.2/T2.21.3**:
+
+1. **El criterio de aceptación de T2.21.2 es hoy inalcanzable.** `t1_7_ingesta.py` tiene el literal
+   `'DRIVE_HISTORICO'` incrustado en sus cuatro `INSERT INTO ots` (líneas 106, 126, 186, 303) — no es
+   parámetro, no hay `argparse`, y ningún `ON DUPLICATE KEY UPDATE` toca `fuente`. El criterio ya
+   escrito arriba (`SELECT COUNT(*) FROM ots WHERE fuente='IMAP_EN_VIVO'` > 0) no puede pasar con el
+   código actual, aunque toda la cadena funcione perfecto. **Arreglo, ya con las correcciones del
+   refutador incorporadas:** los manifiestos que ya escriben `t2_18_rescatar_buzon.py` (columnas
+   `origen`, `canonico`, `destino`, `sha256`) y `t2_4_normalizar_nuevas.py` (`estado, modulo,
+   archivo_origen, nombre_canonico, destino, detalle`) ya identifican el origen — no hace falta
+   columna nueva. `t1_7_ingesta.py` debe leer esos CSV y usar `fuente=IF(VALUES(fuente)=
+   'DRIVE_HISTORICO', fuente, VALUES(fuente))` en los cuatro `ON DUPLICATE` (nunca degradar
+   `IMAP_EN_VIVO`/`SISTEMA_DESCARGADO` de vuelta a `DRIVE_HISTORICO` en una re-corrida).
+2. **El promotor del buzón (`t2_18_rescatar_buzon.py --origen`) nunca se encadenó a nada.** Ni al
+   saneamiento nocturno (`PASOS` en `saneamiento_nocturno.py:47-58` no lo menciona), ni a ninguna
+   Tarea programada (`schtasks` solo devuelve «Informes de OT» y «Vigilante del buzon»), ni lo llama
+   `t2_11`. Por eso el árbol no recibe un archivo nuevo desde el 2026-09-13: no es que algo falle, es
+   que nada lo dispara. **Arreglo, con los tres defectos que el refutador encontró en la propuesta
+   original:** agregarlo a `PASOS` **entre `normalizar` e `ingesta`** (no después de `ingesta`, o lo
+   promovido se queda un día entero fuera de la base) con la entrada exacta `["t2_18_rescatar_buzon.py",
+   "--origen", "D:\\RESPALDOS\\_ORIGEN_BUZON", "--ejecutar"]` (sin `--origen` trabajaría sobre
+   `_DEL_BUZON`, la carpeta vieja); y antes de encadenarlo, hacer que salga con código distinto de 0
+   cuando haya `CONFLICTO_CORRELATIVO` o `COLISION` (hoy `main()` no hace `sys.exit`, así que el
+   nocturno nunca se entera de un conflicto sin resolver).
+3. **`t2_19_subir_pdfs.py` no ve `_ORIGEN_BUZON` ni `_ORIGEN_SISTEMA`: su «faltan: 0» es una
+   tautología**, no una prueba de que todo está subido. Solo recorre `D:\RESPALDOS\ORDENES DE
+   TRABAJO` (línea 77) y excluye toda carpeta que empiece por `_` salvo `_DEL_BUZON` (línea 102) —
+   las otras dos cuelgan de `D:\RESPALDOS` directamente, nunca entran al `rglob`. Medido el
+   2026-09-20: son **270 PDF invisibles para t2_19** (107 en `_ORIGEN_BUZON` + 163 que ya había en
+   `_ORIGEN_SISTEMA` de una corrida previa). **El arreglo NO es contar esas carpetas como
+   "pendientes"** —por I-2 el origen nunca se borra tras promover, así que seguirían contando para
+   siempre, como ya pasa con los 164 de `_DEL_BUZON`—: hay que cruzar por **hash** contra lo ya
+   promovido al árbol, nunca por nombre (el nombre cambia al normalizar).
+4. **La deduplicación de `t2_18`/`t2_4` es por RUTA canónica, no por contenido** (`t2_18:157-166`,
+   `t2_4:232-242`): si `resolver()` calcula un nombre distinto al que ya tiene ese mismo contenido en
+   el árbol bajo otra ruta, se archiva una segunda copia. Medido contra los 2.323 de producción:
+   **13 casos reales** (0 entre los 107 del correo — coinciden byte a byte con producción). La causa
+   **no es** el correlativo ni el marcador de día, como se pensó al principio: es **local ambiguo**
+   (`K073H015` resuelve a `H015EC` cuando el árbol ya lo tiene como `K073EC`) y **aviso corto
+   descartado** (`1031` sin ceros a la izquierda vs `00001031` en el árbol). **El arreglo no es
+   marcar `YA_ESTABA` en silencio si el hash calza en otra ruta** — esos 13 casos delatan un defecto
+   real de `resolver()` (`OT-2341-K197H071` resuelve a `V058EC`, que huele a error): van a
+   **revisión humana con las dos rutas pegadas**, igual que cualquier otra colisión (I-11).
+5. **El saneamiento nocturno nunca corrió encadenado**: existe completo en código
+   (`saneamiento_nocturno.py`, 7 pasos, aborta al primer fallo) pero la Tarea programada
+   correspondiente **no existe** en Windows — confirmado con `schtasks` de primera mano.
+
+**Cuatro hallazgos de la misma corrida que el refutador SÍ tumbó — no los repitas:**
+- *"La FK de `locales` aborta el lote si llega un local sin EC"*: el escenario que lo dispara es
+  imposible hoy — `t1_7_ingesta.py` no tiene `argparse`, su `RAIZ` es una ruta fija, y `_ORIGEN_BUZON`
+  ni siquiera cuelga de ella.
+- *"La UNIQUE KEY no protege contra la fuente nueva porque `dia_intervencion` es NULL"*: falso —
+  `resolver()` ya normaliza el local y el día contra el maestro **antes** de nombrar el archivo, así
+  que el correo y producción producen el mismo `id_industec` byte a byte para el mismo documento.
+- *"Hay 342 filas de `ots` duplicando el mismo PDF, la cifra de 7.118 activas está inflada"*: falso
+  — las 342 están **en cuarentena** (`SUPERSEDIDO_POR_NOMBRE_CANONICO`), es el mecanismo reversible
+  de I-5 funcionando a propósito. Las 7.118 activas tienen 7.118 hashes distintos.
+- *"7 archivos con el mismo aviso y otro local chocan contra `uq_ots_zona_correlativo_modulo`"*:
+  falso — son correctivos con `dia_intervencion NULL`, y MariaDB no bloquea con NULL (ya hay 9 pares
+  así conviviendo hoy sin problema).
+
+**Sin verificar, por límite de sesión (I-7):** el refutador de *"aviso corto descartado"* murió antes
+de correr — el hallazgo aparece mencionado dentro del punto 4 de arriba (`1031` vs `00001031`) pero
+esa mención puntual no pasó por un refutador dedicado.
 
 | Autónomo | Requiere aprobación de Andrés | Prohibido |
 |---|---|---|
-| Escribir y correr en **simulación** todo lo de arriba; leer cualquier carpeta del buzón con EXAMINE; commitear el código | El `--ejecutar` de T2.21.2 (mueve 104 archivos al árbol y escribe en `ots`); el `--ejecutar` de T2.21.3 (sube 104 PDF al servidor); resolver los 8 conflictos de correlativo; crear la Tarea programada del nocturno | Restaurar, mover o borrar un correo del buzón; borrar nada de `_ORIGEN_BUZON` ni de `_DEL_BUZON` aunque ya esté promovido; autorresolver un conflicto de correlativo; tocar `G:\Mi unidad` |
+| Escribir y correr en **simulación** todo lo de arriba; leer cualquier carpeta del buzón con EXAMINE; espejar producción a `_ORIGEN_SISTEMA` (T2.21.7, es copia de solo lectura hacia `D:\RESPALDOS`, nunca escribe en el árbol ni en la base); commitear el código | El `--ejecutar` de T2.21.2 (mueve archivos al árbol y escribe en `ots`); el `--ejecutar` de T2.21.3 (sube PDF al servidor); encadenar `t2_18_rescatar_buzon.py` al nocturno; resolver los conflictos de correlativo y las 13 colisiones de contenido en otra ruta | Restaurar, mover o borrar un correo del buzón; borrar nada de `_ORIGEN_BUZON`, `_DEL_BUZON` ni `_ORIGEN_SISTEMA` aunque ya esté promovido; autorresolver un conflicto de correlativo o una colisión de hash; tocar `G:\Mi unidad`; escribir en producción |
 
 ---
 
@@ -1236,55 +1317,34 @@ python verificar_reportes.py    # 36 · 0
 python verificar_seguridad.py   # 28 · 0
 ```
 
-### Arranque inmediato al 2026-09-20 — antes de leer el resto de esta sección
-
-**Se cortó a media tarea por límite de sesión (`resets 2:50pm`), dos veces seguidas.** Dos agentes
-quedaron picados:
-
-1. **El programador de "producción como fuente"** dejó `comun.py`, `informes.bat`,
-   `t2_11_informes_ot.py`, `t2_4_sync_hostinger.py` y `t2_9_buzon_vigilante.py` **modificados en el
-   disco de la estación, sin commitear y sin una sola verificación corrida.** Antes de fiarte de esos
-   cambios: `git diff` completo, leerlo entero, y solo entonces decidir si se corrige, se prueba y se
-   commitea, o se descarta con `git checkout --` (nada se pierde: nunca llegó a estar en el árbol
-   canónico ni en la base). **No lo asumas andando** — es el mismo error nº 15 de más abajo.
-2. **El workflow de 5 lentes + refutadores** terminó 14 de 16 agentes; los dos últimos (un
-   refutador y la síntesis) murieron por el mismo límite. Sus hallazgos SIN sintetizar quedan en
-   `journal.jsonl` del run `wf_0987ea74-def`. Antes de repetirlo entero, lee ese journal — puede que
-   ya alcance sin gastar otra tanda de agentes.
-
-**Lo que SÍ quedó cerrado, commiteado y empujado, y no hay que repetir** (commits `1697357`,
-`28320d6`): T2.21.1 (el robot lee `INBOX`+`Trash`+`INFORMES OT`, comprobado en producción con
-`n=193 antes=122`) y T2.21.2 en simulación (92 promovibles / 13 a revisión, sobre los 105 de
-`_ORIGEN_BUZON`). Detalle completo en `ESTADO.md` §1b-bis y §1c-bis.
-
-**Lo que se descubrió y cambia el diseño:** producción (yellow-elephant) SÍ tiene los informes —
-2.323 PDF en los 5 módulos del sistema viejo, 0 bajados aquí, mismos documentos que llegan por
-correo— pero **tampoco es almacenamiento permanente** (`uploads/` rota a ~3 meses, según el propio
-docstring de `t2_4_sync_hostinger.py`). El diseño correcto no es "producción en vez de correo": es
-espejar producción a `D:\RESPALDOS` a tiempo, con la cadena que ya existe
-(`t2_4_sync_hostinger.py` → `t2_4_normalizar_nuevas.py` → árbol → `t1_7_ingesta.py`) y que nunca se
-corrió en esta estación.
-
----
-
 ### La siguiente acción, concreta
 
 **Empieza por H: es la única que está perdiendo datos ahora mismo.** Después,
 escoge por este orden; las tres primeras son autónomas y no dependen de nadie;
 la cuarta y la quinta requieren a Andrés.
 
-**H. T2.21 · Cerrar la cadena del correo** — *autónomo hasta el `--ejecutar`, y
-es lo más urgente que hay.* La auditoría del 2026-09-18 midió que el robot lee
-el correo y actualiza el estatus del caso, pero **los informes no llegan a
-ninguna parte más**: 104 varados en `D:\RESPALDOS\_ORIGEN_BUZON` (0 clasificados,
-0 en `ots`, 0 en el servidor, ~20 nuevos al día desde el 2026-09-14), y **76
-casos ya cerrados que el sitio muestra pendientes** porque su informe está en
-`Trash` y los scripts solo abren `INBOX`. La tarea T2.21 más arriba trae las seis
-subtareas con su criterio y las decisiones de diseño ya cerradas — **léela antes
-de tocar código, porque el promotor ya existe** (`t2_18_rescatar_buzon.py`, con
-la carpeta clavada en la vieja) y el error nº 18 explica cómo se llegó aquí.
-Empieza por T2.21.1 (leer `Trash`, que destapa los 76 sin mover un archivo) y
-T2.21.2 en simulación. Nada de `--ejecutar` sin Andrés.
+**H. T2.21 · Cerrar la cadena del correo** — *autónomo hasta el `--ejecutar`.*
+**Ya hecho y verificado (2026-09-19/20), no repetir:** T2.21.1 (lee `INBOX`+
+`Trash`+`INFORMES OT`, comprobado en producción con `n=193 antes=122`),
+T2.21.4 (reintento + código de salida real, probado con el endpoint apagado),
+T2.21.7 (espejo de producción — 2.323/2.323 PDF, 0 fallidos — y disparo
+automático desde el vigilante), y T2.21.2/T2.21.3 en **simulación** (92
+promovibles / 13 a revisión sobre los 105 del correo; 246 documentos nuevos
+de verdad en producción, cuadre exacto por hash).
+
+**Lo que sigue, antes de cualquier `--ejecutar`:** los cinco hallazgos
+verificados por refutación adversarial de la sección de arriba («T2.21 —
+cinco hallazgos verificados...», 2026-09-20). En resumen, en orden de
+dependencia: (1) hacer que `t1_7_ingesta.py` lea el origen de los manifiestos
+de `t2_18`/`t2_4` y deje de escribir `'DRIVE_HISTORICO'` a ciegas — si no,
+el criterio de aceptación de T2.21.2 nunca puede pasar; (2) indexar por HASH
+el árbol canónico antes de promover, en `t2_18_rescatar_buzon.py` y
+`t2_4_normalizar_nuevas.py`, para que las 13 colisiones de contenido en otra
+ruta vayan a revisión humana en vez de archivarse dos veces; (3) encadenar
+`t2_18_rescatar_buzon.py --origen ... --ejecutar` al nocturno, entre
+`normalizar` e `ingesta`, y antes hacer que salga con código ≠0 en un
+conflicto; (4) que `t2_19_subir_pdfs.py` cruce por hash contra `_ORIGEN_BUZON`
+y `_ORIGEN_SISTEMA`, no solo el árbol. Nada de `--ejecutar` real sin Andrés.
 
 **A. Fusionar `pc/pulido-2026-09-12` en `master`** — ✅ **ya está, sin que esta
 sección lo dijera.** La fusión de `pc/documentos-y-otros-trabajos-2026-09-14`
