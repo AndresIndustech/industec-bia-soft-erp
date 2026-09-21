@@ -1050,6 +1050,50 @@ esa mención puntual no pasó por un refutador dedicado.
 
 ---
 
+### T2.22 · 203 casos con la orden ya archivada que `casos_gestion` no refleja (hallazgo del 2026-09-21)
+
+**Por qué existe.** Andrés reportó el aviso 10353660: el buzón lo mostraba `ASIGNADO`
+(sin orden emitida, sin cierre) pero la orden real ya estaba archivada y verificada
+en `ot_archivo` desde el saneamiento del corpus histórico (T2.21), con técnico y
+fecha de atención. Se regularizó ese caso puntual en dos pasos, replicando la
+máquina de estados de `casos.php` en vez de forzar el estado a mano:
+`ASIGNADO → ATENDIDO` (con `ot_cierre` y `atendido_en` tomados del propio
+`ot_archivo`, que es la evidencia independiente — I-10) y después
+`ATENDIDO → RESUELTO` ('cerrado_sap', a pedido explícito de Andrés para ese caso,
+sin verificar contra SAP — mismo patrón que la regularización masiva de
+`ESTADO.md` §1h). Bitácora: acciones `ATENDIDO_DESDE_ARCHIVO` y
+`CERRADO_SAP_PUNTUAL`, aviso 10353660.
+
+**El hallazgo es más grande que un caso.** Al dimensionarlo:
+
+```sql
+SELECT COUNT(*) FROM ot_archivo a JOIN casos_gestion g ON g.aviso = a.aviso
+ WHERE a.origen = 'HISTORICO' AND g.estado IN ('NUEVO','ASIGNADO','EN_REVISION')
+   AND g.ot_cierre IS NULL;
+-- 203
+```
+
+203 avisos tienen un documento archivado (origen `HISTORICO`, del saneamiento del
+corpus) sin que `casos_gestion` refleje que la orden ya se emitió. La causa:
+`Casos::atenderPorOrden()` solo se dispara desde la app (orden emitida en el acto)
+o desde `Reconciliar::atenciones()` (informe leído por el robot del correo); un
+documento que entra por la regularización del corpus histórico no pasa por
+ninguna de las dos rutas, así que su caso se queda congelado en el estado que
+tenía antes de que apareciera el documento. Varios avisos del listado tienen
+**más de un documento** (10336163, 10336625, 10336510, 10337184, 10337874...),
+así que antes de regularizar en bloque hay que decidir qué informe manda cuando
+hay más de uno (fecha más reciente? el que tenga `en_servidor=1`?) — no es el
+mismo caso simple del 10353660, que solo tenía un documento.
+
+**No se tocó nada de esto:** es un hallazgo, no una regularización. Los 203 casos
+siguen exactamente como estaban.
+
+| Autónomo | Requiere aprobación de Andrés | Prohibido |
+|---|---|---|
+| Volver a correr la consulta de conteo; revisar a mano una muestra para confirmar el patrón; escribir el script de regularización en bloque (solo contar, sin `--ejecutar`) | El `--ejecutar` que mueva los 203 (o el subconjunto que se decida) a `ATENDIDO`/`RESUELTO`; el criterio de qué informe manda cuando un aviso tiene más de uno | Aplicar la transición `cerrado_sap` a un caso sin evidencia en `ot_archivo`; asumir sin dejarlo escrito en la bitácora que la administradora ya cerró en SAP |
+
+---
+
 # FASE 3 · DECISIÓN — Noviembre
 
 > **Cierra con:** tablero de decisión y equipo capaz de operarlo por su cuenta.
@@ -1298,6 +1342,18 @@ canónico no recibe un archivo desde el **2026-09-13 22:22**. Es la acción **H*
 corregidas por esta auditoría:** los «69 sin PDF» de T2.19 **no** eran «sin archivo local» (los
 archivos están en `_ORIGEN_BUZON`), y `prueba_48h.php` ya da **120·0**, no los 4 fallos que §5.2b
 sigue anunciando.
+
+**Sumado el 2026-09-21 — caso puntual 10353660 y el hallazgo T2.22.** Andrés
+reportó un caso que el buzón mostraba pendiente aunque la orden ya estaba hecha.
+Se regularizó en dos pasos (`ASIGNADO → ATENDIDO → RESUELTO`, con el documento de
+`ot_archivo` como evidencia del primer paso) y al dimensionarlo salieron **203
+casos con el mismo patrón**: documento ya archivado desde el saneamiento del
+corpus histórico, sin que `casos_gestion` lo refleje, porque ese camino de
+ingreso no pasa por `Casos::atenderPorOrden()` ni por el robot del correo.
+**Nada de los 203 se tocó.** Es la siguiente acción concreta si Andrés quiere
+vaciar ese pendiente: T2.22, con el criterio de qué informe manda cuando un
+aviso tiene más de uno (varios sí lo tienen) pendiente de decidir antes de
+escribir nada en bloque.
 
 ### Antes de dar nada por verificado
 

@@ -430,6 +430,62 @@ aquí: no hay con qué cruzar, es una decisión de negocio explícita).
 
 ---
 
+## 1i. Caso puntual OT 10353660 regularizado, y el hallazgo de los 203 (2026-09-21)
+
+Andrés reportó el aviso **10353660** (G005 Labrador Quito, GUS): el buzón lo
+mostraba `ASIGNADO` — sin orden emitida — pero la orden ya estaba hecha. Se
+verificó contra `ot_archivo` (fuente independiente, I-10): el documento
+`OT-1851-G005EC-10353660-UIO` ya estaba archivado y verificado desde el
+saneamiento del corpus histórico (T2.21), técnico Anthony Morales, fecha de
+atención 2026-09-09, `en_servidor=1`. Sin pendiente de repuestos vivo (ASG-01).
+
+**Regularizado en dos pasos**, replicando `Casos::TRANSICIONES` en vez de forzar
+el estado a mano:
+
+```
+1) ASIGNADO -> ATENDIDO   (ot_cierre y atendido_en tomados de ot_archivo)
+2) ATENDIDO -> RESUELTO   ('cerrado_sap', a pedido de Andrés: la administradora
+                            ya lo procesó en SAP — sin verificar caso por caso
+                            contra SAP, mismo patrón que §1h)
+```
+
+**Comprobado, corrida contra el sitio de pruebas** (`casos_gestion` en
+Hostinger), con verificación de idempotencia (segunda corrida: «Ya está
+RESUELTO. Nada que hacer.»):
+
+```
+Estado actual en casos_gestion: ASIGNADO
+Documento en el archivo: OT-1851-G005EC-10353660-UIO (fecha_atencion 2026-09-09, en_servidor=1)
+Pendiente de repuestos vivo: no
+Paso 1 aplicado: ASIGNADO -> ATENDIDO
+Paso 2 aplicado: ATENDIDO -> RESUELTO
+```
+
+Bitácora verificada con dos filas: `ATENDIDO_DESDE_ARCHIVO` (ASIGNADO→ATENDIDO)
+y `CERRADO_SAP_PUNTUAL` (ATENDIDO→RESUELTO), `usuario='sistema'`, aviso
+10353660, con el motivo y el pedido de Andrés citados en `detalle`.
+
+**El hallazgo es más grande que un caso — T2.22 en el plan.** Al dimensionar
+cuántos avisos tienen el mismo patrón (documento archivado desde el corpus
+histórico que `casos_gestion` no refleja):
+
+```sql
+SELECT COUNT(*) FROM ot_archivo a JOIN casos_gestion g ON g.aviso = a.aviso
+ WHERE a.origen = 'HISTORICO' AND g.estado IN ('NUEVO','ASIGNADO','EN_REVISION')
+   AND g.ot_cierre IS NULL;
+```
+→ **203 avisos**, varios con más de un documento archivado (10336163, 10336625,
+10336510, 10337184, 10337874...). **Ninguno de los 203 se tocó**: es un
+hallazgo, no una regularización — falta que Andrés decida el criterio para los
+avisos con más de un informe antes de escribir nada en bloque. Detalle y tabla
+de permisos en `PLAN_INDUSTEC.md` T2.22.
+
+**Lo que NO se comprobó:** igual que en §1h, que la administradora efectivamente
+haya cerrado el 10353660 en SAP — es la premisa que dio Andrés para este caso
+puntual, no un hecho verificado contra SAP.
+
+---
+
 ## 1c. La cadena del correo, medida el 2026-09-18 (auditoría de T2.21)
 
 Andrés pidió validar si el robot del correo identifica los informes nuevos, los
