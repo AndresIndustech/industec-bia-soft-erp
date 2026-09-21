@@ -197,6 +197,39 @@ def resolver(nombre, modulo_dir, canonicos, alias, sap, maestro, anio=None):
     return destino, canon, nota
 
 
+def indice_hashes_arbol(raiz: Path = None) -> dict:
+    """SHA-256 -> la ruta donde ese contenido YA esta archivado.
+
+    POR QUE EXISTE (decision de Andres, 2026-09-20). Hasta hoy el control de
+    duplicados era por RUTA: se preguntaba si el destino calculado ya existia.
+    Eso deja pasar el caso que mas se repite en la operacion real -- al tecnico
+    se le reenvia el informe, o lo manda dos veces a proposito, y el sistema le
+    da OTRO correlativo -- porque el nombre canonico cambia y entonces la ruta
+    no colisiona con nada. El documento terminaba archivado dos veces.
+
+    Andres lo zanjo asi: "cuando tienen un numero de OT diferente pero el resto
+    esta copiado, se almacena la primera que llego y se descarta la otra".
+
+    QUIEN ES "LA PRIMERA". Si el contenido ya esta en el arbol, la primera es
+    la que esta: el candidato se descarta. Si las dos llegan en el mismo lote,
+    gana la de correlativo menor, que es la que se emitio antes -- y sale sola,
+    porque los archivos se recorren ordenados por nombre y el nombre empieza
+    por OT-{correlativo} con ceros a la izquierda.
+
+    Se saltan las carpetas que empiezan por "_": son origenes crudos
+    (_DEL_BUZON y demas), no el archivo. Incluirlas haria que cada original
+    pareciera duplicado de su propia copia y no se promoveria nada.
+    """
+    raiz = raiz or CANONICO
+    indice = {}
+    for p in raiz.rglob("*.pdf"):
+        rel = p.relative_to(raiz)
+        if any(parte.startswith("_") for parte in rel.parts[:-1]):
+            continue
+        indice.setdefault(sha256_de(p), p)
+    return indice
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Promueve el espejo crudo del sistema al arbol canonico. Por defecto simula.")
@@ -210,7 +243,11 @@ def main():
     print(f"Maestro: {len(maestro)} locales | {len(alias)} alias | {len(sap)} avisos SAP\n")
 
     modulos = args.modulo or [m for m in MODULO_DE if (ESPEJO / m).is_dir()]
-    promovidos, rechazados, ya_estaban, colisiones = [], [], [], []
+    promovidos, rechazados, ya_estaban, colisiones, repetidos = [], [], [], [], []
+
+    print("Indexando por contenido el arbol canonico...")
+    indice = indice_hashes_arbol()
+    print(f"  {len(indice)} documentos distintos ya archivados\n")
 
     for mod in modulos:
         origen = ESPEJO / mod
@@ -241,9 +278,23 @@ def main():
                                        "motivo": "ya existe con contenido distinto"})
                 continue
 
+            # El mismo documento con OTRO correlativo. Gana el que ya esta
+            # archivado y este se descarta, sin borrar el origen (I-2): queda en
+            # el espejo crudo y en el manifiesto, con la ruta del que gano.
+            gemelo = indice.get(h_origen)
+            if gemelo is not None:
+                repetidos.append({"modulo": mod, "origen": p.name, "canonico": canon,
+                                  "motivo": f"mismo contenido que {gemelo.name}",
+                                  "gemelo": str(gemelo.relative_to(CANONICO))})
+                continue
+
             promovidos.append({"modulo": mod, "origen": p.name, "canonico": canon,
                                "destino": str(destino_rel), "regla": nota,
                                "sha256": h_origen})
+            # Se anota aunque estemos simulando: asi el segundo gemelo DEL MISMO
+            # lote tambien se cuenta como repetido y la simulacion da el numero
+            # que va a dar la corrida de verdad.
+            indice[h_origen] = destino
             if args.ejecutar:
                 destino.parent.mkdir(parents=True, exist_ok=True)
                 tmp = destino.with_suffix(".pdf.parcial")
@@ -270,12 +321,17 @@ def main():
             w.writerow(["YA_ESTABA", r["modulo"], r["origen"], r["canonico"], "", ""])
         for r in colisiones:
             w.writerow(["COLISION", r["modulo"], r["origen"], r["canonico"], "", r["motivo"]])
+        for r in repetidos:
+            w.writerow(["REPETIDO_DESCARTADO", r["modulo"], r["origen"], r["canonico"],
+                        r["gemelo"], r["motivo"]])
         for r in rechazados:
             w.writerow(["NO_RESUELTO", r["modulo"], r["origen"], "", "", r["motivo"]])
 
     print("\n" + "=" * 66)
     print(f"{'Promovidos' if args.ejecutar else 'Promovibles':<14}: {len(promovidos)}")
     print(f"{'Ya estaban':<14}: {len(ya_estaban)}")
+    print(f"{'Repetidos':<14}: {len(repetidos)}"
+          "   (mismo contenido con otro correlativo: gana el ya archivado)")
     print(f"{'Colisiones':<14}: {len(colisiones)}")
     print(f"{'No resueltos':<14}: {len(rechazados)}")
     if rechazados:

@@ -54,7 +54,8 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from t2_4_normalizar_nuevas import resolver, cargar_maestro, conectar, sha256_de  # noqa: E402
+from t2_4_normalizar_nuevas import (resolver, cargar_maestro, conectar, sha256_de,  # noqa: E402
+                                     indice_hashes_arbol)
 from comun import RESPALDOS, SALIDAS, cargar_env  # noqa: E402
 
 CANONICO = RESPALDOS / "ORDENES DE TRABAJO"
@@ -122,7 +123,12 @@ def main():
             por_aviso_lote.setdefault(m.group(2), set()).add(int(m.group(1)))
     conflicto_en_lote = {av for av, corrs in por_aviso_lote.items() if len(corrs) > 1}
 
+    print("Indexando por contenido el arbol canonico...")
+    indice = indice_hashes_arbol()
+    print(f"  {len(indice)} documentos distintos ya archivados\n")
+
     promovidos, ya_estaban, colisiones, conflictos, no_resueltos = [], [], [], [], []
+    repetidos = []
 
     for p in archivos:
         modulo_dir = modulo_dir_de(p.name)
@@ -165,8 +171,18 @@ def main():
                                     "motivo": "ya existe en el canonico con contenido distinto"})
             continue
 
+        # Mismo documento con otro correlativo: gana el que ya esta archivado
+        # (decision de Andres, 2026-09-20). No se borra el origen (I-2).
+        gemelo = indice.get(h_origen)
+        if gemelo is not None:
+            repetidos.append({"origen": p.name, "canonico": canon,
+                               "motivo": f"mismo contenido que {gemelo.name}",
+                               "gemelo": str(gemelo.relative_to(CANONICO))})
+            continue
+
         promovidos.append({"origen": p.name, "canonico": canon, "destino": str(destino_rel),
                             "regla": nota, "sha256": h_origen})
+        indice[h_origen] = destino
         if args.ejecutar:
             destino.parent.mkdir(parents=True, exist_ok=True)
             tmp = destino.with_suffix(".pdf.parcial")
@@ -180,6 +196,8 @@ def main():
 
     print(f"promovidos:            {len(promovidos)}")
     print(f"ya estaban (duplicado): {len(ya_estaban)}")
+    print(f"repetidos descartados:  {len(repetidos)}"
+          "   (mismo contenido con otro correlativo: gana el ya archivado)")
     print(f"colisiones:             {len(colisiones)}")
     print(f"conflicto correlativo:  {len(conflictos)}")
     print(f"no resueltos:           {len(no_resueltos)}")
@@ -211,6 +229,9 @@ def main():
             w.writerow(["YA_ESTABA", r["origen"], r["canonico"], "", ""])
         for r in colisiones:
             w.writerow(["COLISION", r["origen"], r["canonico"], "", r["motivo"]])
+        for r in repetidos:
+            w.writerow(["REPETIDO_DESCARTADO", r["origen"], r["canonico"], r["gemelo"],
+                        r["motivo"]])
         for r in conflictos:
             w.writerow(["CONFLICTO_CORRELATIVO", r["origen"], r["canonico"], "", r["motivo"]])
         for r in no_resueltos:
