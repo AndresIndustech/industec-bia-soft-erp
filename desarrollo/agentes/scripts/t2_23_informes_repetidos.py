@@ -21,11 +21,18 @@ eso Andres decidio el 2026-09-20 archivar LOS DOS y que decida una persona con
 los dos documentos a la vista. Este Excel es esa vista.
 
 QUE HACE
-Busca en el arbol canonico los grupos de dos o mas ordenes que comparten
-numero de aviso, abre cada PDF y compara los campos de la visita. Para cada
-grupo dice si es UNA SOLA VISITA documentada dos veces (mismo dia, tecnico y
-horario) o DOS VISITAS REALES en fechas distintas, que es un caso de negocio
-legitimo y NO hay que tocar.
+Busca en el arbol canonico las ordenes que comparten numero de aviso, abre cada
+PDF y las subagrupa por VISITA (mismo dia, mismo tecnico, misma hora de inicio
+y fin). Dos ordenes de la misma visita son el mismo trabajo documentado dos
+veces, y eso es lo que hay que decidir. Dos ordenes de visitas distintas son el
+tecnico que volvio, que es un caso normal y no hay que tocar.
+
+SE SUBAGRUPA POR VISITA, NO SE MIRA EL AVISO ENTERO. Las dos cosas son
+independientes: el aviso 10347141 tiene CUATRO ordenes porque el tecnico
+volvio varias veces, y dentro de esas cuatro hay un par -la 2507 y la 2508-
+que es el mismo trabajo enviado dos veces. La primera version preguntaba si
+TODO el aviso era una sola visita, y por eso ese par y el del aviso 10354784
+quedaban invisibles justo en los avisos con mas movimiento.
 
 SOLO LECTURA. No mueve, no borra y no escribe en la base. Lo unico que produce
 es un Excel a nombre nuevo en SALIDAS IA (I-4).
@@ -95,36 +102,51 @@ def main() -> int:
             except Exception as e:
                 datos.append((p, {"error": f"NO_LEGIBLE: {e}"}))
 
-        claves = {tuple(texto(d.get(k)) for k in VISITA) for _, d in datos}
-        # `not d.get("error")` y NO `"error" not in d`: extraer_pdf devuelve
-        # SIEMPRE la clave `error`, con None cuando todo salio bien. Preguntar
-        # por la presencia de la clave daba falso siempre y ningun grupo podia
-        # marcarse como misma visita: la primera corrida reporto 0 de 1.694,
-        # que es justo el numero que hay que mirar.
-        misma = len(claves) == 1 and all(not d.get("error") for _, d in datos)
-        if misma:
+        # SE AGRUPA POR (AVISO, VISITA), NO SOLO POR AVISO.
+        #
+        # La primera version preguntaba si TODOS los documentos del aviso eran
+        # la misma visita, y con eso escondia los casos reales: el aviso
+        # 10347141 tiene CUATRO ordenes (2180, 2472, 2507 y 2508) porque el
+        # tecnico volvio varias veces, y dentro de esas cuatro, la 2507 y la
+        # 2508 son el mismo trabajo enviado dos veces. Como el grupo entero no
+        # era "una sola visita", el par quedaba invisible. Igual el 10354784,
+        # con tres ordenes. Que un aviso tenga varias visitas y que una de esas
+        # visitas se haya documentado dos veces son cosas independientes.
+        por_visita = defaultdict(list)
+        for p, d in datos:
+            if d.get("error"):
+                por_visita[("ILEGIBLE", p.name)].append((p, d))
+            else:
+                por_visita[tuple(texto(d.get(k)) for k in VISITA)].append((p, d))
+
+        hubo_repetida = False
+        for clave, docs in por_visita.items():
+            if len(docs) > 1 and clave[0] != "ILEGIBLE":
+                hubo_repetida = True
+                veredicto = f"UNA SOLA VISITA documentada {len(docs)} veces"
+                cambios = sorted({k for k in CONTENIDO
+                                  if len({texto(d.get(k)) for _, d in docs}) > 1})
+                detalle = ("cambio: " + ", ".join(cambios)) if cambios else "identicas"
+            else:
+                veredicto = "VISITA UNICA de este aviso"
+                detalle = ("el tecnico volvio al mismo aviso otro dia: caso normal"
+                           if len(por_visita) > 1 else "sin repeticion")
+            for p, d in docs:
+                filas.append({
+                    "aviso": aviso, "veredicto": veredicto, "detalle": detalle,
+                    "orden": p.stem, "ruta": str(p.relative_to(CANONICO)),
+                    "fecha": texto(d.get("fecha_atencion")),
+                    "tecnico": texto(d.get("tecnico_nombre")),
+                    "horario": f"{texto(d.get('hora_inicio'))}-{texto(d.get('hora_fin'))}".strip("-"),
+                    "actividades": texto(d.get("actividades"))[:300],
+                    "repuestos": texto(d.get("repuestos"))[:200],
+                    "fotos": texto(d.get("fotos_cantidad")),
+                    "estado_ot": texto(d.get("estado_ot")),
+                })
+        if hubo_repetida:
             una_visita += 1
-            veredicto = "UNA SOLA VISITA documentada dos veces"
-            cambios = sorted({k for k in CONTENIDO
-                              if len({texto(d.get(k)) for _, d in datos}) > 1})
-            detalle = ("cambio: " + ", ".join(cambios)) if cambios else "identicas"
         else:
             dos_visitas += 1
-            veredicto = "DOS VISITAS en fechas distintas"
-            detalle = "caso normal: el tecnico volvio. NO hay que tocar nada"
-
-        for p, d in datos:
-            filas.append({
-                "aviso": aviso, "veredicto": veredicto, "detalle": detalle,
-                "orden": p.stem, "ruta": str(p.relative_to(CANONICO)),
-                "fecha": texto(d.get("fecha_atencion")),
-                "tecnico": texto(d.get("tecnico_nombre")),
-                "horario": f"{texto(d.get('hora_inicio'))}-{texto(d.get('hora_fin'))}".strip("-"),
-                "actividades": texto(d.get("actividades"))[:300],
-                "repuestos": texto(d.get("repuestos"))[:200],
-                "fotos": texto(d.get("fotos_cantidad")),
-                "estado_ot": texto(d.get("estado_ot")),
-            })
 
     # --- Compuerta de cuadre (I-10) -------------------------------------------
     esperado = sum(len(v) for v in grupos.values())
@@ -189,9 +211,11 @@ def main() -> int:
     except PermissionError:
         sys.exit(f"ABORTADO: {destino.name} esta abierto en Excel. Cierralo y repite.")
 
-    print(f"Avisos con una sola visita documentada dos veces : {una_visita}"
+    a_decidir = sum(1 for f in filas if f["veredicto"].startswith("UNA SOLA"))
+    print(f"Avisos con algun informe enviado dos veces  : {una_visita}"
           "   <- la administracion decide cual vale")
-    print(f"Avisos con dos visitas reales en fechas distintas: {dos_visitas}"
+    print(f"  documentos involucrados en esas repeticiones: {a_decidir}")
+    print(f"Avisos sin ninguna repeticion              : {dos_visitas}"
           "   <- caso normal, no hay que tocar nada")
     print(f"CUADRE: {len(filas)} documentos en {len(grupos)} grupos (esperado {esperado})")
     print(f"\nEscrito: {destino}")

@@ -137,16 +137,70 @@ base, los cuatro son **dos visitas legítimas al mismo aviso**, con 14, 5, 3 y
 Ortiz el 02-sep y Alfredo Montoya el 16-sep). El técnico volvió. Las ocho
 órdenes ya estaban archivadas y activas.
 
-**Lo que NO se archivó, y por qué** (41 de producción): 27 son envíos con el
-formulario vacío (sin código de local), 7 son de otros clientes fuera del
-contrato, 6 tienen el local ambiguo (`RestauranteElvita`, `G015Michelena`,
-`G021Colonial`, `MENESTRASDELNEGRO`, `kh073`, `H071k197`) y 1 no encaja el
-patrón del preventivo. Los 6 ambiguos necesitan a una persona: el código no
-inventa un local (I-7).
+**Lo que NO se archivó: de 41 quedaron 12** (resuelto el 2026-09-20/21 con
+Andrés, caso por caso).
+
+- **28 formularios vacíos → descartados.** Se abrieron los 28 antes de borrar:
+  ni un campo de texto con valor, ni un equipo con datos. Pesan entre 124.049 y
+  126.687 bytes — **2.638 bytes de diferencia entre los 28**, que es la firma de
+  una plantilla. Borrarlos del espejo no alcanzaba (el sync los repone en la
+  siguiente corrida, que ahora se dispara con cada correo), así que van por
+  SHA-256 en `config/descartados_sha256.txt`. **Siguen en producción:** la lista
+  solo dice «no me lo traigas al espejo». Comprobado: 7+6+9+5+1 = 28 descartados
+  y «0 por bajar» en los cinco módulos.
+- **1 archivado: el aviso tecleado con espacio.** `1034 7791` no encajaba con
+  ningún patrón. Los patrones ahora aceptan espacios y los quitan antes de
+  validar los 8 dígitos. **SAP lo confirma de forma independiente:** el aviso
+  `10347791` tiene centro de coste `M044`, el local del archivo.
+- **2 resueltos por el interior del PDF** (`t2_24_promover_por_evidencia.py`),
+  porque el nombre no alcanzaba: `MENESTRASDELNEGRO` trae la **cadena** y hay 8
+  locales de ella, pero dentro coinciden `cliente=M036` y
+  `correo_local=m36@menestrasdelnegro.com.ec` → **M036EC**; y `RestauranteElvita`
+  **no es de KFC** — su `correo_jefe_op` es `gerenciageneral@industec.me` y el
+  aviso viene en `0`. Los dos ya estaban archivados por otra vía, comprobado por
+  hash. **No se creó un alias `MENESTRASDELNEGRO`→`M036EC`:** sería el falso
+  positivo contra el que avisa `industec-archivos-canonicos`.
+- **Quedan 12:** 6 de otros clientes (TropiBurger ×4, el evento de Baños, G016)
+  y 6 de local ambiguo. De esos 6, **cuatro resuelven con un alias que falta
+  confirmar** (`kh073`→K073EC, `H071k197`→K197EC, `G015Michelena`→G015EC,
+  `G021Colonial`→G021EC) y dos ya están archivados.
 
 **Lo que no se pudo comprobar (I-7):** 4 PDF entraron con `fecha_atencion`
 nula porque su fecha es ilegible en el documento — uno dice el año `20026`.
 Están archivados e ingestados, pero sin fecha utilizable.
+
+---
+
+## 1e. El robot, arreglado — y la consola que lo vigila (2026-09-20)
+
+**El robot llevaba cinco días corriendo con código viejo y nadie se enteraba.**
+El vigilante se había iniciado el 2026-09-15 a las 12:43 y un proceso de Python
+ya arrancado no recoge los cambios del `.py`, así que `espejar_produccion()`
+—la mitad nueva de su trabajo— no corrió ni una vez. La Tarea programada decía
+«En ejecución» y el registro se veía sano: la única pista era una **ausencia**.
+
+**Y al reiniciarlo apareció la causa de fondo: los permisos de la llave SSH.**
+Hay dos `ssh.exe` en la estación y no se comportan igual — el de Git Bash
+tolera los permisos del archivo de llave y el de Windows los exige.
+`config/clave_hostinger` tenía acceso para «Usuarios autenticados» por herencia,
+así que el de Windows la rechazaba con `UNPROTECTED PRIVATE KEY FILE` y salía
+255. **Como la Tarea programada corre por `cmd.exe`, usa el de Windows: T2.21.7
+nunca habría funcionado desde el Programador por más que pasara las pruebas a
+mano.** Corregido con `icacls /inheritance:r`; antes daba `Permission denied`,
+ahora `CONECTADO_OK` y código 0. `hostinger_ssh.py` ahora avisa si la llave
+queda abierta, con el comando de corrección.
+
+**Cadena cerrada**, con el vigilante reiniciado: existe por primera vez
+`config/vigilante_estado.json`, que solo se escribe cuando el espejo **termina
+bien**.
+
+**La consola** (`scripts/consola.bat`) no muestra «el robot está corriendo»:
+muestra **desde hace cuánto** no pasa cada cosa que debería estar pasando, que
+es lo único que delata a un robot que corre sin hacer su trabajo. Tres bloques:
+el vigilante (con su hora de arranque, que dice qué versión del código tiene
+cargada), los requerimientos de SAP que van entrando, y los informes nuevos de
+producción por zona. Solo lectura. Probada antes de arreglar nada, señaló los
+dos problemas de una: «Última señal hace 13 min» y «Último espejo NUNCA».
 
 ---
 
@@ -543,7 +597,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| ~~T2.21 · producción como fuente de informes~~ | Revisado, probado y commiteado el 2026-09-20 (`a99554e`) | 2026-09-19/20 | ✅ El diff que dejó el agente cortado se revisó línea por línea, compiló y se probó en vivo: T2.21.4 (endpoint apagado → reintenta y sale con 1) y T2.21.7 (espejo 2.323/2.323, `--recientes` probado). Lo que sigue —los 5 hallazgos del workflow adversarial, antes del `--ejecutar` de T2.21.2/T2.21.3— está en `PLAN_INDUSTEC.md` bajo T2.21, no aquí |
+| ~~T2.21 · la cadena del correo y de producción~~ | ✅ **Cerrada el 2026-09-21** | Regularización ejecutada con cuadre exacto (ver §1d), robot arreglado y consola de estado en marcha (§1e). Queda abierto: los 4 alias por confirmar, encadenar el promotor al nocturno y T2.21.5 |
 | ~~T2.14 · Pulido para las pruebas del cliente, T2.15, T2.17~~ | Conversación desde el PC de Andrés — rama `pc/pulido-2026-09-12` en GitHub | 2026-09-12 (noche) | ✅ **Fusionada en `master` el 2026-09-13** por la estación (ff, sin conflictos), junto con `pc/archivo-zona-franquicia-2026-09-13` (T2.18) |
 | **T2.18 · Falta el `--ejecutar` de `t2_18_clasificar_archivo.py` y `t2_18_atender_pedidos_copia.py`** | Libre — nadie la tiene tomada | 2026-09-13/14 | El rescate de `_DEL_BUZON` (53 OTs) ya se hizo y está empujado. Queda pendiente por espacio: `G:\Mi unidad` (cupo real de Drive) tenía 4,3 GB libres frente a los ~5 GB a copiar — resolver el espacio en Drive antes de correr `--ejecutar`. También quedan 4 conflictos de correlativo en `_DEL_BUZON` esperando decisión de Andrés (detalle en el plan, T2.18) |
 | ~~T2.5 · Captura — formulario único, v1 para revisión~~ | Conversación "app captura v1" | 2026-09-08 | ✅ Terminada y en §1b. El formulario único está desplegado y preguntado por pasos |
