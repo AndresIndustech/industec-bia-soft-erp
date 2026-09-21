@@ -96,7 +96,12 @@ def main() -> int:
                 datos.append((p, {"error": f"NO_LEGIBLE: {e}"}))
 
         claves = {tuple(texto(d.get(k)) for k in VISITA) for _, d in datos}
-        misma = len(claves) == 1 and all("error" not in d for _, d in datos)
+        # `not d.get("error")` y NO `"error" not in d`: extraer_pdf devuelve
+        # SIEMPRE la clave `error`, con None cuando todo salio bien. Preguntar
+        # por la presencia de la clave daba falso siempre y ningun grupo podia
+        # marcarse como misma visita: la primera corrida reporto 0 de 1.694,
+        # que es justo el numero que hay que mirar.
+        misma = len(claves) == 1 and all(not d.get("error") for _, d in datos)
         if misma:
             una_visita += 1
             veredicto = "UNA SOLA VISITA documentada dos veces"

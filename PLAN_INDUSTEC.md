@@ -1323,28 +1323,37 @@ python verificar_seguridad.py   # 28 · 0
 escoge por este orden; las tres primeras son autónomas y no dependen de nadie;
 la cuarta y la quinta requieren a Andrés.
 
-**H. T2.21 · Cerrar la cadena del correo** — *autónomo hasta el `--ejecutar`.*
-**Ya hecho y verificado (2026-09-19/20), no repetir:** T2.21.1 (lee `INBOX`+
-`Trash`+`INFORMES OT`, comprobado en producción con `n=193 antes=122`),
-T2.21.4 (reintento + código de salida real, probado con el endpoint apagado),
-T2.21.7 (espejo de producción — 2.323/2.323 PDF, 0 fallidos — y disparo
-automático desde el vigilante), y T2.21.2/T2.21.3 en **simulación** (92
-promovibles / 13 a revisión sobre los 105 del correo; 246 documentos nuevos
-de verdad en producción, cuadre exacto por hash).
+**H. T2.21 · Cerrar la cadena del correo** — ✅ **CERRADA el 2026-09-20.**
+Corrió el `--ejecutar` que Andrés autorizó y cuadró en las tres dimensiones:
+árbol 7.123 → **7.452** PDF, `ots` 7.469 → **7.798** filas, activas 7.118 →
+**7.447**, todas +329 exacto, con 7.447 hashes distintos entre las activas
+(cero duplicados) y 329 PDF subidos y verificados en el servidor. La evidencia
+completa está en `ESTADO.md` **§1d**; no la repitas aquí.
 
-**Lo que sigue, antes de cualquier `--ejecutar`:** los cinco hallazgos
-verificados por refutación adversarial de la sección de arriba («T2.21 —
-cinco hallazgos verificados...», 2026-09-20). En resumen, en orden de
-dependencia: (1) hacer que `t1_7_ingesta.py` lea el origen de los manifiestos
-de `t2_18`/`t2_4` y deje de escribir `'DRIVE_HISTORICO'` a ciegas — si no,
-el criterio de aceptación de T2.21.2 nunca puede pasar; (2) indexar por HASH
-el árbol canónico antes de promover, en `t2_18_rescatar_buzon.py` y
-`t2_4_normalizar_nuevas.py`, para que las 13 colisiones de contenido en otra
-ruta vayan a revisión humana en vez de archivarse dos veces; (3) encadenar
-`t2_18_rescatar_buzon.py --origen ... --ejecutar` al nocturno, entre
-`normalizar` e `ingesta`, y antes hacer que salga con código ≠0 en un
-conflicto; (4) que `t2_19_subir_pdfs.py` cruce por hash contra `_ORIGEN_BUZON`
-y `_ORIGEN_SISTEMA`, no solo el árbol. Nada de `--ejecutar` real sin Andrés.
+Quedaron hechas T2.21.1 (lee `INBOX`+`Trash`+`INFORMES OT`), T2.21.2, T2.21.3,
+T2.21.4 (código de salida real, probado con el endpoint apagado), T2.21.6 y
+T2.21.7 (espejo de producción con disparo automático desde el vigilante).
+
+**Tres decisiones de Andrés del 2026-09-20 que cerraron hallazgos abiertos, y
+que mandan sobre lo que decía la sección de los cinco hallazgos:**
+1. **No hace falta distinguir el origen en la base.** Todo lo genera el sistema
+   antiguo igual y esa parte desaparece cuando entre el sistema nuevo, así que
+   `t1_7_ingesta.py` no se toca. El criterio viejo de T2.21.2
+   (`fuente='IMAP_EN_VIVO' > 0`) queda **ANULADO**: no se persigue más.
+2. **El correo dejó de ser la fuente de los informes** — lo es producción. Y
+   está medido: tras promover producción, el promotor del buzón sobre sus 117
+   PDF dio «promovidos 0, ya estaban 103».
+3. **Todo se archiva aunque se repita**, y cuando el mismo documento llega con
+   otro correlativo gana el que ya está archivado (implementado por hash). Los
+   informes enviados dos veces se archivan **los dos** y decide la
+   administración, con el Excel de `t2_23_informes_repetidos.py`.
+
+**Lo que sigue de T2.21**, y ya no bloquea nada: (a) encadenar
+`t2_18_rescatar_buzon.py --origen ... --ejecutar` al saneamiento nocturno,
+entre `normalizar` e `ingesta`, y crear la Tarea programada del nocturno, que
+sigue sin existir; (b) T2.21.5, el filtro «Las mías» del Archivo (ver
+`ESTADO.md` §1c-bis: son 239 filas de 7.356, no «1 de 7.118»); (c) los 6
+locales ambiguos que no resolvieron, que necesitan a una persona.
 
 **A. Fusionar `pc/pulido-2026-09-12` en `master`** — ✅ **ya está, sin que esta
 sección lo dijera.** La fusión de `pc/documentos-y-otros-trabajos-2026-09-14`

@@ -39,9 +39,9 @@ del rediseño.
 
 | Pieza | Estado | Cifra verificada |
 |---|---|---|
-| Corpus histórico saneado | ✅ | **7.070** órdenes en el árbol canónico + 5 informes técnicos + 25 de otros clientes |
-| **Robot del correo → informes nuevos** | ⚠️ **captación reparada; falta el `--ejecutar`** | El robot lee `INBOX`+`Trash`+`INFORMES OT` (T2.21.1, confirmado por el servidor: `n=193 antes=122`), reintenta y avisa si el empuje falla (T2.21.4), y desde el 2026-09-20 también espeja producción al detectar un correo (T2.21.7: 2.323 PDF, 246 nuevos de verdad que ni el árbol ni el correo tenían). Sigue sin promover al árbol: **107 informes en `_ORIGEN_BUZON`**, simulación en verde (92/13), a la espera de 4 arreglos de diseño (ver plan, T2.21) y del `--ejecutar` de Andrés |
-| Base de datos poblada | ✅ | **7.118 órdenes activas** (era 7.069 hasta el 2026-09-13: `t2_18_rescatar_buzon.py` recuperó 53 OTs que llevaban 4 días en `_DEL_BUZON` sin clasificar ni ingestar — ver T2.18 en el plan) · 9.071 equipos · 100 locales · 145 alias · 6.450 avisos SAP · 19 técnicos |
+| Corpus histórico saneado | ✅ **regularizado el 2026-09-20** | **7.452** PDF en el árbol canónico (eran 7.123: entraron 329 de producción) + 5 informes técnicos + 25 de otros clientes |
+| **Robot del correo y de producción → informes nuevos** | ✅ **cadena cerrada el 2026-09-20** | Lee `INBOX`+`Trash`+`INFORMES OT` (T2.21.1, el servidor confirmó `n=193 antes=122`); reintenta y **sale con código 1** si el empuje falla (T2.21.4, probado con el endpoint apagado); y **espeja producción al detectar un correo** (T2.21.7). El `--ejecutar` corrió: **+329 órdenes** al árbol, a la base y al servidor, con cuadre exacto en las tres. Detalle en **§1d** |
+| Base de datos poblada | ✅ **2026-09-20** | **7.447 órdenes activas** (eran 7.118; +329 de la regularización, con 7.447 hashes distintos: cero duplicados)<br>Histórico: **7.118 órdenes activas** (era 7.069 hasta el 2026-09-13: `t2_18_rescatar_buzon.py` recuperó 53 OTs que llevaban 4 días en `_DEL_BUZON` sin clasificar ni ingestar — ver T2.18 en el plan) · 9.071 equipos · 100 locales · 145 alias · 6.450 avisos SAP · 19 técnicos |
 | Auditor de calidad (Agente 1) | ✅ | 2.644 observaciones abiertas, con veredicto editable por la administración |
 | Consolidador de plan de zona (Agente 2) | ⚠️ v1 | 87,3% de coincidencia celda a celda en el piloto UIO |
 | **Histórico en formato de planificación** | ✅ | **39 planes mensuales** de correctivo (7.863 filas, 3 zonas × 13 meses) + **seguimiento de preventivos** de 96 locales, reconstruidos desde las OTs y SAP. LOCAL, FECHA DE INICIO y ESTADO al 100%; EQUIPO al 99,5% |
@@ -88,6 +88,65 @@ seguirían figurando pendientes.
 no devuelve nada, y los seis `select()` del proyecto llevan `readonly=True`.
 
 `INFORMES OT` existe en la cuenta y está **vacía**: confirmado, nadie escribe ahí.
+
+---
+
+## 1d. La regularización ejecutada, 2026-09-20 (T2.21, cierre)
+
+Andrés autorizó el `--ejecutar` que llevaba pendiente desde el 18-sep. Corrió
+la cadena entera y cuadró en las tres dimensiones.
+
+| | Antes | Después | Diferencia |
+|---|---|---|---|
+| PDF en el árbol canónico | 7.123 | **7.452** | +329 |
+| Filas en `ots` | 7.469 | **7.798** | +329 |
+| Órdenes activas | 7.118 | **7.447** | +329 |
+
+**Cero duplicados:** las 7.447 activas tienen 7.447 hashes distintos.
+**Ingesta:** 7.452 procesados, 0 con error de extracción.
+**Subida:** el «faltan: 0» tautológico que la auditoría había detectado en
+`t2_19` dio por fin un número real — faltan 329 → **329 subidos y verificados,
+0 fallidos**. Índice del Archivo: 7.705 órdenes, 7.616 con el PDF ahí.
+**Respaldo previo:** `D:\RESPALDOS\_LOGS\respaldos_bd\` (13 MB, 13 tablas).
+**Nada se borró de ningún origen (I-2):** los 2.338 de `_ORIGEN_SISTEMA` y los
+117 de `_ORIGEN_BUZON` siguen donde estaban.
+
+**El correo dejó de ser necesario como fuente, y está medido.** Tras promover
+producción, el promotor del buzón sobre sus 117 PDF dio **«promovidos 0, ya
+estaban 103»**: los informes ya habían entrado por producción. Es el punto 2
+de Andrés, confirmado con datos.
+
+**Deduplicación por contenido (decisión de Andrés).** Los scripts comparaban
+por ruta, así que un informe reenviado con otro correlativo se archivaba dos
+veces. Ahora se cruza por hash: **13 repetidos descartados**, todos el mismo
+documento con el nombre crudo distinto del canónico ya archivado — local
+compuesto (`K073H015` vs `K073EC`), aviso sin ceros a la izquierda (`1031` vs
+`00001031`) y un código mal escrito (`BS17` vs `BR17EC`).
+
+**Los informes enviados dos veces: deciden las personas.** 5 pares, todos el
+mismo técnico, el mismo día y la misma hora de inicio y fin — una sola visita
+documentada dos veces. Pero en **tres de ellos el técnico corrigió el informe**
+al reenviarlo (actividades, equipos o repuestos) y en dos solo cambió el número
+de fotos. Quedarse con el primero habría archivado la versión que él quiso
+corregir, así que Andrés decidió archivar los dos y que la administración elija.
+`t2_23_informes_repetidos.py` arma esa vista en `SALIDAS IA\CALIDAD\`.
+
+**Los 4 «conflictos de correlativo» no eran conflictos.** Cruzados contra la
+base, los cuatro son **dos visitas legítimas al mismo aviso**, con 14, 5, 3 y
+16 días de diferencia, y dos de ellas con otro técnico (aviso 10351998: Pablo
+Ortiz el 02-sep y Alfredo Montoya el 16-sep). El técnico volvió. Las ocho
+órdenes ya estaban archivadas y activas.
+
+**Lo que NO se archivó, y por qué** (41 de producción): 27 son envíos con el
+formulario vacío (sin código de local), 7 son de otros clientes fuera del
+contrato, 6 tienen el local ambiguo (`RestauranteElvita`, `G015Michelena`,
+`G021Colonial`, `MENESTRASDELNEGRO`, `kh073`, `H071k197`) y 1 no encaja el
+patrón del preventivo. Los 6 ambiguos necesitan a una persona: el código no
+inventa un local (I-7).
+
+**Lo que no se pudo comprobar (I-7):** 4 PDF entraron con `fecha_atencion`
+nula porque su fecha es ilegible en el documento — uno dice el año `20026`.
+Están archivados e ingestados, pero sin fecha utilizable.
 
 ---
 
