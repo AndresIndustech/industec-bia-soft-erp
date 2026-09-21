@@ -60,11 +60,19 @@ ZONA_DE = {"uio": "UIO", "larb": "LARB", "cnlj": "CNLJ"}
 # El aviso es opcional: hay correctivos emitidos sin numero de aviso SAP porque
 # el tecnico ya estaba en sitio y el aviso todavia no existia (regla del cliente,
 # 2026-09-04). Exigirlo mandaba a cuarentena documentos correctos.
+# El aviso admite ESPACIOS INTERNOS porque el tecnico los teclea: apareció
+# `OT-0336-M044-1034 7791-Dia 2-LARB.pdf` (2026-09-11), que con `(\d*)` no
+# encajaba con ningun patron y caia entero. Se aceptan aqui y se quitan abajo;
+# si al quitarlos no quedan 8 digitos, el aviso se descarta como cualquier otro.
+# Quitar un espacio NO es inventar un dato, es la misma clase de normalizacion
+# que ya hace `num_aviso()` con los ceros de la izquierda -- y en este caso SAP
+# lo confirmo de forma independiente: el aviso 10347791 tiene centro de coste
+# M044, que es justo el local del archivo.
 RE_CORRECTIVO = re.compile(
-    r"^OT-(\d{3,5})-([A-Za-z0-9]*)-(\d*)-?([A-Za-z]*)\.pdf$")
+    r"^OT-(\d{3,5})-([A-Za-z0-9]*)-([\d ]*)-?([A-Za-z]*)\.pdf$")
 # Nombre que emite el preventivo: OT-{corr}-{local}-{aviso}-Dia {n}-{zona}.pdf
 RE_PREVENTIVO = re.compile(
-    r"^OT-(\d{3,5})-([A-Za-z0-9]*)-(\d*)-?D[ií]a\s*(\d*)-([A-Za-z]*)\.pdf$",
+    r"^OT-(\d{3,5})-([A-Za-z0-9]*)-([\d ]*)-?D[ií]a\s*(\d*)-([A-Za-z]*)\.pdf$",
     re.IGNORECASE)
 
 
@@ -122,6 +130,10 @@ def resolver(nombre, modulo_dir, canonicos, alias, sap, maestro, anio=None):
     # aviso, que es un caso de negocio legitimo (regla del cliente,
     # 2026-09-04), en vez de tirar el documento entero. Exigir el patron
     # completo rechazaba 4 preventivos reales solo por este campo.
+    # Los espacios que el tecnico tecleo de mas se quitan ANTES de validar: el
+    # numero es el mismo, solo esta mal escrito (ver el comentario de
+    # RE_CORRECTIVO). Lo que no llegue a 8 digitos sigue descartandose.
+    aviso = (aviso or "").replace(" ", "")
     if aviso and not re.fullmatch(r"\d{8}", aviso):
         aviso = None
 
