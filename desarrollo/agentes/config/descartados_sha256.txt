@@ -1,0 +1,40 @@
+# Documentos que NO se vuelven a bajar al espejo, por SHA-256 del contenido.
+#
+# Los 28 primeros los mando descartar Andres el 2026-09-20: son envios del
+# formulario del sistema viejo con TODOS los campos en blanco. Comprobado uno por
+# uno abriendo el PDF: ni local, ni aviso, ni fecha, ni tecnico, ni actividades, ni
+# un solo equipo con datos. Los 28 pesan entre 124.049 y 126.687 bytes -- 2.638
+# bytes de diferencia entre los 28 -- y los 28 declaran exactamente 1 foto y 1
+# firma: es el mismo elemento grafico de la plantilla, no contenido.
+#
+# SIGUEN EN PRODUCCION. Esto no borra nada en el servidor (regla 9): solo dice
+# "no me lo traigas al espejo". Si alguna vez hay que recuperarlos, estan ahi.
+#
+8b2486538022488176ed9db9d14fd6c6b0b19dacc2aba046a7fe96f5244dce6e  # cnlj/OT-0009---.pdf (126,202 bytes)
+667ff26d5350fc064c81ef7e0d0cc373a959f508c3d65892994c4a2e2abc9782  # cnlj/OT-0010---.pdf (126,050 bytes)
+2cb3448e8e67d4a18e01695d7425f9dbcc20c2877e058d092b8f89507dce0083  # cnlj/OT-0011---.pdf (126,050 bytes)
+f6e9502907bb8057b73f9e3c54b8462e9cbab9deeb01781e88a3a661201db1e8  # cnlj/OT-0012---.pdf (126,460 bytes)
+e3cae6f2fe6fd752991ae817a3ef799bd4deb2acba92e659275ab9c0c9079d2a  # cnlj/OT-0013---.pdf (126,433 bytes)
+70e3fd67e89e6e0afafd8a994a23143c8e9150ebfd075893ff3c65dba4d0c0f8  # cnlj/OT-0014---.pdf (126,342 bytes)
+395a7f3ee84f4e5dd8f4ed31cdb2f23e9f96a01f38bc2977c97bedf2521b4527  # cnlj/OT-0015---.pdf (126,374 bytes)
+5539d0a97137fb9fd4b0244d3c77826b59fcdfd766da62d7f816beab754b3b6e  # cnlj/OT-0016---.pdf (126,393 bytes)
+e404dc208332ee70fe2d88e16d35362bd2898e5a0aab67cb1a0395f2e1ed8554  # cnlj/OT-0017---.pdf (126,265 bytes)
+b051f8c7ef3ac75d390bb99458d82eb22b645e0c5626f796a3f0d1b2022137bd  # larb/OT-0026---.pdf (126,633 bytes)
+260027195b5b9c7b1b9d82011c3cea3298ba9b68d730c809d3c3dbdfcb50d36d  # larb/OT-0027---.pdf (126,511 bytes)
+5d036c151716c920bfbd39ceec462bd4f13ee1285809eb212f76a9559a9d372c  # larb/OT-0028---.pdf (126,687 bytes)
+22e4a32c1cdbe210ae32d3581f1dfdb11410ac364543466a01e507aae84f68a0  # larb/OT-0029---.pdf (126,643 bytes)
+886381b2500faf9d7181f49d1f77a2fe71cb1e0ffee4118b2553ff26f00aaca7  # larb/OT-0030---.pdf (126,240 bytes)
+eb2087e2faedc5ba8621fd05dc6e62da42d4d30322caaf21714ac23a0ddd85b2  # larb/OT-0031---.pdf (126,433 bytes)
+ca3b2fd21d6202848051a2778c86c84b3dbf900ec91eee9036ae6008f6cdd52d  # mant/OT-0011---Dia -.pdf (124,049 bytes)
+4530f0c15df3e21c6404d4109fc5beb071fdf85866208ea2a79c03ef2bcf69ef  # mant/OT-0012---Dia -.pdf (124,223 bytes)
+27dda73fceda08838b0d8fa955ce798f9f4e7758fd2306d08dd4504861ac5c04  # mant/OT-0013---Dia -.pdf (124,217 bytes)
+2b843f2f57058bf97018a0b8e625615b267515c1ac7616a8e50328c860a204b7  # mant/OT-0014---Dia -.pdf (124,157 bytes)
+3783746b9c322a27805c6522feb26162e976cb619baa29198a9d94553cce4b75  # mant/OT-0015---Dia -.pdf (124,191 bytes)
+5974e8441e58c26672b9446750c9fbf327a4769c4fe3f21637e6704ed4b0a651  # otros/OT--037.pdf (125,016 bytes)
+a369ba9ffd11fc3b2360cd2f7e29d21c622ed0d01b47681764575921111668a4  # uio/OT-0023---.pdf (126,652 bytes)
+3b9adb36b114a46e518e5849f214d7b12b07fa8f64099ebd59386bec6a280966  # uio/OT-0024---.pdf (126,577 bytes)
+70e219b438500753dc06b7ca434addcf06af5831c28b2062919d50e08990df67  # uio/OT-0025---.pdf (126,608 bytes)
+4e705ff758d20eac7ce0c9a1c44d1a1905e1f17e571ace5347849c4a8da6cc84  # uio/OT-0026---.pdf (126,633 bytes)
+9d2bec55c85161e8ac2b8c2200967d5b9ca66bf6efe5c888eaa953de6dca7346  # uio/OT-0027---.pdf (126,511 bytes)
+c326c884e046d0d2649a4dd460ff8dd987e15f1f8747fc89da398c767b274212  # uio/OT-0028---.pdf (126,687 bytes)
+a080f100319a4eb02706eccb6dc2e4bf75876a1b0af73204ba6265f07b70b284  # uio/OT-0029---.pdf (126,643 bytes)

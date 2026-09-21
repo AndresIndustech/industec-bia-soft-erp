@@ -58,7 +58,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import RESPALDOS, leer_env, sha256_de  # noqa: E402
+from comun import BASE, RESPALDOS, leer_env, sha256_de  # noqa: E402
 import hostinger_ssh as H  # noqa: E402
 
 # Espejo crudo del sistema viejo, hermano de _ORIGEN_DRIVE. Nunca se modifica a
@@ -73,6 +73,36 @@ CANDADO = DESTINO / "_sincronizando.lock"
 # Una corrida completa de los 2.323 PDFs tarda horas con este enlace; un candado
 # mas corto se venceria a mitad de camino y dejaria entrar a una segunda.
 CANDADO_VENCE_SEG = 8 * 3600
+
+# Documentos que Andres mando descartar, por SHA-256 del contenido.
+#
+# POR QUE POR HASH Y NO POR NOMBRE. El sistema viejo reusa correlativos entre
+# zonas (el 2280 existe en CNLJ y en LARB apuntando a locales distintos), asi
+# que excluir "OT-0023---.pdf" podria tapar manana un documento legitimo con
+# ese mismo nombre. El hash solo excluye ESE contenido exacto.
+#
+# POR QUE HACE FALTA. Borrar el archivo del espejo no alcanza: el sync baja
+# todo lo que esta en el servidor y no esta en local, asi que en la siguiente
+# corrida -que desde T2.21.7 se dispara con cada correo- volveria a aparecer.
+# El descarte no se sostiene sin esta lista.
+#
+# NO SE BORRA NADA EN PRODUCCION (regla 9): los archivos siguen en el servidor.
+# Esto solo dice "no me lo traigas al espejo".
+DESCARTADOS = BASE / "config" / "descartados_sha256.txt"
+
+
+def hashes_descartados() -> set:
+    """Los SHA-256 que no se vuelven a bajar. Formato: un hash por linea,
+    todo lo que siga a '#' es comentario."""
+    if not DESCARTADOS.is_file():
+        return set()
+    out = set()
+    for linea in DESCARTADOS.read_text(encoding="utf-8").splitlines():
+        h = linea.split("#", 1)[0].strip().lower()
+        if len(h) == 64:
+            out.add(h)
+    return out
+
 
 # El docroot del sistema viejo, relativo al home. SOLO LECTURA: `hostinger_ssh`
 # rechaza cualquier comando que lo nombre y parezca escribir.
@@ -227,8 +257,14 @@ def sincronizar_modulo(env: dict, modulo: str, solo_inventario: bool,
     # Un archivo local con el hash correcto no se vuelve a bajar. Uno con hash
     # distinto SI se baja: significa que el servidor reescribio ese nombre, y
     # eso pasa de verdad. Pero no pisa el local: va a _divergentes (T2.15.3).
-    pendientes, ya_ok, divergentes = [], 0, []
+    descartados = hashes_descartados()
+    pendientes, ya_ok, divergentes, saltados = [], 0, [], 0
     for nombre, meta in remotos.items():
+        # El descarte se mira ANTES que nada: si no, el archivo borrado a mano
+        # vuelve en la siguiente corrida y el descarte no sirve de nada.
+        if (meta.get("sha256") or "").lower() in descartados:
+            saltados += 1
+            continue
         local = destino / nombre
         if local.exists() and sha256_de(local) == meta["sha256"]:
             ya_ok += 1
@@ -237,6 +273,8 @@ def sincronizar_modulo(env: dict, modulo: str, solo_inventario: bool,
                 divergentes.append(nombre)
             pendientes.append(nombre)
 
+    if saltados:
+        print(f"  descartados: {saltados} (en config/descartados_sha256.txt; siguen en el servidor)")
     print(f"  local  : {ya_ok} ya verificados, {len(pendientes)} por bajar" +
           (f", {len(divergentes)} DIVERGENTES (el servidor los reescribio; van a _divergentes)" if divergentes else ""))
 
