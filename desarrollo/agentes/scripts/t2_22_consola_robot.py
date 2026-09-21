@@ -188,6 +188,18 @@ def inventario_espejo() -> dict:
     return out
 
 
+def avisos_del_buzon() -> dict:
+    """Los requerimientos de SAP vivos, por numero de aviso.
+
+    Se guarda el caso entero y no solo el numero: cuando aparece uno nuevo hay
+    que poder decir de que local es y que pidieron, no solo que "entro algo".
+    """
+    cas, _ = leer_json(CASOS)
+    if not cas:
+        return {}
+    return {str(c.get("aviso")): c for c in (cas.get("datos") or []) if c.get("aviso")}
+
+
 def fmt(n) -> str:
     return f"{n:,}".replace(",", ".")
 
@@ -198,7 +210,8 @@ def delta(n: int) -> str:
     return color(f" +{n:<3}", V)
 
 
-def pintar(base_espejo: dict, arrancada: datetime, nuevos_vistos: list) -> None:
+def pintar(base_espejo: dict, base_avisos: dict, arrancada: datetime,
+           nuevos_vistos: list, avisos_nuevos: list) -> None:
     ancho = 78
     limpiar()
     print(color("=" * ancho, G))
@@ -247,7 +260,19 @@ def pintar(base_espejo: dict, arrancada: datetime, nuevos_vistos: list) -> None:
         except Exception:
             cuando = None
         print(f"   Catalogo                {gen}   " + color(hace_cuanto(cuando), X))
-        print(f"   Casos vigentes          {color(fmt(r.get('casos_vigentes', 0)), G)}")
+        ahora_av = avisos_del_buzon()
+        entrados = [a for a in ahora_av if a not in base_avisos]
+        for a in entrados:
+            if a not in [x["aviso"] for x in avisos_nuevos]:
+                c = ahora_av[a]
+                avisos_nuevos.append({
+                    "aviso": a, "hora": datetime.now(),
+                    "local": c.get("local") or c.get("centro_coste_sap") or "?",
+                    "zona": c.get("zona") or "?",
+                    "que": (c.get("descripcion_trabajo") or c.get("caso") or "")[:44],
+                })
+        print(f"   Casos vigentes          {color(fmt(r.get('casos_vigentes', 0)), G)}" +
+              delta(len(entrados)))
         pz = r.get("por_zona", {})
         print("   por zona                " +
               "  ".join(f"{z} {fmt(n)}" for z, n in pz.items()))
@@ -268,6 +293,13 @@ def pintar(base_espejo: dict, arrancada: datetime, nuevos_vistos: list) -> None:
         if ra.get("informes_no_parseados"):
             print("   " + color(f"informes que no se pudieron leer: "
                                  f"{ra['informes_no_parseados']}", R))
+
+    if avisos_nuevos:
+        print()
+        print(color(" REQUERIMIENTOS QUE ENTRARON CON LA CONSOLA ABIERTA", V))
+        for a in avisos_nuevos[-6:]:
+            print("   " + color(f"{a['hora']:%H:%M}  aviso {a['aviso']}  "
+                                f"{a['zona']:<5} {a['local']:<8} {a['que']}", V))
 
     # ---------------------------------------------- informes de yellow elephant
     print()
@@ -335,16 +367,18 @@ def main() -> int:
         os.system("")          # habilita los colores ANSI en la consola de Windows
 
     base_espejo = inventario_espejo()
+    base_avisos = avisos_del_buzon()
     arrancada = datetime.now()
     nuevos_vistos: list = []
+    avisos_nuevos: list = []
 
     if args.una_vez:
-        pintar(base_espejo, arrancada, nuevos_vistos)
+        pintar(base_espejo, base_avisos, arrancada, nuevos_vistos, avisos_nuevos)
         return 0
 
     try:
         while True:
-            pintar(base_espejo, arrancada, nuevos_vistos)
+            pintar(base_espejo, base_avisos, arrancada, nuevos_vistos, avisos_nuevos)
             time.sleep(max(2, args.refresco))
     except KeyboardInterrupt:
         print("\n\n  Consola cerrada. El robot sigue corriendo por su cuenta.\n")

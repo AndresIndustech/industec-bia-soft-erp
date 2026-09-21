@@ -62,6 +62,7 @@ import argparse
 import hashlib
 import imaplib
 import json
+import re
 import select
 import socket
 import subprocess
@@ -211,14 +212,26 @@ def espejar_produccion() -> bool:
     r = subprocess.run([str(PYTHON), str(ESPEJO), "--sin-app", "--sin-auxiliares",
                         "--recientes", str(minutos)],
                        cwd=str(BASE), capture_output=True, text=True, timeout=3600)
+    # Solo lo que cambio algo. El filtro mira el NUMERO, no el final de la
+    # linea: "Divergentes : 0  (mismo nombre...)" no termina en ": 0" y se
+    # colaba en el registro cada corrida, ensuciando justo lo que hay que mirar.
     for linea in (r.stdout or "").splitlines():
-        if linea.startswith(("Bajados", "Fallidos", "Divergentes")) and not linea.endswith(": 0"):
+        m = re.match(r"(Bajados|Fallidos|Divergentes)\s*:\s*(\d+)", linea.strip())
+        if m and m.group(2) != "0":
             log(f"   {linea.strip()}")
     if r.returncode != 0:
         log(f"AVISO: el espejo de produccion salio con {r.returncode} "
             f"(no frena el ciclo; se reintenta con el proximo aviso)")
-        for linea in (r.stdout or "").strip().splitlines()[-3:]:
+        # La CAUSA, no el final del texto. Antes se registraban las tres ultimas
+        # lineas y eran siempre las mismas tres del resumen: el "ERROR:" del
+        # modulo que fallo quedaba fuera, y un fallo sin causa no se puede
+        # arreglar (paso el 2026-09-20 en la primera corrida real).
+        causas = [x.strip() for x in (r.stdout or "").splitlines()
+                  if re.search(r"ERROR|FALLIDOS|\s+- |bajaron a 0", x)]
+        for linea in (causas or (r.stdout or "").strip().splitlines())[-8:]:
             log(f"   {linea}")
+        if r.stderr and r.stderr.strip():
+            log(f"   stderr: {r.stderr.strip()[:300]}")
         return False
     ESTADO.parent.mkdir(parents=True, exist_ok=True)
     ESTADO.write_text(json.dumps(
