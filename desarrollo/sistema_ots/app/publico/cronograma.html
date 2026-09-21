@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Cronograma de preventivos · B.IA Soft ERP</title>
+<title>Preventivos · B.IA Soft ERP</title>
 <link rel="stylesheet" href="estilo.css" />
 <link rel="stylesheet" href="cronograma.css" />
 </head>
@@ -35,59 +35,83 @@
   </nav>
 </header>
 
-<!-- La franja de alertas. Fija arriba, delgada, sin botón de cerrar:
-     desaparece sola cuando la condición se resuelve, no cuando alguien la
-     descarta. Es lo que pidió el cliente: visible siempre, sin estorbar. -->
+<!-- La franja de alertas. Fija arriba, sin botón de cerrar: desaparece sola
+     cuando la condición se resuelve, no cuando alguien la descarta. Lo pidió
+     así el cliente — visible siempre, sin estorbar.
+
+     DESDE EL 2026-09-21 LLEVA UNA SOLA FRASE. Antes traía hasta cinco chips de
+     colores que repetían, uno por uno, lo mismo que decían las ocho tarjetas de
+     abajo y la leyenda de siete colores. Andrés lo dijo con todas sus letras:
+     «muy aturdidora, agolpa tanta información». Una alerta que aparece en cada
+     carga y que dice cinco cosas a la vez no es una alerta: es papel tapiz. -->
 <div class="alertas" id="alertas" hidden></div>
 
 <div class="wrap">
   <div class="card">
     <div class="cab">
       <div>
-        <h1>Cronograma de preventivos</h1>
+        <h1>Preventivos</h1>
         <p class="sub" id="subcab">4 ingresos al año por local, acordados con Grupo KFC</p>
       </div>
-      <!-- ANTES esto era un simulador: un desplegable con los cuatro roles para
-           poder probar la pantalla sin sesión. Se quedó puesto, y ahora
-           contradice al servidor — `cronograma.php` filtra por la zona de la
-           sesión, así que un jefe de LARB que eligiera «las 3 zonas» veía
-           igual solo LARB y no entendía por qué.
-
-           Ahora es un filtro de verdad, y lo rellena `cronograma.js` con lo
-           que el servidor dice que este usuario alcanza: para la
-           administración, las tres zonas y cada una por separado; para un jefe
-           de zona, su zona y nada más. -->
+      <!-- El desplegable es un FILTRO de verdad, no un simulador de rol: lo
+           rellena `cronograma.js` con lo que el servidor dice que este usuario
+           alcanza. A la administración, las tres zonas y cada una por separado;
+           a un jefe de zona, la suya y nada más. -->
       <div class="cab-controles">
         <label class="oculto-visual" for="usuario">Zona que se muestra</label>
         <select id="usuario"></select>
+        <button type="button" class="btn primary" id="btnAgendar">+ Agendar un local</button>
       </div>
     </div>
 
-    <!-- Resumen de cumplimiento. Va arriba porque es lo que se mira primero. -->
-    <div class="tiles" id="tiles"></div>
+    <!-- El titular: UNA frase con lo que hay que hacer hoy. Reemplaza a las
+         ocho tarjetas de cifras, que con los datos reales mostraban tres ceros
+         permanentes (cumplidos, reagendados y «0 % a tiempo») y hacían leer
+         veintiséis números para no sacar ninguna conclusión. -->
+    <p class="titular" id="titular"></p>
 
-    <div class="barra-mes">
-      <button type="button" class="btn" id="mesAnt" aria-label="Mes anterior">‹</button>
-      <strong id="mesTitulo"></strong>
-      <button type="button" class="btn" id="mesSig" aria-label="Mes siguiente">›</button>
-      <span class="sep"></span>
-      <button type="button" class="btn primary" id="btnAgendar">+ Agendar un local</button>
+    <!-- Tres horizontes, y uno solo a la vez. Es como trabajan los sistemas de
+         mantenimiento: el mes sirve para ver dónde se amontona el trabajo, la
+         semana es donde se decide de verdad, y el año es lo que se le reporta
+         al cliente. Antes los tres estaban apilados en la misma pantalla. -->
+    <div class="vistas" role="tablist" aria-label="Qué se muestra">
+      <button type="button" role="tab" id="tabAhora" data-v="ahora" aria-controls="vAhora" aria-selected="true">Lo que toca</button>
+      <button type="button" role="tab" id="tabMes" data-v="mes" aria-controls="vMes" aria-selected="false" tabindex="-1">El mes</button>
+      <button type="button" role="tab" id="tabAno" data-v="ano" aria-controls="vAno" aria-selected="false" tabindex="-1">El año y KFC</button>
     </div>
 
-    <div class="leyenda">
-      <span><i class="pt vencido"></i>Vencido</span>
-      <span><i class="pt poriniciar"></i>Inicia en ≤3 días</span>
-      <span><i class="pt encurso"></i>En curso</span>
-      <span><i class="pt planificado"></i>Planificado</span>
-      <span><i class="pt cumplido"></i>Cumplido</span>
-      <span><i class="pt sinagendar"></i>Sin agendar</span>
-      <span><i class="pt sinkit"></i>Sin kit</span>
-    </div>
+    <!-- Los filtros rápidos son también el resumen: la cifra está dentro del
+         botón que la filtra, así que informar y filtrar dejan de ser dos
+         bloques distintos que dicen lo mismo. -->
+    <div class="filtros-rapidos" id="filtros"></div>
 
-    <div class="calendario" id="calendario"></div>
+    <section class="vista" id="vAhora" role="tabpanel" aria-labelledby="tabAhora"></section>
 
-    <h2>Ingresos del mes</h2>
-    <div id="listaMes"></div>
+    <section class="vista" id="vMes" role="tabpanel" aria-labelledby="tabMes" hidden>
+      <div class="barra-mes">
+        <button type="button" class="btn" id="mesAnt" aria-label="Mes anterior">‹</button>
+        <strong id="mesTitulo"></strong>
+        <button type="button" class="btn" id="mesSig" aria-label="Mes siguiente">›</button>
+        <span class="sep"></span>
+        <span class="sub" id="mesResumen"></span>
+      </div>
+      <!-- En el celular la rejilla de siete columnas no se encoge: se cambia
+           por la lista de abajo, que es la que se puede leer con una mano. -->
+      <div class="calendario" id="calendario"></div>
+      <p class="solo-movil sub" id="avisoMovil">En el celular el mes se lee como lista. Cambia a horizontal para ver la rejilla.</p>
+      <h2 id="tituloLista">Ingresos del mes</h2>
+      <div id="listaMes"></div>
+    </section>
+
+    <section class="vista" id="vAno" role="tabpanel" aria-labelledby="tabAno" hidden></section>
+
+    <!-- La leyenda deja de ocupar sitio permanente: siete colores explicados
+         arriba de un calendario que ya lleva la palabra escrita en cada fila
+         son siete líneas que nadie vuelve a leer después del primer día. -->
+    <details class="ayuda">
+      <summary>¿Qué significa cada estado?</summary>
+      <div class="ayuda-cuerpo" id="ayudaEstados"></div>
+    </details>
   </div>
 </div>
 

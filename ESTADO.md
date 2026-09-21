@@ -49,6 +49,7 @@ del rediseño.
 | Capacitación de cierre | 🔒 | Bloqueada: falta agendar con el personal |
 | Repositorio git sincronizado con GitHub | ✅ **2026-09-12** | `origin` es `git@github.com:AndresIndustech/industec-bia-soft-erp.git`. **Comprobado:** `ssh -T git@github.com` responde «Hi AndresIndustech! You've successfully authenticated», `git fetch` trae, y `master` tiene upstream `origin/master`. Andrés ya agregó la clave pública, así que el bloqueo del 2026-09-11 está levantado. **Se acabó el proyecto en un solo disco.** Ojo con lo que esto destapa: existe `origin/pc/auditoria-2026-09-10` **29 commits por delante de `master`**, con `master` como ancestro — ver §5.2b |
 | **Buzón de la administradora, regularizado en bloque** | ✅ **2026-09-21** | **124 ATENDIDO → cerrados en SAP** + **773 CERRADO_SIN_ATENCION → regularizados**, a pedido de Andrés y asumiendo que ella ya lo hizo en SAP (sin verificar caso por caso). Pendientes de regularizar: **0**. Detalle, la herramienta y la nota sobre los «656» vs 773 reales en **§1h** |
+| **Pantalla de preventivos** | ✅ **rediseñada el 2026-09-21 (T2.23)** | De **~110 elementos** en la primera pantalla a **~28**. Tres horizontes en pestañas en vez de apilados; el atraso como cola de trabajo. Destapó tres cifras que se leían al revés: **174 ingresos «sin cerrar»** que figuraban «en curso» (algunos desde enero), el «0 % a tiempo» que en realidad era «ningún ingreso cerrado todavía», y el «sin kit» que salía en el 86 % de las filas. Baterías locales **120·0, 57·0, 62·0, 11·0**; cuadre de bloques **82+174+19+16+77 = 368**. Detalle y lo no comprobado en **§1k**. **Sin desplegar todavía** |
 
 **Cuadre del corpus, exacto contra los 7.333 PDFs originales:**
 `7.070 (órdenes) + 5 (informes técnicos) + 25 (otros clientes) + 233 (duplicados descartados) = 7.333`
@@ -581,6 +582,134 @@ de verdad sin sesión abierta.
 
 ---
 
+## 1k. La pantalla de preventivos, rediseñada (2026-09-21, T2.23)
+
+Pedido de Andrés, textual: *«la interfaz de preventivos me parece muy
+aturdidora, quiero que sea más entendible y fácil de navegar, que no agolpe con
+tanta información»*. Y un segundo pedido en la misma conversación: *«busca
+información de otros softwares similares de cómo lo hacen y adopta las mejores
+prácticas»*.
+
+### Lo que se midió antes de tocar nada
+
+La pantalla se levantó en una maqueta local con **los 368 ingresos reales de
+2026** (`SALIDAS IA/OTS/catalogos/cronograma_preventivo.json`), se capturó con
+un navegador de verdad y se contó lo que se ve. No era una impresión: era esto.
+
+| Lo que medía | Antes | Después |
+|---|---|---|
+| Elementos informativos antes de desplazarse (admin, 3 zonas) | **~110** | **~28** |
+| Tarjetas de cifras en la primera pantalla | 8, más 3 recuadros por zona con 6 cifras cada uno = **26 números** | **0** — una frase |
+| Chips de la franja de alertas | hasta **5** | **1 línea**, máximo 2 cifras |
+| Leyenda de colores permanente | **7 entradas** siempre visibles | plegada, en «¿Qué significa cada estado?» |
+| Veces que aparece la palabra «sin kit» en el calendario | **~60** (una por chip: el 86 % del año lo tiene pendiente) | **0** — un punto, y solo donde el kit todavía se puede reclamar |
+| Cifras que eran un cero permanente | **3** (cumplidos, reagendados, «0 % a tiempo») | **0** — un filtro en cero no se dibuja |
+
+### Tres cifras que la pantalla mostraba mal, y que el rediseño destapa
+
+Esto no es estética: son números que se leían al revés.
+
+1. **176 ingresos (48 %) figuraban «en curso».** La regla del servidor
+   (`Reportes::estadoPreventivo`) marca «en curso» todo lo que tenga una orden
+   emitida, **sin caducidad**: 145 de esos 176 habían arrancado **antes de
+   agosto**, y los hay de enero. Un ingreso de enero pintado de azul en
+   septiembre no está en curso: está **sin cerrar**. La pantalla ahora lo dice
+   con esa palabra y lo pone en su propio bloque — **174 al 2026-09-21**. El
+   contrato con el servidor no se tocó: para él siguen siendo `encurso`.
+2. **La tarjeta de cumplimiento decía «0 % a tiempo» en rojo.** No es que se
+   incumpliera el 100 %: es que **no hay ningún ingreso cerrado** en todo 2026,
+   así que no hay porcentaje que calcular. Ahora dice «Sin cifra todavía» y
+   explica por qué (I-7).
+3. **«Sin kit» salía en casi todas las filas** porque 316 de 368 (86 %) tienen
+   el kit pendiente. Un distintivo que sale en el 86 % de los casos no
+   distingue nada. Ahora se marca solo donde el kit todavía se puede reclamar
+   —el ingreso aún no arrancó y arranca dentro de 15 días— y, cuando en una
+   lista faltar el kit es la norma (≥ 70 %), se marca **la excepción**: los
+   pocos que sí lo tienen listo, con la cifra completa en la cabecera.
+
+### Cómo quedó
+
+Tres horizontes y **uno solo a la vez**, que es como lo resuelven los sistemas
+de mantenimiento: el mes sirve para ver dónde se amontona el trabajo, la
+quincena es donde se decide, y el año es lo que se le reporta al cliente.
+
+- **«Lo que toca»** (la que abre): una frase con lo que hay que hacer, filtros
+  que son también el resumen (la cifra va dentro del botón que la filtra) y
+  cuatro bloques plegables — Vencidos, Sin cerrar, En marcha y por arrancar
+  (15 días), Sin agendar. Cada bloque muestra 6 filas y un «Ver N más».
+- **«El mes»**: el calendario, con un chip por ingreso y el código del local, y
+  debajo la lista del mes. En el celular la rejilla de siete columnas se
+  reemplaza por la lista, no se encoge.
+- **«El año y KFC»**: el cumplimiento con su regla escrita, la tabla por zona
+  y el avance mes a mes. Aquí sí tienen sentido las cifras por zona: es la
+  pantalla de preparar el reporte, no la del trabajo del día.
+
+### Lo que se adoptó de los CMMS de referencia
+
+Se revisaron Limble, MaintainX, Fiix, UpKeep, MPulse, Sockeye e IDCON, y **SAP
+PM**, que es además el sistema de Grupo KFC. Lo que entró:
+
+| Práctica | Cómo quedó aquí |
+|---|---|
+| Tres horizontes (mes = densidad, semana/quincena = decisión, día = supervisión) | Las tres pestañas. El mes deja de ser el centro |
+| El atraso es una **cola de trabajo**, no un color dentro del calendario | Bloques «Vencidos» y «Sin cerrar», ordenados por lo más atrasado |
+| En el celular la rejilla del mes **se reemplaza** por lista, no se encoge | `@media (max-width:700px)` oculta el calendario y deja la lista |
+| El kit es precondición de «listo para ejecutar» (*parts kitting*) | El kit se marca donde todavía sirve, con su cifra por bloque |
+| La fórmula del cumplimiento **se declara**, no se supone | Escrita en «El año y KFC», con por qué reagendar no la maquilla |
+| Programa **fijo** (la fecha sale del acuerdo) frente a flotante (sale del cierre anterior) | INDUSTEC es fijo puro, que es lo correcto para un contrato — y ahora la pantalla lo dice |
+| Filtros por zona, y visibilidad por rol | Ya existían; se conservan tal cual |
+
+### Verificado
+
+```
+node pruebas/prueba_barra_tecnico.mjs                    → 11 · 0 fallos
+PHP_BIN=D:/SOFTWARE/PHP83/php.exe node pruebas/prueba_contratos.mjs → 57 · 0
+D:/SOFTWARE/PHP83/php.exe pruebas/prueba_48h.php         → 120 · 0
+node pruebas/prueba_graficos.mjs                         → 62 · 0
+```
+
+Y contra la maqueta con los 368 ingresos reales, contando **las filas que
+pinta el código**, no las que debería pintar:
+
+```
+BLOQUES DE «LO QUE TOCA»
+vencido=82    (cabecera dice 82)
+sincerrar=174 (cabecera dice 174)
+quincena=19   (cabecera dice 19)
+sinagendar=16 (cabecera dice 16)
+suma en bloques = 291
+```
+
+**291 + 77 planificados a más de 15 días = 368.** Cuadra exacto: ningún ingreso
+se queda fuera de todos los bloques. Ese cuadre encontró un defecto real antes
+de subir nada: un ingreso que debía arrancar hace tres días y cuyo fin es hoy
+—todavía no vencido— **no caía en ningún bloque** y desaparecía de la pantalla.
+
+Capturas de los tres roles (administración, jefe de LARB, técnico en celular de
+390 px) y de las tres pestañas, revisadas una por una con navegador real.
+
+### Lo que NO se pudo comprobar
+
+- **No se desplegó a darkviolet** ni se corrieron las baterías contra el
+  servidor (`verificar_http.py` y las otras seis). Lo verificado es local y
+  contra maqueta con datos reales.
+- **No se probó el guardado de verdad**: la maqueta intercepta `fetch`, así que
+  agendar, reagendar, kit, cierre y novedad se comprobaron **por lectura del
+  código** —los cinco cuerpos JSON quedaron idénticos a los de antes— y por la
+  batería `verificar_reportes.py`, que **no se corrió en esta sesión**.
+- **No se midió con una persona usándola.** Las cifras de arriba son de
+  elementos en pantalla, no de tiempo hasta encontrar algo.
+
+### `sw.js` subió a v11
+
+`cronograma.html`, `.css` y `.js` están en la lista de precarga del trabajador
+de servicio. Sin subir la versión, a quien ya tiene la aplicación instalada le
+seguiría saliendo la pantalla vieja aunque el servidor tenga la nueva. Quedó
+anotado en el propio `sw.js`, porque el comentario decía «se sube cuando cambia
+la lista» y el caso real es «cuando cambia el contenido».
+
+---
+
 ## 1c. La cadena del correo, medida el 2026-09-18 (auditoría de T2.21)
 
 Andrés pidió validar si el robot del correo identifica los informes nuevos, los
@@ -974,7 +1103,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| **T2.23 · Rediseño de la interfaz de preventivos** (`cronograma.html/.js/.css`) | Conversación "interfaz de preventivos" (estación) | 2026-09-21 | Solo los tres archivos de la pantalla del cronograma en `desarrollo/sistema_ots/app/publico/`. **No toca** la base, ni el árbol canónico, ni `cronograma.php`/`cronograma_accion.php` (el contrato del servidor se respeta tal cual) |
+| ~~T2.23 · Rediseño de la interfaz de preventivos~~ | ✅ **Terminada el 2026-09-21** | — | `cronograma.html/.js/.css` y `sw.js` a v11. No tocó la base, ni el árbol canónico, ni el contrato de `cronograma.php`/`cronograma_accion.php`. Cifras, evidencia y lo que quedó sin comprobar en **§1k**. Falta desplegar a darkviolet y correr las baterías de servidor |
 | ~~Regularización masiva del buzón (ATENDIDO → cerrado SAP, CERRADO_SIN_ATENCION → regularizado)~~ | ✅ **Terminada el 2026-09-21** | — | 124 + 773 casos regularizados en `casos_gestion` (Hostinger). Detalle en **§1h** |
 | ~~T2.22b · InspectorBot — consola gráfica del robot~~ | ✅ **Terminada el 2026-09-21** | — | Ventana, icono, nombre propio en el Administrador de tareas y arranque con el equipo, todo verificado. Cifras y método en **§1f**. Sumó además la red de seguridad del trabajo en curso (`scripts/guardar_sesion.py` + hook `Stop`), ver §1g. `consola.bat` se conserva |
 | ~~T2.21 · la cadena del correo y de producción~~ | ✅ **Cerrada del todo el 2026-09-21** | Regularización ejecutada con cuadre exacto y 0 documentos pendientes (§1d), robot arreglado y consola de estado en marcha (§1e), promotor del buzón encadenado al nocturno con su Tarea programada creada. Queda abierto solo T2.21.5 («Las mías» del Archivo) y recrear la Tarea con `/ru SYSTEM` cuando haya sesión de administrador |

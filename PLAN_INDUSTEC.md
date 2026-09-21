@@ -1092,6 +1092,98 @@ siguen exactamente como estaban.
 |---|---|---|
 | Volver a correr la consulta de conteo; revisar a mano una muestra para confirmar el patrón; escribir el script de regularización en bloque (solo contar, sin `--ejecutar`) | El `--ejecutar` que mueva los 203 (o el subconjunto que se decida) a `ATENDIDO`/`RESUELTO`; el criterio de qué informe manda cuando un aviso tiene más de uno | Aplicar la transición `cerrado_sap` a un caso sin evidencia en `ot_archivo`; asumir sin dejarlo escrito en la bitácora que la administradora ya cerró en SAP |
 
+### T2.23 · La pantalla de preventivos, rediseñada (2026-09-21) — ✅ HECHA
+
+Pedido de Andrés, textual: *«la interfaz de preventivos me parece muy
+aturdidora, quiero que sea más entendible y fácil de navegar, que no agolpe con
+tanta información»*, y *«busca información de otros softwares similares de cómo
+lo hacen y adopta las mejores prácticas»*.
+
+**Hecho y verificado.** Las cifras, las capturas, la tabla de antes/después y
+lo que **no** se pudo comprobar están en `ESTADO.md` **§1k** — no se repiten
+aquí. En una línea: de ~110 elementos en la primera pantalla a ~28, tres
+horizontes en pestañas en vez de apilados, y tres cifras que se leían al revés
+puestas en su sitio.
+
+**Qué se tocó:** `cronograma.html`, `cronograma.js`, `cronograma.css` y la
+versión de `sw.js` (v10 → v11). **Qué NO se tocó, a propósito:** el contrato de
+`cronograma.php` y `cronograma_accion.php`. Los cinco cuerpos JSON que la
+pantalla envía (`agendar`, `reagendar`, `kit`, `nota`, `cerrar`) quedaron
+idénticos, y el motivo obligatorio al reagendar se sigue exigiendo antes de
+enviar. Por eso el rediseño **no puede** haber cambiado ninguna cifra que se le
+reporte a Grupo KFC.
+
+| Autónomo | Requiere aprobación humana | Prohibido |
+|---|---|---|
+| Cambiar lo que la pantalla **pinta** con los datos que ya llegan | Desplegar a darkviolet (falta) | Cambiar la regla de cumplimiento que se le reporta a KFC |
+| Reagrupar, plegar, renombrar en pantalla un estado derivado | Cambiar `Reportes::estadoPreventivo` | Tocar `plan_original` por cualquier vía |
+| Subir la versión de `sw.js` | Tocar `ingresos_preventivos` | Escribir en la base desde esta tarea |
+
+**Lo que falta para darla por cerrada del todo:**
+
+1. **Desplegar a darkviolet** (`t2_10_desplegar.py`) y correr las siete
+   baterías de servidor, sobre todo `verificar_reportes.py`, que es la que
+   prueba que agendar/reagendar/kit/cierre/novedad siguen escribiendo bien.
+   Lo verificado hasta ahora es local y contra maqueta.
+2. **Mirarla con Andrés** antes de que entre al piloto. El criterio del pedido
+   es suyo, no de una cifra de elementos en pantalla.
+
+---
+
+### T2.24 · El módulo de preventivos, lo que falta para que sea correcto (2026-09-21)
+
+Del estudio de los CMMS de referencia (Limble, MaintainX, Fiix, UpKeep, MPulse,
+Sockeye, IDCON) y de **SAP PM**, que es el sistema de Grupo KFC. Lo que se podía
+resolver en la pantalla ya entró en T2.23. Esto es lo que exige tocar el
+servidor o la base, **y lo que no puede decidir un agente.**
+
+**T2.24.1 · «Sin cerrar» tiene que existir también en el servidor.** Hoy
+`Reportes::estadoPreventivo` devuelve `encurso` para todo lo que tenga una orden
+emitida, sin caducidad: **174 de 368 ingresos de 2026** están así, algunos desde
+enero. La pantalla ya lo distingue, pero el reporte a KFC y `reportes.php`
+siguen viéndolos «en curso». *Criterio:* `estadoPreventivo` devuelve un estado
+propio cuando el fin vigente ya pasó y no hay cierre, y `verificar_reportes.py`
+lo comprueba con un caso sembrado.
+
+**T2.24.2 · Cerrar los 174 sin cerrar.** No es un problema de pantalla: nadie
+registra el cierre. Hay dos caminos y **hay que elegir uno**: (a) que el
+promotor del buzón cierre el ingreso cuando archiva la orden del último día
+declarado, o (b) una regularización en bloque como la del buzón, asumiendo que
+el trabajo se hizo. La (b) mete en el cumplimiento de KFC 174 cierres que nadie
+verificó uno por uno: **eso lo decide Andrés, no un agente** (I-7).
+
+**T2.24.3 · La ventana de tolerancia del cumplimiento — DECISIÓN DE ANDRÉS.**
+La práctica estándar de los CMMS es contar «a tiempo» lo cerrado dentro de un
+**±10 % del ciclo**. El ciclo de INDUSTEC son 4 ingresos al año, o sea ~91 días,
+así que la ventana estándar sería de **±9 días**. Hoy el sistema usa
+**tolerancia cero**: `real_fin <= plan_original_fin`, en
+`cronograma_accion.php` y en la pantalla. Es **más dura** que el estándar.
+Cambiarla cambia el porcentaje que ve Grupo KFC, así que se propone con las dos
+cifras al lado y **no se aplica sola**. Recomendación: dejar la tolerancia cero
+—es lo honesto frente a un contrato con fechas acordadas— y, si se quiere la
+comparación, mostrar la cifra estándar **al lado**, nunca en lugar de la otra.
+
+**T2.24.4 · El horizonte de llamada, declarado en vez de escrito a mano.** Los
+«3 días» del estado `poriniciar` están a mano en `Reportes::estadoPreventivo` y
+en `cronograma.js`. En SAP PM eso es el *call horizon* y es un parámetro con
+nombre. *Criterio:* una sola constante, en el servidor, que la pantalla lee.
+
+**T2.24.5 · El kit, del texto importado a un dato que alguien mantiene.**
+316 de 368 ingresos (86 %) tienen el kit «PENDIENTE», que es lo que decía el
+texto original del cronograma. La práctica estándar es que ningún trabajo que
+dependa de repuestos entra al programa de la semana sin su kit completo y
+separado, y que el kit de un trabajo aplazado se devuelve al almacén a las dos
+semanas. Aquí ni siquiera se sabe si esos 316 tienen kit o no: **nadie lo
+actualiza**. Antes de endurecer la regla hay que saber si el dato es real.
+
+**T2.24.6 · Lo que NO hay que copiar de los CMMS.** Queda escrito para que
+nadie lo proponga otra vez: (a) **programa flotante** —que la fecha siguiente
+salga del cierre anterior— rompería el acuerdo de 4 fechas con KFC; (b)
+**capacidad y horas por técnico** es un problema de una planta con turnos, no de
+tres zonas con cuadrillas que viajan; (c) **meter el correctivo aquí**: el
+estado real de un correctivo lo manda SAP (`avisos_sap.estatus_general`) y
+ninguna señal de este sistema puede hacerse pasar por ese cierre.
+
 ---
 
 # FASE 3 · DECISIÓN — Noviembre
@@ -1380,6 +1472,25 @@ python verificar_seguridad.py   # 28 · 0
 ```
 
 ### La siguiente acción, concreta
+
+**K. Desplegar la pantalla de preventivos rediseñada (T2.23)** — *lo único que
+le falta, y es corto.* El rediseño está hecho y verificado **en local**: cuatro
+baterías en verde (120·0, 57·0, 62·0, 11·0) y el cuadre de bloques contra los
+368 ingresos reales (82+174+19+16+77 = 368). Falta `t2_10_desplegar.py` a
+darkviolet y correr las siete baterías de servidor, sobre todo
+`verificar_reportes.py`, que es la que prueba que agendar/reagendar/kit/cierre
+siguen escribiendo bien. **Y mirarla con Andrés**, porque el criterio del
+pedido («que no aturda») es suyo. Ojo: `sw.js` subió a **v11** — si no sube, a
+quien ya tiene la aplicación instalada le sale la pantalla vieja. Cifras y lo
+no comprobado en `ESTADO.md` **§1k**.
+
+> **Lo que el rediseño destapó y no se arregló, porque no era su tarea:** hay
+> **174 ingresos de 2026 «sin cerrar»** —con orden emitida y sin que nadie
+> registre el cierre, algunos desde enero— y **ningún ingreso cumplido en todo
+> el año**, así que no hay porcentaje de cumplimiento que reportarle a KFC.
+> Eso es **T2.24**, y su punto 2 (cómo se cierran esos 174) **lo decide
+> Andrés**: cerrarlos en bloque mete en el cumplimiento 174 cierres que nadie
+> verificó uno por uno.
 
 **H ya está cerrada del todo (2026-09-21, 0 pendientes).** Lo único que le
 queda es T2.21.5, sin urgencia — la Tarea del nocturno **ya se recreó con

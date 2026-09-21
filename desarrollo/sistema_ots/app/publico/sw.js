@@ -35,7 +35,14 @@
      v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
      recibe el numero de la orden. Con el armazon viejo el celular seguiria
      mandando la orden sin ellas. */
-const VERSION = 'ot-industec-v10';  // v10: estilo.css (§S3-§S5), cronograma.js/html/css que escribe y graficos.js accesible (2026-09-13)
+const VERSION = 'ot-industec-v11';  // v11: preventivos rediseñado — cronograma.html/js/css (2026-09-21)
+// v10: estilo.css (§S3-§S5), cronograma.js/html/css que escribe y graficos.js accesible (2026-09-13)
+//
+// OJO: la versión hay que subirla también cuando cambia el CONTENIDO de un
+// archivo ya precargado, no solo cuando cambia la lista. `cronograma.html`,
+// `.css` y `.js` están en PRECARGA: sin subir la versión, a quien ya tiene la
+// aplicación instalada le sigue saliendo la pantalla vieja aunque el servidor
+// tenga la nueva, y nadie entiende por qué.
 const ARMAZON = `${VERSION}-armazon`;
 const DATOS   = `${VERSION}-datos`;
 
