@@ -78,6 +78,10 @@ desarrollo/agentes/logs/
 # Cache de tecnicos por OT: se rehace sola, no va al repositorio.
 desarrollo/agentes/config/cache_tecnicos.json
 
+# Marca del ultimo espejo de produccion exitoso (T2.21.7): estado en vivo de
+# esta maquina, no configuracion. Se rehace solo en la primera corrida.
+desarrollo/agentes/config/vigilante_estado.json
+
 # Ajustes locales de Claude Code de cada equipo (p. ej. disableClaudeAiConnectors
 # en la estacion, 11-sep-2026): son de esa maquina y no viajan en el repositorio.
 # Sin esta regla el archivo sale como `??` en cada `git status`, y cualquier
