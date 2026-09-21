@@ -486,6 +486,101 @@ puntual, no un hecho verificado contra SAP.
 
 ---
 
+## 1j. El saneamiento nocturno arreglado, y su primera corrida real (2026-09-21)
+
+Andrés dio acceso de administrador y pidió resolver el pendiente que InspectorBot
+dejó a la vista en §1f: la Tarea «INDUSTEC - Saneamiento nocturno» nunca había
+corrido. Quedó **arreglada, probada y ejecutada de verdad**, con evidencia
+cruzada contra la base.
+
+**Dos bugs, no uno.** El modo «solo interactivo» era la causa documentada, pero
+al exportar la definición de la Tarea (`config/tarea_nocturno_original.xml`,
+guardado como respaldo) apareció un segundo bug independiente: el comando estaba
+**partido en el espacio de «INDUSTECH IA»** — `Command: D:\INDUSTECH`,
+`Arguments: IA\desarrollo\agentes\scripts\saneamiento_nocturno.bat`. Un comando
+que no ejecuta nada con sentido, sin relación con la cuenta que la corre. Las
+otras dos tareas del proyecto no tienen este defecto. Recreada con
+`Register-ScheduledTask`: mismo horario (diaria 02:30, repetición cada 30 min
+por 2 h), cuenta `NT AUTHORITY\SYSTEM` (`LogonType ServiceAccount`), comando
+corregido.
+
+**Un tercer bug, esperado por el error nº 20 del plan pero con una forma nueva.**
+SYSTEM no tenía acceso a `config/clave_hostinger`. Dárselo con `icacls /grant`
+(sumando el permiso, no reemplazando) **no sirvió**: el ssh de Windows rechazó
+la llave por «UNPROTECTED PRIVATE KEY FILE» — no porque SYSTEM sea untrusted,
+sino porque **el ACL mezclaba dos cuentas distintas** (`indus` y `SYSTEM`), y
+eso el ssh de Windows lo trata igual de mal que un permiso abierto a cualquiera.
+La llave original volvió a como estaba (solo `indus`); se creó una **copia
+exclusiva** `config/clave_hostinger_system` (mismo contenido, ACL con **solo**
+`SYSTEM:(F)`, sin herencia) y la Tarea la usa vía `INDUSTEC_LLAVE_SSH`, inyectada
+en el propio comando de la Tarea — no toca el `.bat`, así que una corrida manual
+de Andrés sigue usando su propia llave sin cambiar nada. Verificado con
+`hostinger_ssh.py --probar` corrido como una Tarea temporal bajo SYSTEM antes de
+tocar la Tarea real: `OK: conexion, docroots y herramientas`. La copia nueva
+está en `.gitignore` (no es la misma llave que la del usuario, aunque el
+contenido coincida).
+
+**Validado en tres capas antes de la corrida real**, seco primero: (1) SSH bajo
+SYSTEM con la llave dedicada, de solo lectura; (2) un `--ensayo` con la
+configuración REAL de la Tarea (SYSTEM, comando corregido, llave dedicada) — los
+8 pasos en `ok`, confirmando que python arranca, encuentra el venv y resuelve
+las rutas bajo SYSTEM; (3) recién con eso en verde, Andrés autorizó la primera
+corrida real, supervisada.
+
+**La primera corrida real de la historia de este mecanismo — resultado
+verificado, no solo el `ok: true` del propio script:**
+
+```
+OK · 213.1 min · sync:ok(9083s) · volcado:ok(9s) · normalizar:ok(52s) ·
+buzon:ok(31s) · ingesta:ok(3466s) · informes:ok(9s) · archivo:ok(55s) ·
+pdfs:ok(80s)
+```
+
+- **sync**: primera reconciliación **completa** (sin `--recientes`, a diferencia
+  de los sync parciales del vigilante): 9.970 archivos en el servidor, **7.622
+  bajados** de una vez, 0 fallidos, 0 divergentes. Es la causa de los 213 minutos:
+  cada archivo abre su propia sesión SSH y nunca se había corrido sin el límite
+  de tiempo. Los cinco módulos que cuenta InspectorBot (`_ORIGEN_SISTEMA`)
+  apenas se movieron (2.320 → 2.320, ya los mantenía al día el vigilante); el
+  grueso de lo bajado fue el módulo de la app nueva, que el vigilante nunca
+  toca (corre con `--sin-app`).
+- **ingesta**: 7.467 documentos procesados, 0 errores de extracción (4 avisos
+  `RECUPERADO_CON_FECHA_NULL`, el camino de recuperación ya previsto para fechas
+  mal formadas, no una falla).
+- **normalizar**: 10 promovidos, 2.289 ya estaban, 13 repetidos resueltos por
+  hash, **8 sin resolver** (6 del módulo OTROS, 2 por nombre de local ambiguo:
+  `RestauranteElvita`, `MENESTRASDELNEGRO` — pendientes de revisión, no urgentes).
+- **Verificado contra una fuente independiente, no solo contra el JSON que
+  escribió el propio script (I-10):** `SELECT COUNT(*) FROM ots` en vivo dio
+  **7.813**, con **351** en cuarentena — exacto contra lo que reportó el log. Y
+  la fila en `bitacora` (`accion='SANEAMIENTO_NOCTURNO'`, id 9, la primera que
+  existe) trae el JSON completo, idéntico al de `estado_nocturno.json`.
+
+**Un defecto cosmético encontrado, ajeno a este cambio.** Los pasos `archivo` y
+`pdfs` traen texto corrupto en la respuesta de `archivo_indexar_cli.php`
+(`índice` → `Â\xadndice`, `aquí` → `aquÃ\xad`) **mientras el resto del mismo
+texto capturado —`·`, `gestión`, `histórico`, `órdenes`— decodifica bien**. Al
+romperse solo esas dos palabras y no el resto de la misma cadena, no es un
+problema de codificación de consola de SYSTEM (eso habría roto todo el bloque
+por igual): es un defecto ya existente en el PHP del servidor, que esta corrida
+solo dejó a la vista por ser la primera vez que su salida se captura completa en
+un JSON. Cosmético — no afecta los datos, solo el texto del registro. Pendiente
+para cuando se toque `archivo_indexar_cli.php`, sin prisa.
+
+**InspectorBot ya lo confirma solo:** la alerta grave «el saneamiento nocturno
+no ha corrido nunca» **desapareció** al recalcular el estado después de la
+corrida. Salud pasó de GRAVE a MEDIO (quedan solo avisos leves de siempre: 6
+casos con alerta para la administración, 2 sin local resuelto).
+
+**Lo que NO se pudo comprobar:** que la Tarea arranque en un inicio de sesión
+real de Windows (sin nadie loggeado) — con `LogonType ServiceAccount`, SYSTEM no
+necesita que haya una sesión iniciada para correr, a diferencia de las otras dos
+tareas del proyecto (todavía en modo «solo interactivo»), pero eso es una
+propiedad documentada de `ServiceAccount` y no algo que se haya visto disparar
+de verdad sin sesión abierta.
+
+---
+
 ## 1c. La cadena del correo, medida el 2026-09-18 (auditoría de T2.21)
 
 Andrés pidió validar si el robot del correo identifica los informes nuevos, los
@@ -879,6 +974,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
+| **T2.23 · Rediseño de la interfaz de preventivos** (`cronograma.html/.js/.css`) | Conversación "interfaz de preventivos" (estación) | 2026-09-21 | Solo los tres archivos de la pantalla del cronograma en `desarrollo/sistema_ots/app/publico/`. **No toca** la base, ni el árbol canónico, ni `cronograma.php`/`cronograma_accion.php` (el contrato del servidor se respeta tal cual) |
 | ~~Regularización masiva del buzón (ATENDIDO → cerrado SAP, CERRADO_SIN_ATENCION → regularizado)~~ | ✅ **Terminada el 2026-09-21** | — | 124 + 773 casos regularizados en `casos_gestion` (Hostinger). Detalle en **§1h** |
 | ~~T2.22b · InspectorBot — consola gráfica del robot~~ | ✅ **Terminada el 2026-09-21** | — | Ventana, icono, nombre propio en el Administrador de tareas y arranque con el equipo, todo verificado. Cifras y método en **§1f**. Sumó además la red de seguridad del trabajo en curso (`scripts/guardar_sesion.py` + hook `Stop`), ver §1g. `consola.bat` se conserva |
 | ~~T2.21 · la cadena del correo y de producción~~ | ✅ **Cerrada del todo el 2026-09-21** | Regularización ejecutada con cuadre exacto y 0 documentos pendientes (§1d), robot arreglado y consola de estado en marcha (§1e), promotor del buzón encadenado al nocturno con su Tarea programada creada. Queda abierto solo T2.21.5 («Las mías» del Archivo) y recrear la Tarea con `/ru SYSTEM` cuando haya sesión de administrador |

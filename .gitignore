@@ -64,6 +64,13 @@ desarrollo/sistema_ots/app/publico/nucleo/padron.json
 desarrollo/agentes/config/clave_hostinger
 desarrollo/agentes/config/clave_hostinger.pub
 
+# Copia de la misma llave, con ACL restringido a NT AUTHORITY\SYSTEM en
+# exclusiva: Windows OpenSSH rechaza una llave cuyo ACL mezcle dos cuentas
+# distintas ("UNPROTECTED PRIVATE KEY FILE"), asi que la Tarea programada del
+# nocturno (T2.22.1) necesita su propia copia y no puede compartir la del
+# usuario interactivo.
+desarrollo/agentes/config/clave_hostinger_system
+
 # Llave SSH de lectura/escritura del repositorio en GitHub. Es una llave APARTE
 # de la de Hostinger a proposito: si una se revoca o se filtra, la otra sigue
 # sirviendo, y el alcance de cada una se ve de un golpe. Las reglas de arriba

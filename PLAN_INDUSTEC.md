@@ -1382,11 +1382,11 @@ python verificar_seguridad.py   # 28 · 0
 ### La siguiente acción, concreta
 
 **H ya está cerrada del todo (2026-09-21, 0 pendientes).** Lo único que le
-queda es T2.21.5 y recrear su Tarea con `/ru SYSTEM`, ninguna de las dos
-urgente. La siguiente prioridad real es **B** (la lista de
-`ANTES_DE_EMPEZAR.md` del piloto): A, F y G ya estaban hechas de arrastre
-(ver más abajo), así que no hay nada bloqueando el piloto de UIO salvo lo que
-depende de Andrés.
+queda es T2.21.5, sin urgencia — la Tarea del nocturno **ya se recreó con
+SYSTEM y corrió de verdad** (ver más abajo). La siguiente prioridad real es
+**B** (la lista de `ANTES_DE_EMPEZAR.md` del piloto): A, F y G ya estaban
+hechas de arrastre (ver más abajo), así que no hay nada bloqueando el piloto
+de UIO salvo lo que depende de Andrés.
 
 **J. Regularización masiva del buzón** — ✅ **hecha el 2026-09-21, sin
 subtarea del plan porque fue un pedido puntual, no una construcción.** El
@@ -1411,13 +1411,13 @@ y método en `ESTADO.md` **§1f**; no lo repitas aquí. Trajo de paso la red de
 seguridad del trabajo en curso (`scripts/guardar_sesion.py` + hook `Stop`),
 en **§1g**.
 
-> **Lo que InspectorBot dejó a la vista y sigue sin arreglarse:** el nocturno
-> **no ha corrido ni una vez**. Es quien hace la ingesta a la base, la
-> normalización al árbol canónico y la subida de PDF al servidor. La causa es
-> la de siempre —las tres Tareas del proyecto están en modo «solo
-> interactivo»—, así que **recrearla con `/ru SYSTEM` dejó de ser una tarea
-> menor**: ya no es higiene, es un día entero de proceso que no ocurre. Va con
-> la acción **B**.
+> **Lo que InspectorBot dejó a la vista — ✅ resuelto el mismo día.** El
+> nocturno nunca había corrido; con acceso de administrador se recreó con
+> SYSTEM, se corrigió un comando roto que la tarea traía de fábrica, se le dio
+> a SYSTEM su propia llave SSH (el ssh de Windows rechaza una llave con dos
+> cuentas en el ACL), y se corrió de verdad por primera vez: 213 min, los 8
+> pasos en `ok`, verificado contra la base en vivo. Detalle en `ESTADO.md`
+> **§1j**. Ya no bloquea nada de la acción **B**.
 
 **H. T2.21 · Cerrar la cadena del correo** — ✅ **CERRADA DEL TODO el 2026-09-21,
 0 pendientes.** Corrió el `--ejecutar` en dos rondas (el masivo del 20-sep y el
@@ -1477,13 +1477,18 @@ reintento cada 30 min durante 2 h.
 **Lo único que sigue abierto de T2.21:**
 - **T2.21.5**, el filtro «Las mías» del Archivo (`ESTADO.md` §1c-bis: hoy son
   239 filas de 7.356, no «1 de 7.118» como decía antes de verificarse).
-- **Recrear la Tarea del nocturno con `/ru SYSTEM`** cuando haya una sesión con
-  permisos de administrador — quedó en modo «solo interactivo» porque esta
-  sesión no tenía elevación, igual que las otras dos tareas del proyecto (no es
-  una excepción: es el patrón real, verificado con `Get-ScheduledTask` contra
-  las tres). Con «solo interactivo» el nocturno **no corre si nadie inició
-  sesión** a las 02:30, así que de momento hay que correrlo a mano o dejar la
-  sesión abierta.
+
+**La Tarea del nocturno, recreada con SYSTEM** — ✅ **hecha y corrida de verdad
+el 2026-09-21**, con acceso de administrador. Ya no está en modo «solo
+interactivo»: `LogonType ServiceAccount`, cuenta `NT AUTHORITY\SYSTEM`, corre
+sin que nadie haya iniciado sesión. Traía además un comando roto (la ruta
+partida en el espacio de «INDUSTECH IA») que no tenía nada que ver con la
+cuenta, y una llave SSH que hubo que duplicar con ACL exclusivo para SYSTEM
+porque el ssh de Windows rechaza una llave con dos cuentas distintas en su
+lista de permisos. Primera corrida real: 213 min, los 8 pasos en `ok`, 7.622
+archivos bajados en la primera reconciliación completa, 7.467 documentos
+ingresados, verificado contra la base en vivo (no solo contra el JSON del
+propio script). Evidencia completa en `ESTADO.md` **§1j**; no la repitas aquí.
 
 **A. Fusionar `pc/pulido-2026-09-12` en `master`** — ✅ **ya está, sin que esta
 sección lo dijera.** La fusión de `pc/documentos-y-otros-trabajos-2026-09-14`
@@ -1498,10 +1503,10 @@ abajo, solo que sin costo esta vez porque nadie llegó a repetir la fusión.
 pasos con su comprobación; quedan los 4 y 9, de Andrés.* Los pasos 2 (retirar
 los datos de prueba) y 3 (decisión sobre las órdenes 90xx: se borran) **ya están
 hechos, el 2026-09-13** — cifra verificada en `ESTADO.md` §1b. **La Tarea
-programada del saneamiento ya existe** (creada el 2026-09-21, ver T2.21 más
-arriba), aunque en modo «solo interactivo» — recrearla con `/ru SYSTEM` sigue
-pendiente de una sesión con permisos de administrador. Faltan las cuentas de
-UIO y sus claves (`CUENTAS.md`) y `SEGUNDA_COPIA` en `.env`.
+programada del saneamiento ya existe y ya corre con SYSTEM**, sin depender de
+que nadie inicie sesión (recreada y corrida de verdad el 2026-09-21, ver
+`ESTADO.md` §1j). Faltan las cuentas de UIO y sus claves (`CUENTAS.md`) y
+`SEGUNDA_COPIA` en `.env`.
 
 **C. El piloto real en UIO** — *requiere a Andrés, y es I-8.* Con las tres hojas
 del paquete (técnico, jefe de zona, administración) y el guion de cinco días de
@@ -1934,6 +1939,24 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     alarma que grita cuando todo va bien enseña a ignorarla**, y entonces no
     sirve el día que tiene razón. Antes de fijar un umbral de silencio: mirar
     cuánto puede tardar legítimamente la operación más lenta.
+26. **El ssh de Windows rechaza una llave privada con DOS cuentas en el ACL**,
+    aunque las dos sean de confianza. Al dar a `NT AUTHORITY\SYSTEM` acceso de
+    lectura sobre `config\clave_hostinger` (sumándolo al del usuario, sin
+    quitar nada) el ssh de Windows la rechazó igual que si fuera legible por
+    cualquiera: «UNPROTECTED PRIVATE KEY FILE». No es que desconfíe de SYSTEM
+    en particular — desconfía de que el ACL tenga **más de un titular**, sea
+    quien sea el segundo. La solución no es abrir el archivo: es que cada
+    cuenta tenga su **propia copia** de la misma llave, cada una con ACL
+    exclusivo. Mismo patrón que «cada equipo con su llave» (error nº 20), un
+    nivel más abajo: «cada cuenta del sistema operativo, con su llave».
+27. **Los pasos de una tarea nocturna pueden tardar horas la primera vez, y
+    eso no es un cuelgue.** El paso `sync` del saneamiento nocturno tardó 213
+    minutos en su primera corrida real: corre sin los límites (`--recientes`)
+    que usa el vigilante, así que hizo la primera reconciliación **completa**
+    contra el servidor (9.970 archivos remotos, 7.622 bajados de una vez, cada
+    uno con su propia sesión SSH). Antes de decidir que algo está atascado:
+    mirar si hay trabajo legítimo detrás (conexiones nuevas abriéndose,
+    archivos llegando) y cuál es el timeout real del paso — aquí, 4 horas.
 
 ### Lo que no se toca, nunca
 
