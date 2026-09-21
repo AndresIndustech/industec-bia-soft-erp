@@ -145,24 +145,15 @@ def main():
         m = re.match(r"^OT-(\d{4})-[^-]+-(\d{8})-", canon)
         corr_canon, aviso_canon = (int(m.group(1)), m.group(2)) if m else (None, None)
 
-        if aviso_canon and aviso_canon in conflicto_en_lote:
-            conflictos.append({"origen": p.name, "canonico": canon,
-                                "motivo": f"el aviso {aviso_canon} aparece en este mismo lote "
-                                          f"con los correlativos "
-                                          f"{sorted(por_aviso_lote[aviso_canon])}: dos archivos "
-                                          f"distintos dicen ser la misma orden"})
-            continue
-
-        if aviso_canon and aviso_canon in por_aviso and corr_canon not in por_aviso[aviso_canon]:
-            conflictos.append({"origen": p.name, "canonico": canon,
-                                "motivo": f"el aviso {aviso_canon} ya existe en la base con "
-                                          f"correlativo {sorted(por_aviso[aviso_canon])}, "
-                                          f"no {corr_canon}"})
-            continue
-
         destino = CANONICO / destino_rel
         h_origen = sha256_de(p)
 
+        # PRIMERO SE PREGUNTA SI YA ESTA ARCHIVADO, Y RECIEN DESPUES SI HAY
+        # CONFLICTO. El orden inverso costo una tanda entera el 2026-09-20: los
+        # 14 "conflictos de correlativo" que este script reporto ya estaban los
+        # 14 en el arbol, traidos por el espejo de produccion minutos antes. Un
+        # documento que ya esta archivado no tiene nada que decidir, y gritar
+        # conflicto sobre el manda a una persona a revisar algo resuelto.
         if destino.exists():
             if sha256_de(destino) == h_origen:
                 ya_estaban.append({"origen": p.name, "canonico": canon})
@@ -179,6 +170,33 @@ def main():
                                "motivo": f"mismo contenido que {gemelo.name}",
                                "gemelo": str(gemelo.relative_to(CANONICO))})
             continue
+
+        # Dos archivos del lote dicen ser la misma orden con distinto
+        # correlativo, y NINGUNO esta archivado todavia. Andres decidio el
+        # 2026-09-20 archivar los dos y que la administracion decida cual vale
+        # (t2_23_informes_repetidos.py le arma la vista): medido sobre los 5
+        # pares reales, los cinco eran una sola visita -mismo tecnico, mismo
+        # dia, misma hora- documentada dos veces, y en tres de ellos el tecnico
+        # habia CORREGIDO el informe al reenviarlo. Quedarse con el primero
+        # archivaria justo la version que el quiso corregir.
+        # Se promueven los dos y se anota, no se bloquean.
+        if aviso_canon and aviso_canon in conflicto_en_lote:
+            conflictos.append({"origen": p.name, "canonico": canon,
+                                "motivo": f"el aviso {aviso_canon} aparece en este mismo lote "
+                                          f"con los correlativos "
+                                          f"{sorted(por_aviso_lote[aviso_canon])}: se archivan "
+                                          f"los dos, decide la administracion"})
+
+        # El aviso ya tiene otra orden en la base. NO es un conflicto por si
+        # solo: un tecnico que vuelve al mismo aviso otro dia genera una segunda
+        # OT legitima, y asi resultaron ser los 4 casos del 2026-09-20 (hasta 16
+        # dias de diferencia y dos con tecnico distinto). Se anota para que se
+        # pueda revisar, y se promueve.
+        elif aviso_canon and aviso_canon in por_aviso and corr_canon not in por_aviso[aviso_canon]:
+            conflictos.append({"origen": p.name, "canonico": canon,
+                                "motivo": f"el aviso {aviso_canon} ya tiene en la base la orden "
+                                          f"{sorted(por_aviso[aviso_canon])}: puede ser una "
+                                          f"segunda visita legitima. Se archiva y se revisa"})
 
         promovidos.append({"origen": p.name, "canonico": canon, "destino": str(destino_rel),
                             "regla": nota, "sha256": h_origen})
@@ -199,7 +217,8 @@ def main():
     print(f"repetidos descartados:  {len(repetidos)}"
           "   (mismo contenido con otro correlativo: gana el ya archivado)")
     print(f"colisiones:             {len(colisiones)}")
-    print(f"conflicto correlativo:  {len(conflictos)}")
+    print(f"anotados para revisar:  {len(conflictos)}"
+          "   (se archivaron; ver el Excel de t2_23_informes_repetidos.py)")
     print(f"no resueltos:           {len(no_resueltos)}")
 
     if conflictos:
