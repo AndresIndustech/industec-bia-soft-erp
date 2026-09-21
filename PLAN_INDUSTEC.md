@@ -1198,7 +1198,7 @@ Las tareas T1.9 a T1.11 avanzan en paralelo conforme se desbloqueen sus dependen
 
 ---
 
-## 11b. Arranque para una conversación nueva — al 2026-09-18
+## 11b. Arranque para una conversación nueva — al 2026-09-21
 
 > Esta sección existe para que quien abra una conversación nueva pueda **empezar
 > a ejecutar sin preguntar nada**. Se actualiza cada vez que cambia lo que sigue.
@@ -1234,6 +1234,12 @@ commitear que no reconoces, mira §5.2b de `ESTADO.md` antes de tocarlos: hay
 cosas dejadas fuera **a propósito**.
 
 ### Qué leer, y en qué orden
+
+> **Antes de leer nada, abre InspectorBot** (acceso directo en el Escritorio, o
+> `.venv\Scripts\InspectorBot.exe scripts\inspectorbot.py`). En diez segundos
+> te dice si el robot está vivo, si corre código viejo, qué lleva sin pasar y
+> qué hay que revisar hoy. Es más rápido y más fiable que esta prosa, que se
+> desactualiza (error nº 15). Sin escritorio: `scripts\consola.bat`.
 
 | Orden | Documento | Para qué |
 |---|---|---|
@@ -1325,6 +1331,24 @@ urgente. La siguiente prioridad real es **B** (la lista de
 `ANTES_DE_EMPEZAR.md` del piloto): A, F y G ya estaban hechas de arrastre
 (ver más abajo), así que no hay nada bloqueando el piloto de UIO salvo lo que
 depende de Andrés.
+
+**I. T2.22b · InspectorBot** — ✅ **terminada el 2026-09-21.** La consola del
+robot pasó de ventana de CMD a aplicación con ventana, icono propio, nombre
+**InspectorBot** en el Administrador de tareas y arranque con el equipo. Vigila
+**12** fuentes de estado donde la consola de texto usaba 5, y la primera vez
+que corrió levantó una alerta grave real que llevaba días escondida: **el
+saneamiento nocturno no ha corrido nunca** (`LastTaskResult 267011`). Evidencia
+y método en `ESTADO.md` **§1f**; no lo repitas aquí. Trajo de paso la red de
+seguridad del trabajo en curso (`scripts/guardar_sesion.py` + hook `Stop`),
+en **§1g**.
+
+> **Lo que InspectorBot dejó a la vista y sigue sin arreglarse:** el nocturno
+> **no ha corrido ni una vez**. Es quien hace la ingesta a la base, la
+> normalización al árbol canónico y la subida de PDF al servidor. La causa es
+> la de siempre —las tres Tareas del proyecto están en modo «solo
+> interactivo»—, así que **recrearla con `/ru SYSTEM` dejó de ser una tarea
+> menor**: ya no es higiene, es un día entero de proceso que no ocurre. Va con
+> la acción **B**.
 
 **H. T2.21 · Cerrar la cadena del correo** — ✅ **CERRADA DEL TODO el 2026-09-21,
 0 pendientes.** Corrió el `--ejecutar` en dos rondas (el masivo del 20-sep y el
@@ -1809,6 +1833,38 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     «no hay nada que decidir» cuando había 227 documentos por decidir.
     **Un `0` en un entregable de calidad se verifica contra un caso positivo
     conocido antes de publicarlo, igual que cualquier otro número.**
+22. **Recortar la salida de un comando antes de parsearla por posición.**
+    `guardar_sesion.py` hacía `.strip()` sobre el stdout de
+    `git status --porcelain`, que se come el espacio de la primera columna **de
+    la primera línea**: ` M ESTADO.md` se leía como `M ESTADO.md` y el archivo
+    se respaldaba como **`STADO.md`**. Las demás líneas salían bien, así que el
+    fallo era invisible salvo mirando exactamente la primera. En un script cuyo
+    trabajo es no perder nada, ese recorte era el bug. **Si vas a leer un
+    formato por posición de columna, no toques el texto antes**: recorta al
+    final y solo lo que necesites.
+23. **El `pythonw.exe` de un venv no es el intérprete: es un lanzador.** Lee
+    `pyvenv.cfg` y arranca el intérprete real **como proceso hijo**. Por eso el
+    vigilante aparece hoy como **dos** `python.exe` en el Administrador de
+    tareas siendo uno solo, y por eso copiarlo con otro nombre dejaba dos
+    procesos donde el que tenía la ventana se seguía llamando «Python». Lo que
+    hay que copiar es el intérprete **base** (`sys.base_prefix`), dejándolo
+    dentro de `.venv\Scripts\` para que encuentre el `pyvenv.cfg`. Y **contar
+    procesos de un script Python por su línea de comandos da siempre el doble**:
+    el robot de verdad es la raíz del árbol, el que no tiene padre en la lista.
+24. **Armar rutas de carpetas de Windows desde `%USERPROFILE%`.** En esta
+    estación el Escritorio está en `C:\Users\indus\OneDrive\Desktop` —
+    redirigido por OneDrive y llamado «Desktop» con el sistema en español—, así
+    que tanto `%USERPROFILE%\Desktop` como `%USERPROFILE%\OneDrive\Escritorio`
+    fallan. Se pregunta con `SHGetKnownFolderPath` y se acabó el problema. Vale
+    igual para Inicio, Documentos y Descargas.
+25. **Un umbral de alarma que no conoce los trabajos largos del proceso que
+    vigila.** InspectorBot marcaba «el robot lleva callado demasiado» a los 12
+    minutos, sacados del ciclo IMAP de 9. Pero el espejo de producción tiene
+    **una hora** de tiempo límite y no escribe una línea hasta terminar: la
+    primera corrida ya dio rojo con el robot trabajando perfectamente. **Una
+    alarma que grita cuando todo va bien enseña a ignorarla**, y entonces no
+    sirve el día que tiene razón. Antes de fijar un umbral de silencio: mirar
+    cuánto puede tardar legítimamente la operación más lenta.
 
 ### Lo que no se toca, nunca
 

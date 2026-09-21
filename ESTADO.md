@@ -232,6 +232,142 @@ dos problemas de una: «Última señal hace 13 min» y «Último espejo NUNCA».
 
 ---
 
+## 1f. InspectorBot — la consola del robot, con ventana propia (2026-09-21)
+
+Andrés pidió que la consola de T2.22 dejara de ser una ventana de CMD: que
+fuera visual, con su icono y su nombre, visible como **InspectorBot** en el
+Administrador de tareas, y que arrancara sola con el equipo. La consola de
+texto (`scripts/consola.bat`) **se conserva**: sigue siendo la forma de mirar
+esto por SSH o sin escritorio.
+
+**Cuatro archivos nuevos, ninguno toca nada:**
+
+| Archivo | Qué hace |
+|---|---|
+| `scripts/inspectorbot_estado.py` | Lee las **doce** fuentes de estado y calcula las alertas. Sin una línea de interfaz, para poder comprobarlo con `--json` |
+| `scripts/inspectorbot.py` | La ventana (tkinter). Un Canvas que se redibuja; la lectura va en un hilo aparte para que PowerShell no la congele |
+| `scripts/crear_inspectorbot.py` | Fabrica `InspectorBot.exe`, su icono y los accesos directos |
+| `recursos/InspectorBot.ico` | El icono, 9 resoluciones (16→256 px), paleta de marca de B.IA Soft ERP |
+
+**Lo que vigila y la consola vieja no veía.** La de texto usaba 5 de las 12
+fuentes disponibles, y la 9ª mal contada. Lo que se sumó:
+
+- **Código viejo en memoria.** Compara el `mtime` de `t2_9_buzon_vigilante.py` y
+  `comun.py` con la hora de arranque del proceso. Es el fallo de los cinco días
+  del 2026-09-20 y **no hay ninguna otra señal que lo delate**. Solo esos dos
+  archivos: los otros tres (`t2_6`, `t2_11`, `t2_4`) se lanzan como subproceso
+  en cada ciclo y leen el disco siempre, así que incluirlos daría una alarma
+  roja permanente y falsa.
+- **El saneamiento nocturno.** Mira `ok`, **`ensayo`** y el paso que falló. Sin
+  mirar `ensayo`, un simulacro se lee como una corrida buena.
+- **Cuántos robots hay de verdad.** La consola vieja pintaba «PID 13340, 13652»
+  y parecían dos vigilantes. Es uno: `.venv\Scripts\python.exe` es un lanzador
+  que arranca el intérprete base como hijo. Ahora se cuenta una raíz por robot,
+  y **4 procesos sí serían dos robots**, que es una alarma legítima porque
+  `t2_9` no tiene candado de instancia única.
+- **El resumen del espejo** (`_manifiestos/resumen_*.json`): `sospechoso`,
+  `error`, `fallidos`, `divergentes`. El registro solo ecoa esas cifras cuando
+  no son 0, así que una corrida sana y una que no ocurrió se ven idénticas.
+- **Catálogo congelado**, por hash de `datos` **sin** el campo `generado` (que
+  lleva la hora dentro y cambia en cada barrido aunque no haya novedades).
+- Escucha IMAP muerta, reinicios repetidos, `.tmp` huérfano, candado del
+  nocturno abandonado, cuarentena, divergentes, espacio en `D:`, y los **6 casos
+  con alerta** y **2 sin local** que esperan a la administración.
+
+**Una falsa alarma corregida en el camino, con el caso real delante.** El umbral
+de «lleva callado demasiado» eran 12 minutos, del ciclo IMAP de 9. Pero el
+espejo tiene **una hora** de tiempo límite y no escribe una línea hasta que
+termina. Medido el 2026-09-21 a las 11:25: última línea `espejando lo que
+produccion emitio en los ultimos 60 min...` hace 14 minutos — con el umbral
+viejo, rojo; y el robot estaba trabajando. Ahora, si la última línea es un
+trabajo largo, el límite sube a 65 min. Una alarma que grita cuando todo va
+bien enseña a ignorarla.
+
+**Cifras verificadas** (`scripts/inspectorbot_estado.py`, 2026-09-21 11:25):
+898 casos vigentes (UIO 280 · LARB 270 · CNLJ 348), 192 atendidos de 898,
+706 sin atender, **2.319 PDF** en el espejo (uio 477 · larb 668 · cnlj 907 ·
+mant 261 · otros 6), 1 robot vivo en 2 procesos, 4 alertas — de ellas **1 grave
+y real: el saneamiento nocturno no ha corrido nunca** (`LastTaskResult 267011`
+= `SCHED_S_TASK_HAS_NOT_RUN`, ni un `logs/saneamiento-*.log`, y el único
+`estado_nocturno.json` dice `ensayo: true`).
+
+**El ejecutable, y por qué no es el `pythonw.exe` del venv.** El del venv no es
+el intérprete: es un **lanzador** que lee `pyvenv.cfg` y arranca el intérprete
+real **como proceso hijo**. Copiándolo salían dos entradas en el Administrador
+de tareas y la que tenía la ventana se seguía llamando `pythonw.exe` /
+«Python». Se copia el intérprete **base** (`sys.base_prefix\pythonw.exe`) dentro
+de `.venv\Scripts\`, donde encuentra el `pyvenv.cfg` un nivel arriba y usa el
+site-packages del venv: **un solo proceso llamado InspectorBot**. Necesita
+`python312.dll` al lado, porque fuera de su carpeta ya no la encuentra salvo que
+Python esté en el PATH, y en eso no se puede confiar. El icono y la ficha de
+versión se escriben con `UpdateResourceW` vía ctypes — sin PyInstaller, sin
+bundle, y **sin reconstruir nada cuando cambia un `.py`**: el `.exe` es el
+intérprete. Verificado: `Get-Process` da `ProcessName InspectorBot`,
+`Description InspectorBot`, y el Administrador de tareas lo lista bajo
+Aplicaciones con su icono.
+
+**Arranque con el equipo:** acceso directo en `shell:startup` (y otro en el
+Escritorio). No es Tarea programada a propósito: InspectorBot es una **ventana**,
+y una tarea con `/ru SYSTEM` correría en la sesión 0, donde nadie la vería nunca.
+Además, en la carpeta de Inicio Andrés lo apaga solo desde Administrador de
+tareas → Inicio. Las carpetas se piden con `SHGetKnownFolderPath` y no se arman
+desde `%USERPROFILE%`: aquí el Escritorio está redirigido a
+`C:\Users\indus\OneDrive\Desktop` y se llama «Desktop» con el sistema en
+español, así que la ruta adivinada falla.
+
+**Probado con el entorno que tendrá de verdad** (la lección del error nº 20):
+lanzado con `PATH` reducido a `C:\Windows\system32;C:\Windows`, arranca. Y desde
+los dos accesos directos, no solo a mano.
+
+⚠ **Avast marca el `.lnk` como `IDP.HELU.PSD11`** — falso positivo de reputación,
+típico de un ejecutable nuevo sin firmar. El `.exe` nunca se bloqueó. Andrés
+añadió la excepción el 2026-09-21 y los dos accesos directos arrancan. Si el
+equipo de Andrés (u otro) vuelve a bloquearlo, la alternativa es Tarea
+programada «al iniciar sesión», que no pasa por un `.lnk`.
+
+**Lo que NO se pudo comprobar:** que arranque en un inicio de sesión real. Se
+probó lanzando el propio `.lnk` de la carpeta de Inicio y con el `PATH` limpio,
+que es lo más cerca que se llega sin cerrar la sesión.
+
+---
+
+## 1g. Red de seguridad del trabajo en curso (2026-09-21)
+
+Andrés pidió que una conversación que se corta en seco —se agota el crédito, se
+cierra la ventana— no se lleve el trabajo por delante.
+
+`scripts/guardar_sesion.py` copia lo que `git status` ve como modificado o sin
+seguimiento a `.respaldo_sesion/<fecha-hora>/`, con un `RETOMAR.md` que dice
+rama, último commit y en qué se estaba. **No toca git**: no commitea, no hace
+stash, no cambia de rama, no borra. La carpeta está en `.gitignore` y se puede
+borrar entera sin perder nada que ya esté en git.
+
+Lo dispara solo el hook **`Stop`** de `.claude/settings.json` (nuevo archivo,
+versionado, así que el PC de Andrés lo hereda), al final de cada turno.
+
+**Dos decisiones que se tomaron con el dato delante:**
+1. **Solo lo modificado en las últimas 12 h.** La primera corrida copió **217
+   archivos**: se llevaba `desarrollo/sitio_web/` entero (215 archivos, 22 MB),
+   que lleva sin commitear desde el 2026-09-12 **a propósito** (§5.1). Copiar
+   eso en cada turno convierte la red de seguridad en un estorbo. Con el filtro:
+   3 archivos.
+2. **`git()` devuelve stdout SIN recortar.** El `.strip()` se comía el espacio
+   de la primera columna de `status --porcelain` en la primera línea, y
+   ` M ESTADO.md` se leía como `M ESTADO.md`: el archivo se respaldaba como
+   **`STADO.md`**. En un script cuyo trabajo es no perder nada, un recorte
+   silencioso es justo lo que no puede pasar. Encontrado probando, no leyendo.
+
+Lo que el hook **no** puede hacer es detectar que se acaba el presupuesto: eso
+no es un evento, es un número que llega en cada turno. Queda como regla de
+trabajo — al ~10 % restante, dejar de construir y cerrar ordenadamente
+(guardar, commitear, dejar plan y estado al día).
+
+**Verificado:** `guardar_sesion.py` → «Guardados 3 archivos en
+`.respaldo_sesion/20260921-111838/`», con `ESTADO.md` entre ellos (el caso que
+el bug se comía).
+
+---
+
 ## 1c. La cadena del correo, medida el 2026-09-18 (auditoría de T2.21)
 
 Andrés pidió validar si el robot del correo identifica los informes nuevos, los
@@ -625,6 +761,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
+| ~~T2.22b · InspectorBot — consola gráfica del robot~~ | ✅ **Terminada el 2026-09-21** | — | Ventana, icono, nombre propio en el Administrador de tareas y arranque con el equipo, todo verificado. Cifras y método en **§1f**. Sumó además la red de seguridad del trabajo en curso (`scripts/guardar_sesion.py` + hook `Stop`), ver §1g. `consola.bat` se conserva |
 | ~~T2.21 · la cadena del correo y de producción~~ | ✅ **Cerrada del todo el 2026-09-21** | Regularización ejecutada con cuadre exacto y 0 documentos pendientes (§1d), robot arreglado y consola de estado en marcha (§1e), promotor del buzón encadenado al nocturno con su Tarea programada creada. Queda abierto solo T2.21.5 («Las mías» del Archivo) y recrear la Tarea con `/ru SYSTEM` cuando haya sesión de administrador |
 | ~~T2.14 · Pulido para las pruebas del cliente, T2.15, T2.17~~ | Conversación desde el PC de Andrés — rama `pc/pulido-2026-09-12` en GitHub | 2026-09-12 (noche) | ✅ **Fusionada en `master` el 2026-09-13** por la estación (ff, sin conflictos), junto con `pc/archivo-zona-franquicia-2026-09-13` (T2.18) |
 | **T2.18 · Falta el `--ejecutar` de `t2_18_clasificar_archivo.py` y `t2_18_atender_pedidos_copia.py`** | Libre — nadie la tiene tomada | 2026-09-13/14 | El rescate de `_DEL_BUZON` (53 OTs) ya se hizo y está empujado. Queda pendiente por espacio: `G:\Mi unidad` (cupo real de Drive) tenía 4,3 GB libres frente a los ~5 GB a copiar — resolver el espacio en Drive antes de correr `--ejecutar`. También quedan 4 conflictos de correlativo en `_DEL_BUZON` esperando decisión de Andrés (detalle en el plan, T2.18) |

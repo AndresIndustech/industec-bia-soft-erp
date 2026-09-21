@@ -88,3 +88,10 @@ desarrollo/agentes/config/vigilante_estado.json
 # `git add -A` de cualquiera de las conversaciones en paralelo se lo lleva al
 # repositorio sin que nadie lo note.
 .claude/settings.local.json
+
+# Red de seguridad del trabajo en curso (scripts/guardar_sesion.py): copias
+# fechadas de lo que todavia no esta commiteado, para que una conversacion que
+# se corta en seco -se agota el credito, se cierra la ventana- no se lleve el
+# trabajo por delante. Es local a cada equipo y se puede borrar entera sin
+# perder nada que este en git.
+.respaldo_sesion/
