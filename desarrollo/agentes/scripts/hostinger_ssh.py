@@ -97,7 +97,45 @@ def llave() -> Path:
         sys.exit(f"Falta la llave SSH {ruta}.\n"
                  f"  En la estacion: config/clave_hostinger. En otro equipo: declara la tuya en\n"
                  f"  la variable de entorno INDUSTEC_LLAVE_SSH y autoriza la publica en hPanel.")
+    avisar_permisos(ruta)
     return ruta
+
+
+_permisos_avisados: set[str] = set()
+
+
+def avisar_permisos(ruta: Path) -> None:
+    """Avisa ANTES de conectar si el ssh de Windows va a rechazar la llave.
+
+    El 2026-09-20 el espejo de produccion del vigilante fallo cinco veces
+    seguidas con un escueto `ssh fallo (codigo 255)`, y a mano no se reproducia:
+    Git Bash tolera los permisos del archivo y el ssh de Windows no. La llave
+    tenia acceso para "Usuarios autenticados", asi que la Tarea programada
+    -que usa el de Windows- la ignoraba. Diagnosticarlo costo varias vueltas
+    por un error que no decia su causa; este aviso existe para que la proxima
+    vez la diga sola, y de paso para que nadie deje una llave privada legible
+    por medio mundo.
+
+    Solo avisa: no cambia permisos por su cuenta ni aborta. Puede haber equipos
+    con otro esquema de cuentas y no es este script quien decide eso.
+    """
+    if os.name != "nt" or str(ruta) in _permisos_avisados:
+        return
+    _permisos_avisados.add(str(ruta))
+    try:
+        r = subprocess.run(["icacls", str(ruta)], capture_output=True, text=True, timeout=20)
+        salida = (r.stdout or "")
+        riesgosos = [g for g in ("Authenticated Users", "Usuarios autenticados",
+                                 "BUILTIN\\Usuarios", "BUILTIN\\Users", "Todos", "Everyone")
+                     if g in salida]
+        if riesgosos:
+            print(f"AVISO: la llave {ruta.name} es accesible por {', '.join(riesgosos)}.\n"
+                  f"  El ssh de Windows la RECHAZA por eso (sale con 255) aunque desde Git Bash\n"
+                  f"  funcione. Si una Tarea programada falla con 255, es esto. Se corrige con:\n"
+                  f'    icacls "{ruta}" /inheritance:r /grant:r "%USERNAME%:(F)"',
+                  file=sys.stderr)
+    except Exception:
+        pass          # el aviso es una cortesia: si falla, no frena nada
 
 
 def usuario(env: dict | None = None) -> str:
@@ -125,6 +163,21 @@ def opciones_base() -> list[str]:
     BatchMode=yes es deliberado: si la llave no sirve, queremos que falle en el
     acto con un error legible, no que se quede colgado pidiendo contrasena en
     una tarea nocturna donde nadie la va a escribir (I-5: abortar ruidosamente).
+
+    OJO CON LOS PERMISOS DE LA LLAVE EN WINDOWS (2026-09-20). Hay dos ssh.exe
+    en esta estacion y NO se comportan igual:
+
+        el de Git Bash            tolera los permisos del archivo
+        C:\\Windows\\System32\\OpenSSH  los exige, y si no rechaza la llave
+
+    Una llave sobre la que el grupo "Usuarios autenticados" tenga acceso hace
+    que el ssh de Windows la ignore ("UNPROTECTED PRIVATE KEY FILE") y salga
+    con 255. Eso significa que todo script que se pruebe a mano desde Git Bash
+    puede pasar y fallar igual desde la Tarea programada, que usa el de
+    Windows: paso exactamente asi con el espejo de produccion del vigilante.
+
+    Si aparece un `ssh fallo (codigo 255)` que no se reproduce a mano:
+        icacls config\\clave_hostinger /inheritance:r /grant:r "%USERNAME%:(F)"
     """
     return [
         "-i", str(llave()),
