@@ -7,6 +7,7 @@ Cada noche la estación deja a salvo, verificado por hash, todo lo que el sistem
 | 1 | sync | `t2_4_sync_hostinger.py` | `RESPALDOS\_ORIGEN_SISTEMA\<modulo>\` (sistema viejo) y `RESPALDOS\_ORIGEN_APP\{pdf,fotos}\` (app nueva), con manifiesto en `_manifiestos\`. Un PDF divergente va a `_divergentes\<nombre>.<sha12>.pdf`, nunca encima del que ya estaba |
 | 2 | volcado | `t2_4_volcado_bd.py` | `RESPALDOS\_ORIGEN_APP\_bd\volcado_<sello>.sql.gz` + `.sha256`, verificado contra el hash del servidor; 30 diarios + 12 mensuales |
 | 3 | normalizar | `t2_4_normalizar_nuevas.py --ejecutar` | El espejo crudo promovido al árbol canónico `RESPALDOS\ORDENES DE TRABAJO\` |
+| 3.5 | buzon | `t2_18_rescatar_buzon.py --origen "D:\RESPALDOS\_ORIGEN_BUZON" --ejecutar` | Los informes que el correo baja a `_ORIGEN_BUZON` (T2.21), promovidos al árbol canónico. Va **antes** de la ingesta a propósito: si corriera después, lo promovido se queda un día entero fuera de la base. Aborta el nocturno solo ante una COLISIÓN de contenido; los "conflicto de correlativo" (misma orden posible con otro número) se archivan igual y quedan anotados para revisar |
 | 4 | ingesta | `t1_7_ingesta.py` | La base de la estación (`ots`, `ot_equipos`) al día; ignora toda carpeta que empiece por `_` |
 | 5 | informes | `t2_11_informes_ot.py --empujar` | `atenciones.json` en el sitio; los PDF del buzón en `RESPALDOS\_ORIGEN_BUZON\` |
 | 6 | archivo | `t2_15_exportar_archivo.py --desde-mariadb --empujar` | El catálogo histórico en el índice del archivo general del sitio (`ot_archivo`) |

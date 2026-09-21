@@ -49,6 +49,14 @@ PASOS = [
     ("sync",       ["t2_4_sync_hostinger.py"],                    "espejo verificado del sistema viejo y de la app"),
     ("volcado",    ["t2_4_volcado_bd.py"],                        "volcado de la base de la app"),
     ("normalizar", ["t2_4_normalizar_nuevas.py", "--ejecutar"],   "del espejo crudo al arbol canonico"),
+    # T2.21 (2026-09-21): el promotor del buzon. Va ENTRE normalizar e ingesta,
+    # nunca despues: si corriera despues de "ingesta", lo que promueve hoy se
+    # queda un dia entero fuera de la base (el propio docstring de
+    # t2_18_rescatar_buzon.py lo advierte). --origen fijo a _ORIGEN_BUZON:
+    # _DEL_BUZON (el otro origen que este mismo script sabe atender) ya se
+    # rescato una vez en T2.18 y no vuelve a generar archivos nuevos.
+    ("buzon",      ["t2_18_rescatar_buzon.py", "--origen", r"D:\RESPALDOS\_ORIGEN_BUZON",
+                    "--ejecutar"],                                "informes del correo -> arbol canonico"),
     ("ingesta",    ["t1_7_ingesta.py"],                           "arbol canonico -> base de la estacion"),
     ("informes",   ["t2_11_informes_ot.py", "--empujar"],         "informes de OT del buzon -> sitio"),
     ("archivo",    ["t2_15_exportar_archivo.py", "--desde-mariadb", "--empujar"], "catalogo historico -> indice del archivo"),

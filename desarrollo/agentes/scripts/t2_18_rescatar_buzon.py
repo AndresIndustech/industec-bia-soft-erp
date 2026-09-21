@@ -208,7 +208,10 @@ def main():
             if sha256_de(tmp) != h_origen:
                 tmp.unlink()
                 promovidos.pop()
-                no_resueltos.append({"origen": p.name, "motivo": "la copia no verifico por hash"})
+                # Corrupcion, no un caso de negocio: cuenta como colision para
+                # que el codigo de salida SI se entere (I-2, I-10).
+                colisiones.append({"origen": p.name, "canonico": canon,
+                                   "motivo": "la copia no verifico por hash"})
                 continue
             tmp.replace(destino)
 
@@ -222,7 +225,7 @@ def main():
     print(f"no resueltos:           {len(no_resueltos)}")
 
     if conflictos:
-        print("\nCONFLICTO_CORRELATIVO (requieren decision humana, NO promovidos):")
+        print("\nARCHIVADOS CON AVISO (misma orden posible bajo otro correlativo, revisar):")
         for r in conflictos:
             print(f"  {r['origen']}: {r['motivo']}")
 
@@ -261,6 +264,19 @@ def main():
         print("\nSimulacion: nada se copio. Repite con --ejecutar para escribir de verdad, "
               "y despues corre t1_7_ingesta.py para que entren a la base.")
 
+    # CODIGO DE SALIDA DISTINTO DE 0 SOLO ANTE UN FALLO REAL (T2.21, encadenado
+    # al nocturno el 2026-09-21). "No resuelto" y "conflicto" NO cuentan: son
+    # casos de negocio normales (formulario vacio, local ambiguo, el tecnico
+    # que volvio) y frenar el nocturno por ellos apagaria la alarma de verdad
+    # entre ruido -- el mismo error que T2.21 encontro en t2_19 (ver plan,
+    # hallazgo 3). Lo que SI para la cadena es una COLISION -contenido
+    # distinto bajo el mismo nombre canonico, I-11- o una copia que no
+    # verifico por hash: eso es corrupcion o un conflicto real, no un caso
+    # esperado, y la ingesta no debe correr sobre un arbol asi.
+    if args.ejecutar and colisiones:
+        sys.exit(f"ABORTADO: {len(colisiones)} colision(es) de contenido sin resolver.")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
