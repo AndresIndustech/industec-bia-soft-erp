@@ -48,6 +48,7 @@ del rediseño.
 | Respaldo TrueNAS | 🔒 | Bloqueado: falta acceso físico al equipo |
 | Capacitación de cierre | 🔒 | Bloqueada: falta agendar con el personal |
 | Repositorio git sincronizado con GitHub | ✅ **2026-09-12** | `origin` es `git@github.com:AndresIndustech/industec-bia-soft-erp.git`. **Comprobado:** `ssh -T git@github.com` responde «Hi AndresIndustech! You've successfully authenticated», `git fetch` trae, y `master` tiene upstream `origin/master`. Andrés ya agregó la clave pública, así que el bloqueo del 2026-09-11 está levantado. **Se acabó el proyecto en un solo disco.** Ojo con lo que esto destapa: existe `origin/pc/auditoria-2026-09-10` **29 commits por delante de `master`**, con `master` como ancestro — ver §5.2b |
+| **Buzón de la administradora, regularizado en bloque** | ✅ **2026-09-21** | **124 ATENDIDO → cerrados en SAP** + **773 CERRADO_SIN_ATENCION → regularizados**, a pedido de Andrés y asumiendo que ella ya lo hizo en SAP (sin verificar caso por caso). Pendientes de regularizar: **0**. Detalle, la herramienta y la nota sobre los «656» vs 773 reales en **§1h** |
 
 **Cuadre del corpus, exacto contra los 7.333 PDFs originales:**
 `7.070 (órdenes) + 5 (informes técnicos) + 25 (otros clientes) + 233 (duplicados descartados) = 7.333`
@@ -365,6 +366,67 @@ trabajo — al ~10 % restante, dejar de construir y cerrar ordenadamente
 **Verificado:** `guardar_sesion.py` → «Guardados 3 archivos en
 `.respaldo_sesion/20260921-111838/`», con `ESTADO.md` entre ellos (el caso que
 el bug se comía).
+
+---
+
+## 1h. Regularización masiva del buzón — el pendiente de la administradora en cero (2026-09-21)
+
+El buzón de `casos.php` tenía **124 ATENDIDO** (esperando el botón «Ya lo cerré
+en SAP») y **773 CERRADO_SIN_ATENCION sin regularizar**, y a la administradora
+le resultaba abrumador. **Andrés pidió tratarlos en bloque, asumiendo que ella
+ya hizo las dos cosas en SAP** — no se verificó caso por caso contra SAP, es
+una decisión de negocio suya, no una comprobación de datos. **No toca
+`avisos_sap.estatus_general`** (regla 5 de §6): solo mueve la capa de gestión
+interna (`casos_gestion`) que decide qué le sigue apareciendo pendiente.
+
+**Nota sobre la cifra que dio Andrés:** pidió regularizar «los 656 cerrados sin
+atención». La base viva daba **773** pendientes de regularizar, no 656 — un
+18 % más (probablemente creció desde que los miró, o los recordaba
+aproximados). Se procesaron los 773 reales, no 656: la instrucción era vaciar
+la categoría entera («todos esos»), y el número que dio era descriptivo, no un
+tope.
+
+**Herramienta:** `desarrollo/sistema_ots/app/publico/regularizar_masivo_cli.php`
+(nuevo, documentado en `t2_10_desplegar.py`), calcado de las transiciones que ya
+existen en `casos.php` (`Casos::TRANSICIONES['cerrado_sap']` y
+`['regularizar']`) — mismo criterio, incluido no tocar un ATENDIDO con
+pendiente de repuestos vivo (ASG-01). Queda en la bitácora con
+`usuario='sistema'`, no con el id de la administradora, porque ella no hizo el
+clic y atribuírselo falsearía el registro (mismo patrón que
+`Reconciliar::anotar()`). Es una herramienta a mano, **no** se encadenó al
+nocturno ni a ningún cron: el cierre en dos manos sigue siendo la norma para
+los casos que entren de ahora en adelante.
+
+**Ejecutado contra el sitio de pruebas** (`industec_app` en Hostinger), con
+conteo previo sin `--ejecutar` y una segunda corrida después que confirmó
+idempotencia (0 y 0):
+
+```
+1. ATENDIDO -> cerrado en SAP
+   en ATENDIDO                                : 124
+   con pendiente de repuestos vivo (se saltan) : 0
+   cerrados                                    : 124
+
+2. CERRADO_SIN_ATENCION -> regularizado
+   pendientes de regularizar                   : 773
+   regularizados                               : 773
+
+Estado de la tabla:
+   CERRADO_SIN_ATENCION     775   (2 ya estaban regularizados antes de hoy)
+   ASIGNADO                 131
+   RESUELTO                 128   (4 ya estaban + 124 de esta corrida)
+   NUEVO                      3
+   pendientes de regularizar   : 0
+   ATENDIDO sin cerrar en SAP  : 0
+```
+
+**Bitácora, verificada aparte:** `CERRADO_SAP_MASIVO: 124` ·
+`REGULARIZAR_MASIVO: 773` — cuadra exacto con lo ejecutado.
+
+**Lo que NO se comprobó:** que la administradora efectivamente haya cerrado o
+reportado estos 897 casos en SAP. Es la premisa que dio Andrés, no un hecho
+verificado por este agente contra una fuente independiente (I-10 no aplica
+aquí: no hay con qué cruzar, es una decisión de negocio explícita).
 
 ---
 
@@ -761,6 +823,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
+| ~~Regularización masiva del buzón (ATENDIDO → cerrado SAP, CERRADO_SIN_ATENCION → regularizado)~~ | ✅ **Terminada el 2026-09-21** | — | 124 + 773 casos regularizados en `casos_gestion` (Hostinger). Detalle en **§1h** |
 | ~~T2.22b · InspectorBot — consola gráfica del robot~~ | ✅ **Terminada el 2026-09-21** | — | Ventana, icono, nombre propio en el Administrador de tareas y arranque con el equipo, todo verificado. Cifras y método en **§1f**. Sumó además la red de seguridad del trabajo en curso (`scripts/guardar_sesion.py` + hook `Stop`), ver §1g. `consola.bat` se conserva |
 | ~~T2.21 · la cadena del correo y de producción~~ | ✅ **Cerrada del todo el 2026-09-21** | Regularización ejecutada con cuadre exacto y 0 documentos pendientes (§1d), robot arreglado y consola de estado en marcha (§1e), promotor del buzón encadenado al nocturno con su Tarea programada creada. Queda abierto solo T2.21.5 («Las mías» del Archivo) y recrear la Tarea con `/ru SYSTEM` cuando haya sesión de administrador |
 | ~~T2.14 · Pulido para las pruebas del cliente, T2.15, T2.17~~ | Conversación desde el PC de Andrés — rama `pc/pulido-2026-09-12` en GitHub | 2026-09-12 (noche) | ✅ **Fusionada en `master` el 2026-09-13** por la estación (ff, sin conflictos), junto con `pc/archivo-zona-franquicia-2026-09-13` (T2.18) |

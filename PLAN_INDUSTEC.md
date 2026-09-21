@@ -1332,6 +1332,19 @@ urgente. La siguiente prioridad real es **B** (la lista de
 (ver más abajo), así que no hay nada bloqueando el piloto de UIO salvo lo que
 depende de Andrés.
 
+**J. Regularización masiva del buzón** — ✅ **hecha el 2026-09-21, sin
+subtarea del plan porque fue un pedido puntual, no una construcción.** El
+buzón de la administradora tenía 124 `ATENDIDO` y 773 `CERRADO_SIN_ATENCION`
+sin regularizar; Andrés pidió vaciarlo en bloque asumiendo que ella ya reportó
+o cerró esos casos en SAP. Ejecutado con `regularizar_masivo_cli.php` (nuevo,
+en `sistema_ots/app/publico/`), mismas reglas que los botones «Ya lo cerré en
+SAP» / «Regularizar» de `casos.php`. **Pendiente de regularizar: 0.** No toca
+`avisos_sap.estatus_general` — sigue siendo el único estado real de SAP (regla
+5 de `ESTADO.md` §6). Detalle, evidencia y la nota sobre los «656» que dio
+Andrés contra los 773 reales, en `ESTADO.md` **§1h**. Si el buzón vuelve a
+acumularse, la herramienta ya existe: correr sin `--ejecutar` primero para
+contar, avisar el número a Andrés antes del `--ejecutar`.
+
 **I. T2.22b · InspectorBot** — ✅ **terminada el 2026-09-21.** La consola del
 robot pasó de ventana de CMD a aplicación con ventana, icono propio, nombre
 **InspectorBot** en el Administrador de tareas y arranque con el equipo. Vigila

@@ -163,7 +163,10 @@ ARCHIVOS = [
 #   cronograma_importar_cli.php (T2.14.5: carga cronograma_preventivo.json en
 #   ingresos_preventivos; se corre tras cada publicación del cronograma),
 #   purgar_cli.php (T2.14.6: fotos huérfanas a 30 días y .tmp a 24 h; solo
-#   informa sin --ejecutar; cron semanal)
+#   informa sin --ejecutar; cron semanal),
+#   regularizar_masivo_cli.php (2026-09-21: vacía en bloque el pendiente de la
+#   administradora — ATENDIDO -> cerrado SAP, CERRADO_SIN_ATENCION -> regularizado
+#   — asumiendo que ya lo hizo en SAP; a mano, no en el cron. Ver ESTADO.md §1h)
 #                        herramientas de línea de órdenes. Las que ya están en
 #                        el servidor cortan con 404 por web; el resto no tienen
 #                        por qué llegar. Los dos CLI de T2.14.6 se suben con
