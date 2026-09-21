@@ -3,7 +3,7 @@
 > **Empieza por aquí.** Este archivo dice dónde vamos; [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) dice qué hay que construir y con qué criterios.
 > Si vas a trabajar, **anótate primero en §5 (Trabajo en paralelo)** antes de tocar nada.
 
-**Última actualización:** 2026-09-18
+**Última actualización:** 2026-09-21
 **Fase en curso:** 2 · Automatización — **construida y desplegada en el sitio de pruebas; lo que sigue es el piloto en UIO** (paquete en `desarrollo/sistema_ots/piloto/`). La Fase 1 quedó cerrada
 **Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
 
@@ -39,9 +39,9 @@ del rediseño.
 
 | Pieza | Estado | Cifra verificada |
 |---|---|---|
-| Corpus histórico saneado | ✅ **regularizado el 2026-09-20** | **7.452** PDF en el árbol canónico (eran 7.123: entraron 329 de producción) + 5 informes técnicos + 25 de otros clientes |
-| **Robot del correo y de producción → informes nuevos** | ✅ **cadena cerrada el 2026-09-20** | Lee `INBOX`+`Trash`+`INFORMES OT` (T2.21.1, el servidor confirmó `n=193 antes=122`); reintenta y **sale con código 1** si el empuje falla (T2.21.4, probado con el endpoint apagado); y **espeja producción al detectar un correo** (T2.21.7). El `--ejecutar` corrió: **+329 órdenes** al árbol, a la base y al servidor, con cuadre exacto en las tres. Detalle en **§1d** |
-| Base de datos poblada | ✅ **2026-09-20** | **7.447 órdenes activas** (eran 7.118; +329 de la regularización, con 7.447 hashes distintos: cero duplicados)<br>Histórico: **7.118 órdenes activas** (era 7.069 hasta el 2026-09-13: `t2_18_rescatar_buzon.py` recuperó 53 OTs que llevaban 4 días en `_DEL_BUZON` sin clasificar ni ingestar — ver T2.18 en el plan) · 9.071 equipos · 100 locales · 145 alias · 6.450 avisos SAP · 19 técnicos |
+| Corpus histórico saneado | ✅ **regularizado el 2026-09-20/21** | **7.457** PDF en el árbol canónico (eran 7.123: entraron 334 de producción y del correo, cero pendientes) + 5 informes técnicos + 25+4 de otros clientes (METALZA gana 3) |
+| **Robot del correo y de producción → informes nuevos** | ✅ **T2.21 cerrada del todo el 2026-09-21** | Lee `INBOX`+`Trash`+`INFORMES OT` (T2.21.1, el servidor confirmó `n=193 antes=122`); reintenta y **sale con código 1** si el empuje falla (T2.21.4, probado con el endpoint apagado); y **espeja producción al detectar un correo** (T2.21.7). El `--ejecutar` corrió dos veces: **+334 órdenes** al árbol, a la base y al servidor, con cuadre exacto en las tres. **0 documentos pendientes de archivar.** El promotor del buzón quedó encadenado al saneamiento nocturno, que ya tiene su Tarea programada. Detalle en **§1d** |
+| Base de datos poblada | ✅ **2026-09-21** | **7.452 órdenes activas** (eran 7.118; +334 de la regularización, con 7.452 hashes distintos: cero duplicados) · 9.071 equipos · 100 locales · **149 alias** (145 + 4 confirmados el 21-sep) · 6.450 avisos SAP · 19 técnicos<br>Histórico: 7.118 activas era 7.069 hasta el 2026-09-13 (`t2_18_rescatar_buzon.py` recuperó 53 OTs de `_DEL_BUZON`) |
 | Auditor de calidad (Agente 1) | ✅ | 2.644 observaciones abiertas, con veredicto editable por la administración |
 | Consolidador de plan de zona (Agente 2) | ⚠️ v1 | 87,3% de coincidencia celda a celda en el piloto UIO |
 | **Histórico en formato de planificación** | ✅ | **39 planes mensuales** de correctivo (7.863 filas, 3 zonas × 13 meses) + **seguimiento de preventivos** de 96 locales, reconstruidos desde las OTs y SAP. LOCAL, FECHA DE INICIO y ESTADO al 100%; EQUIPO al 99,5% |
@@ -96,18 +96,24 @@ no devuelve nada, y los seis `select()` del proyecto llevan `readonly=True`.
 Andrés autorizó el `--ejecutar` que llevaba pendiente desde el 18-sep. Corrió
 la cadena entera y cuadró en las tres dimensiones.
 
-| | Antes | Después | Diferencia |
-|---|---|---|---|
-| PDF en el árbol canónico | 7.123 | **7.452** | +329 |
-| Filas en `ots` | 7.469 | **7.798** | +329 |
-| Órdenes activas | 7.118 | **7.447** | +329 |
+**Cifra final, tras dos rondas (el `--ejecutar` masivo del 20-sep y el cierre
+caso por caso del 20/21-sep):**
 
-**Cero duplicados:** las 7.447 activas tienen 7.447 hashes distintos.
-**Ingesta:** 7.452 procesados, 0 con error de extracción.
+| | Antes de todo | Después | Diferencia |
+|---|---|---|---|
+| PDF en el árbol canónico | 7.123 | **7.457** | +334 |
+| Filas en `ots` | 7.469 | **7.803** | +334 |
+| Órdenes activas | 7.118 | **7.452** | +334 |
+
+**Cero duplicados:** las 7.452 activas tienen 7.452 hashes distintos.
 **Subida:** el «faltan: 0» tautológico que la auditoría había detectado en
-`t2_19` dio por fin un número real — faltan 329 → **329 subidos y verificados,
-0 fallidos**. Índice del Archivo: 7.705 órdenes, 7.616 con el PDF ahí.
-**Respaldo previo:** `D:\RESPALDOS\_LOGS\respaldos_bd\` (13 MB, 13 tablas).
+`t2_19` dio un número real dos veces — 329 y después 5 — y las dos veces se
+subieron y verificaron los 334, **0 fallidos**. Índice del Archivo: 7.710
+órdenes, 7.621 con el PDF ahí. Verificado **contra el servidor**, no contra el
+log: los 4 casos de la segunda ronda (G016, el del espacio, dos por alias) dan
+`en_servidor=1`.
+**Respaldo previo:** `D:\RESPALDOS\_LOGS\respaldos_bd\` (13 MB, 13 tablas), tomado
+antes del primer `--ejecutar`.
 **Nada se borró de ningún origen (I-2):** los 2.338 de `_ORIGEN_SISTEMA` y los
 117 de `_ORIGEN_BUZON` siguen donde estaban.
 
@@ -137,8 +143,8 @@ base, los cuatro son **dos visitas legítimas al mismo aviso**, con 14, 5, 3 y
 Ortiz el 02-sep y Alfredo Montoya el 16-sep). El técnico volvió. Las ocho
 órdenes ya estaban archivadas y activas.
 
-**Lo que NO se archivó: de 41 quedaron 12** (resuelto el 2026-09-20/21 con
-Andrés, caso por caso).
+**Lo que NO se archivó en la primera ronda: los 41, todos cerrados** (resuelto
+el 2026-09-20/21 con Andrés, caso por caso — **0 pendientes**).
 
 - **28 formularios vacíos → descartados.** Se abrieron los 28 antes de borrar:
   ni un campo de texto con valor, ni un equipo con datos. Pesan entre 124.049 y
@@ -151,23 +157,45 @@ Andrés, caso por caso).
 - **1 archivado: el aviso tecleado con espacio.** `1034 7791` no encajaba con
   ningún patrón. Los patrones ahora aceptan espacios y los quitan antes de
   validar los 8 dígitos. **SAP lo confirma de forma independiente:** el aviso
-  `10347791` tiene centro de coste `M044`, el local del archivo.
-- **2 resueltos por el interior del PDF** (`t2_24_promover_por_evidencia.py`),
+  `10347791` tiene centro de coste `M044`, el local del archivo. Archivado como
+  `OT-0336-M044EC-10347791-D2-LARB.pdf`.
+- **2 resueltos por el interior del PDF, ya estaban** (`t2_24_promover_por_evidencia.py`),
   porque el nombre no alcanzaba: `MENESTRASDELNEGRO` trae la **cadena** y hay 8
   locales de ella, pero dentro coinciden `cliente=M036` y
   `correo_local=m36@menestrasdelnegro.com.ec` → **M036EC**; y `RestauranteElvita`
   **no es de KFC** — su `correo_jefe_op` es `gerenciageneral@industec.me` y el
   aviso viene en `0`. Los dos ya estaban archivados por otra vía, comprobado por
-  hash. **No se creó un alias `MENESTRASDELNEGRO`→`M036EC`:** sería el falso
-  positivo contra el que avisa `industec-archivos-canonicos`.
-- **Quedan 12:** 6 de otros clientes (TropiBurger ×4, el evento de Baños, G016)
-  y 6 de local ambiguo. De esos 6, **cuatro resuelven con un alias que falta
-  confirmar** (`kh073`→K073EC, `H071k197`→K197EC, `G015Michelena`→G015EC,
-  `G021Colonial`→G021EC) y dos ya están archivados.
+  hash: no se copió nada nuevo. **No se creó un alias `MENESTRASDELNEGRO`→`M036EC`:**
+  sería el falso positivo contra el que avisa `industec-archivos-canonicos`.
+- **4 con local mal escrito → alias confirmado y archivados.** `locales_alias`
+  pasó de 145 a 149 filas: `kh073`→K073EC, `H071k197`→K197EC,
+  `G015Michelena`→G015EC, `G021Colonial`→G021EC (nivel de confianza 2, con
+  la evidencia citada en `regla_aplicada`). De los 4, `kh073` ya estaba
+  archivado por otra vía; los otros 3 se copiaron y verificaron por hash.
+- **6 de otros clientes → verificados uno por uno, no clasificados a ciegas.**
+  La primera lectura los daba a todos por «otros clientes fuera de contrato»,
+  y era **incorrecta para 1 de los 6**: `G016` resuelve limpio contra el
+  maestro (`G016EC`, SUR UNO VILLAFLORA QUITO, cadena GUS) — se promovió al
+  árbol canónico, no a `OTROS CLIENTES`. Los otros 5 (TropiBurger ×4 y el
+  evento de Baños) sí son de clientes fuera de contrato, confirmado con
+  evidencia independiente: `METALZA` y `NOVO EVENTOS` ya eran carpetas de
+  cliente existentes en `OTROS CLIENTES` con historial de 2025. De los 5, 2
+  ya estaban archivados por hash y 3 se copiaron y verificaron.
 
 **Lo que no se pudo comprobar (I-7):** 4 PDF entraron con `fecha_atencion`
 nula porque su fecha es ilegible en el documento — uno dice el año `20026`.
 Están archivados e ingestados, pero sin fecha utilizable.
+
+**El promotor del buzón quedó encadenado al nocturno** (T2.21, cierre
+definitivo): `t2_18_rescatar_buzon.py --origen "D:\RESPALDOS\_ORIGEN_BUZON" --ejecutar`
+es ahora un paso de `saneamiento_nocturno.py`, entre `normalizar` e `ingesta`.
+Antes salía siempre con código 0 pasara lo que pasara; ahora aborta solo ante
+una colisión real de contenido, nunca ante un caso de negocio normal. La Tarea
+programada **«INDUSTEC - Saneamiento nocturno»** se creó — no existía —, diaria
+a las 02:30 con reintento cada 30 min durante 2 h. Queda en modo «solo
+interactivo» como las otras dos tareas del proyecto, porque esta sesión no
+tenía permisos de administrador para `/ru SYSTEM`: **pendiente que alguien con
+sesión de administrador la recree así, para que corra sin sesión abierta.**
 
 ---
 
@@ -597,14 +625,13 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| ~~T2.21 · la cadena del correo y de producción~~ | ✅ **Cerrada el 2026-09-21** | Regularización ejecutada con cuadre exacto (ver §1d), robot arreglado y consola de estado en marcha (§1e). Queda abierto: los 4 alias por confirmar, encadenar el promotor al nocturno y T2.21.5 |
+| ~~T2.21 · la cadena del correo y de producción~~ | ✅ **Cerrada del todo el 2026-09-21** | Regularización ejecutada con cuadre exacto y 0 documentos pendientes (§1d), robot arreglado y consola de estado en marcha (§1e), promotor del buzón encadenado al nocturno con su Tarea programada creada. Queda abierto solo T2.21.5 («Las mías» del Archivo) y recrear la Tarea con `/ru SYSTEM` cuando haya sesión de administrador |
 | ~~T2.14 · Pulido para las pruebas del cliente, T2.15, T2.17~~ | Conversación desde el PC de Andrés — rama `pc/pulido-2026-09-12` en GitHub | 2026-09-12 (noche) | ✅ **Fusionada en `master` el 2026-09-13** por la estación (ff, sin conflictos), junto con `pc/archivo-zona-franquicia-2026-09-13` (T2.18) |
 | **T2.18 · Falta el `--ejecutar` de `t2_18_clasificar_archivo.py` y `t2_18_atender_pedidos_copia.py`** | Libre — nadie la tiene tomada | 2026-09-13/14 | El rescate de `_DEL_BUZON` (53 OTs) ya se hizo y está empujado. Queda pendiente por espacio: `G:\Mi unidad` (cupo real de Drive) tenía 4,3 GB libres frente a los ~5 GB a copiar — resolver el espacio en Drive antes de correr `--ejecutar`. También quedan 4 conflictos de correlativo en `_DEL_BUZON` esperando decisión de Andrés (detalle en el plan, T2.18) |
 | ~~T2.5 · Captura — formulario único, v1 para revisión~~ | Conversación "app captura v1" | 2026-09-08 | ✅ Terminada y en §1b. El formulario único está desplegado y preguntado por pasos |
 | ~~Buscador de órdenes y avisos por coincidencia parcial~~ | Conversación "cotejo SAP" | 2026-09-10 | ✅ **Commiteado el 2026-09-12 por la estación, con tres defectos corregidos** — ver la fila del buscador en §1b. Si esa conversación sigue viva: `Ui::normalizarBusqueda()` **cambió de implementación** (tabla de 123 entradas generada, no las 16 a mano) y `prueba_contratos.mjs` ahora ejecuta el PHP de verdad. Toma lo de `master` antes de seguir. Sus dos scripts de SAP (`t2_11`, `t2_12`) tardaron más en entrar a git, pero ya están: ambos commiteados el 2026-09-18, ver §5.2b |
 | T2.12 · **solo queda T2.12.12**, las tres hojas de capacitación | Libre — nadie la tiene tomada | 2026-09-10 | **Escribe** en `SALIDAS IA\OTS\`, una hoja por rol. Todo lo demás de T2.12 está hecho y desplegado, incluida la verificación por rol (87 comprobaciones con ingreso real). Es la acción **D** de §11b |
 | ~~Auditoría del robot del correo~~ | Conversación "auditoría correo→informes" (estación) | 2026-09-18 | ✅ **Terminada el 2026-09-18.** Cifras en §1c; qué construir, en `PLAN_INDUSTEC.md` **T2.21** (acción **H** de §11b). No tocó nada: solo lectura |
-| **T2.21 · Cerrar la cadena del correo** | Libre — nadie la tiene tomada | 2026-09-18 | Cuando se tome: **escribe en el árbol canónico y en `ots`** (T2.21.2 + ingesta), así que choca con `t1_7_ingesta.py`, con los scripts de T1.6b y con `t2_4_normalizar_nuevas.py --ejecutar`. Va de a uno. T2.21.1 (leer `Trash`) y las simulaciones no bloquean nada |
 | Sitio web corporativo industec.me | Conversación "web corporativa industec.me" | 2026-09-10 | La **raíz** del sitio de pruebas (`public_html/`), con archivos nuevos. **No toca `public_html/ot/`**, ni la base, ni el árbol canónico. ⚠ **Ojo, 2026-09-12:** el sitio ya está publicado y versionado desde el PC en `desarrollo/web_corporativa/`. El `desarrollo/sitio_web/` de la estación es una **segunda copia sin commitear** (215 archivos, 22 MB de imágenes): decidir cuál queda antes de commitear ninguna de las dos |
 
 > **El aviso de «no despliegues a `public_html/ot/`» se retiró el 2026-09-12**,

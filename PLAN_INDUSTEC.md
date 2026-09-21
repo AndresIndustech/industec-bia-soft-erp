@@ -1319,20 +1319,24 @@ python verificar_seguridad.py   # 28 · 0
 
 ### La siguiente acción, concreta
 
-**Empieza por H: es la única que está perdiendo datos ahora mismo.** Después,
-escoge por este orden; las tres primeras son autónomas y no dependen de nadie;
-la cuarta y la quinta requieren a Andrés.
+**H ya está cerrada del todo (2026-09-21, 0 pendientes).** Lo único que le
+queda es T2.21.5 y recrear su Tarea con `/ru SYSTEM`, ninguna de las dos
+urgente. La siguiente prioridad real es **B** (la lista de
+`ANTES_DE_EMPEZAR.md` del piloto): A, F y G ya estaban hechas de arrastre
+(ver más abajo), así que no hay nada bloqueando el piloto de UIO salvo lo que
+depende de Andrés.
 
-**H. T2.21 · Cerrar la cadena del correo** — ✅ **CERRADA el 2026-09-20.**
-Corrió el `--ejecutar` que Andrés autorizó y cuadró en las tres dimensiones:
-árbol 7.123 → **7.452** PDF, `ots` 7.469 → **7.798** filas, activas 7.118 →
-**7.447**, todas +329 exacto, con 7.447 hashes distintos entre las activas
-(cero duplicados) y 329 PDF subidos y verificados en el servidor. La evidencia
-completa está en `ESTADO.md` **§1d**; no la repitas aquí.
+**H. T2.21 · Cerrar la cadena del correo** — ✅ **CERRADA DEL TODO el 2026-09-21,
+0 pendientes.** Corrió el `--ejecutar` en dos rondas (el masivo del 20-sep y el
+cierre caso por caso del 20/21-sep) y cuadró en las tres dimensiones las dos
+veces: árbol 7.123 → **7.457** PDF, `ots` 7.469 → **7.803** filas, activas
+7.118 → **7.452**, todas +334 exacto, con 7.452 hashes distintos entre las
+activas (cero duplicados) y 334 PDF subidos y verificados en el servidor. La
+evidencia completa está en `ESTADO.md` **§1d**; no la repitas aquí.
 
-Quedaron hechas T2.21.1 (lee `INBOX`+`Trash`+`INFORMES OT`), T2.21.2, T2.21.3,
-T2.21.4 (código de salida real, probado con el endpoint apagado), T2.21.6 y
-T2.21.7 (espejo de producción con disparo automático desde el vigilante).
+Quedaron hechas T2.21.1 a T2.21.4, T2.21.6, T2.21.7 y el encadenamiento al
+nocturno (ver más abajo). **T2.21.5 sigue abierta**, es la única que queda de
+toda la tarea.
 
 **Tres decisiones de Andrés del 2026-09-20 que cerraron hallazgos abiertos, y
 que mandan sobre lo que decía la sección de los cinco hallazgos:**
@@ -1346,14 +1350,47 @@ que mandan sobre lo que decía la sección de los cinco hallazgos:**
 3. **Todo se archiva aunque se repita**, y cuando el mismo documento llega con
    otro correlativo gana el que ya está archivado (implementado por hash). Los
    informes enviados dos veces se archivan **los dos** y decide la
-   administración, con el Excel de `t2_23_informes_repetidos.py`.
+   administración, con el Excel de `t2_23_informes_repetidos.py` (108 avisos,
+   227 documentos, cinco casos verificados a mano entre ellos).
 
-**Lo que sigue de T2.21**, y ya no bloquea nada: (a) encadenar
-`t2_18_rescatar_buzon.py --origen ... --ejecutar` al saneamiento nocturno,
-entre `normalizar` e `ingesta`, y crear la Tarea programada del nocturno, que
-sigue sin existir; (b) T2.21.5, el filtro «Las mías» del Archivo (ver
-`ESTADO.md` §1c-bis: son 239 filas de 7.356, no «1 de 7.118»); (c) los 6
-locales ambiguos que no resolvieron, que necesitan a una persona.
+**Cierre caso por caso de los 41 no resueltos, el 2026-09-20/21 — los 12 que
+quedaban también están resueltos, 0 pendientes:**
+- **28 formularios vacíos, descartados por SHA-256** en
+  `config/descartados_sha256.txt` (siguen en producción, solo no se vuelven a
+  espejar).
+- **1 (el aviso con espacio tecleado) archivado**, con el patrón corregido para
+  aceptar espacios y SAP confirmando el aviso de forma independiente.
+- **2 (Menestras, Elvita) resueltos por evidencia del interior del PDF** con
+  `t2_24_promover_por_evidencia.py` — los dos ya estaban archivados por otra
+  vía, sin crear un alias de cadena que habría sido el falso positivo que
+  avisa `industec-archivos-canonicos`.
+- **4 con local mal escrito, resueltos con alias confirmado**
+  (`locales_alias` 145→149): `kh073`→K073EC, `H071k197`→K197EC,
+  `G015Michelena`→G015EC, `G021Colonial`→G021EC.
+- **6 de «otros clientes», verificados uno por uno — la primera lectura estaba
+  mal para 1 de los 6.** `G016` no era de otros clientes: resuelve limpio a
+  GUS/UIO (`G016EC`) y se promovió al árbol canónico. Los otros 5 (TropiBurger
+  ×4 y el evento de Baños) sí son de clientes fuera de contrato, confirmado
+  porque `METALZA` y `NOVO EVENTOS` ya eran carpetas de cliente existentes con
+  historial de 2025 — no una clasificación inventada.
+
+**El promotor del buzón, encadenado al nocturno.** `saneamiento_nocturno.py`
+tiene ahora el paso `buzon` entre `normalizar` e `ingesta`, y
+`t2_18_rescatar_buzon.py` sale con código distinto de 0 solo ante una colisión
+real de contenido (antes siempre salía 0). Se creó la Tarea programada
+**«INDUSTEC - Saneamiento nocturno»** — no existía —, diaria a las 02:30 con
+reintento cada 30 min durante 2 h.
+
+**Lo único que sigue abierto de T2.21:**
+- **T2.21.5**, el filtro «Las mías» del Archivo (`ESTADO.md` §1c-bis: hoy son
+  239 filas de 7.356, no «1 de 7.118» como decía antes de verificarse).
+- **Recrear la Tarea del nocturno con `/ru SYSTEM`** cuando haya una sesión con
+  permisos de administrador — quedó en modo «solo interactivo» porque esta
+  sesión no tenía elevación, igual que las otras dos tareas del proyecto (no es
+  una excepción: es el patrón real, verificado con `Get-ScheduledTask` contra
+  las tres). Con «solo interactivo» el nocturno **no corre si nadie inició
+  sesión** a las 02:30, así que de momento hay que correrlo a mano o dejar la
+  sesión abierta.
 
 **A. Fusionar `pc/pulido-2026-09-12` en `master`** — ✅ **ya está, sin que esta
 sección lo dijera.** La fusión de `pc/documentos-y-otros-trabajos-2026-09-14`
@@ -1367,9 +1404,11 @@ abajo, solo que sin costo esta vez porque nadie llegó a repetir la fusión.
 **B. La lista de `desarrollo/sistema_ots/piloto/ANTES_DE_EMPEZAR.md`** — *diez
 pasos con su comprobación; quedan los 4 y 9, de Andrés.* Los pasos 2 (retirar
 los datos de prueba) y 3 (decisión sobre las órdenes 90xx: se borran) **ya están
-hechos, el 2026-09-13** — cifra verificada en `ESTADO.md` §1b. Faltan las
-cuentas de UIO y sus claves (`CUENTAS.md`), la Tarea programada del saneamiento
-y `SEGUNDA_COPIA` en `.env`.
+hechos, el 2026-09-13** — cifra verificada en `ESTADO.md` §1b. **La Tarea
+programada del saneamiento ya existe** (creada el 2026-09-21, ver T2.21 más
+arriba), aunque en modo «solo interactivo» — recrearla con `/ru SYSTEM` sigue
+pendiente de una sesión con permisos de administrador. Faltan las cuentas de
+UIO y sus claves (`CUENTAS.md`) y `SEGUNDA_COPIA` en `.env`.
 
 **C. El piloto real en UIO** — *requiere a Andrés, y es I-8.* Con las tres hojas
 del paquete (técnico, jefe de zona, administración) y el guion de cinco días de
@@ -1742,6 +1781,34 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     administración empiece a usarla, lo que muevan ahí desaparece. Antes de
     afirmar «el robot lee el correo», listar las carpetas (`M.list()`) y decidir
     explícitamente cuáles entran y cuáles no.
+20. **Dos `ssh.exe` en la misma estación, y no se comportan igual.** El de Git
+    Bash tolera los permisos del archivo de llave privada; el de
+    `C:\Windows\System32\OpenSSH` los exige, y si `config\clave_hostinger`
+    queda accesible para «Usuarios autenticados» (herencia normal de carpeta
+    en Windows), lo rechaza con `UNPROTECTED PRIVATE KEY FILE` y sale 255.
+    Probado a mano desde Git Bash, todo pasaba. Como la Tarea programada corre
+    por `cmd.exe`, usa el de Windows: **T2.21.7 nunca habría funcionado desde
+    el Programador**, y nadie lo habría notado porque el error no decía la
+    causa. Costó una tanda entera diagnosticarlo el 2026-09-20. Antes de dar
+    por bueno un mecanismo que se dispara desde una Tarea programada:
+    probarlo con el `ssh.exe` que la Tarea realmente usa
+    (`C:\Windows\System32\OpenSSH\ssh.exe`), no con el del PATH de la consola
+    de desarrollo. `hostinger_ssh.py` ahora avisa solo si detecta el permiso
+    abierto.
+21. **Un entregable que reporta «0» sin refutar el propio «0».** El Excel para
+    la administración de informes repetidos falló dos veces seguidas, y las
+    dos veces el número publicado era el equivocado, no una excepción visible:
+    (a) reportó 0 repetidos porque `extraer_pdf()` siempre devuelve la clave
+    `error` con `None` cuando todo sale bien, y el chequeo `"error" not in d`
+    daba falso siempre; (b) corregido eso, agrupaba por aviso ENTERO en vez de
+    por (aviso, visita), así que un aviso con varias visitas —el caso con más
+    movimiento, el que más importa revisar— escondía el par duplicado dentro
+    de él. Los dos bugs se encontraron por lo mismo: comparar la salida del
+    script contra 5 casos que ya se habían verificado a mano abriendo los PDF.
+    Sin esa comparación, el entregable le habría dicho a la administración
+    «no hay nada que decidir» cuando había 227 documentos por decidir.
+    **Un `0` en un entregable de calidad se verifica contra un caso positivo
+    conocido antes de publicarlo, igual que cualquier otro número.**
 
 ### Lo que no se toca, nunca
 
