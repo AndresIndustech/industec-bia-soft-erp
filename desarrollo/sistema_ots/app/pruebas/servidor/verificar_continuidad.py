@@ -216,6 +216,38 @@ def main():
     vh.anotar("T2.25.4", "  y queda en bitácora a nombre del técnico que declaró",
               bool(ultimo) and int(ultimo[0]["usuario_id"]) == int(tec_id),
               ultimo[0]["usuario_id"] if ultimo else "sin fila")
+
+    # T2.25.5: el buzón del jefe tiene que poder decir quién empezó el trabajo
+    # anterior. `Casos::quienAtendio()` lo saca de la FIRMA de la orden
+    # archivada, y solo si no hay orden cae al asignado. Ese orden de
+    # preferencia es el punto entero: en el primer caso real de continuidad el
+    # aviso viejo estaba CERRADO_SIN_ATENCION y con `asignado_a` en NULL —
+    # mirar el asignado habría dicho «sin dato» justo ahí, mientras la orden
+    # OT-1561 tenía la firma de Marco Taipe.
+    #
+    # Aquí se ejercita esa preferencia con el terreno al revés a propósito: el
+    # aviso viejo está asignado a `otro` (lo acaba de reasignar la prueba) pero
+    # sus órdenes del arnés las firmó el técnico A. Tiene que ganar la firma.
+    quien = json.loads(vh.ssh(
+        "cd " + vh.D + " && php -r \"require 'nucleo/Db.php'; require 'nucleo/Casos.php'; "
+        "echo json_encode(Casos::quienAtendio(['" + viejo + "','99999999']));\""))
+    firma = vh.sql("SELECT tecnico FROM ot_archivo WHERE aviso = ? AND tecnico <> '' "
+                   "ORDER BY fecha_atencion DESC LIMIT 1", [viejo])
+    if firma:
+        vh.anotar("T2.25.5", "manda la FIRMA de la orden, no a quién está asignado hoy",
+                  (quien.get(viejo) or {}).get("nombre") == firma[0]["tecnico"]
+                  and (quien.get(viejo) or {}).get("fuente") == "la orden",
+                  f"{(quien.get(viejo) or {}).get('nombre')} por {(quien.get(viejo) or {}).get('fuente')}")
+    else:
+        # Sin orden archivada, el respaldo es el asignado: la otra rama.
+        nombre_otro = vh.sql("SELECT nombre FROM usuarios WHERE usuario_id = ?", [otro_id])[0]["nombre"]
+        vh.anotar("T2.25.5", "sin orden archivada, el respaldo es a quién está asignado",
+                  (quien.get(viejo) or {}).get("nombre") == nombre_otro
+                  and (quien.get(viejo) or {}).get("fuente") == "asignado",
+                  f"{(quien.get(viejo) or {}).get('nombre')} por {(quien.get(viejo) or {}).get('fuente')}")
+    vh.anotar("T2.25.5", "  y de un aviso que no existe NO inventa un nombre",
+              "99999999" not in quien, list(quien.keys()))
+
     vh.ejecutar("UPDATE casos_gestion SET asignado_a = ? WHERE aviso = ?", [tec_id, viejo])
 
     print("\n== 5. la orden nueva arrastra la cadena y cierra el pendiente viejo ==")

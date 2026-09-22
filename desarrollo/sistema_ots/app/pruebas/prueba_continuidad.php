@@ -138,6 +138,27 @@ afirmar('dos modelos distintos NO se confunden',
 afirmar('vacío es vacío, no un equipo', Casos::equipoNormalizado(null), '');
 
 /* -------------------------------------------------------------------------
+   3b. QUIEN EMPEZO Y QUIEN SIGUE: el resalte del cruce de técnico (T2.25.5).
+   `mismaPersona()` decide si el buzón marca un caso como «cruzó de técnico».
+   Solo gobierna el color —los dos nombres se muestran siempre—, pero un falso
+   positivo le hace perder el tiempo a un jefe de zona, así que se prueba.
+   El caso real que abrió T2.25.5: la orden del aviso 10342524 la firmó
+   «Marco Taipe» y el 10342924 lo siguió «Anthony Medardo Jumbo Rojano».
+   ------------------------------------------------------------------------- */
+echo "\n=== Quién empezó y quién sigue ===\n";
+afirmar('la firma recortada del PDF y el nombre del padrón son la misma persona',
+        Casos::mismaPersona('Anthony Jumbo', 'Anthony Medardo Jumbo Rojano'), true);
+afirmar('el cruce de técnico del caso real SÍ se distingue',
+        Casos::mismaPersona('Marco Taipe', 'Anthony Medardo Jumbo Rojano'), false);
+afirmar('las tildes y las mayúsculas no separan a nadie',
+        Casos::mismaPersona('JOSÉ PÉREZ', 'jose perez gomez'), true);
+afirmar('las partículas cortas no juntan a dos personas distintas',
+        Casos::mismaPersona('Luis de la Cruz', 'Ana de los Rios'), false);
+// Sin nombre no se afirma un cruce: ante la duda, el buzón no marca (I-7).
+afirmar('sin nombre de un lado no se marca cruce', Casos::mismaPersona('', 'Marco Taipe'), true);
+afirmar('sin ninguno de los dos, tampoco', Casos::mismaPersona(null, null), true);
+
+/* -------------------------------------------------------------------------
    4. LA CADENA SE GUARDA PLANA Y NO ADMITE CICLOS.
    Aquí la gestión es sintética: es la única forma de ejercitar una fila
    escrita a mano en la base, que es de donde puede salir un ciclo.

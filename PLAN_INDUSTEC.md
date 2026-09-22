@@ -1350,41 +1350,75 @@ tiene cuenta de otra zona en el arnés para probarse de punta a punta — queda
 cubierta por revisión de código, no por esta batería. Si algo se ve raro en el
 piloto, es el primer lugar donde mirar.
 
-#### T2.25.5 · Hacer visible, para el jefe de zona y la administración, cuándo un caso cruzó de técnico (pendiente, 2026-09-22)
+#### T2.25.5 · Quién empezó y quién sigue, visible en el buzón del jefe (hecho y desplegado, 2026-09-22)
 
 **Pedido de Andrés**, al mismo tiempo que T2.25.4: que este tipo de sucesos —un
 caso que terminó un técnico distinto del que lo empezó— **se pueda identificar
 desde el panel**, para regularizarlo y para ir armando la norma con datos
-reales de cuánto pasa esto en la operación diaria. No pidió cambiar la máquina
-de estados otra vez: pidió que lo que ya queda auditado en la bitácora **se vea
-sin tener que abrir cada caso**.
+reales. Con la política dicha en el mismo pedido: alinearse siempre a que quien
+empieza un caso lo termine; el cruce es el **flujo alternativo, auditable, para
+casos especiales**.
 
-**Lo que ya existe, y por qué no alcanza.** `casos.php` ya muestra, por caso,
-"continúa el aviso X" con un tooltip de quién declaró el enlace y cuándo (línea
-1038 y siguientes, comentario "Aquí es donde se AUDITA"). Pero el tooltip dice
-quién *declaró*, no si esa persona es *distinta* de quien tenía asignado el
-aviso de origen — el jefe tiene que abrir los dos casos y compararlos a mano
-para notar el cruce. Con más de un puñado de casos por semana, eso no se mira.
+**El dato tumbó el diseño que tenía escrito acá, antes de escribir una línea.**
+La primera versión de esta tarea decía comparar `continua_por` contra el
+`asignado_a` del aviso de origen. Medido contra la base, eso **no detecta
+nada**: el primer —y único— caso real de continuidad (10342924 → 10342524, el
+del horno de G006EC) tiene el aviso de origen en `CERRADO_SIN_ATENCION` y con
+`asignado_a` en **NULL**, porque SAP lo cerró solo a las 48 h sin que nadie
+quedara asignado. Ese es justamente el caso que hay que ver, y la comparación
+propuesta habría respondido «sin dato». **Gana el dato** (§0): la fuente buena
+es la **firma de la orden archivada** (`ot_archivo.tecnico`), que existe, es
+inmutable y no se pierde — la orden `OT-1561` del aviso viejo la firmó *Marco
+Taipe* y el caso nuevo lo sigue *Anthony Jumbo*. Y como sale de ahí, **no hizo
+falta ninguna migración**: se descartó la columna nueva en `casos_gestion` que
+esta tarea iba a pedir.
 
-**Lo que falta, en un vistazo, sin diseñar la pantalla entera:**
-- Comparar `continua_por` (quien declaró) contra el `asignado_a` que tenía el
-  aviso `continua_de` **en el momento del enlace** — no el actual, que puede
-  haber cambiado después por otra razón.
-- Una señal visible (no solo en el `title` del tooltip, que en el celular nadie
-  toca para leer) cuando son distintos: por ejemplo, un color o etiqueta aparte
-  de "continúa el aviso X", tipo "técnico distinto: cerró Fulano, lo empezó
-  Mengano".
-- Un filtro o un conteo en el panel del jefe de zona (o en un reporte aparte)
-  de cuántos casos de su zona cruzaron de técnico en la ventana que decida:
-  es el dato que arma la norma que Andrés quiere fijar más adelante.
+**Lo que se construyó:**
+- `Casos::quienAtendio(array $avisos)` — una sola consulta para todos los
+  avisos de la pantalla (mismo patrón que `Casos::documentos()`, sin N+1).
+  Manda la firma de la orden; si no hay orden, el asignado; si no hay ninguna
+  de las dos, el aviso no sale y la pantalla dice «no consta quién atendió ese
+  trabajo anterior» en vez de inventar (I-7).
+- `Casos::mismaPersona()` — decide **solo el resalte**, nunca el texto. La
+  firma del PDF recorta el nombre del padrón («Anthony Jumbo» vs «Anthony
+  Medardo Jumbo Rojano»), así que compara por palabras y, ante la duda, **no**
+  marca cruce: un falso positivo le hace perder el tiempo a un jefe de zona.
+- `casos.php` muestra, bajo «continúa el aviso X», la línea
+  **«⚠ lo empezó Marco Taipe · sigue Anthony Medardo Jumbo Rojano»**, en ámbar
+  cuando cruzó de técnico y en gris cuando es el mismo. Los dos nombres se ven
+  siempre; el color es la ayuda, no el dato.
 
-**Lo que NO se hace todavía:** diseñar un panel nuevo o un reporte con
-gráficos. Es una extensión de lo que ya existe en `casos.php`, no una pantalla
-distinta — eso se decide si el dato, una vez visible, resulta ser frecuente.
+*Criterio, comprobado:* con el caso real ya en la base, `casos.php` cargado con
+sesión de jefe de zona devuelve **200** y contiene la línea exacta
+`⚠ lo empezó Marco Taipe · sigue Anthony Medardo Jumbo Rojano`, sin un solo
+aviso de PHP. `prueba_continuidad.php`: **42 comprobaciones, 0 fallos** (eran
+36; las 6 nuevas fijan `mismaPersona`, incluido el par real Taipe/Jumbo).
+`verificar_continuidad.py`: **29 de 30**, donde las dos nuevas de T2.25.5
+pasan —«manda la FIRMA de la orden, no a quién está asignado hoy» y «de un
+aviso que no existe NO inventa un nombre»— y el único fallo es ajeno (ver
+abajo).
+
+**El fallo que quedó rojo, y por qué NO se tocó:** «ningún caso cerrado con un
+pendiente vivo» da **1 fila**: el aviso **10356012** (G007, real), `ATENDIDO`
+con el pendiente 22 en `SIN_VEREDICTO`. No lo causó este cambio y no es de la
+continuidad: es un choque entre el **arnés de pruebas** —que tomó prestados dos
+casos REALES (10356012 y 10355931, ver `ESTADO.md` §1l) y dejó ese pendiente
+abierto desde las pruebas de T2.13.5— y la **reconciliación automática**, que
+el 2026-09-22 12:35 lo pasó a `ATENDIDO` con `ATENDIDO_AUTO`. Es dato de un
+local real, así que no se toca sin que Andrés lo diga (regla 2). Lo que
+corresponde es correr `php ~/respaldos/deshacer_prueba.php` cuando las demás
+baterías ya no lo necesiten.
+
+**Lo que queda pendiente de esta misma idea:** el **filtro y el conteo** por
+zona («cuántos casos cruzaron de técnico este mes»), que es lo que arma la
+norma. No se hizo porque **hoy hay un solo caso enlazado en toda la base**:
+contar sobre n=1 no dice nada, y para filtrar bien antes hay que resolver la
+identidad entre la firma del PDF y el padrón — el mismo pendiente que tiene
+«Las mías» del Archivo. Se retoma cuando el piloto deje casos de verdad.
 
 | Autónomo | Requiere aprobación de Andrés | Prohibido |
 |---|---|---|
-| Medir cuánto pasa esto hoy (consulta de solo lectura contra `casos_gestion`/`bitacora`) para dimensionar antes de construir | Diseñar y desplegar la señal visual en `casos.php` | Cambiar `Casos::TRANSICIONES` o la máquina de estados por esto — es una vista, no una regla nueva |
+| Medir cuánto pasa esto (consulta de solo lectura); afinar el texto o el color de la línea | El filtro/conteo por zona cuando haya datos; resolver la identidad firma↔padrón | Cambiar `Casos::TRANSICIONES` o la máquina de estados por esto — es una vista, no una regla nueva; tocar el pendiente 22 o el caso 10356012 sin que Andrés lo pida |
 
 #### Qué puede hacer un agente aquí
 

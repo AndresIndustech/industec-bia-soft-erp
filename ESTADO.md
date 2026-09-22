@@ -909,21 +909,87 @@ sin cambios porque no toca lo que se modificó.
 Desplegado en darkviolet (`mis.php`, `nucleo/Casos.php`) el 2026-09-22,
 verificado con `t2_10_desplegar.py` que la web entrega exactamente lo subido.
 
-**Lo que NO se comprobó:** el clic real de un técnico en el celular contra un
-caso de un compañero (no se generó una sesión de prueba adicional para no
-ensuciar la bandeja de un técnico real); y la rama cross-zona (que sigue
-prohibida) no tiene cuenta de otra zona en el arnés para ejercitarse de punta
-a punta contra el servidor — queda cubierta por revisión de código
-(`Auth::alcanzaZona()` ya está probada en otras rutas) pero no por esta
-batería.
+### ✅ Confirmado por el uso real, no por una prueba: la bitácora de `ajumbo`
+
+Lo que esta sección daba por «no comprobado» —el clic real de un técnico— lo
+comprobó el propio uso. La bitácora del aviso **10342924** cuenta la historia
+completa, y es la mejor evidencia que tiene este arreglo:
+
+| Cuándo | Usuario | Qué pasó |
+|---|---|---|
+| 2026-09-21 21:54:45 | `ajumbo` | `DENEGADO` · continuidad contra 10342524, fuera de su alcance |
+| 2026-09-21 21:54:55 | `ajumbo` | `DENEGADO` · lo intentó de nuevo |
+| 2026-09-22 06:09:07 | `ajumbo` | `DENEGADO` |
+| 2026-09-22 06:09:34 | `ajumbo` | `DENEGADO` · el cuarto intento, ya con la captura mandada |
+| — | — | *(aquí entra el arreglo)* |
+| 2026-09-22 06:30:02 | `ajumbo` | **`CASO_CONTINUA`** · continúa el trabajo del aviso 10342524 |
+| 2026-09-22 06:30:29 | `ajumbo` | `CASO_DESCONTINUA` · probó deshacerlo, y se deshizo |
+| 2026-09-22 11:47:49 | `ajumbo` | **`CASO_CONTINUA`** · con la nota «Mismo equipo, mismo trabajo» |
+
+Cuatro rechazos antes, dos enlaces logrados después, el mismo usuario y el
+mismo par de avisos. **`ajumbo` es Anthony Medardo Jumbo Rojano, TECNICO de
+UIO** — un técnico de verdad, no una cuenta de prueba, y el caso que enlazó es
+el del horno de G006EC que dio origen a T2.25 entera.
+
+**Lo que sigue sin comprobarse:** la rama cross-zona (que sigue prohibida) no
+tiene cuenta de otra zona en el arnés para ejercitarse de punta a punta contra
+el servidor — queda cubierta por revisión de código (`Auth::alcanzaZona()` ya
+está probada en otras rutas) pero no por esta batería.
 
 **La política que fija esto, dicha por Andrés en el momento:** enlazar con el
 trabajo de otro técnico sigue siendo la EXCEPCIÓN — la norma a la que el
 sistema se alinea es que quien empieza un caso lo lleve hasta el cierre. Por
-eso el pedido no termina en "que funcione": pidió además que el jefe de zona y
-la administración puedan **ver, sin abrir cada caso, cuándo pasó** — es
-T2.25.5 en el plan, **pendiente, sin construir todavía**: hoy la trazabilidad
-existe (bitácora + tooltip de `casos.php`) pero nadie la resalta como señal.
+eso el pedido no terminó en «que funcione»: pidió que el jefe de zona y la
+administración puedan **ver, sin abrir cada caso, cuándo pasó**. Eso es
+T2.25.5, **hecho el mismo día** — sigue aquí abajo.
+
+---
+
+## 1ñ. T2.25.5 · «Quién empezó y quién sigue», en el buzón del jefe (2026-09-22)
+
+El buzón del jefe de zona ya decía «continúa el aviso 10342524». Ahora dice,
+debajo y en ámbar cuando el trabajo cruzó de técnico:
+
+```
+continúa el aviso 10342524 · sin orden propia
+⚠ lo empezó Marco Taipe · sigue Anthony Medardo Jumbo Rojano
+```
+
+**El dato tumbó el diseño antes de escribirlo.** La tarea, tal como la dejé
+escrita en el plan una hora antes, decía comparar `continua_por` contra el
+`asignado_a` del aviso de origen. Medido contra la base: **no detecta nada**.
+El único caso real de continuidad tiene el aviso viejo en
+`CERRADO_SIN_ATENCION` y `asignado_a` en **NULL** —SAP lo cerró solo a las
+48 h, que es la razón misma por la que existe T2.25—, así que esa comparación
+habría dicho «sin dato» justo en el caso que hay que ver. La fuente buena es
+la **firma de la orden archivada** (`ot_archivo.tecnico`): existe, es
+inmutable, y dice *Marco Taipe*. **Como el dato ya estaba, no hizo falta
+migración** — se descartó la columna nueva en `casos_gestion` que la tarea iba
+a pedir.
+
+| Cifra | Valor |
+|---|---|
+| Casos enlazados hoy en toda la base | **1** (el real: 10342924 → 10342524) |
+| De ellos, con cruce de técnico | **1** — el primer caso real ya es el flujo alternativo |
+| `prueba_continuidad.php` | **42 comprobaciones · 0 fallos** (eran 36) |
+| `verificar_continuidad.py` | **29 de 30**, con las 2 nuevas de T2.25.5 en verde |
+| `casos.php` como jefe de zona | **HTTP 200**, con la línea exacta y **0 avisos de PHP** |
+
+**El único rojo, y es ajeno:** «ningún caso cerrado con un pendiente vivo» da
+1 fila — el aviso **10356012** (G007, **real**), `ATENDIDO` con el pendiente 22
+en `SIN_VEREDICTO`. No lo causó este cambio: es el **arnés de pruebas** —que
+tomó prestados dos casos reales (§1l lo advertía) y dejó ese pendiente abierto
+en las pruebas de T2.13.5— chocando con la **reconciliación automática**, que
+lo pasó a `ATENDIDO` el 2026-09-22 a las 12:35 (`ATENDIDO_AUTO`, usuario
+`sistema`). **No se tocó**: es un dato de un local real (regla 2). Lo que
+corresponde es correr `php ~/respaldos/deshacer_prueba.php` cuando las demás
+baterías ya no necesiten el arnés.
+
+**Lo que NO se hizo:** el filtro y el conteo por zona («cuántos cruzaron este
+mes»), que es lo que armaría la norma. Con **un solo caso enlazado** en toda la
+base, contar no dice nada; y filtrar por técnico exige antes resolver la
+identidad entre la firma del PDF y el nombre del padrón —el mismo pendiente que
+tiene «Las mías» del Archivo—. Se retoma cuando el piloto deje casos de verdad.
 
 ---
 

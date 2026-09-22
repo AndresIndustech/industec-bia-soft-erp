@@ -647,6 +647,86 @@ final class Casos
     }
 
     /**
+     * Quién consta que atendió cada uno de esos avisos, en UNA consulta.
+     *
+     * Es lo que deja ver al jefe de zona que un trabajo cruzó de técnico
+     * (T2.25.5). El dato sale de la FIRMA de la orden archivada, no de
+     * `asignado_a`: el primer caso real de continuidad lo demostró —el aviso
+     * 10342524 estaba CERRADO_SIN_ATENCION y con `asignado_a` en NULL, porque
+     * SAP lo cerró solo a las 48 h, y sin embargo la orden OT-1561 la firmó
+     * Marco Taipe—. Comparar contra `asignado_a` habría dicho «sin dato»
+     * justo en el caso que hay que ver.
+     *
+     * `asignado_a` queda de respaldo para el aviso que todavía no tiene
+     * orden. Si no hay ninguna de las dos cosas, el aviso no aparece en el
+     * resultado: quien llama dice «no consta», no inventa un nombre (I-7).
+     *
+     * OJO con el nombre: `ot_archivo.tecnico` es la firma cruda del PDF
+     * («Anthony Jumbo»), no el nombre del padrón («Anthony Medardo Jumbo
+     * Rojano»). Sirve para MOSTRARLO, que es para lo que se usa. Para contar
+     * o filtrar por técnico hace falta antes resolver esa identidad, que es
+     * el mismo pendiente que tiene «Las mías» del Archivo.
+     *
+     * @param string[] $avisos
+     * @return array<string,array{nombre:string,fuente:string}>
+     */
+    public static function quienAtendio(array $avisos): array
+    {
+        $avisos = array_values(array_unique(array_filter(array_map(
+            static fn($a): string => trim((string) $a), $avisos
+        ))));
+        if ($avisos === []) { return []; }
+        $marcas = implode(',', array_fill(0, count($avisos), '?'));
+
+        $out = [];
+        try {
+            // La más reciente de cada aviso: es la que refleja quién quedó al
+            // frente del trabajo, no quién pasó primero.
+            foreach (Db::todos(
+                "SELECT aviso, tecnico, fecha_atencion FROM ot_archivo
+                  WHERE aviso IN ($marcas) AND tecnico IS NOT NULL AND tecnico <> ''
+                  ORDER BY fecha_atencion", $avisos) as $r) {
+                $out[(string) $r['aviso']] = ['nombre' => (string) $r['tecnico'], 'fuente' => 'la orden'];
+            }
+        } catch (Throwable $e) { /* sin la 009 no hay índice: queda el respaldo */ }
+
+        foreach (Db::todos(
+            "SELECT g.aviso, u.nombre FROM casos_gestion g
+               JOIN usuarios u ON u.usuario_id = g.asignado_a
+              WHERE g.aviso IN ($marcas)", $avisos) as $r) {
+            $out[(string) $r['aviso']] ??= ['nombre' => (string) $r['nombre'], 'fuente' => 'asignado'];
+        }
+        return $out;
+    }
+
+    /**
+     * ¿Estos dos nombres son, con poco margen de duda, la misma persona?
+     *
+     * Solo decide el RESALTE de la pantalla, nunca el texto: los dos nombres
+     * se muestran siempre tal como constan, y quien mira saca su conclusión.
+     * Por eso puede equivocarse sin afirmar nada falso (I-7).
+     *
+     * Dos palabras en común bastan —«Anthony Jumbo» y «Anthony Medardo Jumbo
+     * Rojano» son el mismo—, porque la firma del PDF recorta el nombre del
+     * padrón de formas que no se pueden prever. Con una sola palabra en común
+     * se devuelve `true` a propósito: ante la duda NO se marca el caso como
+     * cruce, que es el error que le haría perder el tiempo a un jefe de zona.
+     */
+    public static function mismaPersona(?string $a, ?string $b): bool
+    {
+        $pal = static function (?string $s): array {
+            $s = mb_strtoupper(trim((string) $s), 'UTF-8');
+            $s = strtr($s, ['Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ñ' => 'N']);
+            $s = preg_replace('/[^A-Z ]+/', ' ', $s) ?? '';
+            return array_values(array_filter(explode(' ', $s), static fn($p) => mb_strlen($p) > 2));
+        };
+        $pa = $pal($a);
+        $pb = $pal($b);
+        if ($pa === [] || $pb === []) { return true; }   // sin nombre no se afirma un cruce
+        return array_intersect($pa, $pb) !== [];
+    }
+
+    /**
      * Toda la cadena de un caso: él, su raíz y los demás que cuelgan de ella.
      *
      * Es lo que cierra una orden concluida (T2.25.3). Solo entran casos que

@@ -435,6 +435,15 @@ foreach ($todos as $c) {
 }
 $atencion = static fn(string $av): ?string => $porAviso[$av]['estado_industec'] ?? null;
 
+/* Quién atendió el trabajo ANTERIOR de cada caso enlazado (T2.25.5). Se carga
+   por lote, como `$docs`: con una consulta por fila, el buzón haría una por
+   caso enlazado. Sirve para que el jefe de zona vea de un vistazo cuándo un
+   trabajo cruzó de técnico -- el flujo alternativo que Andrés quiere poder
+   auditar sin abrir los dos casos y compararlos a mano. */
+$quienOrigen = Casos::quienAtendio(array_filter(array_map(
+    static fn($c) => (string) ($gestion[(string) ($c['aviso'] ?? '')]['continua_de'] ?? ''), $todos
+)));
+
 Auth::bitacora('CONSULTAR', 'buzon', 'casos', 'alcance=' . ($zonaAlc ?? 'todas')
              . ' visibles=' . count($todos));
 
@@ -1050,6 +1059,28 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                       if (!empty($g['continua_ot'])): ?> · orden <?= e((string) $g['continua_ot']) ?><?php
                       else: ?> · sin orden propia<?php endif; ?>
                   </span>
+                  <?php
+                    /* Quién empezó y quién sigue: los DOS nombres, siempre, sin
+                       que nadie tenga que abrir el otro caso. El resalte (solo
+                       el color) marca el cruce de técnico, que es el flujo
+                       alternativo a auditar; el texto no afirma nada que no
+                       conste, y si no consta lo dice (I-7). */
+                    $qo   = $quienOrigen[(string) $g['continua_de']] ?? null;
+                    $qAhora = (string) ($g['tecnico_nombre'] ?? $g['continua_nombre'] ?? '');
+                    $cruce  = $qo !== null && $qAhora !== ''
+                              && !Casos::mismaPersona($qo['nombre'], $qAhora);
+                  ?>
+                  <?php if ($qo === null): ?>
+                    <span class="desc" style="color:#64748b">no consta quién atendió ese trabajo anterior</span>
+                  <?php else: ?>
+                    <span class="desc" style="color:<?= $cruce ? '#b45309' : '#64748b' ?>"
+                          title="<?= e('Lo anterior consta por ' . $qo['fuente']
+                                       . ($cruce ? '. Cruce de técnico: es el flujo alternativo, revísalo.'
+                                                 : '')) ?>">
+                      <?= $cruce ? '⚠ ' : '' ?>lo empezó <?= e($qo['nombre']) ?><?php
+                        if ($qAhora !== ''): ?> · sigue <?= e($qAhora) ?><?php endif; ?>
+                    </span>
+                  <?php endif; ?>
                 <?php endif; ?>
               </td>
             </tr>
