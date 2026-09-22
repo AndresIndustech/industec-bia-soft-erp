@@ -161,9 +161,28 @@
         // Se intenta enseguida, pero sin esperar a que termine: si hay señal
         // sale en un segundo, y si no, ya está guardada.
         setTimeout(enviarTodo, 60);
+        pedirSincronia();
         return fila.uuid;
       });
   };
+
+  /* --- El aviso al trabajador de servicio ---------------------------------
+     Hasta aquí, una orden llenada sin señal salía sola SOLO mientras la app
+     siguiera abierta: al recuperar la señal, al volver a la pestaña, o cada
+     dos minutos. El técnico que llena la orden en el local, apaga la pantalla
+     y guarda el teléfono no cumple ninguna de las tres, y la orden se quedaba
+     ahí hasta que él volviera a abrir la aplicación.
+
+     `sync` es lo que arregla eso: el navegador se compromete a despertar al
+     trabajador de servicio cuando vuelva la conexión, AUNQUE la aplicación
+     esté cerrada. Es mejora progresiva -- iOS no lo tiene todavía --, así que
+     los tres disparos de siempre se conservan tal cual. */
+  function pedirSincronia() {
+    if (!global.navigator || !navigator.serviceWorker || !global.SyncManager) { return; }
+    navigator.serviceWorker.ready
+      .then(function (reg) { return reg.sync.register('enviar-ordenes'); })
+      .catch(function () { /* sin permiso o sin soporte: quedan los otros disparos */ });
+  }
 
   Cola.pendientes = function () {
     return tx('readonly', function (t) { return t.getAll(); })
@@ -214,6 +233,7 @@
       return guardar(fila).then(function () {
         pintar();
         setTimeout(enviarTodo, 60);
+        pedirSincronia();
         return fila.uuid;
       });
     });
@@ -580,6 +600,26 @@
       if (!document.hidden) { enviarTodo(); }
     });
     setInterval(enviarTodo, 120000);
+
+    /* El trabajador de servicio despertó por `sync` y hay una pantalla abierta:
+       la manda ella, que es la única que sabe subir las fotos y tratar las once
+       respuestas distintas del servidor. Se le contesta para que el trabajador
+       no lo intente también y se pisen. */
+    if (global.navigator && navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', function (e) {
+        if (!e.data || e.data.tipo !== 'enviar-cola') { return; }
+        var responder = function (r) { if (e.ports && e.ports[0]) { e.ports[0].postMessage(r); } };
+        enviarTodo().then(function () { responder({ atendido: true }); },
+                          function () { responder({ atendido: true }); });
+      });
+    }
+    // Si quedó algo pendiente de antes, que el navegador lo reintente aunque
+    // esta pantalla se cierre.
+    Cola.pendientes().then(function (filas) {
+      if (filas.some(function (f) { return f.estado === 'PENDIENTE' && !f.espera_usuario; })) {
+        pedirSincronia();
+      }
+    });
   }
 
   if (document.readyState === 'loading') {

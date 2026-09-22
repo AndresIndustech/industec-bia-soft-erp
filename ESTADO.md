@@ -860,6 +860,141 @@ la que dejó T2.23.
 
 ---
 
+## 1o. T2.26 · El formulario del técnico: desbloqueado, predictivo y capaz de trabajar sin señal (2026-09-22)
+
+Andrés entró como `ajumbo` al caso **10355894**, pulsó «Emitir la orden de este
+caso» y el formulario no avanzaba ni mostraba los datos del caso. De ahí salió
+todo lo de abajo.
+
+### Lo que estaba roto, y por qué ninguna prueba lo vio
+
+**Ninguna cabecera del guiado abría su paso.** En `guia.js`, cada cabecera
+registraba su clic cerrando sobre `actual`, **una sola variable** de `envolver()`
+que se reasigna en cada `<h2>`. Cuando alguien pulsaba, ya valía el último paso:
+`pasos.indexOf(actual)` daba siempre **11** y *cualquier* cabecera abría «Firma
+del administrador». El técnico no podía abrir «La orden» ni «Datos generales»,
+así que **el caso precargado —que sí se cargaba bien— no se veía por ningún
+lado**, y nueve de los doce pasos quedaban en gris.
+
+**Las 319 comprobaciones del proyecto estaban TODAS en verde** con el formulario
+inutilizable. Ninguna pulsa un botón: comprueban códigos HTTP, contratos de
+archivos y datos. Ese hueco es el error nº 33 del plan, y lo cubre la batería
+nueva `verificar_formulario.mjs`.
+
+### Lo que se midió antes de tocar nada
+
+| Qué | Cifra medida | Contra qué |
+|---|---|---|
+| El equipo del aviso se preseleccionaba | **0 de 885** | los casos del buzón, con `Catalogo::cargar()` |
+| Locales con administrador prellenado | **0 de 100** | `locales_admin` tiene 1 fila, y es de prueba |
+| Locales con correo real del restaurante | **4 de 100** (95 son el buzón genérico) | maestro de locales |
+| Órdenes históricas con el administrador | **7.386**, cubren **99 de 100** locales | `ots.admin_nombre`, estación |
+
+La preselección del equipo **nunca** podía acertar: el aviso trae la
+denominación entera (`MAQUINA DE HIELO-WM-IM100-000000000010176992`) y el
+catálogo guarda un código de seis dígitos (`003769`). **Son dos numeraciones
+distintas**, y la regla comparaba una con otra por igualdad.
+
+### Lo que quedó hecho
+
+**1 · El guiado, arreglado** (`guia.js`). El paso se captura en una variable por
+vuelta. De paso, el resumen plegado del primer paso decía «Correctivo · **on**»:
+una casilla sin atributo `value` vale la cadena `"on"` esté marcada o no, y la
+de «otro proveedor» se colaba sola.
+
+**2 · El equipo del caso, preseleccionado por TIPO** (`app.js`). Medido con el
+mismo JavaScript que corre en el celular, sobre los 883 casos con local y
+activo:
+
+| | casos | qué hace |
+|---|---|---|
+| tipo exacto, uno solo | **425 (48,1 %)** | **se preselecciona** |
+| tipo exacto, varios iguales | 134 (15,2 %) | dice cuántos hay; elige el técnico |
+| solo parientes (`FREIDORA` → `FREIDORA ABIERTA`) | 105 (11,9 %) | los enseña; elige el técnico |
+| el local no tiene nada de ese estilo | 219 (24,8 %) | lo dice y ofrece «Equipo nuevo» |
+
+**Solo se preselecciona el calce exacto.** Un `FREIDORA → MESA` puesto por el
+sistema acabaría impreso en un documento que lee Grupo KFC: eso es justo lo que
+I-7 prohíbe. Y nunca se dice «este local no tiene ninguna FREIDORA» cuando tiene
+dos de un subtipo — sería falso.
+
+**3 · Las órdenes salen solas con la app CERRADA** (`cola.js` + `sw.js`). Hasta
+aquí `cola.js` reintentaba al cargar, al volver la señal, al volver a la pestaña
+y cada dos minutos: **todo eso solo mientras la aplicación siguiera abierta**. El
+técnico que llena la orden, bloquea el teléfono y se va al siguiente local no
+cumple ninguna de las cuatro. Ahora `cola.js` registra un `sync` y `sw.js` lo
+atiende: si hay una pantalla abierta le pide a ella que mande —es la única que
+sabe subir fotos y tratar las once respuestas del servidor—, y **solo si no hay
+ninguna** manda él, y solo las órdenes sin fotos pendientes. Reenviar es
+inofensivo: `envio.php` es idempotente por `envio_uuid`.
+
+**4 · Un 401 ya no borra la copia local** (`sw.js`). Borraba **toda** la caché de
+datos. La intención era buena —que lo de una sesión no se le sirva a otra— pero
+el precio lo pagaba el técnico: la sesión vence a las 12 h, o la desplaza su
+propio ingreso desde otro teléfono, y con eso se le borraban catálogos, bandeja
+e identidad. Entraba al local sin señal y la aplicación estaba **vacía**.
+Reproducido el 2026-09-22. Ahora se borra **cuando `yo.php` contesta con otro
+usuario**, no cuando la sesión vence. Es el error nº 34.
+
+`sw.js` va a **v13**: `guia.js`, `app.js` y `cola.js` están en la precarga del
+armazón y sin subir la versión el arreglo no llega a un celular ya instalado.
+
+### Evidencia
+
+```
+Locales (estación, PHP 8.3)
+  prueba_48h.php          120 · 0
+  prueba_contratos.mjs     57 · 0
+  prueba_graficos.mjs      62 · 0
+  prueba_continuidad.php   42 · 0
+
+Contra darkviolet
+  verificar_bandeja.py     37 · 0
+  verificar_sync_cerrada.mjs (nueva)   4 · 0
+  verificar_formulario.mjs   (nueva)  A, B y C en verde
+```
+
+`verificar_sync_cerrada.mjs` es la prueba que importa y dio **4 · 0**: con la
+aplicación **cerrada** (0 pantallas), se dispara el `sync` y **el servidor
+registra el POST**, contado por `envio_uuid` en la bitácora antes de reabrir
+nada. No crea ninguna orden: encola a propósito una inválida, y `envio.php`
+responde 400 **antes** de insertar en `ot_capturadas`.
+
+En `verificar_formulario.mjs`, con el caso 10355931: cada cabecera abre su paso;
+sin señal el caso sigue precargado (`aviso=10355931`, `local=G018EC · SAN
+BARTOLO QUITO`, catálogo de 100 locales desde la copia); y la orden llenada sin
+señal **queda guardada con su caso, su local y su firma**, con el recibo
+diciendo la verdad: «Orden guardada en este celular. No hay señal, así que
+todavía no salió».
+
+### Lo que NO se pudo comprobar, y por qué
+
+- **`verificar_http.py` da 81/86 y `verificar_emision.py` aborta.** No es por
+  esto: **el arnés se quedó sin ningún caso con local** para el técnico de
+  prueba —`10355931` y `10356012` pasaron a ATENDIDO mientras se probaba— y solo
+  le queda el sintético `99990011`, que no trae local. `verificar_emision.py`
+  aborta literalmente en `next(x for x in cat["avisos"]["datos"] if
+  x.get("local"))`. Ninguna de las dos carga `app.js`, `cola.js` ni `sw.js`: son
+  POST de Python contra `envio.php`. **Hay que correr `preparar_prueba.php` y
+  repetirlas**, cuando la otra conversación suelte el arnés.
+- **No se entró con la cuenta real de `ajumbo`**: no se tiene su clave y no se
+  iba a tocar. El defecto era del guion, igual para todas las cuentas, pero
+  queda dicho.
+- **La entrega con la app cerrada se probó con una orden inválida**, a propósito,
+  para no escribir en el servidor. El camino (despertar → token → POST → tratar
+  la respuesta) se recorrió entero; **una orden VÁLIDA entregada por el
+  trabajador de servicio no se ha visto todavía**.
+- **iOS no tiene Background Sync.** Ahí siguen valiendo los cuatro disparos de
+  siempre, que exigen abrir la app. Es mejora progresiva, no un cambio de
+  contrato.
+- **`prueba_offline.mjs` estaba rota antes de tocar nada** (comprobado con
+  `git stash`): es una de las dos que §5.2b ya daba por rotas.
+- **Nada de lo medido para el administrador del local se ha aplicado**: sembrar
+  `locales_admin` desde las 7.386 órdenes históricas **escribe en la base del
+  servidor** y no se hizo. Es lo que sigue.
+
+---
+
 ## 1n. T2.25.4 · El origen ya no tenía que ser "suyo" — Andrés lo encontró probando el propio 10342924 (2026-09-22)
 
 Andrés, mirando otra vez el caso 10342924 (el mismo de T2.25.2), se topó con «No
@@ -1504,7 +1639,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| **T2.26 · El formulario de emisión no deja abrir ningún paso** | Conversación «emitir orden no avanza» (estación) | 2026-09-22 | Solo `publico/guia.js` y su despliegue a darkviolet. No toca la base, ni el árbol canónico, ni `app.js`, ni ningún PHP. Reportado por Andrés entrando como `ajumbo` al caso 10355894 |
+| ~~**T2.26 · El formulario del técnico: desbloqueado, predictivo y sin señal**~~ | ✅ **Terminada y desplegada el 2026-09-22** | — | `guia.js`, `app.js`, `cola.js`, `sw.js` (v13) y dos baterías nuevas. **No tocó la base, ni el árbol canónico, ni ningún PHP.** Verificado: 120·0, 57·0, 62·0, 42·0 locales; 37·0 bandeja; **4·0** `verificar_sync_cerrada.mjs`. Detalle, cifras y lo que quedó sin comprobar en **§1o**. ⚠ `verificar_http.py` (81/86) y `verificar_emision.py` (aborta) piden **`preparar_prueba.php`**: el arnés se quedó sin ningún caso con local |
 | ~~**T2.25 · Continuidad entre casos del mismo equipo**~~ | ✅ **Terminada, aplicada y desplegada el 2026-09-21** | — | Migración 012 en darkviolet y seis archivos desplegados. Verificado: **25·0** la batería nueva, 37·0 bandeja, 86·0 http, `verificar_esquema.php` TODO OK; y 36·0 · 120·0 · 57·0 · 62·0 en local. Lo único que queda es **que Andrés la mire**, y que alguien la use con un caso real. Detalle en **§1l** |
 | ~~T2.23 · Rediseño de la interfaz de preventivos~~ | ✅ **Terminada el 2026-09-21** | — | `cronograma.html/.js/.css` y `sw.js` a v11. No tocó la base, ni el árbol canónico, ni el contrato de `cronograma.php`/`cronograma_accion.php`. Cifras, evidencia y lo que quedó sin comprobar en **§1k**. Falta desplegar a darkviolet y correr las baterías de servidor |
 | ~~Regularización masiva del buzón (ATENDIDO → cerrado SAP, CERRADO_SIN_ATENCION → regularizado)~~ | ✅ **Terminada el 2026-09-21** | — | 124 + 773 casos regularizados en `casos_gestion` (Hostinger). Detalle en **§1h** |

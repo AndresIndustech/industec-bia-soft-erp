@@ -34,6 +34,8 @@
   var localesPorCodigo = {};
   var avisoElegido = null;
   var equipoAmbiguo = 0;       // H-09: cuántos activos iguales no se pudieron distinguir
+  var equipoSinCandidato = ''; // H-09: el tipo que nombra el aviso y que el local no tiene
+  var equipoParecidos = [];    // H-09: los del local que se le parecen, sin ser el mismo
   var firma;
   var ultimoUuid = null;       // H-04: qué fila de la cola es "la que se acaba de mandar"
   var reintentarUuid = null;   // H-07: viene de ?reintentar=<uuid>
@@ -416,9 +418,18 @@
       // H-09: si el activo del aviso calzó con más de un equipo del local, no
       // se adivina cuál -- se dice, y el técnico lo elige él mismo abajo.
       (equipoAmbiguo > 1
-        ? '<div class="derivado" style="margin-top:8px">No se pudo identificar el activo entre '
-          + equipoAmbiguo + ' equipos iguales del local: elígelo en "Equipos intervenidos".</div>'
-        : '');
+        ? '<div class="derivado" style="margin-top:8px">Este local tiene ' + equipoAmbiguo
+          + ' equipos de ese tipo y el aviso no dice cuál: elígelo en "Equipos intervenidos".</div>'
+        : equipoParecidos.length
+          ? '<div class="derivado" style="margin-top:8px">El aviso lo llama así, y en el catálogo '
+            + 'del local lo más parecido es '
+            + equipoParecidos.slice(0, 3).map(function (t) { return '<b>' + esc(t) + '</b>'; }).join(', ')
+            + '. Elige cuál fue en "Equipos intervenidos".</div>'
+          : equipoSinCandidato
+            ? '<div class="derivado" style="margin-top:8px">Este local no tiene ningún <b>'
+              + esc(equipoSinCandidato) + '</b> ni nada parecido en el catálogo de SAP. Si el '
+              + 'equipo existe, regístralo en "Equipos intervenidos" con <b>Equipo nuevo</b>.</div>'
+            : '');
     f.hidden = false;
   }
 
@@ -620,29 +631,86 @@
     });
     sel.appendChild(ogn);
 
-    // H-09: el equipo del aviso viene preseleccionado, cruzando por
-    // `equipo_sap` (si SAP lo trae) o por `codigo_activo` contra el activo
-    // fijo del caso. Si hay más de un candidato -- varios activos iguales--
-    // no se adivina: se deja vacío y se avisa en la ficha (equipoAmbiguo).
+    // H-09: el equipo del aviso viene preseleccionado. Si hay más de un
+    // candidato -- varios activos iguales -- no se adivina: se deja vacío y se
+    // avisa en la ficha (equipoAmbiguo).
     if (avisoElegido) {
       var af = String(avisoElegido.equipo_denominacion || '').trim();
-      var cand = Array.prototype.filter.call(sel.options, function (o) {
-        return o.value && (
-          (avisoElegido.equipo_sap && o.value === avisoElegido.equipo_sap) ||
-          (af !== '' && o.dataset.cod && o.dataset.cod === af)
-        );
+      var delLocal = Array.prototype.filter.call(sel.options, function (o) {
+        return o.value && o.value.indexOf('TIPO:') !== 0;
       });
+
+      /* Primero, las claves que identifican UN activo concreto. Si el día de
+         mañana el aviso trae el número de equipo de SAP, esto lo resuelve
+         solo y con certeza. */
+      var cand = delLocal.filter(function (o) {
+        return (avisoElegido.equipo_sap && o.value === avisoElegido.equipo_sap) ||
+               (af !== '' && o.dataset.cod && o.dataset.cod === af);
+      });
+
+      /* Y si no, por TIPO, que es lo único que de verdad comparten las dos
+         listas. Medido el 2026-09-22 contra los 883 casos del buzón que traen
+         local y activo: por clave acertaban CERO, porque el aviso trae la
+         denominación entera («MAQUINA DE HIELO-WM-IM100-000000000010176992»)
+         y el catálogo guarda un código de seis dígitos («003769»): son dos
+         numeraciones distintas y no coinciden nunca. El técnico terminaba
+         buscando el equipo a mano en TODAS las órdenes. */
+      var tipoAviso = '';
+      if (!cand.length) {
+        tipoAviso = normalizarTipo(af.split('-')[0]);
+        if (tipoAviso) {
+          cand = delLocal.filter(function (o) {
+            return normalizarTipo(o.dataset.tipo) === tipoAviso;
+          });
+        }
+      }
+
       if (cand.length === 1) {
-        sel.value = cand[0].value;
+        sel.value = cand[0].value;          // 425 de 883: calce exacto, sin duda
         sel.dispatchEvent(new Event('change'));
       } else if (cand.length > 1) {
-        equipoAmbiguo = cand.length;
+        equipoAmbiguo = cand.length;        // 134: varios iguales, no se adivina
+      } else if (tipoAviso) {
+        /* No hay ninguno de ese tipo exacto. Puede que el local tenga uno
+           EMPARENTADO —el aviso dice «FREIDORA» y el local tiene «FREIDORA
+           ABIERTA»— y ahí no se elige por él: un tipo parecido puesto por el
+           sistema acabaría impreso en un documento que lee Grupo KFC, y eso es
+           exactamente lo que I-7 prohíbe. Se le enseñan los candidatos y elige.
+           Lo que NO se puede hacer es decirle «este local no tiene ninguna
+           FREIDORA» cuando tiene dos: eso sería falso. */
+        equipoParecidos = delLocal
+          .filter(function (o) { return emparentados(tipoAviso, normalizarTipo(o.dataset.tipo)); })
+          .map(function (o) { return limpiarTipo(o.dataset.tipo); });
+        // 219 de 883: el local no tiene nada de ese estilo. Se dice y ya.
+        if (!equipoParecidos.length) { equipoSinCandidato = limpiarTipo(af.split('-')[0]).trim(); }
       }
     }
   }
 
+  /* ¿Dos tipos son de la misma familia? Se comparan PALABRAS COMPLETAS desde el
+     principio: «FREIDORA» y «FREIDORA ABIERTA» sí; «MESA» y «MESADA», no. Con
+     `indexOf` sueltos, «HORNO» emparentaba con «HORNO MICROONDAS» y también con
+     cualquier cosa que llevara esas letras dentro. */
+  function emparentados(a, b) {
+    if (!a || !b) { return false; }
+    var pa = a.split(' '), pb = b.split(' ');
+    var n = Math.min(pa.length, pb.length);
+    for (var i = 0; i < n; i++) { if (pa[i] !== pb[i]) { return false; } }
+    return true;
+  }
+
+  /* El tipo de un equipo, comparable entre el aviso y el catálogo: sin el
+     prefijo de SAP, sin tildes, sin puntuación y con los espacios colapsados.
+     «Máquina de Hielo» y «000108_SY_MAQYEQ_MAQUINA DE HIELO» son el mismo. */
+  function normalizarTipo(s) {
+    return Reglas.quitarTildes(limpiarTipo(s || ''))
+      .toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+  }
+
   function refrescarEquipos() {
     equipoAmbiguo = 0;
+    equipoSinCandidato = '';
+    equipoParecidos = [];
     $$('#equipos .eq-sel').forEach(poblarEquipoSelect);
   }
 

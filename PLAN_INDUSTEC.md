@@ -1716,6 +1716,49 @@ python verificar_seguridad.py   # 28 · 0
 
 ### La siguiente acción, concreta
 
+**N. T2.26 · El formulario del técnico** — ✅ **hecho y desplegado el
+2026-09-22**, y es lo más nuevo de esta sección. Andrés reportó que «Emitir la
+orden de este caso» no dejaba avanzar: **ninguna cabecera del guiado abría su
+paso**, así que el caso precargado no se veía y nueve de doce pasos quedaban en
+gris. Arreglado. Y de paso: el equipo del aviso **se preselecciona en el 48,1 %**
+de los casos (antes, medido, en **0 de 885**), las órdenes **salen solas con la
+app cerrada** (Background Sync, probado 4·0 contra la bitácora del servidor) y
+**un 401 ya no borra la copia local** del técnico. `sw.js` va a **v13**. Cifras,
+evidencia y lo que quedó sin comprobar, en `ESTADO.md` **§1o**; las lecciones,
+en los errores **33, 34 y 35**.
+
+> **Lo que le queda, y hay que hacerlo antes de creer que está cerrado:**
+>
+> 1. **Correr `~/respaldos/preparar_prueba.php`** y repetir `verificar_http.py`
+>    (quedó 81/86) y `verificar_emision.py` (aborta). **No fallan por T2.26**: el
+>    arnés se quedó sin ningún caso con local para el técnico de prueba, y las
+>    dos lo necesitan. Ninguna carga `app.js`, `cola.js` ni `sw.js`.
+> 2. **Que Andrés lo mire en un celular de verdad**, recargando dos veces (la
+>    primera instala el trabajador de servicio v13, la segunda sirve lo nuevo).
+> 3. **Ver una orden VÁLIDA entregada con la app cerrada.** Lo probado fue el
+>    camino entero con una orden inválida a propósito, para no escribir en el
+>    servidor.
+
+**O. Sembrar el administrador de cada local (lo siguiente, y está medido)** —
+El campo **«Administrador del local» es obligatorio y se teclea a mano en el
+100 % de las órdenes**: `locales_admin` tiene **1 fila**, y es de prueba. En la
+estación hay **7.386 órdenes históricas con `ots.admin_nombre`, que cubren 99 de
+los 100 locales**. Sembrarlo quita un campo de teclear en cada orden y lo vuelve
+un desplegable con el nombre correcto.
+
+| | |
+|---|---|
+| **Criterio de aceptación** | `SELECT COUNT(DISTINCT local_codigo) FROM locales_admin` ≥ 99 en darkviolet, y `catalogos.php` devuelve `admins[<local>]` no vacío para esos locales. El formulario prellena `#admin` con el más reciente y **deja cambiarlo** (es un `datalist`, no un `select`). |
+| **Verificación cruzada (I-10)** | Antes de escribir: contar en la estación los pares (local, admin) y compararlos con lo que va a entrar. Si no cuadra exactamente, `sys.exit(1)`. |
+| **Autónomo** | Leer la estación, contar, generar el volcado y enseñar las cifras. |
+| **Requiere aprobación de Andrés** | **El `--ejecutar`**: escribe en `locales_admin` de la base del servidor. Se propone con el número exacto de filas antes de correrlo. |
+| **Prohibido** | Sobrescribir un administrador que un técnico ya haya ingresado desde la app (`fuente='ORDEN'` con `visto_ultimo` posterior). Lo histórico entra como semilla, no como verdad. |
+
+**Ojo con el nombre**: la nómina guarda el nombre legal completo y los PDF
+históricos traen lo que escribió el técnico. Hay `Jenny montaño`, `José Luis
+Nuñez` con la tilde perdida y mayúsculas mezcladas. Normalizar para comparar,
+**conservar lo que se leyó** para mostrar.
+
 **L. Continuidad entre casos (T2.25)** — ✅ **hecha, aplicada y desplegada el
 2026-09-21.** La 012 está en darkviolet (`verificar_esquema.php` → **TODO OK**,
 con 0 casos enlazados: no enlaza nada por su cuenta) y `verificar_continuidad.py`
@@ -2374,6 +2417,31 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     tragaba en un `catch`, la orden salía «bien» y el recibo decía que sí,
     mientras ningún caso de la cadena se cerraba. El log de la web lo decía en
     una línea.
+33. **319 comprobaciones en verde y el formulario inutilizable.** El 2026-09-22
+    ninguna cabecera del guiado abría su paso —todas abrían el último, por un
+    cierre sobre una variable compartida— así que el técnico no podía ver el
+    caso que traía precargado ni avanzar. **Las cuatro baterías locales y las
+    siete del servidor estaban todas en verde**, porque ninguna pulsa un botón:
+    comprueban códigos HTTP, contratos de archivos y datos. Una pantalla puede
+    estar muerta con toda la instrumentación en verde. Lo que se le entrega a
+    una persona se prueba **con gestos**, en un navegador de verdad
+    (`verificar_formulario.mjs`, `verificar_sync_cerrada.mjs`).
+34. **Una medida de seguridad que deja al técnico sin herramienta en el local.**
+    El trabajador de servicio borraba TODA la copia guardada ante cualquier 401,
+    para que lo de una sesión no se le sirviera a otra. Pero la sesión vence a
+    las 12 h y se desplaza al entrar desde otro teléfono: con eso se le borraban
+    catálogos, bandeja e identidad, y entraba al local sin señal con la
+    aplicación **vacía**. Sesión vencida y cambio de persona **no son lo mismo**:
+    ahora se borra cuando `yo.php` contesta con otro usuario. Antes de proteger
+    un dato, preguntarse qué pasa con quien lo necesita para trabajar.
+35. **Medir antes de creerle a una regla que "ya está hecha".** El formulario
+    tenía desde H-09 la preselección del equipo del aviso. Nunca acertó: **0 de
+    885**, porque comparaba la denominación entera del aviso
+    (`MAQUINA DE HIELO-WM-IM100-000000000010176992`) con un código de seis
+    dígitos del catálogo (`003769`) — dos numeraciones distintas. Estuvo así
+    desde que se escribió, sin que nada fallara: simplemente no preseleccionaba
+    nunca y el técnico buscaba a mano. Una regla de cruce sin su cifra medida
+    contra los datos reales es una intención, no una función.
 
 ### Lo que no se toca, nunca
 
