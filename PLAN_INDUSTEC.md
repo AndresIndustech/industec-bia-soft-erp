@@ -1145,12 +1145,20 @@ siguen viéndolos «en curso». *Criterio:* `estadoPreventivo` devuelve un estad
 propio cuando el fin vigente ya pasó y no hay cierre, y `verificar_reportes.py`
 lo comprueba con un caso sembrado.
 
-**T2.24.2 · Cerrar los 174 sin cerrar.** No es un problema de pantalla: nadie
-registra el cierre. Hay dos caminos y **hay que elegir uno**: (a) que el
-promotor del buzón cierre el ingreso cuando archiva la orden del último día
-declarado, o (b) una regularización en bloque como la del buzón, asumiendo que
-el trabajo se hizo. La (b) mete en el cumplimiento de KFC 174 cierres que nadie
-verificó uno por uno: **eso lo decide Andrés, no un agente** (I-7).
+**T2.24.2 · Cerrar los 174 sin cerrar — ✅ DECIDIDO por Andrés (2026-09-21),
+armado y verificado, escritura bloqueada por el entorno.** Andrés eligió el
+camino (b): «deben ya cerrarse porque KFC ya los cerró y la administradora
+también... mañana recién empezará a probar la plataforma». Antes de escribir
+se cruzaron los 174 contra `ots.fecha_atencion` (fuente independiente, I-10):
+**174 de 174 con fecha real encontrada**, ninguna inventada (I-7). El script
+que escribe (`t2_24_2_cerrar_masivo_cli.php`, mismo patrón que
+`regularizar_masivo_cli.php`: dry-run por omisión, `--ejecutar` para escribir,
+re-verifica cada fila contra la base viva antes de tocarla) está escrito,
+validado con `php -l` y **ya desplegado** al sitio de pruebas. Lo único que
+falta es correrlo: el clasificador de seguridad de la sesión bloqueó el
+comando SSH por «Modify Shared Resources», incluso en modo de solo conteo.
+Detalle completo, el comando exacto y el criterio de aceptación en
+`ESTADO.md` **§1m**.
 
 **T2.24.3 · La ventana de tolerancia del cumplimiento — DECISIÓN DE ANDRÉS.**
 La práctica estándar de los CMMS es contar «a tiempo» lo cerrado dentro de un
@@ -1603,8 +1611,8 @@ ssh … "cd …/ot && php aplicar_sql.php sql/012_continuidad_casos.sql && php v
 #    -> y la prueba negativa: casos enlazados a un trabajo anterior = 0
 
 # 2. Desplegar los cinco archivos y correr la batería nueva
-#    OJO: T2.23 (acción K) también está sin desplegar. O se coordinan las dos, o
-#    la que suba segunda pisa lo de la otra. `sw.js` NO cambia por T2.25 (v11).
+#    T2.23 (acción K) YA SE DESPLEGÓ el 2026-09-21 (cronograma.html/.css/.js,
+#    sw.js v11) — sin conflicto: ningún archivo de T2.25 se solapa con esos.
 python scripts/t2_10_desplegar.py …   # mis.php casos.php envio.php nucleo/Casos.php nucleo/Pendientes.php verificar_esquema.php
 cd app/pruebas/servidor && python verificar_continuidad.py    # 7 bloques
 ```
@@ -1613,24 +1621,22 @@ cd app/pruebas/servidor && python verificar_continuidad.py    # 7 bloques
 propuesta en la ficha del caso, con el horno de `G006EC` (10342924 propone
 10342524). Cifras y lo no comprobado en `ESTADO.md` **§1l**.
 
-**K. Desplegar la pantalla de preventivos rediseñada (T2.23)** — *lo único que
-le falta, y es corto.* El rediseño está hecho y verificado **en local**: cuatro
-baterías en verde (120·0, 57·0, 62·0, 11·0) y el cuadre de bloques contra los
-368 ingresos reales (82+174+19+16+77 = 368). Falta `t2_10_desplegar.py` a
-darkviolet y correr las siete baterías de servidor, sobre todo
-`verificar_reportes.py`, que es la que prueba que agendar/reagendar/kit/cierre
-siguen escribiendo bien. **Y mirarla con Andrés**, porque el criterio del
-pedido («que no aturda») es suyo. Ojo: `sw.js` subió a **v11** — si no sube, a
-quien ya tiene la aplicación instalada le sale la pantalla vieja. Cifras y lo
-no comprobado en `ESTADO.md` **§1k**.
+**K. Desplegar la pantalla de preventivos rediseñada (T2.23)** — ✅ **hecho el
+2026-09-21.** `t2_10_desplegar.py cronograma.html cronograma.css cronograma.js
+sw.js` corrió limpio (4 de 4, la web entrega lo que se subió). **Sigue
+faltando** correr las siete baterías de servidor —sobre todo
+`verificar_reportes.py`, que prueba que agendar/reagendar/kit/cierre siguen
+escribiendo bien— y **mirarla con Andrés**, porque el criterio del pedido
+(«que no aturda») es suyo. Cifras y lo no comprobado en `ESTADO.md` **§1k**.
 
-> **Lo que el rediseño destapó y no se arregló, porque no era su tarea:** hay
-> **174 ingresos de 2026 «sin cerrar»** —con orden emitida y sin que nadie
-> registre el cierre, algunos desde enero— y **ningún ingreso cumplido en todo
-> el año**, así que no hay porcentaje de cumplimiento que reportarle a KFC.
-> Eso es **T2.24**, y su punto 2 (cómo se cierran esos 174) **lo decide
-> Andrés**: cerrarlos en bloque mete en el cumplimiento 174 cierres que nadie
-> verificó uno por uno.
+**M. Correr el cierre masivo de los 174 sin cerrar (T2.24.2)** — ✅ **decidido,
+armado y verificado; solo falta ejecutarlo.** Andrés autorizó el cierre en
+bloque el 2026-09-21 («deben ya cerrarse porque KFC ya los cerró y la
+administradora también»). Está todo hecho salvo el paso final: el clasificador
+de seguridad de esta sesión bloqueó el comando SSH, incluso en modo de solo
+conteo. El comando exacto, el criterio de aceptación (174 validados, 0
+saltados) y todo el trabajo de verificación cruzada están en `ESTADO.md`
+**§1m** — no hace falta releer el código para correrlo, solo pegar el comando.
 
 **H ya está cerrada del todo (2026-09-21, 0 pendientes).** Lo único que le
 queda es T2.21.5, sin urgencia — la Tarea del nocturno **ya se recreó con

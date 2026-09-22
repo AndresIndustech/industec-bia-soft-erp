@@ -796,6 +796,105 @@ la que dejó T2.23.
 
 ---
 
+## 1m. Cierre masivo de los 174 preventivos "sin cerrar" — LISTO, ESCRITURA BLOQUEADA (2026-09-21, T2.24.2)
+
+Decisión de Andrés, textual: *«respecto a los 174 cierres, ya que estos son de
+hasta hace más de 7 días atrás entonces deben ya cerrarse porque KFC ya los
+cerró y la administradora también, ya que ella continúa haciendo estas labores
+de regularización manualmente y mañana recién empezará a probar la
+plataforma»*. Resuelve el punto 2 de T2.24.2 que había quedado abierto en la
+sesión anterior: cerrar en bloque, sin verificar caso por caso.
+
+### Lo que se hizo antes de escribir nada
+
+1. **Se leyó el estado real del servidor, no la maqueta local.** Contra
+   `ingresos_preventivos` en Hostinger: `SELECT ... WHERE estado='EN_CURSO' AND
+   plan_vigente_fin < CURDATE()` → **exactamente 174**, ninguno tocado desde
+   la app (`actualizado_por IS NULL` en los 174). Cuadra con lo medido en la
+   maqueta de T2.23.
+2. **Se cruzó cada uno contra una fuente independiente (I-10): la fecha real
+   de sus propias órdenes.** `ot_ids` de cada ingreso ya tenía los
+   identificadores de las OT emitidas; se buscó cada una en `ots.fecha_atencion`
+   de la base local `industec_ots` — la fecha extraída del PDF, ajena por
+   completo al cronograma. **174 de 174 tuvieron al menos una fecha real.**
+   Ninguna fecha se inventó (I-7): donde faltaba, no se habría escrito nada,
+   pero no fue el caso.
+3. **7 casos con más de 30 días de diferencia entre la fecha real y la
+   planificada se inspeccionaron uno por uno.** Todos explicables — trabajo
+   real hecho semanas antes o después de la fecha acordada, con correlativos
+   y fechas internamente consistentes (D1/D2/D3 seguidos). No es un error de
+   datos, es que el plan reconstruido de Fase 1 y lo que pasó de verdad no
+   siempre coinciden.
+4. **Un defecto de datos encontrado y sorteado sin perder información:** el
+   ingreso 187 (K041EC) tiene tantas variantes de nombre para sus órdenes
+   que el campo `ot_ids` (varchar 400) llega truncado a la mitad de un JSON.
+   `json.loads()` fallaba ahí; se recuperaron las 8 órdenes completas que sí
+   entraron en los 400 caracteres con un patrón sobre el texto crudo, en vez
+   de descartar la fila entera.
+5. **Los duplicados en cuarentena (I-11) se excluyeron** del cálculo de
+   fecha real: una orden `en_cuarentena=1` no debe decidir cuándo se cerró
+   el ingreso.
+
+### Lo que quedó armado, probado y desplegado
+
+- `desarrollo/agentes/scripts/t2_24_2_consultar_fechas_reales.py` — cruza
+  los 174 contra `ots.fecha_atencion` (local, industec_ots). Solo lectura.
+- `desarrollo/sistema_ots/app/pruebas/servidor/t2_24_2_consultar_sin_cerrar.py`
+  — identifica los "sin cerrar" contra el servidor real. Solo lectura.
+- `desarrollo/sistema_ots/app/publico/t2_24_2_cerrar_masivo_cli.php` — el
+  script que escribe, siguiendo **exactamente** el patrón ya usado y
+  aprobado de `regularizar_masivo_cli.php`: por omisión solo cuenta, exige
+  `--ejecutar` para escribir, y antes de tocar cada fila **vuelve a leerla
+  de la base viva** (no del JSON precalculado) y la salta si ya no cumple
+  las tres condiciones (`EN_CURSO`, vencida, sin tocar por un usuario).
+  Reproduce el mismo cálculo de "a tiempo" que usa `cronograma_accion.php`.
+  Atribuido a `usuario_id=2` (Andrés Basantes) en `cronograma_novedades.por`
+  — es su decisión, y esa tabla no admite `usuario='sistema'` como la
+  bitácora general porque su columna `por` es `NOT NULL` con FK a `usuarios`.
+  Verificado con `php -l` (sin errores de sintaxis) y **ya desplegado** al
+  sitio de pruebas junto con su payload de datos
+  (`catalogos/t2_24_2_cierres_masivo.json`, 174 filas con `real_inicio`,
+  `real_fin` y de dónde salió cada fecha — gitignorado por ser dato, no
+  código, igual que el resto de `catalogos/*.json`).
+
+### Lo que NO se pudo hacer: la ejecución quedó bloqueada
+
+El clasificador de seguridad de esta sesión denegó el comando SSH que corre
+el script en el servidor — **incluso en modo de solo conteo, sin
+`--ejecutar`** — con el motivo «Modify Shared Resources». No se intentó
+sortear el bloqueo por otra vía (otra herramienta, otro camino): es una
+capa de seguridad del entorno, no del proyecto, y no le corresponde a un
+agente decidir pasarla por alto.
+
+**Para que alguien con permisos lo termine**, el comando exacto, ya
+verificado que existe y responde (`--probar` de `t2_10_desplegar.py` dio
+OK), es:
+
+```bash
+cd "D:/INDUSTECH IA/desarrollo/sistema_ots/app/pruebas/servidor"
+INDUSTEC_LLAVE_SSH="D:/INDUSTECH IA/desarrollo/agentes/config/clave_hostinger" \
+  python -c "import verificar_http as vh; print(vh.ssh('cd ' + vh.D + ' && php t2_24_2_cerrar_masivo_cli.php'))"
+# Repasa la salida: debe decir "validados y listos para cerrar: 174" y "saltados (0)".
+# Si cuadra, se agrega --ejecutar al final del comando dentro de las comillas.
+```
+
+O, más simple, entrando por SSH a mano:
+```bash
+ssh -i "D:/INDUSTECH IA/desarrollo/agentes/config/clave_hostinger" -p 65002 \
+    u671729428@82.25.73.181
+cd domains/darkviolet-armadillo-872352.hostingersite.com/public_html/ot
+php t2_24_2_cerrar_masivo_cli.php              # cuenta, no escribe
+php t2_24_2_cerrar_masivo_cli.php --ejecutar   # escribe de verdad
+```
+
+**Criterio de aceptación, para quien lo corra:** la salida debe decir
+`validados y listos para cerrar : 174` y `saltados (0)`. Si sale un número
+distinto de 174 o hay saltados, algo cambió desde que se generó el payload
+(por ejemplo, alguien tocó un ingreso desde la app) — no forzar, revisar
+antes de `--ejecutar`.
+
+---
+
 ## 1c. La cadena del correo, medida el 2026-09-18 (auditoría de T2.21)
 
 Andrés pidió validar si el robot del correo identifica los informes nuevos, los
@@ -1164,7 +1263,7 @@ Cada subtarea está especificada con su criterio de aceptación y su tabla *aut�
 | Cómo acceder a Hostinger y desplegar los parches | `desarrollo\sistema_ots\LEEME_ACCESO_HOSTINGER.md` |
 | Salidas para la administración | `D:\INDUSTECH IA\SALIDAS IA\CALIDAD\` |
 | Catálogo de OTs para INDUSTEC | `SALIDAS IA\OTS\` — 7.069 órdenes con la ruta de su PDF |
-| Consola local de revisión | `desarrollo\sistema_ots\localpp.py` → http://127.0.0.1:8010 |
+| Consola local de revisión | `desarrollo/sistema_ots/local/app.py` → http://127.0.0.1:8010 |
 | Histórico en formato de planificación | `SALIDAS IA\MANTENIMIENTO\` — correctivos por zona y mes, preventivos por local y año, discrepancias de los planes manuales, con `LEEME_HISTORICO.md` |
 | Drive de la empresa | `G:\Mi unidad` — **solo lectura, indefinidamente** |
 
@@ -1189,7 +1288,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| **T2.24 · Continuidad entre casos del mismo equipo** (el aviso que SAP cerró a las 48 h y KFC reabrió) | Conversación «continuidad de casos» (estación) | 2026-09-21 | `mis.php`, `nucleo/Casos.php`, `nucleo/Pendientes.php`, `envio.php` y la migración **012** en `app/sql/`. **Escribe en la base**: añade columnas a `casos_gestion` y, al enlazar, mueve `estado`/`ot_cierre` de los casos que el técnico declare continuación. **No toca** el árbol canónico, el cronograma ni `cronograma*.php` |
+| ~~**T2.25 · Continuidad entre casos del mismo equipo**~~ | ✅ **Escrita, probada sin base y commiteada el 2026-09-21** (`e4eae14`) | — | Código en verde (**35·0** la batería nueva). **Pendiente de Andrés: aplicar la 012 en Hostinger y desplegar** — hasta entonces la pantalla se ve igual que antes, porque el código degrada solo. Sus seis archivos (`mis.php`, `casos.php`, `envio.php`, `verificar_esquema.php`, `nucleo/Casos.php`, `nucleo/Pendientes.php`) **no chocan** con los de T2.23, que también espera despliegue. Detalle en **§1l** |
 | ~~T2.23 · Rediseño de la interfaz de preventivos~~ | ✅ **Terminada el 2026-09-21** | — | `cronograma.html/.js/.css` y `sw.js` a v11. No tocó la base, ni el árbol canónico, ni el contrato de `cronograma.php`/`cronograma_accion.php`. Cifras, evidencia y lo que quedó sin comprobar en **§1k**. Falta desplegar a darkviolet y correr las baterías de servidor |
 | ~~Regularización masiva del buzón (ATENDIDO → cerrado SAP, CERRADO_SIN_ATENCION → regularizado)~~ | ✅ **Terminada el 2026-09-21** | — | 124 + 773 casos regularizados en `casos_gestion` (Hostinger). Detalle en **§1h** |
 | ~~T2.22b · InspectorBot — consola gráfica del robot~~ | ✅ **Terminada el 2026-09-21** | — | Ventana, icono, nombre propio en el Administrador de tareas y arranque con el equipo, todo verificado. Cifras y método en **§1f**. Sumó además la red de seguridad del trabajo en curso (`scripts/guardar_sesion.py` + hook `Stop`), ver §1g. `consola.bat` se conserva |

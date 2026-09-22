@@ -167,6 +167,10 @@ ARCHIVOS = [
 #   regularizar_masivo_cli.php (2026-09-21: vacía en bloque el pendiente de la
 #   administradora — ATENDIDO -> cerrado SAP, CERRADO_SIN_ATENCION -> regularizado
 #   — asumiendo que ya lo hizo en SAP; a mano, no en el cron. Ver ESTADO.md §1h)
+#   t2_24_2_cerrar_masivo_cli.php (2026-09-21: cierra en bloque los preventivos
+#   "sin cerrar" que destapó T2.23 — a mano, una sola vez. Lee
+#   catalogos/t2_24_2_cierres_masivo.json, que se sube junto con él y NO entra
+#   en --todo por ser dato, no código. Ver ESTADO.md §1k y PLAN T2.24.2)
 #                        herramientas de línea de órdenes. Las que ya están en
 #                        el servidor cortan con 404 por web; el resto no tienen
 #                        por qué llegar. Los dos CLI de T2.14.6 se suben con
