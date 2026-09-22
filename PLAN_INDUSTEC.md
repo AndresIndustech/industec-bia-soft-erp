@@ -1145,20 +1145,19 @@ siguen viéndolos «en curso». *Criterio:* `estadoPreventivo` devuelve un estad
 propio cuando el fin vigente ya pasó y no hay cierre, y `verificar_reportes.py`
 lo comprueba con un caso sembrado.
 
-**T2.24.2 · Cerrar los 174 sin cerrar — ✅ DECIDIDO por Andrés (2026-09-21),
-armado y verificado, escritura bloqueada por el entorno.** Andrés eligió el
-camino (b): «deben ya cerrarse porque KFC ya los cerró y la administradora
-también... mañana recién empezará a probar la plataforma». Antes de escribir
-se cruzaron los 174 contra `ots.fecha_atencion` (fuente independiente, I-10):
-**174 de 174 con fecha real encontrada**, ninguna inventada (I-7). El script
-que escribe (`t2_24_2_cerrar_masivo_cli.php`, mismo patrón que
-`regularizar_masivo_cli.php`: dry-run por omisión, `--ejecutar` para escribir,
-re-verifica cada fila contra la base viva antes de tocarla) está escrito,
-validado con `php -l` y **ya desplegado** al sitio de pruebas. Lo único que
-falta es correrlo: el clasificador de seguridad de la sesión bloqueó el
-comando SSH por «Modify Shared Resources», incluso en modo de solo conteo.
-Detalle completo, el comando exacto y el criterio de aceptación en
-`ESTADO.md` **§1m**.
+**T2.24.2 · Cerrar los 174 sin cerrar — ✅ HECHO y verificado (2026-09-22).**
+Andrés eligió el camino (b): «deben ya cerrarse porque KFC ya los cerró y la
+administradora también... mañana recién empezará a probar la plataforma».
+Antes de escribir se cruzaron los 174 contra `ots.fecha_atencion` (fuente
+independiente, I-10): **174 de 174 con fecha real encontrada**, ninguna
+inventada (I-7). El script (`t2_24_2_cerrar_masivo_cli.php`, mismo patrón que
+`regularizar_masivo_cli.php`) lo corrió Andrés mismo, en su terminal —el
+clasificador de seguridad de la sesión de Claude Code bloqueó el comando
+incluso en modo de solo conteo, y no era algo que un agente pudiera sortear.
+Salida: `CERRADOS: 174`. Verificado después por lectura contra el servidor:
+**0** ingresos siguen `EN_CURSO` y vencidos, **174** `CUMPLIDO` con
+`real_fin` puesto, **174** novedades `CIERRE`, **368** filas totales sin
+cambio. Detalle completo en `ESTADO.md` **§1m**.
 
 **T2.24.3 · La ventana de tolerancia del cumplimiento — DECISIÓN DE ANDRÉS.**
 La práctica estándar de los CMMS es contar «a tiempo» lo cerrado dentro de un
@@ -1299,6 +1298,39 @@ cadena por parecido.
 *Criterio:* un pendiente abierto en el aviso viejo, con la orden emitida sobre el
 nuevo enlazado, queda `RESUELTO` con nota `Orden concluida <id>`; sin el enlace,
 sigue abierto (la prueba comprueba las dos ramas).
+
+#### T2.25.4 · El origen no podía ser de otro técnico, y las emergencias reasignan (2026-09-22)
+
+Andrés, probando de nuevo el caso 10342924 (el mismo de T2.25.2), se topó con
+«No encuentro ese trabajo anterior entre los tuyos» al poner un aviso anterior
+real como origen. La causa: `mis.php` exigía `Casos::alcanzaAviso($origen, …)`,
+que para un técnico solo es no-null si el caso está asignado A ÉL. Pero el
+patrón que motiva T2.25 entera es justo el contrario — **el trabajo lo puede
+terminar un técnico distinto del que lo empezó**, porque las asignaciones se
+reparten según la urgencia del momento, no según quién atendió el aviso viejo.
+Exigir que el origen fuera "suyo" tapaba con una mano lo que la otra mano de
+T2.25 vino a resolver.
+
+**El arreglo no toca `Casos::alcanzaAviso()`**: esa función sigue siendo «es
+mío» donde debe seguir siéndolo — emitir una orden (`envio.php`) o abrir un
+pendiente de repuesto (`Pendientes.php`), los dos casos donde el candado
+correcto es la asignación, no la zona. Se agregó `Casos::zonaDeAviso()`
+(gestión si la tiene, si no el catálogo) y `mis.php` valida el origen contra
+`Auth::alcanzaZona()`: un técnico puede enlazar con **cualquier caso de su
+zona**, lo haya atendido quien lo haya atendido; el aislamiento entre zonas
+—la razón original de la restricción— se mantiene intacto.
+
+*Criterio, comprobado:* `Casos::zonaDeAviso('10342924', $gestion)` → `UIO`;
+`zonaDeAviso('99999999', …)` (inexistente) → `null`, y se sigue rechazando
+igual que antes. `prueba_continuidad.php` contra el catálogo real del servidor:
+**36 comprobaciones, 0 fallos** (no toca lo que ya estaba probado). Desplegado
+en darkviolet (`mis.php`, `nucleo/Casos.php`) y verificado con
+`t2_10_desplegar.py` que la web entrega exactamente lo subido.
+
+**Lo que NO se comprobó:** el clic real de un técnico en el celular contra un
+caso de otro compañero (no se generó una sesión de prueba para no ensuciar la
+bandeja de un técnico real). Si algo se ve raro en el piloto, es el primer
+lugar donde mirar.
 
 #### Qué puede hacer un agente aquí
 
@@ -1634,14 +1666,10 @@ faltando** correr las siete baterías de servidor —sobre todo
 escribiendo bien— y **mirarla con Andrés**, porque el criterio del pedido
 («que no aturda») es suyo. Cifras y lo no comprobado en `ESTADO.md` **§1k**.
 
-**M. Correr el cierre masivo de los 174 sin cerrar (T2.24.2)** — ✅ **decidido,
-armado y verificado; solo falta ejecutarlo.** Andrés autorizó el cierre en
-bloque el 2026-09-21 («deben ya cerrarse porque KFC ya los cerró y la
-administradora también»). Está todo hecho salvo el paso final: el clasificador
-de seguridad de esta sesión bloqueó el comando SSH, incluso en modo de solo
-conteo. El comando exacto, el criterio de aceptación (174 validados, 0
-saltados) y todo el trabajo de verificación cruzada están en `ESTADO.md`
-**§1m** — no hace falta releer el código para correrlo, solo pegar el comando.
+**M. Cierre masivo de los 174 sin cerrar (T2.24.2)** — ✅ **hecho el
+2026-09-22.** Andrés lo corrió él mismo (`CERRADOS: 174`), verificado después
+por lectura: 0 siguen sin cerrar, 174 `CUMPLIDO`, 368 filas sin cambio.
+Detalle en `ESTADO.md` **§1m**.
 
 **H ya está cerrada del todo (2026-09-21, 0 pendientes).** Lo único que le
 queda es T2.21.5, sin urgencia — la Tarea del nocturno **ya se recreó con

@@ -50,7 +50,7 @@ del rediseño.
 | Repositorio git sincronizado con GitHub | ✅ **2026-09-12** | `origin` es `git@github.com:AndresIndustech/industec-bia-soft-erp.git`. **Comprobado:** `ssh -T git@github.com` responde «Hi AndresIndustech! You've successfully authenticated», `git fetch` trae, y `master` tiene upstream `origin/master`. Andrés ya agregó la clave pública, así que el bloqueo del 2026-09-11 está levantado. **Se acabó el proyecto en un solo disco.** Ojo con lo que esto destapa: existe `origin/pc/auditoria-2026-09-10` **29 commits por delante de `master`**, con `master` como ancestro — ver §5.2b |
 | **Continuidad entre casos del mismo equipo** (T2.25) | ✅ **desplegada y verificada contra el servidor el 2026-09-21** | Migración **012 aplicada** (`verificar_esquema.php` → **TODO OK**, con 0 casos enlazados: no enlaza nada por su cuenta), `verificar_continuidad.py` en **25 · 0** —incluido el arrastre real del pendiente huérfano—, `verificar_http.py` **86 · 0** y `verificar_bandeja.py` **37 · 0**. Locales: **36 · 0** la nueva, 120 · 0, 57 · 0, 62 · 0. El fenómeno, medido: **185 grupos** local+equipo con más de un caso en el buzón vivo y **509 avisos** del histórico SAP que nacen dentro de la semana de otro del mismo equipo. Detalle en **§1l** |
 | **Buzón de la administradora, regularizado en bloque** | ✅ **2026-09-21** | **124 ATENDIDO → cerrados en SAP** + **773 CERRADO_SIN_ATENCION → regularizados**, a pedido de Andrés y asumiendo que ella ya lo hizo en SAP (sin verificar caso por caso). Pendientes de regularizar: **0**. Detalle, la herramienta y la nota sobre los «656» vs 773 reales en **§1h** |
-| **Pantalla de preventivos** | ✅ **rediseñada el 2026-09-21 (T2.23)** | De **~110 elementos** en la primera pantalla a **~28**. Tres horizontes en pestañas en vez de apilados; el atraso como cola de trabajo. Destapó tres cifras que se leían al revés: **174 ingresos «sin cerrar»** que figuraban «en curso» (algunos desde enero), el «0 % a tiempo» que en realidad era «ningún ingreso cerrado todavía», y el «sin kit» que salía en el 86 % de las filas. Baterías locales **120·0, 57·0, 62·0, 11·0**; cuadre de bloques **82+174+19+16+77 = 368**. Detalle y lo no comprobado en **§1k**. **Sin desplegar todavía** |
+| **Pantalla de preventivos** | ✅ **rediseñada y desplegada, 2026-09-21/22 (T2.23 + T2.24.2)** | De **~110 elementos** en la primera pantalla a **~28**. Tres horizontes en pestañas en vez de apilados; el atraso como cola de trabajo. Destapó tres cifras que se leían al revés: los **174 ingresos «sin cerrar»** (ya cerrados en bloque, ver §1m), el «0 % a tiempo» que en realidad era «ningún ingreso cerrado todavía», y el «sin kit» que salía en el 86 % de las filas. Baterías locales **120·0, 57·0, 62·0, 11·0**; cuadre de bloques **82+174+19+16+77 = 368**. Detalle en **§1k** (pantalla) y **§1m** (cierre masivo). **Falta correr las siete baterías de servidor** |
 
 **Cuadre del corpus, exacto contra los 7.333 PDFs originales:**
 `7.070 (órdenes) + 5 (informes técnicos) + 25 (otros clientes) + 233 (duplicados descartados) = 7.333`
@@ -860,7 +860,26 @@ la que dejó T2.23.
 
 ---
 
-## 1m. Cierre masivo de los 174 preventivos "sin cerrar" — LISTO, ESCRITURA BLOQUEADA (2026-09-21, T2.24.2)
+## 1m. Cierre masivo de los 174 preventivos "sin cerrar" — ✅ EJECUTADO Y VERIFICADO (2026-09-22, T2.24.2)
+
+> **Cerrado el 2026-09-22.** El bloqueo de escritura de más abajo lo tuvo esta
+> sesión de Claude Code, no Andrés: él corrió el comando él mismo, en su
+> propia terminal, con `--ejecutar`. Salida: `CERRADOS: 174`. Verificado
+> después por lectura, contra el servidor:
+> - **0** ingresos siguen `EN_CURSO` y vencidos — el atraso quedó en cero.
+> - **174** quedaron `CUMPLIDO`, con `actualizado_por=2` (Andrés) y `real_fin`
+>   puesto.
+> - **174** novedades `CIERRE` con el motivo del cierre masivo, una por
+>   ingreso.
+> - **368** filas totales en `ingresos_preventivos`, igual que antes: nada se
+>   perdió ni se duplicó.
+> - Conteo final por estado: **192 PLANIFICADO + 2 EN_CURSO + 174 CUMPLIDO =
+>   368.** Los 2 `EN_CURSO` que quedan no estaban vencidos — no eran parte de
+>   los 174, así que es correcto que sigan así.
+>
+> El texto de abajo (armado el 2026-09-21) documenta cómo se llegó hasta acá
+> y por qué las fechas usadas son reales y no inventadas; se conserva tal
+> cual como evidencia del trabajo previo a la ejecución.
 
 Decisión de Andrés, textual: *«respecto a los 174 cierres, ya que estos son de
 hasta hace más de 7 días atrás entonces deben ya cerrarse porque KFC ya los
