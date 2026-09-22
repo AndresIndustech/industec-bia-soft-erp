@@ -217,9 +217,19 @@ def main():
     anotar("T2.12.5", "los dos rechazos quedan en la bitácora con exito = 0", len(rech) >= 2, f"{len(rech)} filas: {[r['accion'] for r in rech]}")
 
     print("\n== T2.13.1 · la orden que manda la app ==")
-    aviso = elegidos[1]
-    caso = next((a for a in cat_a.get("avisos", {}).get("datos", []) if a["aviso"] == aviso), {})
+    # El caso se toma de lo que el tecnico tiene ABIERTO ahora y CON local, no
+    # de `elegidos[1]` a ciegas: ese aviso deja de estar abierto en cuanto algo
+    # lo atiende -paso el 2026-09-22 con el 10355931- y entonces `local` queda
+    # en None y los cinco envios de aqui abajo fallan con "sin local", que no
+    # tiene nada que ver con lo que se esta probando. Mismo criterio que usa
+    # verificar_emision.py.
+    abiertos = [a for a in cat_a.get("avisos", {}).get("datos", []) if a.get("local")]
+    caso = next((a for a in abiertos if a["aviso"] in elegidos), abiertos[0] if abiertos else {})
+    aviso = caso.get("aviso") or elegidos[1]
     local = caso.get("local")
+    if not local:
+        print("  AVISO: el tecnico de prueba no tiene ningun caso abierto con local. "
+              "Corre ~/respaldos/preparar_prueba.php antes de creerle a lo que sigue.")
     equipos = (cat_a.get("equipos") or {}).get(local) or []
     eq = ({"equipo_sap": str(equipos[0].get("equipo_sap")), "tipo": equipos[0].get("tipo", "")} if equipos
           else {"tipo": (cat_a.get("tipos") or ["FREIDORA"])[0]})

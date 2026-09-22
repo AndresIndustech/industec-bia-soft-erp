@@ -2443,6 +2443,17 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     nunca y el técnico buscaba a mano. Una regla de cruce sin su cifra medida
     contra los datos reales es una intención, no una función.
 
+36. **`verificar_emision.py` deja a `verificar_http.py` sin terreno.** La de
+    emisión **emite una orden de verdad**, así que el caso del técnico de prueba
+    pasa a ATENDIDO y deja de estar abierto. La de HTTP necesita un caso abierto
+    **con local** para sus cinco envíos de T2.13.1, y sin él falla con «sin
+    local» cinco veces seguidas, que no tiene nada que ver con lo que prueba.
+    **El orden correcto es `preparar_prueba.php` → `verificar_http.py` →
+    `verificar_emision.py`**, y si hay que repetir la de HTTP, volver a preparar
+    el arnés antes. Desde el 2026-09-22 la batería **lo dice en su salida** en
+    vez de dejar cinco fallos crípticos. Es el error nº 30 aplicado a dos
+    baterías concretas.
+
 ### Lo que no se toca, nunca
 
 1. **`G:\Mi unidad`** (Drive de INDUSTEC) es de solo lectura, **indefinidamente**.

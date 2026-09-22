@@ -949,10 +949,15 @@ Locales (estación, PHP 8.3)
   prueba_continuidad.php   42 · 0
 
 Contra darkviolet
-  verificar_bandeja.py     37 · 0
+  verificar_bandeja.py       37 · 0
+  verificar_emision.py       34 · 0
   verificar_sync_cerrada.mjs (nueva)   4 · 0
-  verificar_formulario.mjs   (nueva)  A, B y C en verde
+  verificar_formulario.mjs   (nueva)  12 · 0
 ```
+
+`verificar_formulario.mjs` **12 · 0** con el caso real 10356012: el aviso dice
+`MAQUINA DE HIELO-WM-IM100-000000000010176992` y el formulario **preselecciona
+`MAQUINA DE HIELO · SAP 30045350`** — con señal y también sin ella.
 
 `verificar_sync_cerrada.mjs` es la prueba que importa y dio **4 · 0**: con la
 aplicación **cerrada** (0 pantallas), se dispara el `sync` y **el servidor
@@ -1021,14 +1026,16 @@ cerrojo, no el único.
 
 ### Lo que NO se pudo comprobar, y por qué
 
-- **`verificar_http.py` da 81/86 y `verificar_emision.py` aborta.** No es por
-  esto: **el arnés se quedó sin ningún caso con local** para el técnico de
-  prueba —`10355931` y `10356012` pasaron a ATENDIDO mientras se probaba— y solo
-  le queda el sintético `99990011`, que no trae local. `verificar_emision.py`
-  aborta literalmente en `next(x for x in cat["avisos"]["datos"] if
-  x.get("local"))`. Ninguna de las dos carga `app.js`, `cola.js` ni `sw.js`: son
-  POST de Python contra `envio.php`. **Hay que correr `preparar_prueba.php` y
-  repetirlas**, cuando la otra conversación suelte el arnés.
+- **`verificar_http.py` queda en 81/86, y el motivo está medido.** No es por
+  esto: `verificar_emision.py` —que da **34·0**— **emite una orden de verdad** y
+  con eso el caso con local del técnico de prueba pasa a ATENDIDO. A la de HTTP
+  solo le queda el sintético `99990011`, que no trae local, y sus cinco envíos
+  de T2.13.1 fallan con «sin local». Ninguna de las dos carga `app.js`,
+  `cola.js` ni `sw.js`: son POST de Python contra `envio.php`. **El orden es
+  `preparar_prueba.php` → `verificar_http.py` → `verificar_emision.py`** (error
+  nº 36). La batería ya **lo dice en su salida** en vez de dejar cinco fallos
+  crípticos. Queda **correr `preparar_prueba.php` y repetir la de HTTP** cuando
+  la otra conversación suelte el arnés.
 - **No se entró con la cuenta real de `ajumbo`**: no se tiene su clave y no se
   iba a tocar. El defecto era del guion, igual para todas las cuentas, pero
   queda dicho.
