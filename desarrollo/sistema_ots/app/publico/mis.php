@@ -172,16 +172,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash'] = $ok ? ['ok' => $msg] : ['error' => $msg];
         } else {
             $origen = trim((string) ($_POST['origen'] ?? ''));
-            /* El origen tiene que ser un caso que él también alcanza. Si no, el
-               enlace serviría para averiguar qué pasa en otra zona: se responde
-               lo mismo que a un caso inexistente, sin distinguir cuál es cuál. */
-            $alcanzaOrigen = Casos::alcanzaAviso($origen, $gestion) !== null
-                          || in_array($origen, array_column($mios, 'aviso'), true);
+            /* El origen solo tiene que ser de su ZONA, no de su propia bandeja:
+               las urgencias reasignan casos todo el tiempo, y es el patrón más
+               común que el trabajo anterior lo haya atendido otro técnico. Lo
+               que sí sigue cortando es la zona — si no, el enlace serviría para
+               averiguar qué pasa en otra zona, y por eso se responde lo mismo
+               que a un caso inexistente, sin distinguir cuál es cuál (T2.25.2,
+               ampliado el 2026-09-22 a pedido de Andrés). */
+            $zonaOrigen = Casos::zonaDeAviso($origen, $gestion);
+            $alcanzaOrigen = $zonaOrigen !== null && Auth::alcanzaZona($zonaOrigen);
             if (!$alcanzaOrigen) {
                 Auth::bitacora('DENEGADO', 'caso', $avisoN,
                                'continuidad contra ' . $origen . ', fuera de su alcance',
                                null, null, [], false);
-                $_SESSION['flash'] = ['error' => 'No encuentro ese trabajo anterior entre los tuyos. '
+                $_SESSION['flash'] = ['error' => 'No encuentro ese trabajo anterior en tu zona. '
                                                . 'Revisa el número, o pregúntale a tu jefe de zona.'];
             } else {
                 try {
@@ -625,19 +629,21 @@ if (isset($_GET['ver'])) {
 
     <h2>Continúa un trabajo anterior</h2>
     <p class="sub" style="margin:0 0 14px">
-      Cuando el aviso con el que empezaste se cerró solo a las 48 horas y KFC
-      abrió este otro por el mismo equipo, el trabajo sigue siendo uno. Pon el
-      número del aviso viejo y este caso queda cerrado con la orden de aquel,
-      sin emitir otra.
+      Cuando el aviso anterior se cerró solo a las 48 horas y KFC abrió este
+      otro por el mismo equipo, el trabajo sigue siendo uno — lo hayas
+      atendido tú o un compañero, las asignaciones cambian con la urgencia.
+      Pon el número del aviso anterior y este caso queda cerrado con la orden
+      de aquel, sin emitir otra.
     </p>
 
     <div style="margin-bottom:12px">
-      <label for="cOrigen">Número del aviso con el que empezaste</label>
+      <label for="cOrigen">Número del aviso anterior</label>
       <input type="text" id="cOrigen" name="origen" inputmode="numeric" required
              pattern="[0-9]{6,12}" placeholder="p. ej. 10342524">
       <span class="derivado">
-        Son los 8 dígitos del aviso de SAP. Está en la orden que emitiste y en
-        el correo de KFC. Si no lo tienes a mano, búscalo en tu historial.
+        Son los 8 dígitos del aviso de SAP. Está en el correo de KFC y en la
+        orden de ese trabajo, la haya emitido quien la haya emitido. Si no lo
+        tienes a mano, pregúntale a tu jefe de zona.
       </span>
     </div>
 

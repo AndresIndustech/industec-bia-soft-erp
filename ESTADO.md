@@ -860,6 +860,73 @@ la que dejó T2.23.
 
 ---
 
+## 1n. T2.25.4 · El origen ya no tenía que ser "suyo" — Andrés lo encontró probando el propio 10342924 (2026-09-22)
+
+Andrés, mirando otra vez el caso 10342924 (el mismo de T2.25.2), se topó con «No
+encuentro ese trabajo anterior entre los tuyos» al poner un aviso anterior real
+como origen. La restricción exigía que el ORIGEN estuviera asignado al mismo
+técnico — y **ese es justo el caso que T2.25 existe para resolver**: el trabajo
+lo termina, seguido, un técnico distinto del que lo empezó, porque las
+asignaciones se reparten por urgencia, no por quién atendió el aviso viejo.
+
+**Lo que cambió, y lo que no:**
+
+| | Antes | Ahora |
+|---|---|---|
+| El caso ACTUAL (`avisoN`) | tiene que ser del técnico | **sin cambio** — sigue siendo suyo |
+| El ORIGEN (el trabajo anterior) | tenía que ser del técnico | **cualquiera de su misma ZONA** |
+
+`Casos::alcanzaAviso()` —el candado de «esto es mío», que usan `envio.php` y
+`Pendientes.php` para emitir una orden o abrir un pendiente— **no se tocó**.
+Se agregó `Casos::zonaDeAviso()` (gestión si la tiene, si no el catálogo) y
+`mis.php` valida el origen contra `Auth::alcanzaZona()`, que ya usan el jefe de
+zona y la administración: el aislamiento entre zonas, la razón original de la
+restricción, se mantiene intacto.
+
+**Comprobado, tres corridas limpias consecutivas contra darkviolet**
+(`verificar_continuidad.py`, reescrita para probar las dos ramas — antes solo
+probaba que "otro técnico no enlaza un caso ajeno" con dos cuentas de la MISMA
+zona, lo cual en realidad medía el candado que no cambió, no el que se
+relajó):
+
+```
+28 de 28 comprobaciones pasan; 0 fallan
+```
+
+incluyendo, nuevas: «un técnico no declara continuidad sobre el caso de otro»
+(sin cambio, sigue prohibido) y «el dueño del caso nuevo SÍ enlaza contra un
+origen que no es suyo» + «queda en bitácora a nombre del técnico que declaró»
+(el cambio). **Dos corridas intermedias dieron 401/302 en pasos de sesión no
+tocados por este cambio** (login y `envio.php`) — es el mismo flakiness ya
+documentado en §1l cuando las cuentas de prueba se pisan entre corridas
+seguidas; no es un efecto de este código, y las corridas que llegaron completas
+pasaron siempre 28/28.
+
+`prueba_continuidad.php` (local, sin base) también se corrió contra el
+catálogo real del servidor tras el despliegue: **36 comprobaciones, 0 fallos**,
+sin cambios porque no toca lo que se modificó.
+
+Desplegado en darkviolet (`mis.php`, `nucleo/Casos.php`) el 2026-09-22,
+verificado con `t2_10_desplegar.py` que la web entrega exactamente lo subido.
+
+**Lo que NO se comprobó:** el clic real de un técnico en el celular contra un
+caso de un compañero (no se generó una sesión de prueba adicional para no
+ensuciar la bandeja de un técnico real); y la rama cross-zona (que sigue
+prohibida) no tiene cuenta de otra zona en el arnés para ejercitarse de punta
+a punta contra el servidor — queda cubierta por revisión de código
+(`Auth::alcanzaZona()` ya está probada en otras rutas) pero no por esta
+batería.
+
+**La política que fija esto, dicha por Andrés en el momento:** enlazar con el
+trabajo de otro técnico sigue siendo la EXCEPCIÓN — la norma a la que el
+sistema se alinea es que quien empieza un caso lo lleve hasta el cierre. Por
+eso el pedido no termina en "que funcione": pidió además que el jefe de zona y
+la administración puedan **ver, sin abrir cada caso, cuándo pasó** — es
+T2.25.5 en el plan, **pendiente, sin construir todavía**: hoy la trazabilidad
+existe (bitácora + tooltip de `casos.php`) pero nadie la resalta como señal.
+
+---
+
 ## 1m. Cierre masivo de los 174 preventivos "sin cerrar" — ✅ EJECUTADO Y VERIFICADO (2026-09-22, T2.24.2)
 
 > **Cerrado el 2026-09-22.** El bloqueo de escritura de más abajo lo tuvo esta
@@ -1371,6 +1438,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
+| **T2.26 · El formulario de emisión no deja abrir ningún paso** | Conversación «emitir orden no avanza» (estación) | 2026-09-22 | Solo `publico/guia.js` y su despliegue a darkviolet. No toca la base, ni el árbol canónico, ni `app.js`, ni ningún PHP. Reportado por Andrés entrando como `ajumbo` al caso 10355894 |
 | ~~**T2.25 · Continuidad entre casos del mismo equipo**~~ | ✅ **Terminada, aplicada y desplegada el 2026-09-21** | — | Migración 012 en darkviolet y seis archivos desplegados. Verificado: **25·0** la batería nueva, 37·0 bandeja, 86·0 http, `verificar_esquema.php` TODO OK; y 36·0 · 120·0 · 57·0 · 62·0 en local. Lo único que queda es **que Andrés la mire**, y que alguien la use con un caso real. Detalle en **§1l** |
 | ~~T2.23 · Rediseño de la interfaz de preventivos~~ | ✅ **Terminada el 2026-09-21** | — | `cronograma.html/.js/.css` y `sw.js` a v11. No tocó la base, ni el árbol canónico, ni el contrato de `cronograma.php`/`cronograma_accion.php`. Cifras, evidencia y lo que quedó sin comprobar en **§1k**. Falta desplegar a darkviolet y correr las baterías de servidor |
 | ~~Regularización masiva del buzón (ATENDIDO → cerrado SAP, CERRADO_SIN_ATENCION → regularizado)~~ | ✅ **Terminada el 2026-09-21** | — | 124 + 773 casos regularizados en `casos_gestion` (Hostinger). Detalle en **§1h** |

@@ -16,7 +16,14 @@ El recorrido es el caso real que dio origen a la tarea:
 
 Y las pruebas negativas, que aquí importan tanto como las positivas:
   - enlazar al revés se rechaza (no se puede crear un ciclo)
-  - un caso que no es suyo no lo puede enlazar otro técnico
+  - declarar continuidad sobre el caso de OTRO técnico sigue prohibido: el
+    caso actual tiene que ser suyo, eso no cambió
+  - pero el ORIGEN (el trabajo anterior) ya no tiene que ser suyo (T2.25.4,
+    2026-09-22): las urgencias reasignan, y exigir que fuera "suyo" tapaba el
+    caso más común -- basta con que sea de su misma zona. Lo que sigue
+    cortando es la zona (`Auth::alcanzaZona`), pero este arnés no tiene una
+    cuenta de OTRA zona para ejercitar esa rama — queda sin probar aquí,
+    dicho y no fingido (I-7)
   - `avisos_sap.estatus_general` NO cambia por nada de esto
   - sin enlace, el pendiente del otro aviso sigue abierto (es la rama de control)
 
@@ -171,12 +178,45 @@ def main():
     g = gestion(viejo)
     vh.anotar("T2.25.1", "enlazar al revés se rechaza: no se crea el ciclo",
               not g.get("continua_de"), g.get("continua_de"))
-    # Un técnico de otra zona no puede enlazar un caso que no es suyo.
+
+    # El candado que NO se tocó en T2.25.4: el caso ACTUAL (avisoN) tiene que
+    # seguir siendo del técnico que lo tiene asignado. `otro` (tec_prueba_uio_b)
+    # no tiene 99990012 asignado, así que declarar sobre él sigue prohibido,
+    # sin llegar siquiera a mirar el origen. En este punto el paso 3 ya dejó
+    # `nuevo` enlazado con `viejo`: lo que importa es que el intento de `otro`
+    # NO lo cambie, no que quede vacío.
+    antes = gestion(nuevo).get("continua_de")
     st, _, _ = otro.pedir(f"mis.php?ver={nuevo}", form={
-        "accion": "continua", "aviso": nuevo, "origen": viejo, "nota": "ajeno"})
-    n = vh.sql("SELECT COUNT(*) n FROM bitacora WHERE entidad = 'caso' AND referencia = ? "
-               "AND accion = 'DENEGADO'", [nuevo])[0]["n"]
-    vh.anotar("T2.25.2", "otro técnico no enlaza un caso que no es suyo", int(n) >= 1, n)
+        "accion": "continua", "aviso": nuevo, "origen": viejo, "nota": "caso ajeno"})
+    g = gestion(nuevo)
+    vh.anotar("T2.25", "un técnico no declara continuidad sobre el caso de otro",
+              g.get("continua_de") == antes, g.get("continua_de"))
+
+    # T2.25.4 (2026-09-22): lo que SÍ cambió es el ORIGEN. Las urgencias
+    # reasignan, así que ya no hace falta que el trabajo anterior sea del
+    # mismo técnico -- alcanza con que sea de su zona. Se desenlaza lo que
+    # dejó el paso 3 y el aviso viejo pasa a `otro`, para que el origen sea
+    # de verdad de otro técnico y no del mismo `tec`.
+    otro_id = ids["tec_prueba_uio_b"]
+    st, _, _ = tec.pedir(f"mis.php?ver={nuevo}", form={
+        "accion": "descontinua", "aviso": nuevo, "nota": "prueba: se limpia para T2.25.4"})
+    g = gestion(nuevo)
+    vh.anotar("T2.25.4", "se desenlaza para dejar la prueba siguiente limpia",
+              not g.get("continua_de"), g.get("continua_de"))
+    vh.ejecutar("UPDATE casos_gestion SET asignado_a = ? WHERE aviso = ?", [otro_id, viejo])
+
+    st, _, _ = tec.pedir(f"mis.php?ver={nuevo}", form={
+        "accion": "continua", "aviso": nuevo, "origen": viejo,
+        "nota": "el trabajo anterior lo atendió otro técnico de la zona"})
+    g = gestion(nuevo)
+    vh.anotar("T2.25.4", "el dueño del caso nuevo SÍ enlaza contra un origen que no es suyo",
+              g.get("continua_de") == viejo, g.get("continua_de"))
+    ultimo = vh.sql("SELECT usuario_id FROM bitacora WHERE entidad = 'caso' AND referencia = ? "
+                     "AND accion = 'CASO_CONTINUA' ORDER BY id DESC LIMIT 1", [nuevo])
+    vh.anotar("T2.25.4", "  y queda en bitácora a nombre del técnico que declaró",
+              bool(ultimo) and int(ultimo[0]["usuario_id"]) == int(tec_id),
+              ultimo[0]["usuario_id"] if ultimo else "sin fila")
+    vh.ejecutar("UPDATE casos_gestion SET asignado_a = ? WHERE aviso = ?", [tec_id, viejo])
 
     print("\n== 5. la orden nueva arrastra la cadena y cierra el pendiente viejo ==")
     vh.ejecutar("UPDATE pendientes SET estado = 'ENTREGADO', cerrado_en = NULL, "

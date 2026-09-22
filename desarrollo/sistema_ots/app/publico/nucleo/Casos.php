@@ -346,6 +346,27 @@ final class Casos
         return null;
     }
 
+    /**
+     * La zona real de un aviso, exista o no fila de gestión, esté o no asignado.
+     *
+     * Para enlazar un caso con «el trabajo anterior que ya empecé» (T2.25.2) no
+     * importa a quién está asignado ese trabajo anterior: las urgencias hacen
+     * que un caso lo termine un técnico distinto del que lo arrancó, y exigir
+     * que sea el mismo técnico dejaba sin enlazar el caso más común. Lo que sí
+     * tiene que seguir cortando es la zona — por eso esta función, separada de
+     * `alcanzaAviso()`, que sigue siendo «es mío» para emitir una orden o abrir
+     * un pendiente (`envio.php`, `Pendientes.php`): ese candado no se toca.
+     */
+    public static function zonaDeAviso(string $aviso, array $gestion): ?string
+    {
+        $zg = trim((string) ($gestion[$aviso]['zona'] ?? ''));
+        if ($zg !== '') { return $zg; }
+        foreach (self::catalogo()['datos'] ?? [] as $c) {
+            if (($c['aviso'] ?? '') === $aviso) { return $c['zona'] ?? null; }
+        }
+        return null;
+    }
+
     /* --- Las transiciones legales del caso ---------------------------------
        Hasta la 009 cada rama de casos.php decidía por su cuenta desde qué
        estado se podía hacer qué, y se quedaron huecos: «veredicto → RESUELTO»

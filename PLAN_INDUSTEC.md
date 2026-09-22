@@ -1320,17 +1320,71 @@ correcto es la asignación, no la zona. Se agregó `Casos::zonaDeAviso()`
 zona**, lo haya atendido quien lo haya atendido; el aislamiento entre zonas
 —la razón original de la restricción— se mantiene intacto.
 
+**Esto sigue siendo la EXCEPCIÓN, no el flujo que se busca normalizar.** Andrés
+lo dijo explícito al pedir esto: la norma a la que el sistema se alinea sigue
+siendo que **el técnico que inicia un caso lo lleve hasta la conclusión**;
+enlazar con el trabajo de otro técnico es un **flujo alternativo, para casos
+especiales** (la urgencia del momento reparte distinto), y por eso tiene que
+quedar **auditable** — no solo posible. De ahí sale T2.25.5, más abajo: hoy la
+auditoría existe en la bitácora y en el tooltip de `casos.php`, pero nadie la
+resalta como algo que un jefe de zona deba mirar.
+
 *Criterio, comprobado:* `Casos::zonaDeAviso('10342924', $gestion)` → `UIO`;
 `zonaDeAviso('99999999', …)` (inexistente) → `null`, y se sigue rechazando
-igual que antes. `prueba_continuidad.php` contra el catálogo real del servidor:
-**36 comprobaciones, 0 fallos** (no toca lo que ya estaba probado). Desplegado
-en darkviolet (`mis.php`, `nucleo/Casos.php`) y verificado con
-`t2_10_desplegar.py` que la web entrega exactamente lo subido.
+igual que antes. `verificar_continuidad.py` contra darkviolet, reescrita para
+probar las dos ramas (antes solo probaba con dos cuentas de la MISMA zona que
+"otro técnico no enlaza un caso ajeno" — eso mide el candado que NO cambió, no
+el que se relajó): **28 de 28 comprobaciones pasan, en tres corridas limpias
+consecutivas** (dos corridas intermedias dieron 401/302 en pasos de sesión no
+tocados por este cambio — login y `envio.php` —, el mismo flakiness de cuentas
+de prueba ya documentado en `ESTADO.md` §1l). `prueba_continuidad.php` (local,
+sin base) contra el catálogo real del servidor: **36 comprobaciones, 0
+fallos** (no toca lo que ya estaba probado). Desplegado en darkviolet
+(`mis.php`, `nucleo/Casos.php`) y verificado con `t2_10_desplegar.py` que la
+web entrega exactamente lo subido.
 
 **Lo que NO se comprobó:** el clic real de un técnico en el celular contra un
 caso de otro compañero (no se generó una sesión de prueba para no ensuciar la
-bandeja de un técnico real). Si algo se ve raro en el piloto, es el primer
-lugar donde mirar.
+bandeja de un técnico real); y la rama cross-zona, que sigue prohibida, no
+tiene cuenta de otra zona en el arnés para probarse de punta a punta — queda
+cubierta por revisión de código, no por esta batería. Si algo se ve raro en el
+piloto, es el primer lugar donde mirar.
+
+#### T2.25.5 · Hacer visible, para el jefe de zona y la administración, cuándo un caso cruzó de técnico (pendiente, 2026-09-22)
+
+**Pedido de Andrés**, al mismo tiempo que T2.25.4: que este tipo de sucesos —un
+caso que terminó un técnico distinto del que lo empezó— **se pueda identificar
+desde el panel**, para regularizarlo y para ir armando la norma con datos
+reales de cuánto pasa esto en la operación diaria. No pidió cambiar la máquina
+de estados otra vez: pidió que lo que ya queda auditado en la bitácora **se vea
+sin tener que abrir cada caso**.
+
+**Lo que ya existe, y por qué no alcanza.** `casos.php` ya muestra, por caso,
+"continúa el aviso X" con un tooltip de quién declaró el enlace y cuándo (línea
+1038 y siguientes, comentario "Aquí es donde se AUDITA"). Pero el tooltip dice
+quién *declaró*, no si esa persona es *distinta* de quien tenía asignado el
+aviso de origen — el jefe tiene que abrir los dos casos y compararlos a mano
+para notar el cruce. Con más de un puñado de casos por semana, eso no se mira.
+
+**Lo que falta, en un vistazo, sin diseñar la pantalla entera:**
+- Comparar `continua_por` (quien declaró) contra el `asignado_a` que tenía el
+  aviso `continua_de` **en el momento del enlace** — no el actual, que puede
+  haber cambiado después por otra razón.
+- Una señal visible (no solo en el `title` del tooltip, que en el celular nadie
+  toca para leer) cuando son distintos: por ejemplo, un color o etiqueta aparte
+  de "continúa el aviso X", tipo "técnico distinto: cerró Fulano, lo empezó
+  Mengano".
+- Un filtro o un conteo en el panel del jefe de zona (o en un reporte aparte)
+  de cuántos casos de su zona cruzaron de técnico en la ventana que decida:
+  es el dato que arma la norma que Andrés quiere fijar más adelante.
+
+**Lo que NO se hace todavía:** diseñar un panel nuevo o un reporte con
+gráficos. Es una extensión de lo que ya existe en `casos.php`, no una pantalla
+distinta — eso se decide si el dato, una vez visible, resulta ser frecuente.
+
+| Autónomo | Requiere aprobación de Andrés | Prohibido |
+|---|---|---|
+| Medir cuánto pasa esto hoy (consulta de solo lectura contra `casos_gestion`/`bitacora`) para dimensionar antes de construir | Diseñar y desplegar la señal visual en `casos.php` | Cambiar `Casos::TRANSICIONES` o la máquina de estados por esto — es una vista, no una regla nueva |
 
 #### Qué puede hacer un agente aquí
 
