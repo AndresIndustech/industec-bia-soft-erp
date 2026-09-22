@@ -964,28 +964,48 @@ final class Pendientes
      * No finge (I-7): un pendiente que sigue esperando a Grupo KFC no se cierra
      * solo porque llegó una orden -- queda anotado, y la administración lo ve.
      *
+     * @param string|string[] $aviso el aviso de la orden, o toda su cadena de
+     *        continuidad (`Casos::cadena()`): avisos distintos de SAP para un
+     *        mismo trabajo, enlazados a mano por el técnico. El primero es el
+     *        de la orden y es el que nombran las notas.
      * @return int Cuántos pendientes se resolvieron de verdad.
      */
-    public static function resolverPorOrden(string $aviso, ?string $activoFijo, string $idIndustec,
+    public static function resolverPorOrden(string|array $aviso, ?string $activoFijo, string $idIndustec,
                                             int $usuarioId): int
     {
         if (!self::disponible()) { return 0; }
-        $aviso = trim($aviso);
-        if ($aviso === '') { return 0; }
+
+        /* T2.25.3 — ACEPTA LA CADENA, NO UN SOLO AVISO.
+           Hasta aquí esto filtraba por `aviso = ?`, y ahí había un agujero con
+           consecuencia: SAP cierra el aviso que nadie atendió en 48 horas, KFC
+           abre otro por el mismo equipo, y cuando el técnico vuelve con el
+           repuesto y emite la orden bajo el aviso NUEVO, el pendiente del viejo
+           se quedaba abierto con su reloj corriendo. No había ninguna ruta que
+           lo cerrara: ni esta, ni la pantalla del jefe de zona.
+           Solo entran avisos que una persona enlazó a mano (`Casos::cadena()`):
+           nadie llega a esta lista por parecerse a otro caso. */
+        $avisos = array_values(array_unique(array_filter(
+            array_map('trim', array_map('strval', (array) $aviso)),
+            static fn(string $a): bool => $a !== ''
+        )));
+        if ($avisos === []) { return 0; }
+        $aviso = $avisos[0];            // el de la orden: es el que nombran las notas
         $activoFijo = $activoFijo !== null ? trim($activoFijo) : null;
 
         // Los pasos en que la pieza o el equipo ya están en manos del técnico:
         // instalarlo y emitir la orden es justo lo que los cierra.
         $cerrables = ['ENTREGADO', 'DEVUELTO_TALLER', 'GARANTIA_APROBADA', 'BAJA_APROBADA'];
-        $donde = 'aviso = ? AND estado IN (' . self::lista_($cerrables) . ')';
-        $par = [$aviso];
+        $huecos = implode(',', array_fill(0, count($avisos), '?'));
+        $donde = "aviso IN ($huecos) AND estado IN (" . self::lista_($cerrables) . ')';
+        $par = $avisos;
         if ($activoFijo !== null && $activoFijo !== '') {
             $donde .= ' AND activo_fijo = ?';
             $par[] = $activoFijo;
         }
         $nota = 'Orden concluida ' . $idIndustec;
         $n = 0;
-        foreach (Db::todos("SELECT pendiente_id, estado FROM pendientes WHERE $donde", $par) as $f) {
+        $tocados = [];
+        foreach (Db::todos("SELECT pendiente_id, aviso, estado FROM pendientes WHERE $donde", $par) as $f) {
             $pid = (int) $f['pendiente_id'];
             $afectadas = Db::ejecutar(
                 "UPDATE pendientes SET estado = 'RESUELTO', gestionado_por = ?, gestionado_en = NOW(),
@@ -994,31 +1014,43 @@ final class Pendientes
                 [$usuarioId, $nota, $pid, $f['estado']]
             );
             if ($afectadas === 0) { continue; }   // otra cosa lo cerró primero
-            self::anotar($pid, 'CAMBIO_ESTADO', $nota, false, $f['estado'], 'RESUELTO', $usuarioId);
-            Auth::bitacora('PENDIENTE_RESUELTO_POR_ORDEN', 'pendiente', (string) $pid, $nota,
-                           $f['estado'], 'RESUELTO', ['aviso' => $aviso, 'id_industec' => $idIndustec]);
+            /* El pendiente puede venir de OTRO aviso de la cadena: el de la
+               orden es el nuevo, el del pendiente es el que SAP cerró solo.
+               Se dice cuál es cuál, porque leer después «orden 1564 cerró el
+               pendiente del aviso 10342524» es lo que explica el caso. */
+            $suyo = (string) $f['aviso'];
+            $txt = $nota . ($suyo !== $aviso ? ' (emitida sobre el aviso ' . $aviso
+                                             . ', que continúa este trabajo)' : '');
+            self::anotar($pid, 'CAMBIO_ESTADO', $txt, false, $f['estado'], 'RESUELTO', $usuarioId);
+            Auth::bitacora('PENDIENTE_RESUELTO_POR_ORDEN', 'pendiente', (string) $pid, $txt,
+                           $f['estado'], 'RESUELTO',
+                           ['aviso' => $suyo, 'aviso_orden' => $aviso, 'id_industec' => $idIndustec]);
             $n++;
+            $tocados[$suyo] = true;
         }
 
-        // Los abiertos del mismo aviso que NO estaban en un paso cerrable (p.
-        // ej. uno todavía esperando a Grupo KFC): no se fingen resueltos, se
-        // anota que la orden llegó con el pendiente aún vivo (I-7).
-        $otrosDonde = 'aviso = ? AND estado IN (' . self::lista_(self::ABIERTOS) . ')
+        // Los abiertos de la cadena que NO estaban en un paso cerrable (p. ej.
+        // uno todavía esperando a Grupo KFC): no se fingen resueltos, se anota
+        // que la orden llegó con el pendiente aún vivo (I-7).
+        $otrosDonde = "aviso IN ($huecos) AND estado IN (" . self::lista_(self::ABIERTOS) . ')
                        AND estado NOT IN (' . self::lista_($cerrables) . ')';
-        $otrosPar = [$aviso];
+        $otrosPar = $avisos;
         if ($activoFijo !== null && $activoFijo !== '') {
             $otrosDonde .= ' AND activo_fijo = ?';
             $otrosPar[] = $activoFijo;
         }
-        foreach (Db::todos("SELECT pendiente_id, estado FROM pendientes WHERE $otrosDonde", $otrosPar) as $o) {
+        foreach (Db::todos("SELECT pendiente_id, aviso, estado FROM pendientes WHERE $otrosDonde", $otrosPar) as $o) {
             $pid = (int) $o['pendiente_id'];
             $txt = $nota . ' recibida con este pendiente aún en ' . self::etiquetaEstado($o['estado']) . '.';
             self::anotar($pid, 'AVISO_INTERNO', $txt, false, null, null, $usuarioId);
             Auth::bitacora('PENDIENTE_ORDEN_CONCLUIDA_SIN_CERRAR', 'pendiente', (string) $pid, $txt,
-                           $o['estado'], $o['estado'], ['aviso' => $aviso, 'id_industec' => $idIndustec]);
+                           $o['estado'], $o['estado'],
+                           ['aviso' => $o['aviso'], 'aviso_orden' => $aviso, 'id_industec' => $idIndustec]);
         }
 
-        if ($n > 0) { self::liberarCaso($aviso); }
+        // Cada caso de la cadena que soltó un pendiente puede dejar de esperar:
+        // `liberarCaso` ya comprueba, uno por uno, que no le quede ninguno.
+        foreach (array_keys($tocados) as $a) { self::liberarCaso((string) $a); }
         return $n;
     }
 

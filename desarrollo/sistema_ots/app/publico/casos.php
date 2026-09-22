@@ -1035,6 +1035,22 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                 <?php elseif (Casos::otroTrabajoPorDecidir($c, $g)): ?>
                   <span class="desc" style="color:#92400e">fuera del área: falta decidir si es un otro trabajo</span>
                 <?php endif; ?>
+                <?php /* La continuidad (T2.25). Aquí es donde se AUDITA: el
+                         técnico declara el enlace sin pedir permiso, y esto es
+                         lo que deja ver al jefe de zona y a la administración
+                         por qué este aviso no tiene una orden propia. Sin esta
+                         línea, un caso ATENDIDO sin orden suya no se distingue
+                         de un error. */ ?>
+                <?php if (!empty($g['continua_de'])): ?>
+                  <span class="desc" style="color:#1d4ed8"
+                        title="<?= e(($g['continua_nombre'] ?? 'alguien') . ' lo declaró el '
+                                     . substr((string) ($g['continua_en'] ?? ''), 0, 16)
+                                     . ($g['continua_nota'] ? ': ' . $g['continua_nota'] : '')) ?>">
+                    continúa el aviso <?= e((string) $g['continua_de']) ?><?php
+                      if (!empty($g['continua_ot'])): ?> · orden <?= e((string) $g['continua_ot']) ?><?php
+                      else: ?> · sin orden propia<?php endif; ?>
+                  </span>
+                <?php endif; ?>
               </td>
             </tr>
           <?php endforeach; ?>

@@ -105,9 +105,16 @@ $nuevos  = count(array_filter($avisos, $esNuevo));
 
 Auth::bitacora('CONSULTAR', 'bandeja', 'mis', 'visibles=' . count($mios));
 
+/* Puede declarar que un caso continúa un trabajo anterior (T2.25). Mientras la
+   012 no esté aplicada el permiso no existe todavía, y entonces manda el rol:
+   es el mismo respaldo que usa `Ui::puedeModulo()`, y evita que la pantalla se
+   quede sin la salida nueva por una migración pendiente. */
+$puedeContinuidad = Ui::puedeModulo('casos.continuidad',
+                                    ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO'], $u);
+
 /* =========================================================================
-   LAS DOS ACCIONES QUE EL TECNICO HACE DESDE AQUI.
-   Las dos revalidan permiso, alcance y dato EN EL SERVIDOR. Que el botón esté
+   LAS ACCIONES QUE EL TECNICO HACE DESDE AQUI.
+   Todas revalidan permiso, alcance y dato EN EL SERVIDOR. Que el botón esté
    escondido no protege nada: un POST se fabrica a mano desde cualquier lado.
    Se responde con redirección (POST-redirect-GET) para que recargar no repita
    la acción — y en un celular con mala señal, recargar es lo primero que se
@@ -133,6 +140,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         $_SESSION['flash'] = $ok ? ['ok' => $msg] : ['error' => $msg];
         $vuelta = 'mis.php?ver=' . rawurlencode((string) ($_POST['aviso'] ?? ''));
+
+    } elseif ($accion === 'continua' || $accion === 'descontinua') {
+        /* «Este caso es la continuación de un trabajo que ya empecé» (T2.25.2).
+           SAP cierra el aviso que nadie atendió en 48 h y KFC abre otro por el
+           mismo equipo; sin esto el técnico o emite una orden duplicada o deja
+           el caso pendiente para siempre.
+
+           El alcance se revalida aquí aunque el botón ya lo haya comprobado:
+           enlazar un caso lo deja ATENDIDO ante la administración, así que un
+           POST fabricado no puede cerrar el caso de otra zona. */
+        $avisoN = trim((string) ($_POST['aviso'] ?? ''));
+        $vuelta = 'mis.php?ver=' . rawurlencode($avisoN);
+        $suyo = null;
+        foreach ($mios as $c) { if (($c['aviso'] ?? '') === $avisoN) { $suyo = $c; break; } }
+
+        if (!$puedeContinuidad || $suyo === null) {
+            Auth::bitacora('DENEGADO', 'caso', $avisoN,
+                           $suyo === null ? 'continuidad sobre un caso fuera de su alcance'
+                                          : 'continuidad sin permiso',
+                           null, null, [], false);
+            $_SESSION['flash'] = ['error' => 'Ese caso no está entre los tuyos.'];
+        } elseif ($accion === 'descontinua') {
+            try {
+                [$ok, $msg] = Casos::desenlazar($avisoN, (int) $u['usuario_id'],
+                                                (string) ($_POST['nota'] ?? ''));
+            } catch (Throwable $ex) {
+                error_log('mis.php: desenlazar: ' . $ex->getMessage());
+                [$ok, $msg] = [false, 'Todavía no se puede deshacer el enlace en este servidor.'];
+            }
+            $_SESSION['flash'] = $ok ? ['ok' => $msg] : ['error' => $msg];
+        } else {
+            $origen = trim((string) ($_POST['origen'] ?? ''));
+            /* El origen tiene que ser un caso que él también alcanza. Si no, el
+               enlace serviría para averiguar qué pasa en otra zona: se responde
+               lo mismo que a un caso inexistente, sin distinguir cuál es cuál. */
+            $alcanzaOrigen = Casos::alcanzaAviso($origen, $gestion) !== null
+                          || in_array($origen, array_column($mios, 'aviso'), true);
+            if (!$alcanzaOrigen) {
+                Auth::bitacora('DENEGADO', 'caso', $avisoN,
+                               'continuidad contra ' . $origen . ', fuera de su alcance',
+                               null, null, [], false);
+                $_SESSION['flash'] = ['error' => 'No encuentro ese trabajo anterior entre los tuyos. '
+                                               . 'Revisa el número, o pregúntale a tu jefe de zona.'];
+            } else {
+                try {
+                    [$ok, $msg] = Casos::enlazar($avisoN, $origen, $suyo['zona'] ?? null,
+                                                 (int) $u['usuario_id'],
+                                                 (string) ($_POST['nota'] ?? ''));
+                } catch (Throwable $ex) {
+                    /* Sin la 012 no existen las columnas. La orden del técnico no
+                       se pierde por eso: se le dice que todavía no está puesto,
+                       en vez de un error que no significa nada para él (I-7). */
+                    error_log('mis.php: enlazar: ' . $ex->getMessage());
+                    [$ok, $msg] = [false, 'Este servidor todavía no tiene puesta la continuidad entre casos. '
+                                        . 'Avisa a la administración; tu caso queda como está.'];
+                }
+                $_SESSION['flash'] = $ok ? ['ok' => $msg] : ['error' => $msg];
+            }
+        }
 
     } elseif ($accion === 'insistir') {
         [$ok, $msg] = Pendientes::insistir(
@@ -187,6 +253,17 @@ if (isset($_GET['ver'])) {
     $errFlash = Ui::errorFlash();
     $okFlash  = $_SESSION['flash']['ok'] ?? null;
     unset($_SESSION['flash']);
+
+    /* La continuidad (T2.25.2). `continua_de` puede no venir si la 012 todavía
+       no está aplicada: `gestion()` hace `SELECT g.*` y simplemente no trae la
+       columna, así que esto queda en null y la pantalla se ve como antes. */
+    $continuaDe = trim((string) ($g['continua_de'] ?? ''));
+    $continuaOt = trim((string) ($g['continua_ot'] ?? ''));
+    /* Solo se proponen candidatos si hay algo que decidir: un caso ya enlazado
+       no vuelve a preguntarse, y uno cerrado ya no se cierra con nada. */
+    $candidatos = ($abierto && $puedeContinuidad && $continuaDe === '')
+                ? Casos::continuidadPosible($caso, $gestion, $aten)
+                : [];
     ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -369,6 +446,94 @@ if (isset($_GET['ver'])) {
   </div>
 <?php endif; ?>
 
+<?php /* =====================================================================
+     ESTE CASO PUEDE SER LA CONTINUACION DE UN TRABAJO ANTERIOR (T2.25.2).
+
+     SAP cierra solo el aviso que nadie atendió en 48 horas, y KFC abre otro
+     por el mismo equipo. El trabajo es uno; los avisos, varios. Va ANTES de
+     los botones a propósito: si el técnico ya emitió la orden de este trabajo
+     la semana pasada, lo que tiene que hacer aquí no es emitir otra.
+
+     El sistema propone; decide él. Se le enseña de cada candidato la fecha, lo
+     que escribió KFC y la orden que salió de ahí, porque dos casos del mismo
+     equipo pueden ser dos trabajos distintos —«dar de baja» y «instalar el
+     nuevo»— y el único que sabe cuál es cuál es el que estuvo ahí.
+     ===================================================================== */ ?>
+<?php if ($continuaDe !== ''): ?>
+  <div style="padding:14px 14px 0">
+    <div class="rep atendido">
+      <div class="cab">
+        <div style="min-width:0">
+          <div class="que">Continúa el trabajo del aviso <?= $e($continuaDe) ?></div>
+          <div class="meta">
+            <?= $continuaOt !== '' ? 'cubierto por la orden ' . $e($continuaOt)
+                                   : 'ese trabajo todavía no tiene orden emitida' ?>
+            <?php if (!empty($g['continua_en'])): ?>
+              · <?= $e(substr((string) $g['continua_en'], 0, 16)) ?>
+            <?php endif; ?>
+            <?php if (!empty($g['continua_nombre'])): ?>
+              · lo declaró <?= $e($g['continua_nombre']) ?>
+            <?php endif; ?>
+          </div>
+        </div>
+        <?php if ($continuaOt !== '' && Auth::puede('ots.pdf') && Emision::existePdf($continuaOt)): ?>
+          <a class="btn sm" href="pdf.php?ot=<?= rawurlencode($continuaOt) ?>"
+             target="_blank" rel="noopener">Ver PDF</a>
+        <?php endif; ?>
+      </div>
+      <?php if (!empty($g['continua_nota'])): ?>
+        <div class="nota"><?= $e($g['continua_nota']) ?></div>
+      <?php endif; ?>
+      <?php if ($puedeContinuidad): ?>
+        <form method="post" style="margin-top:10px">
+          <input type="hidden" name="csrf" value="<?= $e(Auth::csrfToken()) ?>">
+          <input type="hidden" name="accion" value="descontinua">
+          <input type="hidden" name="aviso" value="<?= $e($avisoVer) ?>">
+          <button class="btn sm" type="submit">No era el mismo trabajo: deshacer</button>
+        </form>
+      <?php endif; ?>
+    </div>
+  </div>
+<?php elseif ($candidatos): ?>
+  <div style="padding:14px 14px 0">
+    <?= Ui::aviso('info', '<b>¿Esto continúa un trabajo que ya empezaste?</b>'
+      . '<p>Hay ' . count($candidatos) . ' caso' . (count($candidatos) === 1 ? '' : 's')
+      . ' anterior' . (count($candidatos) === 1 ? '' : 'es') . ' de este mismo equipo. Si es el mismo trabajo, '
+      . 'no hace falta emitir otra orden: enlázalo y este caso queda cerrado con la orden de aquel.</p>') ?>
+
+    <?php foreach ($candidatos as $k): ?>
+      <div class="rep" style="margin-top:10px">
+        <div class="cab">
+          <div style="min-width:0">
+            <div class="que">Aviso <?= $e($k['aviso']) ?></div>
+            <div class="meta">
+              <?= $e($k['fecha']) ?> · hace <?= (int) $k['dias'] ?> día<?= $k['dias'] === 1 ? '' : 's' ?>
+              · <?= $k['ot'] !== null ? 'orden ' . $e($k['ot']) : 'sin orden emitida' ?>
+            </div>
+          </div>
+        </div>
+        <?php if (trim((string) $k['pedido']) !== ''): ?>
+          <div class="cita" style="margin-top:9px"><?= $e($k['pedido']) ?></div>
+        <?php endif; ?>
+        <form method="post" style="margin-top:10px">
+          <input type="hidden" name="csrf" value="<?= $e(Auth::csrfToken()) ?>">
+          <input type="hidden" name="accion" value="continua">
+          <input type="hidden" name="aviso" value="<?= $e($avisoVer) ?>">
+          <input type="hidden" name="origen" value="<?= $e($k['aviso']) ?>">
+          <input type="hidden" name="nota" value="Mismo equipo, mismo trabajo">
+          <button class="btn primary" type="submit" style="width:100%;padding:11px">
+            Es el mismo trabajo
+          </button>
+        </form>
+      </div>
+    <?php endforeach; ?>
+
+    <p class="sub" style="margin:10px 0 0">
+      Si ninguno es, sigue abajo y emite la orden de este caso como siempre.
+    </p>
+  </div>
+<?php endif; ?>
+
 <div class="mov-acciones">
   <?php if ($abierto): ?>
     <a class="btn primary" href="index.html?aviso=<?= rawurlencode($avisoVer) ?>">
@@ -381,6 +546,17 @@ if (isset($_GET['ver'])) {
   <?php if ($abierto && Auth::puede('repuestos.pedir') && !$pendCaso): ?>
     <button class="btn ghost" type="button" onclick="document.getElementById('dlgTrabado').showModal()">
       No pude concluir: el equipo quedó trabado
+    </button>
+  <?php endif; ?>
+
+  <?php /* El buscador a mano. El sistema propone por local y equipo, pero KFC
+           a veces abre el aviso contra otro equipo del mismo local, o sin
+           equipo: entonces la propuesta no lo encuentra y hay que poder
+           decirlo. Si el sistema no lo sabe, deja buscar; no inventa (I-7). */ ?>
+  <?php if ($abierto && $puedeContinuidad && $continuaDe === ''): ?>
+    <button class="btn ghost" type="button" onclick="document.getElementById('dlgContinua').showModal()">
+      <?= $candidatos ? 'Es la continuación de otro trabajo que no está en la lista'
+                      : 'Esto continúa un trabajo que ya empecé' ?>
     </button>
   <?php endif; ?>
 </div>
@@ -434,6 +610,49 @@ if (isset($_GET['ver'])) {
 
     <div class="row" style="margin-top:16px;gap:8px">
       <button class="btn primary" type="submit">Registrar</button>
+      <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+<?php endif; ?>
+
+<?php if ($abierto && $puedeContinuidad && $continuaDe === ''): ?>
+<dialog id="dlgContinua">
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= $e(Auth::csrfToken()) ?>">
+    <input type="hidden" name="accion" value="continua">
+    <input type="hidden" name="aviso" value="<?= $e($avisoVer) ?>">
+
+    <h2>Continúa un trabajo anterior</h2>
+    <p class="sub" style="margin:0 0 14px">
+      Cuando el aviso con el que empezaste se cerró solo a las 48 horas y KFC
+      abrió este otro por el mismo equipo, el trabajo sigue siendo uno. Pon el
+      número del aviso viejo y este caso queda cerrado con la orden de aquel,
+      sin emitir otra.
+    </p>
+
+    <div style="margin-bottom:12px">
+      <label for="cOrigen">Número del aviso con el que empezaste</label>
+      <input type="text" id="cOrigen" name="origen" inputmode="numeric" required
+             pattern="[0-9]{6,12}" placeholder="p. ej. 10342524">
+      <span class="derivado">
+        Son los 8 dígitos del aviso de SAP. Está en la orden que emitiste y en
+        el correo de KFC. Si no lo tienes a mano, búscalo en tu historial.
+      </span>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <label for="cNota">Por qué es el mismo trabajo</label>
+      <textarea id="cNota" name="nota" rows="2" required
+        placeholder="p. ej. es el mismo horno: fui el 18-jul, quedó esperando la resistencia y hoy la instalé"></textarea>
+      <span class="derivado">
+        Es lo que ve tu jefe de zona, y lo que responde a Grupo KFC si pregunta
+        por qué este aviso no tiene una orden propia.
+      </span>
+    </div>
+
+    <div class="row" style="margin-top:16px;gap:8px">
+      <button class="btn primary" type="submit">Enlazar</button>
       <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
     </div>
   </form>

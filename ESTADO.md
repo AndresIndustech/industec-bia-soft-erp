@@ -48,6 +48,7 @@ del rediseño.
 | Respaldo TrueNAS | 🔒 | Bloqueado: falta acceso físico al equipo |
 | Capacitación de cierre | 🔒 | Bloqueada: falta agendar con el personal |
 | Repositorio git sincronizado con GitHub | ✅ **2026-09-12** | `origin` es `git@github.com:AndresIndustech/industec-bia-soft-erp.git`. **Comprobado:** `ssh -T git@github.com` responde «Hi AndresIndustech! You've successfully authenticated», `git fetch` trae, y `master` tiene upstream `origin/master`. Andrés ya agregó la clave pública, así que el bloqueo del 2026-09-11 está levantado. **Se acabó el proyecto en un solo disco.** Ojo con lo que esto destapa: existe `origin/pc/auditoria-2026-09-10` **29 commits por delante de `master`**, con `master` como ancestro — ver §5.2b |
+| **Continuidad entre casos del mismo equipo** (T2.25) | ⚠️ **escrito y probado sin base; sin desplegar** | 4 baterías locales en verde (**35 · 0** la nueva, 120 · 0, 57 · 0, 62 · 0). El fenómeno, medido: **185 grupos** local+equipo con más de un caso en el buzón vivo y **509 avisos** del histórico SAP que nacen dentro de la semana de otro del mismo equipo. **Falta aplicar la 012 y correr `verificar_continuidad.py`**: lo que necesita MySQL está escrito y sin ejecutar. Detalle en **§1l** |
 | **Buzón de la administradora, regularizado en bloque** | ✅ **2026-09-21** | **124 ATENDIDO → cerrados en SAP** + **773 CERRADO_SIN_ATENCION → regularizados**, a pedido de Andrés y asumiendo que ella ya lo hizo en SAP (sin verificar caso por caso). Pendientes de regularizar: **0**. Detalle, la herramienta y la nota sobre los «656» vs 773 reales en **§1h** |
 | **Pantalla de preventivos** | ✅ **rediseñada el 2026-09-21 (T2.23)** | De **~110 elementos** en la primera pantalla a **~28**. Tres horizontes en pestañas en vez de apilados; el atraso como cola de trabajo. Destapó tres cifras que se leían al revés: **174 ingresos «sin cerrar»** que figuraban «en curso» (algunos desde enero), el «0 % a tiempo» que en realidad era «ningún ingreso cerrado todavía», y el «sin kit» que salía en el 86 % de las filas. Baterías locales **120·0, 57·0, 62·0, 11·0**; cuadre de bloques **82+174+19+16+77 = 368**. Detalle y lo no comprobado en **§1k**. **Sin desplegar todavía** |
 
@@ -710,6 +711,91 @@ la lista» y el caso real es «cuando cambia el contenido».
 
 ---
 
+## 1l. Continuidad entre casos: un trabajo, varios avisos (2026-09-21, T2.25)
+
+**Pedido de Andrés**, mirando la cuenta de Anthony Jumbo (`ajumbo`): en la ficha
+de un caso el técnico solo podía *emitir la orden de cierre* o decir *el equipo
+quedó trabado*. Faltaba la tercera salida, porque **SAP cierra solo el aviso que
+nadie atendió en 48 horas** y KFC abre otro por el mismo equipo.
+
+**El caso que lo destapó** es el que él tenía en pantalla: el horno
+`HORNO-S/M-2023-118` de `G006EC` tiene **cuatro avisos por el mismo problema**
+—10342524 (18-jul), 10342924 (20-jul), 10343636 (23-jul), 10349666 (20-ago)—
+y para el segundo KFC ya está pidiendo «el repuesto del horno», o sea que el
+técnico ya había ido y el aviso con el que empezó murió solo.
+
+**Cuánto pesa, medido contra los datos reales:**
+
+| Fuente | Ventana | Cifra |
+|---|---|---|
+| `casos_sap.json` (buzón vivo) | 918 casos, 90 días | **185 grupos** local+equipo con más de un caso · **489 casos** implicados · **94 de los 304 pares** consecutivos a ≤7 días (11 el mismo día, 24 a 1-2 d, 59 a 3-7 d) |
+| `casos_sap.json`, lo que vería el técnico | 30 días atrás | **231 de 918 casos** tienen al menos un candidato a trabajo anterior |
+| `avisos_sap` (histórico SAP) | 6.450 avisos, ene–ago 2026 | **509 avisos** nacen dentro de la semana de otro del mismo local y equipo · **68** el mismo día |
+
+**Los dos agujeros que se taparon:**
+
+1. `mis.php` no tenía salida para esto: el técnico o emitía **una orden
+   duplicada** o dejaba el caso pendiente para siempre.
+2. `Pendientes::resolverPorOrden()` filtraba por `aviso = ?`. Si el repuesto
+   quedaba trabado en el aviso viejo y la orden se emitía sobre el nuevo, **el
+   pendiente del viejo se quedaba abierto con su reloj de 48 h corriendo**, sin
+   ninguna ruta que lo cerrara. Ahora acepta la cadena entera.
+
+**Lo que NO hace, porque los mismos datos lo desaconsejan.** No cierra nada
+automáticamente. En `J022EC` el par del mismo equipo es «informe técnico para
+dar de baja» → «instalando el nuevo equipo», y en `K124EC` «no emite sonido» →
+«escape de aceite»: trabajos distintos sobre el mismo equipo. El sistema
+**propone** (local + equipo + 30 días, ordenado por cercanía, con el texto de
+KFC a la vista) y **el técnico confirma de un toque**; queda en bitácora a su
+nombre y el jefe de zona lo ve en `casos.php`. Es la decisión de Andrés del
+2026-09-21, sobre tres opciones. **`avisos_sap.estatus_general` no se toca**
+(regla 5 de §6): un caso enlazado queda ATENDIDO *nuestro*, no cerrado en SAP.
+
+### Qué quedó verificado, y con qué
+
+Las cuatro baterías locales, corridas con el PHP 8.3 de la estación:
+
+```
+php pruebas/prueba_continuidad.php     ->  35 comprobaciones · 0 fallos   (nueva)
+php pruebas/prueba_48h.php             -> 120 comprobaciones · 0 fallos
+PHP_BIN=… node pruebas/prueba_contratos.mjs ->  57 comprobaciones · 0 fallos
+node pruebas/prueba_graficos.mjs       ->  62 comprobaciones · 0 fallos
+```
+
+`prueba_continuidad.php` corre **sin base**, contra el catálogo real, y fija el
+caso del horno como prueba: que 10342924 propone 10342524 a dos días, que
+10343636 propone los dos anteriores en orden de cercanía, que 10349666 solo
+propone lo que cae dentro de los 30 días (10343636 a 28 entra; los de 31 y 33
+no), que una freidora del mismo local no entra, que un ciclo escrito a mano en
+la base no cuelga la pantalla, y que consultar 918 casos no enlaza ninguno.
+
+### 🔴 Lo que NO se pudo comprobar, y hay que correr antes de darlo por bueno
+
+**La mitad que necesita MySQL está escrita y sin ejecutar.** La base local de la
+app (`industec_app`) solo tiene la 001 aplicada —`casos_gestion` ni existe—, así
+que nada de esto se probó contra una base de verdad:
+
+- que el enlace se **escribe** bien y el caso queda ATENDIDO con la orden del
+  trabajo viejo;
+- que la orden nueva **arrastra la cadena** y cierra el pendiente huérfano;
+- que un técnico de otra zona **no** puede enlazar un caso ajeno.
+
+Está todo en `pruebas/servidor/verificar_continuidad.py` (7 bloques, con la
+rama de control «sin enlace, el pendiente sigue abierto» y la comprobación de
+que `avisos_sap.estatus_general` no se movió). **Se corre cuando se despliegue
+y se aplique la 012**, las dos cosas pendientes de aprobación de Andrés.
+
+**La migración 012 no está aplicada en ningún lado.** Mientras no lo esté, el
+código degrada solo y la pantalla se ve exactamente como antes:
+`Casos::gestion()` reintenta sin el JOIN nuevo, `continua_de` queda en null y
+el bloque no se dibuja. Nada se rompe; la función simplemente no aparece.
+
+**`sw.js` NO cambia de versión:** no se tocó ningún archivo de la lista de
+precarga (`mis.php` y `casos.php` son PHP servidos en vivo). Sigue en **v11**,
+la que dejó T2.23.
+
+---
+
 ## 1c. La cadena del correo, medida el 2026-09-18 (auditoría de T2.21)
 
 Andrés pidió validar si el robot del correo identifica los informes nuevos, los
@@ -1103,6 +1189,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
+| **T2.24 · Continuidad entre casos del mismo equipo** (el aviso que SAP cerró a las 48 h y KFC reabrió) | Conversación «continuidad de casos» (estación) | 2026-09-21 | `mis.php`, `nucleo/Casos.php`, `nucleo/Pendientes.php`, `envio.php` y la migración **012** en `app/sql/`. **Escribe en la base**: añade columnas a `casos_gestion` y, al enlazar, mueve `estado`/`ot_cierre` de los casos que el técnico declare continuación. **No toca** el árbol canónico, el cronograma ni `cronograma*.php` |
 | ~~T2.23 · Rediseño de la interfaz de preventivos~~ | ✅ **Terminada el 2026-09-21** | — | `cronograma.html/.js/.css` y `sw.js` a v11. No tocó la base, ni el árbol canónico, ni el contrato de `cronograma.php`/`cronograma_accion.php`. Cifras, evidencia y lo que quedó sin comprobar en **§1k**. Falta desplegar a darkviolet y correr las baterías de servidor |
 | ~~Regularización masiva del buzón (ATENDIDO → cerrado SAP, CERRADO_SIN_ATENCION → regularizado)~~ | ✅ **Terminada el 2026-09-21** | — | 124 + 773 casos regularizados en `casos_gestion` (Hostinger). Detalle en **§1h** |
 | ~~T2.22b · InspectorBot — consola gráfica del robot~~ | ✅ **Terminada el 2026-09-21** | — | Ventana, icono, nombre propio en el Administrador de tareas y arranque con el equipo, todo verificado. Cifras y método en **§1f**. Sumó además la red de seguridad del trabajo en curso (`scripts/guardar_sesion.py` + hook `Stop`), ver §1g. `consola.bat` se conserva |

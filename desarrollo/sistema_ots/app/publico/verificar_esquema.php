@@ -187,6 +187,21 @@ if ($hay009) {
     echo "\nmigracion 011\n";
     $cols011 = array_column($db->query("SHOW COLUMNS FROM casos_gestion LIKE 'otro_trabajo%'")->fetchAll(), 'Field');
     comprobar('casos_gestion lleva la marca de otros trabajos (4 columnas)', count($cols011), 4);
+    // La 012 es la continuidad entre casos del mismo equipo (T2.25): el aviso
+    // que SAP cerró a las 48 h y KFC volvió a abrir.
+    echo "\nmigracion 012\n";
+    $cols012 = array_column($db->query("SHOW COLUMNS FROM casos_gestion LIKE 'continua%'")->fetchAll(), 'Field');
+    comprobar('casos_gestion lleva la continuidad (5 columnas)', count($cols012), 5);
+    $k012 = array_unique(array_column($db->query('SHOW KEYS FROM casos_gestion')->fetchAll(), 'Key_name'));
+    comprobar('indice idx_gestion_continua', in_array('idx_gestion_continua', $k012, true) ? 'si' : 'no', 'si');
+    comprobar('permiso casos.continuidad repartido a los cuatro roles',
+              (int) $db->query("SELECT COUNT(*) FROM rol_permisos WHERE permiso = 'casos.continuidad'")->fetchColumn(), 4);
+    /* La prueba negativa que importa: aplicar la migración NO enlaza casos por
+       su cuenta. Cada fila con `continua_de` la escribió una persona desde la
+       ficha del caso, y esta cifra es la que lo demuestra al aplicarla. */
+    echo '  (casos enlazados a un trabajo anterior: '
+       . (int) $db->query('SELECT COUNT(*) FROM casos_gestion WHERE continua_de IS NOT NULL')->fetchColumn()
+       . ")\n";
     // La semilla (009_semilla_diagnosticos.sql) va aparte: si no se aplicó, aquí se ve.
     comprobar('familias de equipo (semilla)',
               (int) $db->query('SELECT COUNT(*) FROM familias_equipo')->fetchColumn(), fn($n) => $n >= 20);

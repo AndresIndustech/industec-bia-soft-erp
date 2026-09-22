@@ -1186,6 +1186,121 @@ ninguna señal de este sistema puede hacerse pasar por ese cierre.
 
 ---
 
+### T2.25 · Continuidad entre casos: el aviso que SAP cerró a las 48 h y KFC volvió a abrir (2026-09-21)
+
+**Pedido de Andrés**, mirando la cuenta de Anthony Jumbo (`ajumbo`) en el sitio
+de pruebas: al entrar a un caso de su bandeja solo puede *emitir la orden de
+cierre* o decir *el equipo quedó trabado*. Falta la tercera salida real, porque
+**SAP cierra solo el aviso que nadie atendió en 48 horas** y KFC vuelve a abrir
+otro por el mismo equipo. El trabajo es uno; los avisos, varios.
+
+**El caso que lo destapó, que es el que Andrés tenía abierto en pantalla.** El
+horno `HORNO-S/M-2023-118` de `G006EC` (AMERICA QUITO) no tiene un caso: tiene
+**cuatro avisos por el mismo problema**.
+
+| Aviso | Creado | Lo que pide KFC |
+|---|---|---|
+| 10342524 | 2026-07-18 | «se bajó la presión y no tiene temperatura» |
+| **10342924** | **2026-07-20** | **«su ayuda con el repuesto del horno»** ← el de la captura |
+| 10343636 | 2026-07-23 | «el quemador central no tiene flama, al parecer tapado» |
+| 10349666 | 2026-08-20 | «la flama no tiene fuerza y demora en llegar a temperatura» |
+
+Los tres primeros en cinco días. Para el 20-jul KFC ya está pidiendo **el
+repuesto**: el técnico fue, diagnosticó, y el aviso con el que empezó murió solo.
+
+**Cuánto pesa, medido.** En la ventana viva del buzón (`casos_sap.json`, 918
+casos, 90 días) hay **185 grupos local+equipo con más de un caso, 489 casos
+implicados**; de los 304 pares consecutivos, **94 nacen con 7 días o menos** de
+diferencia (11 el mismo día, 24 a 1-2 días, 59 a 3-7). En el histórico de SAP
+(`avisos_sap`, 6.450 avisos, ene–ago 2026) son **509 avisos** que nacen dentro
+de la semana de otro del mismo local y equipo, más **68 el mismo día**.
+
+**Los dos agujeros del código, concretos:**
+
+1. `mis.php` ofrece dos acciones y ninguna sirve aquí. El técnico o **emite una
+   orden duplicada** para un trabajo que ya tiene la suya, o deja el caso
+   pendiente para siempre.
+2. `Pendientes::resolverPorOrden()` filtra por `aviso = ?`. Si el repuesto quedó
+   trabado en el aviso viejo y el técnico vuelve y emite bajo el aviso **nuevo**,
+   **el pendiente del viejo se queda abierto con su reloj de 48 h corriendo**.
+   No hay ninguna ruta que lo cierre.
+
+#### Lo que NO se hace, y por qué — la decisión está cerrada (2026-09-21)
+
+**No se cierra ningún caso automáticamente.** Los mismos datos que justifican la
+tarea traen los contraejemplos: en `J022EC` el par del mismo equipo es «informe
+técnico para dar de baja» → «instalando el nuevo equipo», y en `K124EC` es «no
+emite sonido» → «escape de aceite». Son **trabajos distintos sobre el mismo
+equipo**. Cerrarlos por parecido sería declarar ante Grupo KFC que se atendió un
+caso que nadie atendió, que es exactamente lo que prohíbe **I-7**.
+
+Andrés eligió, sobre esas tres opciones: **el sistema detecta y propone; el
+técnico confirma de un toque; queda en bitácora a su nombre.** Él estuvo ahí y
+es quien sabe si es el mismo trabajo; el jefe de zona no lo aprueba por
+adelantado, lo audita después.
+
+**Tampoco se toca `avisos_sap.estatus_general`** (regla 5 de `ESTADO.md` §6): el
+estado real de un correctivo lo manda SAP, y ninguna señal de este sistema puede
+hacerse pasar por ese cierre. Un caso enlazado queda `ATENDIDO` **nuestro**, no
+«cerrado en SAP».
+
+#### T2.25.1 · La base y la detección
+
+Migración **012**: `casos_gestion` recibe `continua_de` (el aviso raíz de la
+cadena), `continua_ot` (la orden de INDUSTEC que ya cubre el trabajo, si la
+hay), `continua_por`, `continua_en` y `continua_nota`. La clave de negocio sigue
+siendo `aviso`, que ya es PRIMARY KEY: **un caso continúa de uno solo** (I-9).
+
+`Casos::continuidadPosible($aviso)` propone candidatos del **mismo local y mismo
+activo fijo normalizado**, creados antes y dentro de **30 días**, ordenados por
+cercanía y con lo que el técnico necesita para decidir: el texto que escribió
+KFC, la orden que salió de ese caso y si dejó un pendiente abierto. Nunca decide.
+
+`Casos::enlazar()` **resuelve siempre a la raíz** de la cadena antes de escribir
+(máx. 10 saltos): así la cadena queda plana —`10342924`, `10343636` y `10349666`
+apuntan los tres a `10342524`— y un ciclo es imposible por construcción.
+
+*Criterio:* `pruebas/prueba_continuidad.php` corre **sin base**, contra el
+catálogo real, y afirma que (a) los cuatro avisos del horno de `G006EC` salen
+como cadena, (b) un equipo distinto del mismo local **no** sale, (c) enlazar dos
+veces en sentidos opuestos no crea un ciclo, (d) fuera de los 30 días no se
+propone. Se pega la salida literal.
+
+#### T2.25.2 · «Ya lo atendí con otra orden» — la tercera salida de la ficha
+
+En `mis.php?ver=…`, encima de las acciones: «¿Es continuación de un trabajo
+anterior?» con hasta tres candidatos, cada uno con su fecha, su texto de KFC y
+su orden. Un toque en «Es el mismo trabajo» deja el caso `ATENDIDO` con esa
+orden como `ot_cierre`, **sin emitir un PDF duplicado**. Debajo, un buscador por
+número de orden o de aviso para cuando la propuesta no acierta (I-7: si el
+sistema no lo encontró, lo dice y deja buscar, no inventa).
+
+*Criterio:* con el caso 10342924 en la bandeja de un técnico, la ficha ofrece
+10342524 como candidato; al confirmarlo el caso queda `ATENDIDO` con
+`continua_de = 10342524`, la bitácora registra `CASO_CONTINUA` con el usuario, y
+`avisos_sap.estatus_general` del aviso **no cambia**.
+
+#### T2.25.3 · La orden nueva arrastra la cadena
+
+Al emitir una orden **concluida** sobre un caso enlazado, `envio.php` cierra
+también la raíz y los demás casos de la cadena, y `Pendientes::resolverPorOrden()`
+deja de filtrar por un solo aviso: **acepta la cadena**. Es lo que tapa el
+agujero nº 2. Solo entran casos que una persona enlazó a mano: nadie llega a la
+cadena por parecido.
+
+*Criterio:* un pendiente abierto en el aviso viejo, con la orden emitida sobre el
+nuevo enlazado, queda `RESUELTO` con nota `Orden concluida <id>`; sin el enlace,
+sigue abierto (la prueba comprueba las dos ramas).
+
+#### Qué puede hacer un agente aquí
+
+| Autónomo | Requiere aprobación de Andrés | Prohibido |
+|---|---|---|
+| Escribir la migración 012 y las tres piezas de código | **Aplicar la 012 en Hostinger** (toca `casos_gestion`, la tabla viva) | Tocar `avisos_sap.estatus_general` por cualquier vía |
+| Correr `prueba_continuidad.php` y las baterías locales | **Desplegar a darkviolet** (T2.23 tiene cambios sin desplegar: se coordina o se pisa) | Enlazar o cerrar casos en bloque «porque se parecen» |
+| Medir el fenómeno contra la base y el catálogo (solo lectura) | Subir `sw.js` de versión | Borrar o reescribir un `ot_cierre` que ya existía |
+---
+
 # FASE 3 · DECISIÓN — Noviembre
 
 > **Cierra con:** tablero de decisión y equipo capaz de operarlo por su cuenta.
@@ -1472,6 +1587,31 @@ python verificar_seguridad.py   # 28 · 0
 ```
 
 ### La siguiente acción, concreta
+
+**L. Aplicar la 012 y desplegar la continuidad entre casos (T2.25)** —
+*escrita, probada sin base y esperando a Andrés.* Es el pedido del 2026-09-21:
+el técnico no tenía cómo decir que un caso es la continuación de un trabajo que
+ya empezó, y SAP cierra solo el aviso que nadie atendió en 48 horas. Están
+hechas las tres subtareas y las cuatro baterías locales en verde (**35·0** la
+nueva, 120·0, 57·0, 62·0). Faltan **dos cosas que un agente no hace solo**:
+
+```bash
+# 1. Aplicar la migración (toca `casos_gestion`, la tabla viva)
+scp -i <llave> -P 65002 app/sql/012_continuidad_casos.sql u671729428@…:~/domains/…/ot/sql/
+ssh … "cd …/ot && php aplicar_sql.php sql/012_continuidad_casos.sql && php verificar_esquema.php"
+#    -> bloque «migracion 012»: 5 columnas, idx_gestion_continua, permiso en 4 roles
+#    -> y la prueba negativa: casos enlazados a un trabajo anterior = 0
+
+# 2. Desplegar los cinco archivos y correr la batería nueva
+#    OJO: T2.23 (acción K) también está sin desplegar. O se coordinan las dos, o
+#    la que suba segunda pisa lo de la otra. `sw.js` NO cambia por T2.25 (v11).
+python scripts/t2_10_desplegar.py …   # mis.php casos.php envio.php nucleo/Casos.php nucleo/Pendientes.php verificar_esquema.php
+cd app/pruebas/servidor && python verificar_continuidad.py    # 7 bloques
+```
+
+**Lo que hay que mirar con Andrés**, porque es criterio suyo: cómo se ve la
+propuesta en la ficha del caso, con el horno de `G006EC` (10342924 propone
+10342524). Cifras y lo no comprobado en `ESTADO.md` **§1l**.
 
 **K. Desplegar la pantalla de preventivos rediseñada (T2.23)** — *lo único que
 le falta, y es corto.* El rediseño está hecho y verificado **en local**: cuatro
@@ -2068,6 +2208,23 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     uno con su propia sesión SSH). Antes de decidir que algo está atascado:
     mirar si hay trabajo legítimo detrás (conexiones nuevas abriéndose,
     archivos llegando) y cuál es el timeout real del paso — aquí, 4 horas.
+28. **Dar por hecho que el aviso de SAP identifica el trabajo.** No lo
+    identifica: SAP cierra solo el aviso que nadie atendió en 48 horas y KFC
+    abre otro por el mismo equipo, así que **un trabajo puede tener varios
+    avisos** —el horno de `G006EC` llegó a cuatro—. Toda consulta que cierre,
+    cuente o mida por `aviso = ?` está contando episodios, no trabajos.
+    `Pendientes::resolverPorOrden()` arrastraba ese supuesto y dejaba el
+    pendiente del aviso viejo abierto **para siempre**, con su reloj de 48 h
+    corriendo y sin ninguna ruta que lo cerrara (T2.25.3). Antes de escribir
+    un `WHERE aviso = ?`, preguntarse si lo que se busca es el episodio o el
+    trabajo.
+29. **Cerrar un caso por parecido.** «Mismo local, mismo equipo, pocos días» no
+    basta: en `J022EC` ese par es «informe técnico para dar de baja» →
+    «instalando el nuevo equipo», y en `K124EC` «no emite sonido» → «escape de
+    aceite». Son trabajos distintos, y cerrarlos por similitud es declararle a
+    Grupo KFC que se atendió un caso que nadie atendió (I-7). El patrón que
+    sirve —y la decisión de Andrés del 2026-09-21— es **detectar y proponer, y
+    que confirme quien estuvo ahí**, con la traza a su nombre.
 
 ### Lo que no se toca, nunca
 

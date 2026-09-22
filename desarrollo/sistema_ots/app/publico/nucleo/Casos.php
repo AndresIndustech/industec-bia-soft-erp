@@ -107,17 +107,34 @@ final class Casos
     /** La gestión de todos los casos, indexada por aviso. */
     public static function gestion(): array
     {
-        $filas = Db::todos(
-            'SELECT g.*, t.nombre AS tecnico_nombre, t.usuario AS tecnico_usuario,
-                    a.nombre AS asignador_nombre, v.nombre AS veredicto_nombre,
-                    r.nombre AS revision_nombre, o.nombre AS otro_trabajo_nombre
-               FROM casos_gestion g
-               LEFT JOIN usuarios t ON t.usuario_id = g.asignado_a
-               LEFT JOIN usuarios a ON a.usuario_id = g.asignado_por
-               LEFT JOIN usuarios v ON v.usuario_id = g.veredicto_por
-               LEFT JOIN usuarios r ON r.usuario_id = g.revision_por
-               LEFT JOIN usuarios o ON o.usuario_id = g.otro_trabajo_por'
-        );
+        $sql = 'SELECT g.*, t.nombre AS tecnico_nombre, t.usuario AS tecnico_usuario,
+                       a.nombre AS asignador_nombre, v.nombre AS veredicto_nombre,
+                       r.nombre AS revision_nombre, o.nombre AS otro_trabajo_nombre%s
+                  FROM casos_gestion g
+                  LEFT JOIN usuarios t ON t.usuario_id = g.asignado_a
+                  LEFT JOIN usuarios a ON a.usuario_id = g.asignado_por
+                  LEFT JOIN usuarios v ON v.usuario_id = g.veredicto_por
+                  LEFT JOIN usuarios r ON r.usuario_id = g.revision_por
+                  LEFT JOIN usuarios o ON o.usuario_id = g.otro_trabajo_por%s';
+        /* Quién declaró la continuidad (la 012). El JOIN se agrega solo si la
+           columna existe: nombrarla sin la migración aplicada haría fallar la
+           consulta entera y dejaría SIN BANDEJA a todos los técnicos, no solo
+           sin este dato. `SELECT g.*` ya degrada bien por su cuenta.
+           El resultado del intento se recuerda por petición: sin eso, en un
+           servidor sin la 012 cada llamada pagaría una consulta que falla. */
+        static $hay012 = null;
+        if ($hay012 !== false) {
+            try {
+                $filas = Db::todos(sprintf($sql, ', c.nombre AS continua_nombre',
+                                           ' LEFT JOIN usuarios c ON c.usuario_id = g.continua_por'));
+                $hay012 = true;
+            } catch (Throwable $ex) {
+                $hay012 = false;
+            }
+        }
+        if ($hay012 === false) {
+            $filas = Db::todos(sprintf($sql, '', ''));
+        }
         $out = [];
         foreach ($filas as $f) { $out[$f['aviso']] = $f; }
         return $out;
@@ -539,5 +556,323 @@ final class Casos
     {
         require_once __DIR__ . '/Ui.php';
         return Ui::etiquetaEstado($estado);
+    }
+
+    /* =====================================================================
+       CONTINUIDAD: UN TRABAJO, VARIOS AVISOS (T2.25, la 012)
+
+       SAP cierra solo el aviso que nadie atendió en 48 horas. Cuando el
+       técnico fue, diagnosticó y el repuesto tarda, ese aviso muere y KFC
+       abre otro por el mismo equipo. El horno HORNO-S/M-2023-118 de G006EC
+       llegó a tener CUATRO avisos por el mismo problema —10342524, 10342924,
+       10343636 y 10349666— y para el segundo KFC ya estaba pidiendo «el
+       repuesto del horno», o sea que el técnico ya había ido.
+
+       Hasta aquí el sistema no tenía cómo decirlo, así que el técnico o
+       emitía una orden duplicada o dejaba el caso pendiente para siempre.
+
+       LO QUE ESTE CODIGO NO HACE, Y ES LO IMPORTANTE: no enlaza nada por su
+       cuenta. `continuidadPosible()` propone y una persona confirma. Los
+       mismos datos que justifican la función traen los contraejemplos: en
+       J022EC el par del mismo equipo es «informe técnico para dar de baja» ->
+       «instalando el nuevo equipo», y en K124EC «no emite sonido» -> «escape
+       de aceite». Son trabajos distintos sobre el mismo equipo, y cerrarlos
+       por parecido sería declarar ante Grupo KFC que se atendió un caso que
+       nadie atendió (I-7).
+       ===================================================================== */
+
+    /** Cuántos días atrás se busca un trabajo anterior del mismo equipo. */
+    public const CONTINUIDAD_DIAS = 30;
+    /** Cuántos candidatos se le ofrecen. Más de tres en un celular es una lista, no una decisión. */
+    public const CONTINUIDAD_TOPE = 3;
+
+    /**
+     * Normaliza un activo fijo para compararlo.
+     *
+     * KFC escribe el mismo equipo de maneras que solo difieren en espacios y
+     * mayúsculas («FREIDORA-SR 142GP-2205MA0180» frente a «freidora-sr 142gp…»).
+     * No se toca nada más: quitar los guiones juntaría equipos distintos,
+     * porque el guion es lo que separa denominación, modelo y serie.
+     */
+    public static function equipoNormalizado(?string $activoFijo): string
+    {
+        $s = mb_strtoupper(trim((string) $activoFijo));
+        $s = (string) preg_replace('/\s+/u', ' ', $s);
+        // «CAMARA DE REFRIGERACION--» es el equipo sin modelo ni serie: los
+        // guiones de relleno no aportan y se caen, pero el texto sí queda.
+        return trim($s, ' -');
+    }
+
+    /**
+     * La raíz de la cadena de un caso: el primer aviso del mismo trabajo.
+     *
+     * La cadena se guarda PLANA —todos los casos apuntan al primero, no al
+     * inmediatamente anterior—, así que esto normalmente resuelve en un salto.
+     * El bucle con tope existe para que una fila escrita a mano en la base no
+     * pueda colgar la pantalla: a los 10 saltos se devuelve lo último visto.
+     */
+    public static function raiz(string $aviso, ?array $gestion = null): string
+    {
+        $aviso = trim($aviso);
+        $gestion ??= self::gestion();
+        $vistos = [$aviso => true];
+        for ($i = 0; $i < 10; $i++) {
+            $de = trim((string) ($gestion[$aviso]['continua_de'] ?? ''));
+            if ($de === '' || isset($vistos[$de])) { break; }
+            $vistos[$de] = true;
+            $aviso = $de;
+        }
+        return $aviso;
+    }
+
+    /**
+     * Toda la cadena de un caso: él, su raíz y los demás que cuelgan de ella.
+     *
+     * Es lo que cierra una orden concluida (T2.25.3). Solo entran casos que
+     * alguien enlazó a mano: nadie llega aquí por parecerse a otro.
+     *
+     * @return string[] avisos, sin repetir, empezando por el que se pidió
+     */
+    public static function cadena(string $aviso, ?array $gestion = null): array
+    {
+        $aviso = trim($aviso);
+        if ($aviso === '') { return []; }
+        $gestion ??= self::gestion();
+        $raiz = self::raiz($aviso, $gestion);
+        $out = [$aviso => true, $raiz => true];
+        foreach ($gestion as $a => $g) {
+            if (trim((string) ($g['continua_de'] ?? '')) === $raiz) { $out[(string) $a] = true; }
+        }
+        return array_keys($out);
+    }
+
+    /**
+     * Qué trabajo anterior puede estar continuando este caso.
+     *
+     * Busca en el catálogo del buzón —que es lo que el técnico reconoce— los
+     * casos del MISMO local y el MISMO equipo creados antes y dentro de la
+     * ventana, y los devuelve ordenados por cercanía. De cada uno trae lo que
+     * hace falta para decidir sin salir de la pantalla: el texto que escribió
+     * KFC, la orden que salió de ese caso, y si dejó un equipo trabado.
+     *
+     * No mira el parecido de los textos a propósito. Dos pedidos del mismo
+     * equipo se parecen siempre («su ayuda con un técnico»), y dos que no son
+     * el mismo trabajo también: el parecido no distingue nada, y quien sí
+     * distingue es el técnico que estuvo ahí.
+     *
+     * @return array<int,array<string,mixed>> candidatos, el más cercano primero
+     */
+    public static function continuidadPosible(array $caso, array $gestion, ?array $aten = null): array
+    {
+        $aviso = trim((string) ($caso['aviso'] ?? ''));
+        $local = trim((string) ($caso['local'] ?? ''));
+        $equipo = self::equipoNormalizado($caso['activo_fijo'] ?? '');
+        $desde  = (string) ($caso['fecha_creacion'] ?? '');
+        if ($aviso === '' || $local === '' || $equipo === '' || $desde === '') {
+            return [];                  // sin local, sin equipo o sin fecha no hay con qué comparar (I-7)
+        }
+        $aten ??= self::atenciones();
+        $raizPropia = self::raiz($aviso, $gestion);
+
+        $ts = strtotime($desde);
+        if ($ts === false) { return []; }
+        $out = [];
+        foreach (self::catalogo()['datos'] ?? [] as $c) {
+            $otro = trim((string) ($c['aviso'] ?? ''));
+            if ($otro === '' || $otro === $aviso) { continue; }
+            if (trim((string) ($c['local'] ?? '')) !== $local) { continue; }
+            if (self::equipoNormalizado($c['activo_fijo'] ?? '') !== $equipo) { continue; }
+
+            $tsOtro = strtotime((string) ($c['fecha_creacion'] ?? ''));
+            if ($tsOtro === false || $tsOtro > $ts) { continue; }   // solo hacia atrás
+            $dias = (int) round(($ts - $tsOtro) / 86400);
+            if ($dias > self::CONTINUIDAD_DIAS) { continue; }
+
+            // Ya enlazado a la misma cadena: no se ofrece enlazar lo que ya está.
+            $g = $gestion[$otro] ?? [];
+            if (self::raiz($otro, $gestion) === $raizPropia
+                && trim((string) ($g['continua_de'] ?? '')) !== '') { continue; }
+
+            // La orden que salió de ese caso, mirando las dos fuentes: lo que
+            // decidimos nosotros (`ot_cierre`) y lo que dicen los informes ya
+            // leídos del correo (`atenciones.json`). Si no hay, se dice que no
+            // hay: un caso sin orden también puede ser el origen del trabajo.
+            $ot = trim((string) ($g['ot_cierre'] ?? ''));
+            if ($ot === '' && !empty($aten[$otro]['ots'])) {
+                $ot = trim((string) ($aten[$otro]['ots'][0]['ot'] ?? ''));
+            }
+
+            $out[] = [
+                'aviso'       => $otro,
+                'fecha'       => (string) ($c['fecha_creacion'] ?? ''),
+                'dias'        => $dias,
+                'pedido'      => (string) ($c['descripcion_trabajo'] ?? ''),
+                'activo_fijo' => (string) ($c['activo_fijo'] ?? ''),
+                'estado'      => (string) ($g['estado'] ?? 'NUEVO'),
+                'ot'          => $ot !== '' ? $ot : null,
+                'raiz'        => self::raiz($otro, $gestion),
+            ];
+        }
+        usort($out, fn($a, $b) => $a['dias'] <=> $b['dias'] ?: strcmp($b['aviso'], $a['aviso']));
+        return array_slice($out, 0, self::CONTINUIDAD_TOPE);
+    }
+
+    /**
+     * Por qué NO se puede enlazar este caso con ese trabajo, o null si sí.
+     *
+     * Está separado de `enlazar()` —y recibe la gestión en vez de leerla— para
+     * que la regla que evita los ciclos se pueda probar sin levantar MySQL.
+     * Es la única restricción de esta tarea que el esquema no puede expresar,
+     * así que es la que más falta hace poder comprobar.
+     */
+    public static function motivoRechazoEnlace(string $aviso, string $origen, array $gestion): ?string
+    {
+        $aviso  = trim($aviso);
+        $origen = trim($origen);
+        if ($aviso === '' || $origen === '') {
+            return 'Falta el caso o el trabajo anterior.';
+        }
+        if ($aviso === $origen) {
+            return 'Un caso no puede continuarse a sí mismo.';
+        }
+        if (trim((string) ($gestion[$aviso]['continua_de'] ?? '')) !== '') {
+            return 'Este caso ya está enlazado al trabajo ' . $gestion[$aviso]['continua_de'] . '.';
+        }
+        if (self::raiz($origen, $gestion) === $aviso) {
+            // El origen ya cuelga de este caso: enlazarlos al revés cerraría el
+            // círculo y los dos quedarían esperándose. Se corta aquí y se dice
+            // cuál es el orden bueno, que es lo único que puede arreglarlo.
+            return 'Ese caso ya figura como continuación de este. Enlázalos al revés: '
+                 . 'el enlace va del caso nuevo al trabajo que empezó primero.';
+        }
+        return null;
+    }
+
+    /**
+     * Declara que un caso continúa un trabajo anterior.
+     *
+     * Escribe contra la RAIZ de la cadena, no contra el caso que se eligió:
+     * así 10342924, 10343636 y 10349666 apuntan los tres a 10342524, un ciclo
+     * es imposible por construcción y cerrar la cadena es un WHERE de un solo
+     * nivel en cada emisión de orden.
+     *
+     * Si la cadena ya tiene una orden, el caso queda ATENDIDO con esa orden
+     * como cierre: es el punto entero de la función —no se emite un PDF
+     * duplicado por un aviso que SAP abrió dos veces—. Si no la tiene, el
+     * enlace queda hecho y el caso sigue abierto: lo concluirá la orden que se
+     * emita ahora (T2.25.3). Lo segundo NO es un fallo y se dice así en el
+     * mensaje, porque «no hay orden todavía» es un dato, no un error (I-7).
+     *
+     * `avisos_sap.estatus_general` no se toca ni se consulta para decidir: el
+     * estado real de un correctivo lo manda SAP (regla 5 de ESTADO.md §6).
+     *
+     * @return array{0:bool,1:string} ok y el mensaje que ve quien lo hizo
+     */
+    public static function enlazar(string $aviso, string $origen, ?string $zona,
+                                   int $usuarioId, string $nota = ''): array
+    {
+        $aviso  = trim($aviso);
+        $origen = trim($origen);
+        $gestion = self::gestion();
+        $motivo = self::motivoRechazoEnlace($aviso, $origen, $gestion);
+        if ($motivo !== null) { return [false, $motivo]; }
+        $raiz = self::raiz($origen, $gestion);
+
+        self::asegurar($aviso, $zona);
+        self::asegurar($raiz, $zona);
+
+        // La orden que ya cubre el trabajo: la de la raíz, o la del caso que se
+        // eligió si la raíz no alcanzó a tener una.
+        $aten = self::atenciones();
+        $ot = '';
+        foreach ([$raiz, $origen] as $cual) {
+            $ot = trim((string) ($gestion[$cual]['ot_cierre'] ?? ''));
+            if ($ot === '' && !empty($aten[$cual]['ots'])) {
+                $ot = trim((string) ($aten[$cual]['ots'][0]['ot'] ?? ''));
+            }
+            if ($ot !== '') { break; }
+        }
+
+        $antes = (string) ($gestion[$aviso]['estado'] ?? 'NUEVO');
+        Db::ejecutar(
+            "UPDATE casos_gestion
+                SET continua_de   = ?,
+                    continua_ot   = ?,
+                    continua_por  = ?,
+                    continua_en   = NOW(),
+                    continua_nota = ?,
+                    /* Con una orden que ya cubre el trabajo, el caso queda
+                       ATENDIDO y con ella como cierre. Sin orden, el estado no
+                       se toca: el caso sigue siendo trabajo abierto. */
+                    ot_cierre     = IF(? <> '', COALESCE(ot_cierre, ?), ot_cierre),
+                    atendido_en   = IF(? <> '', COALESCE(atendido_en, NOW()), atendido_en),
+                    estado        = CASE
+                        WHEN ? = '' THEN estado
+                        WHEN estado IN ('RESUELTO','NO_COMPETE','EN_REVISION','ESPERA_REPUESTO') THEN estado
+                        ELSE 'ATENDIDO' END
+              WHERE aviso = ? AND continua_de IS NULL",
+            [$raiz, $ot !== '' ? $ot : null, $usuarioId, mb_substr(trim($nota), 0, 300),
+             $ot, $ot, $ot, $ot, $aviso]
+        );
+
+        $desp = Db::uno('SELECT estado, continua_de FROM casos_gestion WHERE aviso = ?', [$aviso]);
+        if (trim((string) ($desp['continua_de'] ?? '')) !== $raiz) {
+            // Otro lo enlazó entre medio: no se pisa lo que ya decidió alguien.
+            return [false, 'Alguien enlazó este caso mientras tanto. Recarga la pantalla.'];
+        }
+        $despues = (string) ($desp['estado'] ?? $antes);
+
+        Auth::bitacora('CASO_CONTINUA', 'caso', $aviso,
+                       'continúa el trabajo del aviso ' . $raiz
+                       . ($origen !== $raiz ? ' (elegido: ' . $origen . ')' : '')
+                       . ($ot !== '' ? ', cubierto por la orden ' . $ot : ', que todavía no tiene orden'),
+                       $antes, $despues,
+                       ['continua_de' => $raiz, 'elegido' => $origen, 'ot' => $ot !== '' ? $ot : null,
+                        'nota' => $nota]);
+
+        if ($ot !== '') {
+            return [true, 'Listo: este caso queda cerrado con la orden ' . $ot
+                        . ', la del trabajo que empezaste en el aviso ' . $raiz . '. No hace falta emitir otra.'];
+        }
+        return [true, 'Enlazado con el aviso ' . $raiz . '. Ese trabajo todavía no tiene orden emitida: '
+                    . 'la que emitas ahora cierra los dos casos.'];
+    }
+
+    /**
+     * Deshace un enlace. Existe porque la alternativa es peor: sin esto, un
+     * enlace equivocado solo se corrige entrando a la base a mano, y el caso
+     * queda figurando atendido por una orden que no lo atendió.
+     *
+     * No devuelve `ot_cierre` a NULL si la orden la puso otra cosa: solo quita
+     * la que entró POR el enlace (`continua_ot`), y únicamente si sigue siendo
+     * la misma. Lo que escribió una emisión de verdad no se borra nunca.
+     */
+    public static function desenlazar(string $aviso, int $usuarioId, string $motivo = ''): array
+    {
+        $aviso = trim($aviso);
+        $g = Db::uno('SELECT estado, continua_de, continua_ot, ot_cierre FROM casos_gestion WHERE aviso = ?', [$aviso]);
+        if ($g === null || trim((string) ($g['continua_de'] ?? '')) === '') {
+            return [false, 'Ese caso no está enlazado a ningún trabajo anterior.'];
+        }
+        $heredada = trim((string) ($g['continua_ot'] ?? ''));
+        $antes = (string) ($g['estado'] ?? '');
+        Db::ejecutar(
+            "UPDATE casos_gestion
+                SET continua_de = NULL, continua_ot = NULL, continua_por = NULL,
+                    continua_en = NULL, continua_nota = NULL,
+                    ot_cierre   = IF(? <> '' AND ot_cierre = ?, NULL, ot_cierre),
+                    estado      = CASE WHEN ? <> '' AND ot_cierre = ? AND estado = 'ATENDIDO'
+                                       THEN IF(asignado_a IS NULL, 'NUEVO', 'ASIGNADO')
+                                       ELSE estado END
+              WHERE aviso = ?",
+            [$heredada, $heredada, $heredada, $heredada, $aviso]
+        );
+        $desp = Db::uno('SELECT estado FROM casos_gestion WHERE aviso = ?', [$aviso]);
+        Auth::bitacora('CASO_DESCONTINUA', 'caso', $aviso,
+                       'se deshizo el enlace con ' . $g['continua_de']
+                       . ($motivo !== '' ? ': ' . $motivo : ''),
+                       $antes, (string) ($desp['estado'] ?? $antes),
+                       ['continua_de' => $g['continua_de'], 'ot' => $heredada !== '' ? $heredada : null]);
+        return [true, 'Enlace deshecho: el caso vuelve a estar abierto.'];
     }
 }

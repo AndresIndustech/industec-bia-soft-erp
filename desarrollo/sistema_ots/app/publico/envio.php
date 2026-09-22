@@ -490,12 +490,45 @@ if ($em['error'] !== null) {
    como «a registrar en SAP» en tiempo real. Va ANTES de resolver el pendiente
    porque `Pendientes` decide ATENDIDO/ASIGNADO mirando si ya hay `ot_cierre`.
    ------------------------------------------------------------------------- */
-if ($em['error'] === null && $aviso !== '' && !empty($em['id_industec'])) {
+/* -------------------------------------------------------------------------
+   Y ARRASTRA LA CADENA (T2.25.3). Cuando este caso es la continuación de otro
+   —SAP cerró el aviso viejo a las 48 h y KFC abrió este por el mismo equipo—,
+   la orden que concluye el trabajo cierra los dos, no uno. Antes el caso viejo
+   se quedaba abierto para siempre: no había ninguna ruta que lo cerrara.
+
+   Solo entran los avisos que el técnico enlazó A MANO desde la ficha del caso.
+   `Casos::cadena()` no adivina nada: lee `continua_de`, que solo escribe una
+   persona. Un caso no entra aquí por parecerse a otro.
+   ------------------------------------------------------------------------- */
+$cadena = [$aviso];
+if ($aviso !== '') {
     try {
-        Casos::atenderPorOrden($aviso, $orden['zona'] ?? null, (string) $em['id_industec'],
-                               $concluida, (int) $u['usuario_id']);
+        $cadena = Casos::cadena($aviso);
     } catch (Throwable $ex) {
-        error_log('envio.php: atenderPorOrden: ' . $ex->getMessage());
+        error_log('envio.php: cadena: ' . $ex->getMessage());   // sin la 012, la cadena es el caso solo
+    }
+}
+
+if ($em['error'] === null && $aviso !== '' && !empty($em['id_industec'])) {
+    foreach ($cadena as $unAviso) {
+        try {
+            /* La zona del caso enlazado la pone `asegurar()` si le falta; la de
+               la orden vale solo para el suyo. El resto de la regla es idéntico
+               —lo que decidió una persona no se pisa—, así que un caso viejo ya
+               RESUELTO o NO_COMPETE se queda como está. */
+            Casos::atenderPorOrden($unAviso,
+                                   $unAviso === $aviso ? ($orden['zona'] ?? null) : null,
+                                   (string) $em['id_industec'],
+                                   $concluida, (int) $u['usuario_id']);
+        } catch (Throwable $ex) {
+            error_log('envio.php: atenderPorOrden(' . $unAviso . '): ' . $ex->getMessage());
+        }
+    }
+    if (count($cadena) > 1) {
+        $anexos[] = 'Esta orden cierra también ' . (count($cadena) - 1) . ' caso'
+                  . (count($cadena) === 2 ? '' : 's') . ' anterior'
+                  . (count($cadena) === 2 ? '' : 'es') . ' del mismo trabajo: '
+                  . implode(', ', array_slice($cadena, 1)) . '.';
     }
 }
 
@@ -507,8 +540,12 @@ if ($em['error'] === null && $aviso !== '' && !empty($em['id_industec'])) {
    ------------------------------------------------------------------------- */
 if ($concluida && $aviso !== '' && method_exists('Pendientes', 'resolverPorOrden')) {
     try {
+        /* Con la cadena, no con el aviso solo (T2.25.3): el repuesto que el
+           técnico fue a instalar hoy quedó trabado en el aviso VIEJO, el que
+           SAP cerró a las 48 horas. Pasándole solo el aviso de la orden, ese
+           pendiente seguía con el reloj corriendo sin que nada lo cerrara. */
         Pendientes::resolverPorOrden(
-            $aviso, null, (string) ($em['id_industec'] ?? ($fila['captura_id'] ?? '')), (int) $u['usuario_id']
+            $cadena, null, (string) ($em['id_industec'] ?? ($fila['captura_id'] ?? '')), (int) $u['usuario_id']
         );
     } catch (Throwable $ex) {
         error_log('envio.php: resolverPorOrden: ' . $ex->getMessage());
