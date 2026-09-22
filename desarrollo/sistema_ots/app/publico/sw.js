@@ -35,7 +35,8 @@
      v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
      recibe el numero de la orden. Con el armazon viejo el celular seguiria
      mandando la orden sin ellas. */
-const VERSION = 'ot-industec-v13';  // v13: las ordenes salen solas con la app cerrada (sync), el equipo del aviso se preselecciona, y un 401 ya no borra la copia local (2026-09-22)
+const VERSION = 'ot-industec-v14';  // v14: el logo de la cabecera, que daba 404 en cada carga (2026-09-22)
+// v13: las ordenes salen solas con la app cerrada (sync), el equipo del aviso se preselecciona, y un 401 ya no borra la copia local (2026-09-22)
 // v12: guia.js — ninguna cabecera abría su paso (2026-09-22)
 // v11: preventivos rediseñado — cronograma.html/js/css (2026-09-21)
 // v10: estilo.css (§S3-§S5), cronograma.js/html/css que escribe y graficos.js accesible (2026-09-13)
@@ -77,6 +78,11 @@ const PRECARGA = [
   'manifest.json',
   'iconos/icono-192.png',
   'iconos/icono-512.png',
+  // El logo de la cabecera del formulario. Estuvo dando 404 en cada carga
+  // desde que se escribió `index.html`: la carpeta `assets/` no existía y el
+  // archivo vivía en `nucleo/`, que la web sirve con 403 a propósito. El
+  // `onerror` del <img> lo escondía, así que nadie lo vio.
+  'assets/logo-industec.png',
   'cronograma.html',
   'cronograma.css',
   'cronograma.js',

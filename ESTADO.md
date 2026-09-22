@@ -967,6 +967,58 @@ señal **queda guardada con su caso, su local y su firma**, con el recibo
 diciendo la verdad: «Orden guardada en este celular. No hay señal, así que
 todavía no salió».
 
+### Instalable en el teléfono: comprobado
+
+`Page.getAppManifest` contra darkviolet, con un navegador de verdad: manifiesto
+servido y **sin errores**, `display: standalone`, `start_url: index.html`,
+iconos 192 y 512 (más el *maskable*) que devuelven **200 image/png**, HTTPS, y
+trabajador de servicio activo con manejador de `fetch`. Cumple lo que Chrome y
+Edge piden para ofrecer «Agregar a la pantalla de inicio».
+
+**El logo de la cabecera daba 404 en cada carga** desde que se escribió
+`index.html`: apuntaba a `assets/logo-industec.png`, la carpeta no existía y el
+archivo vivía en `nucleo/`, que la web sirve con **403** a propósito. El
+`onerror` del `<img>` lo escondía, así que nadie lo vio. Copiado a `assets/` y
+metido en la precarga (**sw.js v14**). Ojo al comprobarlo: Hostinger tiene un
+CDN delante (`Server: hcdn`) que **reoptimiza las imágenes**, así que el hash de
+lo que entrega la web NO coincide con el del disco —7.495 bytes contra 6.412—
+aunque sea el mismo PNG de 768×143. El hash en el servidor sí cuadra.
+
+### Qué sobrevive sin señal, por rol (medido el 2026-09-22)
+
+| Pantalla | Técnico | Jefe de zona |
+|---|---|---|
+| `index.html` (el formulario) | ✅ | — |
+| `mis.php` (su bandeja) | ✅ | — |
+| `pendientes.php` | ✅ | ✅ |
+| `cronograma.html` | ✅ | ✅ |
+| `ordenes.php` | ❌ | ❌ |
+| `documentos.php` | ❌ | — |
+| `panel.php`, `casos.php`, `asignacion.php` | — | ❌ |
+| `novedades_visita.php`, `reportes.php` | — | ❌ |
+
+**El técnico tiene cubierto su trabajo entero sin señal.** El jefe de zona tiene
+**2 de 8**: en el campo solo le sirven repuestos y el cronograma. Ampliarlo es
+una decisión con filo —cachear pantallas PHP es lo que puede servirle a alguien
+lo que no le toca— y es de Andrés: hay que decidir **qué necesita un jefe con el
+teléfono en la mano** antes de cachear nada más.
+
+### Lo que NO abrió un agujero: dos personas en el mismo teléfono
+
+Al quitar el borrado en el 401 parecía que el jefe veía, sin señal, las
+pantallas cacheadas del técnico. **No es así, y la primera medición era mía y
+estaba mal**: el ingreso como jefe nunca llegó a ocurrir —`login.php` con sesión
+activa redirige, así que el formulario no estaba y todo seguía siendo la sesión
+del técnico—. Repetido cerrando sesión de verdad (`salir.php` cierra **solo por
+POST con token**, SEG-25: por GET enseña un botón), el jefe ve **lo suyo**, con
+y sin señal, y la caché del técnico desaparece.
+
+El cambio de persona ya estaba cubierto y no por el 401: **`salir.php` borra las
+cachés `-datos` del teléfono** al cerrar sesión. Y en un mismo teléfono no se
+puede cambiar de usuario sin pasar por ahí, porque `login.php` con sesión activa
+redirige. La comprobación de identidad por `yo.php` que se añadió es el segundo
+cerrojo, no el único.
+
 ### Lo que NO se pudo comprobar, y por qué
 
 - **`verificar_http.py` da 81/86 y `verificar_emision.py` aborta.** No es por
@@ -991,7 +1043,11 @@ todavía no salió».
   `git stash`): es una de las dos que §5.2b ya daba por rotas.
 - **Nada de lo medido para el administrador del local se ha aplicado**: sembrar
   `locales_admin` desde las 7.386 órdenes históricas **escribe en la base del
-  servidor** y no se hizo. Es lo que sigue.
+  servidor** y no se hizo. Es lo que sigue (acción **O** del plan).
+- **El jefe de zona sigue con 2 de 8 pantallas sin señal.** Está medido, no
+  resuelto: qué cachear es decisión de Andrés.
+- **iOS no se probó.** No hay ningún iPhone en el arnés. Background Sync no
+  existe ahí, y lo que se midió de instalación es contra Chrome/Edge.
 
 ---
 
