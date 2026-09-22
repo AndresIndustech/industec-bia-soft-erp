@@ -61,7 +61,12 @@ foreach (['ot_cierre', 'atendido_en', 'tecnico_auto', 'regularizado_por', 'regul
 $fk = $db->query("SELECT COUNT(*) n FROM information_schema.KEY_COLUMN_USAGE
                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'casos_gestion'
                      AND REFERENCED_TABLE_NAME = 'usuarios'")->fetch();
-comprobar('clave foranea a usuarios', $fk['n'], 1);
+// La 003 trae `asignado_a`; la 012 suma `continua_por` (quien declaro que un
+// caso continua un trabajo anterior). Las dos con ON DELETE SET NULL.
+$hay012 = (int) $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS
+                             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'casos_gestion'
+                               AND COLUMN_NAME = 'continua_de'")->fetchColumn() > 0;
+comprobar('clave foranea a usuarios', $fk['n'], $hay012 ? 2 : 1);
 
 echo "\nbitacora\n";
 $cols = array_column($db->query('SHOW COLUMNS FROM bitacora')->fetchAll(), 'Field');
@@ -79,8 +84,11 @@ foreach ($db->query('SELECT rol, COUNT(*) n FROM rol_permisos GROUP BY rol') as 
 }
 // La 007 suma 7 permisos a SUPERADMIN y ADMIN, 6 a JEFE_ZONA y 4 a TECNICO.
 // La 009 suma 13 a SUPERADMIN y ADMIN, 9 a JEFE_ZONA y 4 a TECNICO.
+// La 012 suma 1 a los cuatro: `casos.continuidad`.
+$mas012 = $hay012 ? 1 : 0;
 $esperado = $hay009
-    ? ['SUPERADMIN' => 39, 'ADMIN' => 38, 'JEFE_ZONA' => 26, 'TECNICO' => 13]
+    ? ['SUPERADMIN' => 39 + $mas012, 'ADMIN' => 38 + $mas012,
+       'JEFE_ZONA' => 26 + $mas012, 'TECNICO' => 13 + $mas012]
     : ($hay007
         ? ['SUPERADMIN' => 26, 'ADMIN' => 25, 'JEFE_ZONA' => 17, 'TECNICO' => 9]
         : ['SUPERADMIN' => 19, 'ADMIN' => 18, 'JEFE_ZONA' => 11, 'TECNICO' => 5]);

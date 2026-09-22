@@ -16,7 +16,7 @@ El recorrido es el caso real que dio origen a la tarea:
 
 Y las pruebas negativas, que aquí importan tanto como las positivas:
   - enlazar al revés se rechaza (no se puede crear un ciclo)
-  - un caso de otra zona no se puede enlazar ni consultar
+  - un caso que no es suyo no lo puede enlazar otro técnico
   - `avisos_sap.estatus_general` NO cambia por nada de esto
   - sin enlace, el pendiente del otro aviso sigue abierto (es la rama de control)
 
@@ -79,18 +79,21 @@ def main():
     ids = claves["ids"]
     reg = json.loads(vh.ssh("cat ~/respaldos/prueba_deshacer.json"))
 
-    # Hacen falta DOS casos del mismo técnico y sin pendientes vivos: uno hará
-    # de trabajo viejo (el que SAP cerró) y otro de aviso nuevo.
-    vivos = {r["aviso"] for r in vh.sql(
-        "SELECT DISTINCT aviso FROM pendientes WHERE estado NOT IN ('RESUELTO','CANCELADO')")}
-    enlazados = {r["aviso"] for r in vh.sql(
-        "SELECT aviso FROM casos_gestion WHERE continua_de IS NOT NULL")}
-    libres = [a for a in reg["elegidos"] if a not in vivos and a not in enlazados]
-    if len(libres) < 2:
-        vh.anotar("T2.25", "hacen falta dos casos de prueba sin pendientes vivos", False, libres)
+    # Los DOS avisos sintéticos del arnés (99990011 y 99990012): no existen en
+    # SAP, así que la prueba no mueve ni un caso del cliente. Uno hace de
+    # trabajo viejo —el que SAP cerró a las 48 h— y el otro del aviso nuevo.
+    # Al no estar en el catálogo, la propuesta automática no los ofrece: lo que
+    # esta prueba ejercita es el ENLACE y su arrastre, que es lo que necesita
+    # base. La propuesta ya la cubre `prueba_continuidad.php` contra el
+    # catálogo real, sin base y con el caso del horno de G006EC fijado.
+    viejo, nuevo = "99990011", "99990012"
+    faltan = [a for a in (viejo, nuevo)
+              if not vh.sql("SELECT aviso FROM casos_gestion WHERE aviso = ?", [a])]
+    if faltan:
+        vh.anotar("T2.25", "los avisos sintéticos del arnés existen", False,
+                  f"faltan {faltan}; corre preparar_prueba.php")
         return 1
-    viejo, nuevo = libres[0], libres[1]
-    print(f"trabajo viejo: {viejo}   ·   aviso nuevo de KFC: {nuevo}")
+    print(f"trabajo viejo: {viejo}   ·   aviso nuevo de KFC: {nuevo}   (sintéticos del arnés)")
 
     tec_id = ids["tec_prueba_uio_a"]
     # Punto de partida fijo: los dos casos ASIGNADOS al técnico A, sin cierre y
@@ -100,14 +103,18 @@ def main():
                     "continua_de = NULL, continua_ot = NULL, continua_por = NULL, continua_en = NULL, "
                     "continua_nota = NULL, asignado_a = ? WHERE aviso = ?", [tec_id, a])
 
-    # El estado de SAP, ANTES de tocar nada. Es lo que no puede moverse.
-    sap_antes = vh.sql("SELECT aviso, estatus_general FROM avisos_sap WHERE aviso IN (?, ?)", [viejo, nuevo])
+    # El estado de SAP, ANTES de tocar nada: es lo que no puede moverse.
+    # En el servidor no existe la tabla `avisos_sap` (esa vive en la base de la
+    # estación): aquí lo que dice SAP es el catálogo, un archivo que la estación
+    # REESCRIBE entero en cada barrido y que nada de la app puede tocar. Se mide
+    # por su huella, que es la forma que tiene esa regla en este lado.
+    sap_antes = vh.ssh("cd " + vh.D + " && sha256sum catalogos/casos_sap.json").split()[0]
 
-    s = {u: vh.Sesion(u) for u in ("tec_prueba_uio_a", "tec_prueba_larb", "jefe_prueba_uio")}
+    s = {u: vh.Sesion(u) for u in ("tec_prueba_uio_a", "tec_prueba_uio_b", "jefe_prueba_uio")}
     for u, se in s.items():
         st, loc = se.entrar(claves["claves"][u])
         vh.anotar("ingreso", f"{u} entra", st == 302 and "login.php" not in loc, f"{st} → {loc}")
-    tec, otro = s["tec_prueba_uio_a"], s["tec_prueba_larb"]
+    tec, otro = s["tec_prueba_uio_a"], s["tec_prueba_uio_b"]
     st, _, c = tec.pedir("catalogos.php")
     cat = json.loads(c)
 
@@ -169,7 +176,7 @@ def main():
         "accion": "continua", "aviso": nuevo, "origen": viejo, "nota": "ajeno"})
     n = vh.sql("SELECT COUNT(*) n FROM bitacora WHERE entidad = 'caso' AND referencia = ? "
                "AND accion = 'DENEGADO'", [nuevo])[0]["n"]
-    vh.anotar("T2.25.2", "un técnico de otra zona no enlaza el caso ajeno", int(n) >= 1, n)
+    vh.anotar("T2.25.2", "otro técnico no enlaza un caso que no es suyo", int(n) >= 1, n)
 
     print("\n== 5. la orden nueva arrastra la cadena y cierra el pendiente viejo ==")
     vh.ejecutar("UPDATE pendientes SET estado = 'ENTREGADO', cerrado_en = NULL, "
@@ -195,11 +202,9 @@ def main():
               any(str(viejo) in str(a) for a in recibo.get("anexos", [])), recibo.get("anexos"))
 
     print("\n== 6. lo que NO puede haberse movido ==")
-    sap_desp = {r["aviso"]: r["estatus_general"] for r in
-                vh.sql("SELECT aviso, estatus_general FROM avisos_sap WHERE aviso IN (?, ?)", [viejo, nuevo])}
-    igual = all(sap_desp.get(r["aviso"]) == r["estatus_general"] for r in sap_antes)
-    vh.anotar("T2.25", "avisos_sap.estatus_general NO cambió (regla 5)", igual,
-              f"{[(r['aviso'], r['estatus_general']) for r in sap_antes]} → {sap_desp}")
+    sap_desp = vh.ssh("cd " + vh.D + " && sha256sum catalogos/casos_sap.json").split()[0]
+    vh.anotar("T2.25", "el catálogo de SAP no se tocó: misma huella (regla 5)",
+              sap_desp == sap_antes, f"{sap_antes[:12]}… → {sap_desp[:12]}…")
     q5 = vh.sql("SELECT COUNT(*) n FROM casos_gestion WHERE estado IN ('CERRADO_SIN_ATENCION','ATENDIDO') "
                 "AND aviso IN (SELECT aviso FROM pendientes WHERE estado NOT IN ('RESUELTO','CANCELADO'))")[0]
     vh.anotar("T2.25", "ningún caso cerrado con un pendiente vivo", int(q5["n"]) == 0, f"{q5['n']} filas")
@@ -211,6 +216,32 @@ def main():
         "accion": "descontinua", "aviso": nuevo, "nota": "prueba"})
     g = gestion(nuevo)
     vh.anotar("T2.25.2", "el enlace se deshace", not g.get("continua_de"), g.get("continua_de"))
+
+    print("\n== 8. el terreno se devuelve como estaba ==")
+    # `verificar_bandeja.py` comprueba que 99990011 esté ASIGNADO y 99990012
+    # ATENDIDO sin orden de cierre: es lo que deja `preparar_prueba.php` y lo
+    # que esa batería necesita para distinguir la bandeja del historial. Esta
+    # prueba los mueve a los dos, así que los devuelve. Sin esto, correr esta
+    # batería rompía la siguiente -- y el fallo aparecía lejos de su causa.
+    vh.ejecutar("UPDATE casos_gestion SET estado = 'ASIGNADO', ot_cierre = NULL, atendido_en = NULL, "
+                "continua_de = NULL, continua_ot = NULL, continua_por = NULL, continua_en = NULL, "
+                "continua_nota = NULL WHERE aviso = ?", [viejo])
+    vh.ejecutar("UPDATE casos_gestion SET estado = 'ATENDIDO', ot_cierre = NULL, atendido_en = NULL, "
+                "continua_de = NULL, continua_ot = NULL, continua_por = NULL, continua_en = NULL, "
+                "continua_nota = NULL WHERE aviso = ?", [nuevo])
+    # El pendiente que abrió esta prueba: se cancela, no se borra. La bitácora
+    # y el hilo quedan; borrar filas de `pendientes` es justo lo que no se hace.
+    if pid:
+        vh.ejecutar("UPDATE pendientes SET estado = 'CANCELADO', cerrado_en = NOW(), "
+                    "nota_cierre = 'Cerrado al terminar verificar_continuidad.py' "
+                    "WHERE pendiente_id = ? AND estado NOT IN ('RESUELTO','CANCELADO')", [pid])
+    quedo = {r["aviso"]: r["estado"] for r in
+             vh.sql("SELECT aviso, estado FROM casos_gestion WHERE aviso IN (?, ?)", [viejo, nuevo])}
+    vh.anotar("T2.25", "los avisos sintéticos quedan como los deja preparar_prueba.php",
+              quedo == {viejo: "ASIGNADO", nuevo: "ATENDIDO"}, quedo)
+    vivos = vh.sql("SELECT COUNT(*) n FROM pendientes WHERE aviso IN (?, ?) "
+                   "AND estado NOT IN ('RESUELTO','CANCELADO')", [viejo, nuevo])[0]["n"]
+    vh.anotar("T2.25", "no queda ningún pendiente vivo de esta prueba", int(vivos) == 0, vivos)
 
     for se in s.values():
         se.pedir("salir.php", form={})
@@ -226,7 +257,16 @@ def orden_de(catalogo, aviso, tecnico_id):
     servidor y una orden a medias se rechaza con 400 antes de llegar a lo que
     esta prueba quiere medir.
     """
-    caso = next(x for x in catalogo["avisos"]["datos"] if x["aviso"] == aviso)
+    # Los avisos sintéticos del arnés SÍ salen en el catálogo del técnico —los
+    # tiene asignados— pero SIN local: no existen en SAP. Sin local la orden se
+    # rechaza con 400 antes de llegar a lo que esta prueba mide, así que se le
+    # pone un local real de UIO. `envio.php` la marca con la observación
+    # LOCAL_DISTINTO_AL_DEL_CASO y la acepta igual, que es lo previsto para una
+    # orden firmada cuyo caso no cuadra con el catálogo.
+    caso = next((x for x in catalogo["avisos"]["datos"]
+                 if x["aviso"] == aviso and x.get("local")), None)
+    if caso is None:
+        caso = next(x for x in catalogo["avisos"]["datos"] if x.get("local"))
     local = caso["local"]
     equipos = (catalogo.get("equipos") or {}).get(local) or []
     eq = ({"equipo_sap": str(equipos[0]["equipo_sap"]), "tipo": equipos[0].get("tipo", "")} if equipos

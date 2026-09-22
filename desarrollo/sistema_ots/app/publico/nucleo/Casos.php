@@ -643,7 +643,16 @@ final class Casos
         foreach ($gestion as $a => $g) {
             if (trim((string) ($g['continua_de'] ?? '')) === $raiz) { $out[(string) $a] = true; }
         }
-        return array_keys($out);
+        /* El `(string)` de la vuelta NO sobra: un aviso es todo dígitos, y PHP
+           convierte a int las claves numéricas de un array, así que
+           `array_keys()` devolvía ints. Con `declare(strict_types=1)`,
+           `atenderPorOrden(int)` revienta con TypeError, la excepción se
+           tragaba en el catch de `envio.php` y la orden se emitía SIN cerrar
+           ningún caso de la cadena -- en silencio, con el recibo diciendo que
+           sí. Lo cazó `verificar_continuidad.py` contra el servidor; en local
+           no se veía porque la prueba comparaba con `implode()`, que convierte.
+           Es el mismo tropiezo que ya documenta `delTecnico()` más arriba. */
+        return array_map('strval', array_keys($out));
     }
 
     /**

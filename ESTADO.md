@@ -48,7 +48,7 @@ del rediseño.
 | Respaldo TrueNAS | 🔒 | Bloqueado: falta acceso físico al equipo |
 | Capacitación de cierre | 🔒 | Bloqueada: falta agendar con el personal |
 | Repositorio git sincronizado con GitHub | ✅ **2026-09-12** | `origin` es `git@github.com:AndresIndustech/industec-bia-soft-erp.git`. **Comprobado:** `ssh -T git@github.com` responde «Hi AndresIndustech! You've successfully authenticated», `git fetch` trae, y `master` tiene upstream `origin/master`. Andrés ya agregó la clave pública, así que el bloqueo del 2026-09-11 está levantado. **Se acabó el proyecto en un solo disco.** Ojo con lo que esto destapa: existe `origin/pc/auditoria-2026-09-10` **29 commits por delante de `master`**, con `master` como ancestro — ver §5.2b |
-| **Continuidad entre casos del mismo equipo** (T2.25) | ⚠️ **escrito y probado sin base; sin desplegar** | 4 baterías locales en verde (**35 · 0** la nueva, 120 · 0, 57 · 0, 62 · 0). El fenómeno, medido: **185 grupos** local+equipo con más de un caso en el buzón vivo y **509 avisos** del histórico SAP que nacen dentro de la semana de otro del mismo equipo. **Falta aplicar la 012 y correr `verificar_continuidad.py`**: lo que necesita MySQL está escrito y sin ejecutar. Detalle en **§1l** |
+| **Continuidad entre casos del mismo equipo** (T2.25) | ✅ **desplegada y verificada contra el servidor el 2026-09-21** | Migración **012 aplicada** (`verificar_esquema.php` → **TODO OK**, con 0 casos enlazados: no enlaza nada por su cuenta), `verificar_continuidad.py` en **25 · 0** —incluido el arrastre real del pendiente huérfano—, `verificar_http.py` **86 · 0** y `verificar_bandeja.py` **37 · 0**. Locales: **36 · 0** la nueva, 120 · 0, 57 · 0, 62 · 0. El fenómeno, medido: **185 grupos** local+equipo con más de un caso en el buzón vivo y **509 avisos** del histórico SAP que nacen dentro de la semana de otro del mismo equipo. Detalle en **§1l** |
 | **Buzón de la administradora, regularizado en bloque** | ✅ **2026-09-21** | **124 ATENDIDO → cerrados en SAP** + **773 CERRADO_SIN_ATENCION → regularizados**, a pedido de Andrés y asumiendo que ella ya lo hizo en SAP (sin verificar caso por caso). Pendientes de regularizar: **0**. Detalle, la herramienta y la nota sobre los «656» vs 773 reales en **§1h** |
 | **Pantalla de preventivos** | ✅ **rediseñada el 2026-09-21 (T2.23)** | De **~110 elementos** en la primera pantalla a **~28**. Tres horizontes en pestañas en vez de apilados; el atraso como cola de trabajo. Destapó tres cifras que se leían al revés: **174 ingresos «sin cerrar»** que figuraban «en curso» (algunos desde enero), el «0 % a tiempo» que en realidad era «ningún ingreso cerrado todavía», y el «sin kit» que salía en el 86 % de las filas. Baterías locales **120·0, 57·0, 62·0, 11·0**; cuadre de bloques **82+174+19+16+77 = 368**. Detalle y lo no comprobado en **§1k**. **Sin desplegar todavía** |
 
@@ -756,7 +756,7 @@ nombre y el jefe de zona lo ve en `casos.php`. Es la decisión de Andrés del
 Las cuatro baterías locales, corridas con el PHP 8.3 de la estación:
 
 ```
-php pruebas/prueba_continuidad.php     ->  35 comprobaciones · 0 fallos   (nueva)
+php pruebas/prueba_continuidad.php     ->  36 comprobaciones · 0 fallos   (nueva)
 php pruebas/prueba_48h.php             -> 120 comprobaciones · 0 fallos
 PHP_BIN=… node pruebas/prueba_contratos.mjs ->  57 comprobaciones · 0 fallos
 node pruebas/prueba_graficos.mjs       ->  62 comprobaciones · 0 fallos
@@ -769,30 +769,94 @@ propone lo que cae dentro de los 30 días (10343636 a 28 entra; los de 31 y 33
 no), que una freidora del mismo local no entra, que un ciclo escrito a mano en
 la base no cuelga la pantalla, y que consultar 918 casos no enlaza ninguno.
 
-### 🔴 Lo que NO se pudo comprobar, y hay que correr antes de darlo por bueno
+### Contra el servidor: 23 · 0, y el bug que solo se veía ahí
 
-**La mitad que necesita MySQL está escrita y sin ejecutar.** La base local de la
-app (`industec_app`) solo tiene la 001 aplicada —`casos_gestion` ni existe—, así
-que nada de esto se probó contra una base de verdad:
+Andrés autorizó aplicar y desplegar el 2026-09-21. **La 012 está aplicada** en
+darkviolet —con respaldo previo de `casos_gestion` (1.041 filas, 266 KB, en
+`~/respaldos/casos_gestion_pre012_20260922_001719.sql`)— y los seis archivos
+desplegados, con el desplegador confirmando que *«la web entrega exactamente lo
+que se subió»*.
 
-- que el enlace se **escribe** bien y el caso queda ATENDIDO con la orden del
-  trabajo viejo;
-- que la orden nueva **arrastra la cadena** y cierra el pendiente huérfano;
-- que un técnico de otra zona **no** puede enlazar un caso ajeno.
+```
+php verificar_esquema.php        -> TODO OK
+  migracion 012
+    casos_gestion lleva la continuidad (5 columnas)          5    OK
+    indice idx_gestion_continua                              si   OK
+    permiso casos.continuidad repartido a los cuatro roles   4    OK
+    (casos enlazados a un trabajo anterior: 0)
 
-Está todo en `pruebas/servidor/verificar_continuidad.py` (7 bloques, con la
-rama de control «sin enlace, el pendiente sigue abierto» y la comprobación de
-que `avisos_sap.estatus_general` no se movió). **Se corre cuando se despliegue
-y se aplique la 012**, las dos cosas pendientes de aprobación de Andrés.
+python verificar_continuidad.py  -> 25 de 25 comprobaciones pasan; 0 fallan
+python verificar_http.py         -> 86 de 86 comprobaciones pasan; 0 fallan
+python verificar_bandeja.py      -> 37 de 37 comprobaciones pasan; 0 fallan
+```
 
-**La migración 012 no está aplicada en ningún lado.** Mientras no lo esté, el
-código degrada solo y la pantalla se ve exactamente como antes:
-`Casos::gestion()` reintenta sin el JOIN nuevo, `continua_de` queda en null y
-el bloque no se dibuja. Nada se rompe; la función simplemente no aparece.
+El recorrido que prueba es el del caso real: el equipo queda trabado en el aviso
+viejo → **la rama de control** (sin enlace, la orden del aviso nuevo no toca ese
+pendiente: sigue en ENTREGADO) → el técnico declara que es el mismo trabajo →
+enlazar al revés se rechaza y otro técnico no puede enlazar un caso ajeno → la
+orden nueva deja **los dos casos con la MISMA orden de cierre**
+(`OT-9076-G018EC-99990012-UIO`) y el pendiente del viejo en **RESUELTO**, con la
+nota diciendo con qué orden → el catálogo de SAP con **la misma huella**
+(`d4bea28db752…`), ningún caso cerrado con un pendiente vivo, ninguno
+continuándose a sí mismo → el enlace se deshace → y el **bloque 8** devuelve
+el terreno como estaba y lo comprueba: los sintéticos vuelven a
+`{99990011: ASIGNADO, 99990012: ATENDIDO}` y no queda ningún pendiente vivo.
 
-**`sw.js` NO cambia de versión:** no se tocó ningún archivo de la lista de
+**🔴 El bug que solo apareció en el servidor, y por qué importa.** La primera
+corrida dio **21 · 2**: los dos casos quedaban sin orden de cierre aunque el
+pendiente sí se cerraba y el recibo decía que todo había ido bien. La causa:
+`Casos::cadena()` devolvía `array_keys()`, y **PHP convierte a int las claves
+numéricas de un array** — un aviso es todo dígitos. Con `declare(strict_types=1)`,
+`atenderPorOrden(string $aviso, …)` lanzaba `TypeError`, la excepción se tragaba
+en el `catch` de `envio.php` y **la orden se emitía sin cerrar ningún caso de la
+cadena, en silencio**. Ni la prueba local lo veía (comparaba con `implode()`,
+que convierte) ni el `error_log` de CLI (los errores de la web van a
+`~/.logs/error_log_<dominio>`). Arreglado con `array_map('strval', …)` y **fijado
+con una comprobación de tipos** en la prueba local, que por eso pasó de 35 a 36.
+Es el mismo tropiezo que `Casos::delTecnico()` ya documentaba desde antes.
+
+**`sw.js` NO cambió de versión:** no se tocó ningún archivo de la lista de
 precarga (`mis.php` y `casos.php` son PHP servidos en vivo). Sigue en **v11**,
 la que dejó T2.23.
+
+### Dos baterías que chocaron, y lo que se arregló para que no vuelva
+
+`verificar_bandeja.py` costó dos vueltas, ninguna por el código de T2.25:
+
+1. La primera dio **17·37**, por lanzarla **en paralelo** con `verificar_ciclo`
+   y `verificar_emision`. Las tres usan las mismas cuentas de prueba y se
+   pisaron las sesiones: el síntoma fue un `401 sesion_requerida` donde se
+   esperaba un 403, y un `KeyError: 'avisos'` en emisión porque
+   `catalogos.php` le respondió sin sesión. **Las baterías de servidor se
+   corren de a una.**
+2. La segunda, corrida sola, **abortó** con «los avisos sintéticos no están
+   como los deja `preparar_prueba.php`». Era cierto:
+   `verificar_continuidad.py` los dejaba a los dos en ATENDIDO, y bandeja los
+   necesita uno ASIGNADO y otro ATENDIDO para distinguir la bandeja del
+   historial. **Arreglado en la propia batería**, que ahora cierra con un
+   bloque 8 que devuelve el terreno como lo encontró —los dos casos a su
+   estado original y el pendiente de la prueba a CANCELADO, no borrado— y lo
+   **comprueba con sus propias afirmaciones** en vez de confiar en que salió
+   bien: por eso pasó de 23 a 25 comprobaciones, y la última corrida deja
+   `{99990011: ASIGNADO, 99990012: ATENDIDO}` y 0 pendientes vivos. Son los
+   errores nº 30 y 31 del plan.
+
+   **Confirmado de vuelta:** `verificar_bandeja.py`, corrida sola después de
+   `verificar_continuidad.py`, da **37 · 0**. Las dos conviven.
+
+### 🔴 Lo que sigue sin comprobarse
+
+- **Nadie la ha usado todavía con datos reales.** Las 25 comprobaciones corren
+  sobre los avisos sintéticos del arnés (`99990011`/`99990012`), a propósito:
+  así la prueba no mueve ni un caso del cliente. La **propuesta automática** —la
+  que mira local + equipo + 30 días— solo está probada contra el catálogo, sin
+  base, con el caso del horno de `G006EC`. Falta verla en la pantalla real.
+- **No la ha mirado Andrés.** El criterio de si la propuesta se entiende en un
+  celular, con guantes, es suyo.
+- El arnés de pruebas quedó **puesto** en el servidor (`preparar_prueba.php`
+  corrido: cinco cuentas de prueba y los casos 10356012 y 10355931 asignados al
+  técnico A). Se revierte con `php ~/respaldos/deshacer_prueba.php` cuando ya no
+  haga falta para las otras baterías.
 
 ---
 
@@ -1288,7 +1352,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| ~~**T2.25 · Continuidad entre casos del mismo equipo**~~ | ✅ **Escrita, probada sin base y commiteada el 2026-09-21** (`e4eae14`) | — | Código en verde (**35·0** la batería nueva). **Pendiente de Andrés: aplicar la 012 en Hostinger y desplegar** — hasta entonces la pantalla se ve igual que antes, porque el código degrada solo. Sus seis archivos (`mis.php`, `casos.php`, `envio.php`, `verificar_esquema.php`, `nucleo/Casos.php`, `nucleo/Pendientes.php`) **no chocan** con los de T2.23, que también espera despliegue. Detalle en **§1l** |
+| ~~**T2.25 · Continuidad entre casos del mismo equipo**~~ | ✅ **Terminada, aplicada y desplegada el 2026-09-21** | — | Migración 012 en darkviolet y seis archivos desplegados. Verificado: **25·0** la batería nueva, 37·0 bandeja, 86·0 http, `verificar_esquema.php` TODO OK; y 36·0 · 120·0 · 57·0 · 62·0 en local. Lo único que queda es **que Andrés la mire**, y que alguien la use con un caso real. Detalle en **§1l** |
 | ~~T2.23 · Rediseño de la interfaz de preventivos~~ | ✅ **Terminada el 2026-09-21** | — | `cronograma.html/.js/.css` y `sw.js` a v11. No tocó la base, ni el árbol canónico, ni el contrato de `cronograma.php`/`cronograma_accion.php`. Cifras, evidencia y lo que quedó sin comprobar en **§1k**. Falta desplegar a darkviolet y correr las baterías de servidor |
 | ~~Regularización masiva del buzón (ATENDIDO → cerrado SAP, CERRADO_SIN_ATENCION → regularizado)~~ | ✅ **Terminada el 2026-09-21** | — | 124 + 773 casos regularizados en `casos_gestion` (Hostinger). Detalle en **§1h** |
 | ~~T2.22b · InspectorBot — consola gráfica del robot~~ | ✅ **Terminada el 2026-09-21** | — | Ventana, icono, nombre propio en el Administrador de tareas y arranque con el equipo, todo verificado. Cifras y método en **§1f**. Sumó además la red de seguridad del trabajo en curso (`scripts/guardar_sesion.py` + hook `Stop`), ver §1g. `consola.bat` se conserva |

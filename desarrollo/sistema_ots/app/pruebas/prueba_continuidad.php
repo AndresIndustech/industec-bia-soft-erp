@@ -163,6 +163,17 @@ afirmar('la cadena de un caso suelto es él solo',
         implode(',', Casos::cadena('10349666', $g)), '10349666');
 afirmar('un aviso vacío no arma cadena', count(Casos::cadena('', $g)), 0);
 
+/* Y vienen como CADENAS DE TEXTO, no como enteros. No es quisquillosería: un
+   aviso es todo dígitos, PHP convierte a int las claves numéricas de un array,
+   y `Casos::atenderPorOrden(string $aviso, …)` con `strict_types` revienta con
+   TypeError si le llega un int. Eso pasó de verdad: la excepción se tragaba en
+   el catch de `envio.php` y la orden salía SIN cerrar ningún caso de la
+   cadena, en silencio y con el recibo diciendo que sí. Lo cazó la batería
+   contra el servidor, y esta comprobación es para que no vuelva. */
+$tipos = array_unique(array_map('gettype', Casos::cadena('10342924', $g)));
+afirmar('la cadena devuelve textos, no enteros (TypeError en atenderPorOrden)',
+        implode(',', $tipos), 'string');
+
 // El ciclo: dos filas que se apuntan. No puede pasar por la aplicación
 // —`motivoRechazoEnlace` lo corta—, pero sí escribiendo la base a mano, y
 // entonces `raiz()` tiene que salir igual en vez de colgar la pantalla.

@@ -1596,30 +1596,35 @@ python verificar_seguridad.py   # 28 · 0
 
 ### La siguiente acción, concreta
 
-**L. Aplicar la 012 y desplegar la continuidad entre casos (T2.25)** —
-*escrita, probada sin base y esperando a Andrés.* Es el pedido del 2026-09-21:
-el técnico no tenía cómo decir que un caso es la continuación de un trabajo que
-ya empezó, y SAP cierra solo el aviso que nadie atendió en 48 horas. Están
-hechas las tres subtareas y las cuatro baterías locales en verde (**35·0** la
-nueva, 120·0, 57·0, 62·0). Faltan **dos cosas que un agente no hace solo**:
+**L. Continuidad entre casos (T2.25)** — ✅ **hecha, aplicada y desplegada el
+2026-09-21.** La 012 está en darkviolet (`verificar_esquema.php` → **TODO OK**,
+con 0 casos enlazados: no enlaza nada por su cuenta) y `verificar_continuidad.py`
+da **25·0**, incluido el arrastre real del pendiente huérfano. Locales: **36·0**
+la nueva, 120·0, 57·0, 62·0. Contra el servidor, `verificar_http.py` **86·0** y
+`verificar_bandeja.py` **37·0**.
+Respaldo previo de `casos_gestion` en `~/respaldos/casos_gestion_pre012_20260922_001719.sql`.
 
-```bash
-# 1. Aplicar la migración (toca `casos_gestion`, la tabla viva)
-scp -i <llave> -P 65002 app/sql/012_continuidad_casos.sql u671729428@…:~/domains/…/ot/sql/
-ssh … "cd …/ot && php aplicar_sql.php sql/012_continuidad_casos.sql && php verificar_esquema.php"
-#    -> bloque «migracion 012»: 5 columnas, idx_gestion_continua, permiso en 4 roles
-#    -> y la prueba negativa: casos enlazados a un trabajo anterior = 0
+**Lo único que le queda, y es de Andrés: mirarla.** Si la propuesta se entiende
+en un celular, con guantes, es criterio suyo. Se ve entrando como técnico a un
+caso que tenga un trabajo anterior del mismo equipo. **Y nadie la ha usado
+todavía con un caso real**: las 25 comprobaciones corren sobre los avisos
+sintéticos del arnés (`99990011`/`99990012`), a propósito, para no mover casos
+del cliente.
 
-# 2. Desplegar los cinco archivos y correr la batería nueva
-#    T2.23 (acción K) YA SE DESPLEGÓ el 2026-09-21 (cronograma.html/.css/.js,
-#    sw.js v11) — sin conflicto: ningún archivo de T2.25 se solapa con esos.
-python scripts/t2_10_desplegar.py …   # mis.php casos.php envio.php nucleo/Casos.php nucleo/Pendientes.php verificar_esquema.php
-cd app/pruebas/servidor && python verificar_continuidad.py    # 7 bloques
-```
+**`verificar_bandeja.py` costó tres vueltas, y ninguna por el código.** La
+primera dio 17·37 por lanzarla **en paralelo** con otras dos baterías que usan
+las mismas cuentas de prueba: se pisaron las sesiones (`401 sesion_requerida`
+donde se esperaba un 403). La segunda, sola, **abortó**:
+`verificar_continuidad.py` dejaba los avisos sintéticos en un estado distinto
+del que deja `preparar_prueba.php`, y bandeja los necesita así para distinguir
+la bandeja del historial. Se arregló en la propia batería, que ahora **devuelve
+el terreno como lo encontró** y lo comprueba (bloque 8, de ahí 23→25). **La
+tercera dio 37·0.** Son los errores nº 30 y 31.
 
-**Lo que hay que mirar con Andrés**, porque es criterio suyo: cómo se ve la
-propuesta en la ficha del caso, con el horno de `G006EC` (10342924 propone
-10342524). Cifras y lo no comprobado en `ESTADO.md` **§1l**.
+El arnés quedó **puesto** (`preparar_prueba.php` corrido: cinco cuentas y los
+casos 10356012 y 10355931 asignados al técnico A). Se revierte con
+`php ~/respaldos/deshacer_prueba.php` cuando ya no haga falta. Cifras y lo que
+sigue sin comprobarse, en `ESTADO.md` **§1l**.
 
 **K. Desplegar la pantalla de preventivos rediseñada (T2.23)** — ✅ **hecho el
 2026-09-21.** `t2_10_desplegar.py cronograma.html cronograma.css cronograma.js
@@ -2231,6 +2236,28 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     Grupo KFC que se atendió un caso que nadie atendió (I-7). El patrón que
     sirve —y la decisión de Andrés del 2026-09-21— es **detectar y proponer, y
     que confirme quien estuvo ahí**, con la traza a su nombre.
+
+30. **Una batería que deja el terreno cambiado rompe a la siguiente, y el fallo
+    aparece lejos de su causa.** `verificar_continuidad.py` movía los avisos
+    sintéticos `99990011`/`99990012`, y `verificar_bandeja.py` —que los necesita
+    tal como los deja `preparar_prueba.php`, uno ASIGNADO y otro ATENDIDO, para
+    distinguir la bandeja del historial— abortaba sin más explicación que «no
+    están como los deja preparar_prueba.php». Una batería de servidor
+    **devuelve el terreno como lo encontró**, y lo comprueba al final con su
+    propia afirmación, no «con cuidado».
+31. **Correr en paralelo dos baterías de servidor que usan las mismas cuentas de
+    prueba.** Se pisan las sesiones y el resultado no significa nada:
+    `verificar_bandeja.py` dio 17·37 con un `401 sesion_requerida` donde
+    esperaba un 403, y `verificar_emision.py` reventó con `KeyError: 'avisos'`
+    porque `catalogos.php` le respondió sin sesión. Ninguna de las dos cosas
+    tenía que ver con el código que se estaba probando. **Se corren de a una**,
+    aunque tarden.
+32. **Buscar el error de una petición web en el `error_log` de la carpeta.** Ahí
+    van los de CLI. Los de la web están en `~/.logs/error_log_<dominio>`, y no
+    mirarlos cuesta caro: el TypeError de `Casos::cadena()` (error nº 28) se
+    tragaba en un `catch`, la orden salía «bien» y el recibo decía que sí,
+    mientras ningún caso de la cadena se cerraba. El log de la web lo decía en
+    una línea.
 
 ### Lo que no se toca, nunca
 
