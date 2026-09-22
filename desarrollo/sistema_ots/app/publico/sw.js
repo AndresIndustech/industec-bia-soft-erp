@@ -35,7 +35,8 @@
      v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
      recibe el numero de la orden. Con el armazon viejo el celular seguiria
      mandando la orden sin ellas. */
-const VERSION = 'ot-industec-v11';  // v11: preventivos rediseñado — cronograma.html/js/css (2026-09-21)
+const VERSION = 'ot-industec-v12';  // v12: guia.js — ninguna cabecera abría su paso (2026-09-22)
+// v11: preventivos rediseñado — cronograma.html/js/css (2026-09-21)
 // v10: estilo.css (§S3-§S5), cronograma.js/html/css que escribe y graficos.js accesible (2026-09-13)
 //
 // OJO: la versión hay que subirla también cuando cambia el CONTENIDO de un

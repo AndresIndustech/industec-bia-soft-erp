@@ -118,15 +118,23 @@
         form.insertBefore(caja, nodo);
         nodo.remove();                          // el <h2> pasa a ser la cabecera
 
-        actual = { caja: caja, cab: cab, cuerpo: cuerpo, resu: resu,
-                   titulo: tit.textContent, abierto: false, visitado: false };
-        pasos.push(actual);
+        /* `paso` es de esta vuelta; `actual` es compartido y se reasigna en cada
+           <h2>. El clic tiene que cerrar sobre el primero: cuando cerraba sobre
+           `actual`, para cuando alguien pulsaba ya valía el ÚLTIMO paso, así que
+           `pasos.indexOf(actual)` daba siempre 11 y CUALQUIER cabecera abría
+           «Firma del administrador». El técnico no podía abrir ni «La orden» ni
+           «Datos generales», y el caso que venía precargado desde la bandeja no
+           se veía por ningún lado (Andrés, caso 10355894, 2026-09-22). */
+        var paso = { caja: caja, cab: cab, cuerpo: cuerpo, resu: resu,
+                     titulo: tit.textContent, abierto: false, visitado: false };
+        actual = paso;
+        pasos.push(paso);
 
         cab.addEventListener('click', function () {
           // Un paso pendiente no se abre a golpes: primero hay que completar
           // el anterior. Pero uno ya visitado siempre se puede reabrir.
           if (caja.classList.contains('pendiente')) { return; }
-          abrir(pasos.indexOf(actual), true);
+          abrir(pasos.indexOf(paso), true);
         });
         return;
       }
@@ -229,7 +237,18 @@
     var trozos = [];
     $$('input, select, textarea', p.cuerpo).forEach(function (el) {
       if (!aplica(el, p.cuerpo) || el.type === 'hidden' || el.type === 'file') { return; }
-      var v = String(el.value || '').trim();
+      /* Una casilla sin atributo `value` vale la cadena "on" ESTÉ MARCADA O NO,
+         así que el primer paso se resumía «Correctivo · on» por la casilla de
+         "otro proveedor", que nadie había tocado. Lo que resume una casilla es
+         su etiqueta, y solo si está marcada. */
+      var v;
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        if (!el.checked) { return; }
+        var etiqueta = el.closest('label');
+        v = String(etiqueta ? etiqueta.textContent : el.value).trim();
+      } else {
+        v = String(el.value || '').trim();
+      }
       if (!v || v === 'Lo asigna el servidor') { return; }
       if (el.tagName === 'SELECT' && el.selectedOptions[0]) {
         v = el.selectedOptions[0].textContent.trim();
