@@ -303,6 +303,30 @@ def fijar_valores_de_formulas(ruta: Path, valores: dict[str, dict[str, object]])
     return fijadas
 
 
+def consultar_servidor(sql: str, parametros: list | None = None) -> list[dict]:
+    """Un SELECT contra la base del sitio de pruebas, por SSH. Solo lectura: rechaza lo demás.
+
+    Se usa el mismo camino que las baterías de pruebas (php -r con Db::todos en el sitio),
+    con la llave de la estación (config/clave_hostinger) o la de INDUSTEC_LLAVE_SSH.
+    """
+    import json
+    import os
+    import subprocess
+    if not re.match(r"^\s*SELECT\b", sql, re.I) or ";" in sql.strip().rstrip(";"):
+        raise SystemExit("consultar_servidor solo acepta un SELECT.")
+    llave = os.environ.get("INDUSTEC_LLAVE_SSH") or str(BASE / "config" / "clave_hostinger")
+    sitio = "domains/darkviolet-armadillo-872352.hostingersite.com/public_html/ot"
+    php = ('require "nucleo/Db.php"; $in = json_decode(stream_get_contents(STDIN), true); '
+           'echo json_encode(Db::todos($in["q"], $in["p"]));')
+    r = subprocess.run(["ssh", "-i", llave, "-o", "IdentitiesOnly=yes", "-p", "65002", "-o", "BatchMode=yes",
+                        "-o", "ConnectTimeout=20", "u671729428@82.25.73.181", f"cd {sitio} && php -r '{php}'"],
+                       input=json.dumps({"q": sql, "p": parametros or []}), capture_output=True, text=True,
+                       encoding="utf-8", timeout=120)
+    if r.returncode != 0:
+        raise SystemExit(f"No se pudo leer el servidor ({r.returncode}): {r.stderr.strip()[:200]}")
+    return json.loads(r.stdout)
+
+
 def martes_de_envio(hoy: dt.date) -> dt.date:
     """El martes de la semana de `hoy` (el reporte de pendientes sale los martes)."""
     return hoy - dt.timedelta(days=(hoy.weekday() - 1) % 7)
