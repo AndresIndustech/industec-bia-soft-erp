@@ -2473,6 +2473,19 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     después de correr baterías de servidor, siempre `php
     ~/respaldos/limpiar_pruebas.php` (simulacro → `--ejecutar` con sus
     cifras). Y la bitácora **no se limpia**: la 009 la hizo inalterable.
+38. **Un indicador en verde no prueba nada si su fuente está vacía.** «Se
+    concluye en una visita» dio **100 %** durante semanas: salía de
+    `pendientes`, que solo llena la app nueva y tenía 4 filas de prueba. «Sin
+    pendiente» se leía como «en una visita», y en realidad 80 de los 110 casos
+    tenían la orden **abierta**. **Regla:** antes de publicar un porcentaje,
+    contar cuántas filas reales tiene la tabla de la que sale. Si son pocas o
+    de prueba, el indicador sale «—», no 100.
+39. **PHP por la entrada estándar no define `STDERR`, y `Ui::pie()` termina con
+    `exit`.** Para leer el servidor sin dejar archivos se hace `ssh … "cd <sitio>
+    && php" < script.php`. En ese modo `fwrite(STDERR, …)` es un error fatal
+    **mudo** (sale 255 sin salida); usa `file_put_contents('php://stderr', …)`.
+    Y una pantalla incluida con `include` corta el proceso en `Ui::pie()`: dibuja
+    una por proceso. `pruebas/servidor/verificar_cifras.py` ya lo hace así.
 
 ### Lo que no se toca, nunca
 

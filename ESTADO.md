@@ -860,6 +860,66 @@ la que dejó T2.23.
 
 ---
 
+## 1q. Las cifras del inicio y de Reportes, contra los datos reales (2026-09-22, a pedido de Andrés)
+
+Andrés pidió revisar que las estadísticas del inicio y de Reportes reportaran
+información real, y que los «sin atender» ya regularizados dejaran de verse como
+alarma. Se midió cada cifra contra darkviolet antes de tocar nada. **Tres decían
+otra cosa**, y una cuarta estaba mal rotulada:
+
+| Cifra | Antes | Ahora | Por qué estaba mal |
+|---|---|---|---|
+| «sin atender» en el gráfico de estados | **644 en rojo**, la barra más grande | **644 «regularizado» en gris**; «sin atender» = **0** | Los 644 del buzón de 90 días estaban **todos** regularizados (§1h) |
+| «Se concluye en una visita» | **100 %** (110 de 110) | **80 %** (24 de 30 con orden de cierre) | Salía de `pendientes`, que tenía 4 filas y todas de prueba. **80** casos tienen visita con la orden **abierta** y ahora se muestran aparte |
+| «Vivos en 90 días» (inicio) | **884** | «Siguen abiertos»: **118** | Contaba toda la ventana, incluidos 766 cerrados o regularizados |
+| «Llegaron esta semana» / «Comprometidos hoy» | 8 días / con cerrados | 7 días / solo abiertos | `-7 days` con `>=` son ocho días |
+
+**Cómo quedó.** `Ui::estadoVista()` devuelve `REGULARIZADO` para un
+`CERRADO_SIN_ATENCION` con `regularizado_en`: gris, con borde punteado, en los
+gráficos del inicio y de Reportes, en el distintivo del buzón y en la ficha del
+técnico. **La base no cambia.** El filtro `casos.php?est=CERRADO_SIN_ATENCION`
+—al que manda el enlace «sin regularizar» del inicio— lista solo los que faltan;
+`?est=REGULARIZADO`, los ya explicados. «En una visita» se mide ahora con las
+órdenes del caso (`Reportes::unaVisita()`): cuenta solo lo que tiene orden
+«Cerrada», y una visita = todas sus órdenes del **mismo día** (se emite una orden
+por equipo: R001EC tiene dos del 18-sep que fueron una sola visita). Por técnico,
+igual, y «el mejor técnico» exige 5 casos cerrados. Excel, PDF y PowerPoint
+llevan las mismas cifras. `sw.js` → **v15** (estilo.css va en la precarga).
+
+**Evidencia** (desplegado en darkviolet; batería nueva, solo lectura):
+
+```
+$ cd desarrollo/sistema_ots/app/pruebas/servidor && PYTHONUTF8=1 python verificar_cifras.py
+referencia: {"CSA_SIN": 0, "REG": 644, "ABIERTOS": 118, "N": 884, "concluidos": 30, "una": 24, "en_curso": 80}
+ok  reportes: regularizados aparte, con su cifra                       644
+ok  reportes: % en una visita = referencia                             80
+ok  panel: «Siguen abiertos» = SQL                                     "118"
+ok  panel: barra «regularizado» con la cifra y en gris                 {"e": "regularizado", "v": 644, "c": "#64748b"}
+ok  casos.php: los regularizados salen en gris y ninguno en rojo       "644 gris · 0 rojo"
+21 comprobaciones · 0 fallos
+```
+
+Locales: `prueba_48h.php` **120·0**, `prueba_contratos.mjs` **57·0**,
+`prueba_graficos.mjs` **62·0**. Antes de subir se comprobó que el servidor tenía
+exactamente lo de `HEAD` en los once archivos (solo difería el fin de línea).
+
+**Hallazgos que quedaron medidos y NO se tocaron:**
+
+- **17 de los 85 preventivos «vencidos»** tienen una orden preventiva archivada
+  dentro de su ventana y sin enlazar a ningún ingreso (p. ej. R001EC ingreso 2,
+  plan 16–18 sep, `OT-0222/0223-R001EC-…-D2` del 18-sep). El cálculo es correcto
+  sobre la tabla; la tabla está atrasada. Es de T2.24, y enlazarlos escribe en la base.
+- **74 casos `ASIGNADO` con orden abierta desde jun–jul** (técnico tomado del
+  informe, `asignado_en` NULL). Son trabajo real sin orden de cierre; el inicio no
+  los muestra como tarea.
+- `verificar_http.py` buscaba la llave de la estación en `desarrollo/desarrollo/`
+  (`parents[3]` en vez de `parents[4]`): corregido.
+
+**Lo que NO se comprobó:** `reportes.php` no se dibujó en la verificación porque
+anota una consulta en la bitácora a nombre de la administradora; se verificó
+`Reportes::calcular()`, que es lo que la pantalla dibuja. Tampoco se abrió en un
+navegador ni en un celular.
+
 ## 1p. Sitio de pruebas sin datos ni usuarios de prueba (2026-09-22, a pedido de Andrés)
 
 Andrés pidió «dejar solo la información real», cuentas de prueba incluidas.
@@ -1755,7 +1815,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| **Revisión de las estadísticas del inicio y de Reportes; «sin atender» regularizadas en neutro** (pedida por Andrés) | Conversación "estadísticas" (estación) | 2026-09-22 | Solo **lee** la base de darkviolet. Toca `inicio`/`reportes` (PHP y JS del tablero). No escribe en ninguna tabla |
+| ~~Revisión de las estadísticas del inicio y de Reportes~~ ✅ hecha y desplegada (§1q) · **en curso: reportes para Grupo KFC tal como los pide, y reportes de monitoreo** (pedidos por Andrés) | Conversación "estadísticas" (estación) | 2026-09-22 | **Lee** el correo `servicioalcliente@` en solo lectura (EXAMINE/PEEK), el espejo del Drive y las dos bases. Escribirá generadores nuevos de reportes y salidas en `SALIDAS IA\REPORTES`. No escribe en ninguna tabla |
 | ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |
 | ~~**T2.26 · El formulario del técnico: desbloqueado, predictivo y sin señal**~~ | ✅ **Terminada y desplegada el 2026-09-22** | — | `guia.js`, `app.js`, `cola.js`, `sw.js` (v13) y dos baterías nuevas. **No tocó la base, ni el árbol canónico, ni ningún PHP.** Verificado: 120·0, 57·0, 62·0, 42·0 locales; 37·0 bandeja; **4·0** `verificar_sync_cerrada.mjs`. Detalle, cifras y lo que quedó sin comprobar en **§1o**. ⚠ `verificar_http.py` (81/86) y `verificar_emision.py` (aborta) piden **`preparar_prueba.php`**: el arnés se quedó sin ningún caso con local |
 | ~~**T2.25 · Continuidad entre casos del mismo equipo**~~ | ✅ **Terminada, aplicada y desplegada el 2026-09-21** | — | Migración 012 en darkviolet y seis archivos desplegados. Verificado: **25·0** la batería nueva, 37·0 bandeja, 86·0 http, `verificar_esquema.php` TODO OK; y 36·0 · 120·0 · 57·0 · 62·0 en local. Lo único que queda es **que Andrés la mire**, y que alguien la use con un caso real. Detalle en **§1l** |
