@@ -89,7 +89,7 @@ $hoy      = date('Y-m-d');
    Se hacen en una sola pasada sobre el arreglo en vez de seis `array_filter`
    encadenados: son 918 casos y esto se dibuja en cada carga.
    ------------------------------------------------------------------------- */
-$n = ['total' => count($casos), 'sin_asignar' => 0, 'alerta' => 0, 'alerta_vieja' => 0, 'hoy' => 0,
+$n = ['total' => count($casos), 'abiertos' => 0, 'sin_asignar' => 0, 'alerta' => 0, 'alerta_vieja' => 0, 'hoy' => 0,
       'semana' => 0, 'atendidos_por_cerrar' => 0, 'en_revision' => 0,
       'sin_regularizar' => 0, 'sin_zona' => 0, 'espera' => 0, 'asignados_viejos' => 0];
 // 'OTRA' entra al mismo mapa que UIO/LARB/CNLJ (ASG-21): antes un caso
@@ -104,20 +104,31 @@ foreach (array_keys($porZona) as $zk) {
                 'sin_regularizar' => 0, 'espera' => 0, 'asignados_viejos' => 0];
 }
 $porEstado = [];
-$desde7 = date('Y-m-d', strtotime('-7 days'));
+// Hoy más los seis días anteriores: con '-7 days' y un «>=» entraban OCHO días
+// de casos en un número que dice «los últimos 7».
+$desde7 = date('Y-m-d', strtotime('-6 days'));
 
 foreach ($casos as $c) {
     $aviso  = (string) ($c['aviso'] ?? '');
     $g      = $gestion[$aviso] ?? null;
     $estado = $g['estado'] ?? 'NUEVO';
-    $porEstado[$estado] = ($porEstado[$estado] ?? 0) + 1;
+    // El gráfico cuenta por el estado de vista: un «sin atender» ya regularizado
+    // se ve neutro. El 2026-09-22 eran 644 de 884, todos regularizados, pintados
+    // de rojo en la barra más grande del inicio.
+    $vista = Ui::estadoVista($estado, $g);
+    $porEstado[$vista] = ($porEstado[$vista] ?? 0) + 1;
+    // Abierto = INDUSTEC no lo ha cerrado. Mismo criterio que `Reportes::calcular()`,
+    // para que el inicio y el tablero digan la misma cifra.
+    $abierto = !in_array($estado, ['RESUELTO', 'NO_COMPETE', 'CERRADO_SIN_ATENCION'], true);
+    if ($abierto) { $n['abiertos']++; }
 
     $z = (string) ($c['zona'] ?? '');
     if (isset($porZona[$z])) { $porZona[$z]++; } elseif ($z === '') { $n['sin_zona']++; }
     $zk = isset($nz[$z]) ? $z : null;
 
     if (($c['fecha_creacion'] ?? '') >= $desde7) { $n['semana']++; }
-    if (($c['fecha_estimada'] ?? '') === $hoy)   { $n['hoy']++; }
+    // Lo ya cerrado no está «comprometido» para nada: solo cuenta lo abierto.
+    if ($abierto && ($c['fecha_estimada'] ?? '') === $hoy) { $n['hoy']++; }
     if (($c['estado_alerta'] ?? '') === 'CON_ALERTA') {
         $n['alerta']++;
         // La que de verdad urge: con alerta, sin veredicto, y ya lleva una
@@ -470,13 +481,17 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
   <h2>Cómo va el buzón</h2>
   <div class="tiles">
     <div class="tile azul"><div class="n" data-n="<?= $n['semana'] ?>">0</div>
-      <div class="t">Llegaron esta semana</div></div>
+      <div class="t">Llegaron en los últimos 7 días</div></div>
     <div class="tile"><div class="n" data-n="<?= $n['hoy'] ?>">0</div>
-      <div class="t">Comprometidos hoy</div></div>
+      <div class="t">Comprometidos para hoy</div>
+      <div class="pie">Fecha estimada de SAP hoy, sin cerrar</div></div>
     <div class="tile <?= $n['espera'] ? 'vence' : '' ?>"><div class="n" data-n="<?= $n['espera'] ?>">0</div>
       <div class="t">Esperando un equipo</div></div>
-    <div class="tile"><div class="n" data-n="<?= $n['total'] ?>">0</div>
-      <div class="t">Vivos en 90 días</div></div>
+    <?php /* Antes decía «Vivos en 90 días» y mostraba TODOS los de la ventana
+             (884 el 2026-09-22), incluidos 766 ya cerrados o regularizados. */ ?>
+    <div class="tile"><div class="n" data-n="<?= $n['abiertos'] ?>">0</div>
+      <div class="t">Siguen abiertos</div>
+      <div class="pie">De <?= $n['total'] ?> en la ventana de 90 días</div></div>
     <?php if ($n['sin_zona']): ?>
       <a class="tile viol" href="casos.php?zona=SIN"><div class="n" data-n="<?= $n['sin_zona'] ?>">0</div>
         <div class="t">Sin zona resuelta</div>
@@ -501,8 +516,8 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
     ?>
     <div class="viz-grid" style="margin-top:14px">
       <figure class="viz" data-viz="anillo"
-              data-titulo="Casos vivos por zona"
-              data-sub="De los <?= $n['total'] ?> que siguen en la ventana de 90 días del correo"
+              data-titulo="Casos por zona"
+              data-sub="Los <?= $n['total'] ?> de la ventana de 90 días del correo, abiertos y cerrados"
               data-centro="casos"
               data-datos='<?= $e(json_encode($datosZona, JSON_UNESCAPED_UNICODE)) ?>'></figure>
       <figure class="viz" data-viz="barras"

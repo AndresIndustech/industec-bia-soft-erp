@@ -306,7 +306,7 @@ if (isset($_GET['ver'])) {
   <h1><?= $e($caso['caso'] ?? 'Sin descripción') ?></h1>
   <div class="chips">
     <?= Ui::prioridad($caso['prioridad'] ?? null) ?>
-    <?= Ui::estado($est) ?>
+    <?= Ui::estado(Ui::estadoVista($est, $g)) ?>
     <?= Ui::edad($caso['fecha_creacion'] ?? null) ?>
   </div>
 

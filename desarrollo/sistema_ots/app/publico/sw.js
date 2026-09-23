@@ -35,7 +35,8 @@
      v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
      recibe el numero de la orden. Con el armazon viejo el celular seguiria
      mandando la orden sin ellas. */
-const VERSION = 'ot-industec-v14';  // v14: el logo de la cabecera, que daba 404 en cada carga (2026-09-22)
+const VERSION = 'ot-industec-v15';  // v15: estilo.css — distintivo «regularizado», neutro en vez del rojo de «sin atender» (2026-09-22)
+// v14: el logo de la cabecera, que daba 404 en cada carga (2026-09-22)
 // v13: las ordenes salen solas con la app cerrada (sync), el equipo del aviso se preselecciona, y un 401 ya no borra la copia local (2026-09-22)
 // v12: guia.js — ninguna cabecera abría su paso (2026-09-22)
 // v11: preventivos rediseñado — cronograma.html/js/css (2026-09-21)

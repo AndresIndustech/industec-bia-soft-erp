@@ -132,7 +132,9 @@ if ($formato === 'xlsx') {
         ['Casos del periodo', $r['meta']['casos'], $mes ? 'creados en ' . Reportes::nombreMes($mes) : 'ventana de 90 días del buzón'],
         ['Siguen abiertos', $s['abiertos'], 'INDUSTEC no los ha cerrado'],
         ['Con informe', $s['con_informe'], 'casos con al menos una orden'],
-        ['Se concluye en una visita', $s['pct_concluye'] === null ? 'sin dato' : $s['pct_concluye'] . '%', 'de los casos con informe, sin equipo trabado'],
+        ['Con orden de cierre', $s['concluidos'], 'la visita cerró el trabajo'],
+        ['Con la orden abierta', $s['en_curso'], 'hubo visita, falta la orden de cierre'],
+        ['Se concluye en una visita', $s['pct_concluye'] === null ? 'sin dato' : $s['pct_concluye'] . '%', 'de los casos con orden de cierre: el mismo día y sin equipo trabado'],
         ['Repuestos: validados a tiempo', $c48['a_tiempo'], 'dentro de las 48 h'],
         ['Repuestos: validados tarde', $c48['tarde'], 'después de las 48 h'],
         ['Repuestos: reloj corriendo', $c48['corriendo'], 'todavía a tiempo'],
@@ -168,11 +170,11 @@ if ($formato === 'xlsx') {
 
     // --- Rendimiento por técnico ---
     $ws = $hoja($ss, 'Rendimiento técnicos');
-    $tabla($ws, 5, ['Técnico', 'Zona', 'Activo', 'Asignados', 'Con informe', 'En una visita', '% en una visita', 'Días a la 1.ª atención', 'Abiertos ahora', 'Repuestos vencidos', 'Novedades', 'Órdenes por la app'],
-           array_map(fn($t) => [$t['nombre'], $t['zona'], $t['activo'] ? 'Sí' : 'No', $t['asignados'], $t['con_informe'], $t['una_visita'],
+    $tabla($ws, 5, ['Técnico', 'Zona', 'Activo', 'Asignados', 'Con informe', 'Con orden de cierre', 'En una visita', '% en una visita', 'Días a la 1.ª atención', 'Abiertos ahora', 'Repuestos vencidos', 'Novedades', 'Órdenes por la app'],
+           array_map(fn($t) => [$t['nombre'], $t['zona'], $t['activo'] ? 'Sí' : 'No', $t['asignados'], $t['con_informe'], $t['cerrados'], $t['una_visita'],
                                 $t['pct_una_visita'] === null ? '' : $t['pct_una_visita'] . '%', $t['dias_primera'] ?? '', $t['abiertos_ahora'],
                                 $t['pendientes_vencidos'], $t['novedades'], $t['ordenes_app']], $r['rendimiento']),
-           ['A' => 30, 'B' => 8, 'C' => 8, 'D' => 11, 'E' => 12, 'F' => 13, 'G' => 15, 'H' => 20, 'I' => 14, 'J' => 18, 'K' => 11, 'L' => 17]);
+           ['A' => 30, 'B' => 8, 'C' => 8, 'D' => 11, 'E' => 12, 'F' => 18, 'G' => 13, 'H' => 15, 'I' => 20, 'J' => 14, 'K' => 18, 'L' => 11, 'M' => 17]);
 
     // --- Cumplimiento 48 h ---
     $ws = $hoja($ss, 'Cumplimiento 48h');
@@ -328,7 +330,7 @@ $texto($slide, 'De los equipos que quedaron deshabilitados, cuándo validó el j
 $slide = $p->createSlide(); $cabecera($slide, 'Rendimiento por técnico');
 $tablaP($slide, ['Técnico', 'Zona', 'Asignados', 'Con informe', 'En una visita', 'Días 1.ª at.', 'Rep. vencidos', 'Novedades'],
         array_map(fn($t) => [$t['nombre'], $t['zona'], $t['asignados'], $t['con_informe'],
-                             $t['pct_una_visita'] === null ? '—' : $t['una_visita'] . ' (' . $t['pct_una_visita'] . '%)',
+                             $t['pct_una_visita'] === null ? '—' : $t['una_visita'] . ' de ' . $t['cerrados'] . ' (' . $t['pct_una_visita'] . '%)',
                              $t['dias_primera'] === null ? '—' : number_format((float) $t['dias_primera'], 1, ',', '.'),
                              $t['pendientes_vencidos'], $t['novedades']], array_slice($r['rendimiento'], 0, 12)),
         36, 110, $W - 72, [250, 70, 90, 100, 120, 100, 110, 90]);

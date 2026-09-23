@@ -472,7 +472,9 @@ $desdeF = $fDias !== '' ? date('Y-m-d', strtotime('-' . (int) $fDias . ' days'))
 
 $vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $fEst, $fDiasAsig, $fOtro, $porAviso, $gestion) {
     $g = $gestion[$c['aviso'] ?? ''] ?? null;
-    if ($fEst !== '' && (($g['estado'] ?? 'NUEVO') !== $fEst)) { return false; }
+    // Por el estado de vista: «sin atender» lista solo lo que falta regularizar,
+    // que es a lo que manda el enlace del panel; lo ya explicado va aparte.
+    if ($fEst !== '' && Ui::estadoVista($g['estado'] ?? null, $g) !== $fEst) { return false; }
     if ($fOtro === 'por_decidir' && !Casos::otroTrabajoPorDecidir($c, $g)) { return false; }
     if ($fOtro !== '' && $fOtro !== 'por_decidir' && ($g['otro_trabajo'] ?? null) !== $fOtro) { return false; }
     if ($fAtn !== '') {
@@ -544,7 +546,8 @@ $nSinAsignar = count(array_filter($todos, fn($c) =>
     && !isset($porAviso[$c['aviso'] ?? ''])));
 $porGestion = [];
 foreach ($todos as $c) {
-    $k = $gestion[$c['aviso'] ?? '']['estado'] ?? 'NUEVO';
+    $gk = $gestion[$c['aviso'] ?? ''] ?? null;
+    $k = Ui::estadoVista($gk['estado'] ?? null, $gk);
     $porGestion[$k] = ($porGestion[$k] ?? 0) + 1;
 }
 $nCerrIn  = count(array_filter($todos, fn($c) =>
@@ -683,7 +686,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
       </nav>
       <?php
       $aparte = [];
-      foreach (['EN_REVISION', 'NO_COMPETE', 'CERRADO_SIN_ATENCION'] as $k) {
+      foreach (['EN_REVISION', 'NO_COMPETE', 'CERRADO_SIN_ATENCION', 'REGULARIZADO'] as $k) {
           if (!empty($porGestion[$k])) { $aparte[$k] = $porGestion[$k]; }
       }
       ?>
@@ -1007,7 +1010,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
 
                 <?php if ($g): ?>
                   <span class="desc">
-                    <?= Ui::estado($est) ?>
+                    <?= Ui::estado(Ui::estadoVista($est, $g)) ?>
                     <?php if (!empty($g['tecnico_nombre'])): ?>
                       · <?= e($g['tecnico_nombre']) ?><?= $g['tecnico_auto'] ? ' (del informe)' : '' ?>
                     <?php endif; ?>
@@ -1030,9 +1033,6 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                   <?php endif; ?>
                   <?php if (!empty($g['revision_motivo']) && $est === 'EN_REVISION'): ?>
                     <span class="desc" style="color:#92400e"><?= e($g['revision_motivo']) ?></span>
-                  <?php endif; ?>
-                  <?php if (!empty($g['regularizado_en'])): ?>
-                    <span class="desc" style="color:#166534">regularizado</span>
                   <?php endif; ?>
                 <?php endif; ?>
                 <?php if (!empty($g['otro_trabajo'])): ?>

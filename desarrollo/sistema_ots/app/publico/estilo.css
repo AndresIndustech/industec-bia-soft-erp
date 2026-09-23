@@ -396,6 +396,9 @@ a.tile:hover,.tile.clic:hover{ transform:translateY(-2px); box-shadow:var(--somb
 .est-resuelto{     background:var(--ok-bg);    color:var(--ok);    border-color:var(--ok-bd); }
 .est-no_compete{   background:var(--viol-bg);  color:var(--viol);  border-color:var(--viol-bd); }
 .est-cerrado_sin_atencion{ background:var(--danger-bg); color:var(--danger); border-color:var(--danger-bd); }
+/* Regularizado: cerrado y explicado ante KFC. Neutro a propósito —el rojo es
+   para los que faltan— y con borde punteado para no confundirlo con «sin asignar». */
+.est-regularizado{ background:transparent; color:#64748b; border-color:#cbd5e1; border-style:dashed; }
 .est-espera_repuesto{ background:#fff7ed; color:#c2410c; border-color:#fed7aa; }
 
 /* --- Prioridad --------------------------------------------------------- */

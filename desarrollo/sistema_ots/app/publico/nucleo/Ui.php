@@ -298,7 +298,23 @@ final class Ui
         'RESUELTO'             => ['resuelto',         'Cerrado por las dos partes'],
         'NO_COMPETE'           => ['no nos compete',   'La administración resolvió que no es trabajo de INDUSTEC'],
         'CERRADO_SIN_ATENCION' => ['sin atender',      'Pasó una semana sin ningún informe y se cerró; hay que regularizarlo ante KFC'],
+        // No es un estado de la base: es CERRADO_SIN_ATENCION con `regularizado_en`
+        // (ver `estadoVista()`). Existe porque el 2026-09-21 se regularizaron 773
+        // en bloque y los gráficos seguían pintando 644 «sin atender» en rojo, la
+        // barra más grande del tablero, cuando no quedaba ninguno por explicar.
+        'REGULARIZADO'         => ['regularizado',     'Se cerró sin atención y la administración ya lo explicó ante KFC'],
     ];
+
+    /**
+     * El estado que se MUESTRA. Solo difiere del de la base en un caso: un
+     * «sin atender» ya regularizado deja de ser una alarma y se ve neutro. El
+     * rojo queda para los que todavía hay que explicarle a Grupo KFC.
+     */
+    public static function estadoVista(?string $est, ?array $g = null): string
+    {
+        $e = strtoupper((string) ($est ?: 'NUEVO'));
+        return $e === 'CERRADO_SIN_ATENCION' && !empty($g['regularizado_en']) ? 'REGULARIZADO' : $e;
+    }
 
     public static function etiquetaEstado(?string $est): string
     {
@@ -407,6 +423,7 @@ final class Ui
             'NUEVO' => '#94a3b8', 'ASIGNADO' => '#2a78d6', 'EN_REVISION' => '#eda100',
             'ESPERA_REPUESTO' => '#eb6834', 'ATENDIDO' => '#1baf7a', 'RESUELTO' => '#008300',
             'NO_COMPETE' => '#4a3aa7', 'CERRADO_SIN_ATENCION' => '#e34948',
+            'REGULARIZADO' => '#64748b',
         ][strtoupper((string) $est)] ?? '#94a3b8';
     }
 

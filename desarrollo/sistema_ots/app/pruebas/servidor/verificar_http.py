@@ -32,7 +32,9 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 AQUI = Path(__file__).resolve().parent
-REPO = AQUI.parents[3]
+# parents[4] es la raíz del repo: con [3] quedaba en desarrollo/ y la llave de la
+# estación nunca se encontraba sin INDUSTEC_LLAVE_SSH (visto el 2026-09-22).
+REPO = AQUI.parents[4]
 SALIDA = Path(os.environ.get("INDUSTEC_PRUEBAS_SALIDA", tempfile.gettempdir()))
 BASE = "https://darkviolet-armadillo-872352.hostingersite.com/ot/"
 D = "domains/darkviolet-armadillo-872352.hostingersite.com/public_html/ot"

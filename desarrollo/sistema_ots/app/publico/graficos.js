@@ -55,7 +55,7 @@
   var ESTADO = {
     NUEVO: '#94a3b8', ASIGNADO: '#2a78d6', EN_REVISION: '#eda100',
     ESPERA_REPUESTO: '#eb6834', ATENDIDO: '#1baf7a', RESUELTO: '#008300',
-    NO_COMPETE: '#4a3aa7', CERRADO_SIN_ATENCION: '#e34948'
+    NO_COMPETE: '#4a3aa7', CERRADO_SIN_ATENCION: '#e34948', REGULARIZADO: '#64748b'
   };
   var SEMAFORO = { bien: '#1baf7a', ojo: '#eda100', mal: '#e34948', neutro: '#94a3b8' };
 

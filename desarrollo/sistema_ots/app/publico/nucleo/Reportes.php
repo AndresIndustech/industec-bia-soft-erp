@@ -34,7 +34,7 @@ final class Reportes
     public const COLOR_ESTADO = [
         'NUEVO' => '#94a3b8', 'ASIGNADO' => '#2a78d6', 'EN_REVISION' => '#eda100',
         'ESPERA_REPUESTO' => '#eb6834', 'ATENDIDO' => '#1baf7a', 'RESUELTO' => '#008300',
-        'NO_COMPETE' => '#4a3aa7', 'CERRADO_SIN_ATENCION' => '#e34948',
+        'NO_COMPETE' => '#4a3aa7', 'CERRADO_SIN_ATENCION' => '#e34948', 'REGULARIZADO' => '#64748b',
     ];
     public const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
 
@@ -96,7 +96,10 @@ final class Reportes
             $aviso  = (string) ($c['aviso'] ?? '');
             $g      = $gestion[$aviso] ?? [];
             $estado = (string) ($g['estado'] ?? 'NUEVO');
-            $porEstado[$estado] = ($porEstado[$estado] ?? 0) + 1;
+            // Se cuenta por el estado de vista: un «sin atender» ya regularizado
+            // no es la alarma roja. La lógica de abajo sigue usando el de la base.
+            $vista = Ui::estadoVista($estado, $g);
+            $porEstado[$vista] = ($porEstado[$vista] ?? 0) + 1;
 
             if (($g['otro_trabajo'] ?? null) === 'AUTORIZADO') {
                 $otros[] = [
@@ -183,16 +186,23 @@ final class Reportes
         arsort($porLocal); arsort($porTipo); arsort($porTecnicoFirma); ksort($porMes); arsort($cadenas);
         usort($casosAbiertos, fn($a, $b) => ($b['dias'] ?? 0) <=> ($a['dias'] ?? 0));
 
-        /* --- Se concluye en una visita ------------------------------------------ */
-        $conPendiente = 0; $concluyeUna = 0; $pctConcluye = null;
-        if (Pendientes::disponible() && $conInforme > 0) {
-            foreach ($casos as $c) {
-                $av = (string) ($c['aviso'] ?? '');
-                if (isset($aten[$av], $trabados[$av])) { $conPendiente++; }
-            }
-            $concluyeUna = max(0, $conInforme - $conPendiente);
-            $pctConcluye = (int) round($concluyeUna * 100 / $conInforme);
+        /* --- Se concluye en una visita ------------------------------------------
+           Antes salía de `pendientes`: «con informe y sin pendiente» era «una
+           visita». Esa tabla solo la llena la app nueva y el 2026-09-22 tenía 4
+           filas, todas de prueba, así que el tablero decía 100 % (110 de 110)
+           cuando 80 de esos casos tenían la orden ABIERTA: la visita no cerró el
+           trabajo. Ahora se mide con las órdenes del propio caso; ver unaVisita(). */
+        $concluidos = 0; $concluyeUna = 0; $enCurso = 0; $conPendiente = 0;
+        foreach ($casos as $c) {
+            $av = (string) ($c['aviso'] ?? '');
+            if (!isset($aten[$av])) { continue; }
+            $una = self::unaVisita($aten[$av], isset($trabados[$av]));
+            if ($una === null) { $enCurso++; continue; }
+            $concluidos++;
+            if ($una) { $concluyeUna++; }
+            if (isset($trabados[$av])) { $conPendiente++; }
         }
+        $pctConcluye = $concluidos > 0 ? (int) round($concluyeUna * 100 / $concluidos) : null;
 
         /* --- Rendimiento por técnico (TR-03) --------------------------------- */
         $rendimiento = self::rendimiento($casos, $gestion, $aten, $trabados, $porAsignado, $zona, $mes);
@@ -240,8 +250,9 @@ final class Reportes
                 'casos' => count($casos), 'hay_fuente' => (bool) $fuente,
                 'alcance_fijo' => $za !== null,
             ],
-            'salud' => ['con_informe' => $conInforme, 'concluye_una' => $concluyeUna,
-                        'con_pendiente' => $conPendiente, 'pct_concluye' => $pctConcluye, 'abiertos' => $abiertos],
+            'salud' => ['con_informe' => $conInforme, 'concluidos' => $concluidos, 'concluye_una' => $concluyeUna,
+                        'en_curso' => $enCurso, 'con_pendiente' => $conPendiente,
+                        'pct_concluye' => $pctConcluye, 'abiertos' => $abiertos],
             'edad' => $dEdad,
             'zonas' => $dZona, 'por_zona' => $porZona, 'sin_zona' => $sinZona,
             'estados' => $dEstado, 'por_estado' => $porEstado,
@@ -260,6 +271,29 @@ final class Reportes
             'otros_trabajos' => $otros,
             'otros_por_decidir' => $otrosPorDecidir,
         ];
+    }
+
+    /**
+     * ¿El caso se cerró en una sola visita? Con las órdenes que trae el informe.
+     *
+     *   null  → todavía no se cerró: ninguna orden «Cerrada» (la visita dejó la
+     *           orden abierta). No entra al porcentaje: no se sabe aún.
+     *   true  → se cerró, todas sus órdenes son del mismo día y no dejó equipo
+     *           trabado en `pendientes`.
+     *   false → se cerró, pero hizo falta volver otro día o quedó un equipo trabado.
+     *
+     * Se cuentan DÍAS, no órdenes: INDUSTEC emite una orden por equipo, y R001EC
+     * tiene dos del mismo 18 de septiembre que fueron una sola visita.
+     */
+    private static function unaVisita(array $atencion, bool $trabado): ?bool
+    {
+        if (($atencion['estado_industec'] ?? '') !== 'CERRADA') { return null; }
+        $dias = [];
+        foreach ($atencion['ots'] ?? [] as $o) {
+            $f = substr((string) ($o['fecha'] ?? ''), 0, 10);
+            if ($f !== '') { $dias[$f] = true; }
+        }
+        return count($dias) <= 1 && !$trabado;
     }
 
     /** Rendimiento por técnico: por quién está asignado (usuario_id), no por la firma. */
@@ -304,13 +338,15 @@ final class Reportes
             $id = (int) $t['usuario_id'];
             $avisos = $porAsignado[$id] ?? [];
             $asignados = count($avisos);
-            $conInf = 0; $unaVisita = 0; $sumaDias = 0; $nDias = 0; $abiertosAhora = 0;
+            $conInf = 0; $cerrados = 0; $unaVisita = 0; $sumaDias = 0; $nDias = 0; $abiertosAhora = 0;
             foreach ($avisos as $av) {
                 $g = $gestion[$av] ?? [];
                 if (in_array((string) ($g['estado'] ?? ''), ['ASIGNADO', 'ESPERA_REPUESTO'], true)) { $abiertosAhora++; }
                 if (isset($aten[$av])) {
                     $conInf++;
-                    if (!isset($trabados[$av])) { $unaVisita++; }
+                    $una = self::unaVisita($aten[$av], isset($trabados[$av]));
+                    if ($una !== null) { $cerrados++; }
+                    if ($una === true) { $unaVisita++; }
                     $creado = substr((string) ($porAviso[$av]['fecha_creacion'] ?? ''), 0, 10);
                     $primera = null;
                     foreach ($aten[$av]['ots'] ?? [] as $o) {
@@ -326,8 +362,8 @@ final class Reportes
             $fila = [
                 'usuario_id' => $id, 'nombre' => (string) $t['nombre'], 'zona' => (string) ($t['zona'] ?? ''),
                 'activo' => (int) $t['activo'] === 1,
-                'asignados' => $asignados, 'con_informe' => $conInf, 'una_visita' => $unaVisita,
-                'pct_una_visita' => $conInf > 0 ? (int) round($unaVisita * 100 / $conInf) : null,
+                'asignados' => $asignados, 'con_informe' => $conInf, 'cerrados' => $cerrados, 'una_visita' => $unaVisita,
+                'pct_una_visita' => $cerrados > 0 ? (int) round($unaVisita * 100 / $cerrados) : null,
                 'dias_primera' => $nDias > 0 ? round($sumaDias / $nDias, 1) : null,
                 'abiertos_ahora' => $abiertosAhora,
                 'pendientes_vencidos' => $vencidos[$id] ?? 0,

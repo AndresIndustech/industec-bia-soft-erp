@@ -86,7 +86,7 @@ function reportePdfHtml(array $r, array $u): string
   <?= $kpi($n($s['abiertos']), 'siguen abiertos') ?>
   <?= $kpi($n($c48['vencidos']), 'repuestos fuera de las 48 h', $c48['vencidos'] > 0 ? '#991b1b' : '#166534') ?>
 </tr></table>
-<p class="sub">De <?= $n($s['con_informe']) ?> casos con informe, <?= $n($s['concluye_una']) ?> cerraron sin dejar equipo trabado. Un caso «abierto» es uno que INDUSTEC no ha cerrado: el correo de SAP no avisa cuando Grupo KFC cierra.</p>
+<p class="sub">De <?= $n($s['concluidos']) ?> casos con orden de cierre, <?= $n($s['concluye_una']) ?> se cerraron el mismo día de la primera visita y sin dejar equipo trabado<?= $s['en_curso'] > 0 ? '; otros ' . $n($s['en_curso']) . ' tienen visita con la orden abierta y todavía no cuentan' : '' ?>. Un caso «abierto» es uno que INDUSTEC no ha cerrado: el correo de SAP no avisa cuando Grupo KFC cierra.</p>
 
 <table class="dos"><tr>
   <td><h2>El plazo de 48 horas</h2><?= Reportes::svgAnillo($r['d48'], 'equipos', 'El plazo de 48 horas') ?>
@@ -105,10 +105,10 @@ function reportePdfHtml(array $r, array $u): string
 <?php endif; ?>
 
 <h2 class="salto">Rendimiento por técnico</h2>
-<p class="sub">Por quién tiene asignado el caso. «En una visita»: de sus casos con informe, cuántos cerraron sin dejar equipo trabado. «Días»: promedio entre la creación en SAP y la primera orden.</p>
+<p class="sub">Por quién tiene asignado el caso. «En una visita»: de sus casos con orden de cierre, cuántos se cerraron el mismo día de la primera visita y sin dejar equipo trabado. «Días»: promedio entre la creación en SAP y la primera orden.</p>
 <?= $tabla(array_map(fn($t) => [
     $t['nombre'] . ($t['activo'] ? '' : ' (de baja)'), $t['zona'], (int) $t['asignados'], (int) $t['con_informe'],
-    $t['pct_una_visita'] === null ? '—' : $t['una_visita'] . ' (' . $t['pct_una_visita'] . '%)',
+    $t['pct_una_visita'] === null ? '—' : $t['una_visita'] . ' de ' . $t['cerrados'] . ' (' . $t['pct_una_visita'] . '%)',
     $t['dias_primera'] === null ? '—' : number_format((float) $t['dias_primera'], 1, ',', '.'),
     (int) $t['abiertos_ahora'], (int) $t['pendientes_vencidos'], (int) $t['novedades'], (int) $t['ordenes_app'],
 ], $r['rendimiento']), ['Técnico', 'Zona', '#Asignados', '#Con informe', '#En una visita', '#Días 1.ª at.', '#Abiertos', '#Rep. vencidos', '#Novedades', '#Órdenes app']) ?>

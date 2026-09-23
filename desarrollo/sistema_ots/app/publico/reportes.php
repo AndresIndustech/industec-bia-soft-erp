@@ -128,17 +128,24 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
         <div class="n" style="color:var(--muted)">—</div>
         <div class="t">
           <b>Se concluye en una visita</b><br>
-          Todavía no hay informes cruzados suficientes para calcularlo. No se
-          estima: sin el dato, el número diría más de lo que se sabe.
+          Ningún caso del corte tiene todavía su orden de cierre, así que no hay
+          con qué calcularlo. No se estima: sin el dato, el número diría más de lo que se sabe.
+          <?php if ($s['en_curso'] > 0): ?>
+            <?= number_format($s['en_curso'], 0, ',', '.') ?> casos tienen visita con la orden abierta.
+          <?php endif; ?>
         </div>
       <?php else: ?>
         <div class="n" data-n="<?= $s['pct_concluye'] ?>" style="color:<?= $s['pct_concluye'] >= 85 ? 'var(--ok)' : ($s['pct_concluye'] >= 70 ? 'var(--warn)' : 'var(--danger)') ?>">0</div>
         <div class="t">
           <b>% que se concluye en una sola visita</b><br>
-          De <?= number_format($s['con_informe'], 0, ',', '.') ?> casos con informe,
-          <?= number_format($s['concluye_una'], 0, ',', '.') ?> cerraron sin dejar equipo trabado.
-          Es la premisa del servicio: cuando este número baja, suben los viajes,
-          las horas y los equipos parados.
+          De <?= number_format($s['concluidos'], 0, ',', '.') ?> casos con la orden de cierre,
+          <?= number_format($s['concluye_una'], 0, ',', '.') ?> se cerraron el mismo día de la
+          primera visita y sin dejar equipo trabado.
+          <?php if ($s['en_curso'] > 0): ?>
+            Otros <b><?= number_format($s['en_curso'], 0, ',', '.') ?></b> tienen visita, pero la
+            orden quedó <b>abierta</b>: todavía no cuentan.
+          <?php endif; ?>
+          Cuando este número baja, suben los viajes, las horas y los equipos parados.
         </div>
       <?php endif; ?>
     </div>
@@ -202,16 +209,22 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
               data-ancho-etiqueta="150" data-sin-porcentaje
               data-datos='<?= $j($dRend) ?>'></figure>
       <div class="hero">
-        <?php $conDato = array_filter($rend, fn($t) => $t['pct_una_visita'] !== null); ?>
+        <?php
+        // Con uno o dos casos cerrados, «100 %» no distingue a nadie: el que
+        // cerró un solo caso ganaba siempre. Se exige un mínimo para comparar.
+        $MIN_CERRADOS = 5;
+        $conDato = array_filter($rend, fn($t) => $t['pct_una_visita'] !== null && $t['cerrados'] >= $MIN_CERRADOS);
+        ?>
         <?php if ($conDato): ?>
-          <?php $mejor = array_reduce($conDato, fn($a, $t) => $a === null || $t['pct_una_visita'] > $a['pct_una_visita'] ? $t : $a); ?>
+          <?php $mejor = array_reduce($conDato, fn($a, $t) => $a === null || [$t['pct_una_visita'], $t['cerrados']] > [$a['pct_una_visita'], $a['cerrados']] ? $t : $a); ?>
           <div class="n" data-n="<?= (int) $mejor['pct_una_visita'] ?>" style="color:var(--ok)">0</div>
           <div class="t"><b>% en una visita del mejor técnico del periodo</b><br>
-            <?= $e($mejor['nombre']) ?>, con <?= (int) $mejor['con_informe'] ?> casos con informe. Cada punto por encima
+            <?= $e($mejor['nombre']) ?>, con <?= (int) $mejor['cerrados'] ?> casos cerrados. Cada punto por encima
             del promedio son viajes que no se hicieron.</div>
         <?php else: ?>
           <div class="n" style="color:var(--muted)">—</div>
-          <div class="t"><b>% en una visita por técnico</b><br>Sin informes cruzados todavía en este corte.</div>
+          <div class="t"><b>% en una visita por técnico</b><br>Ningún técnico tiene todavía
+            <?= $MIN_CERRADOS ?> casos con orden de cierre en este corte, y con menos el porcentaje no compara a nadie.</div>
         <?php endif; ?>
       </div>
     </div>
@@ -229,7 +242,7 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
             <td data-th="Zona"><?= Ui::zona($t['zona']) ?></td>
             <td data-th="Asignados" class="n"><?= (int) $t['asignados'] ?></td>
             <td data-th="Con informe" class="n"><?= (int) $t['con_informe'] ?></td>
-            <td data-th="En una visita" class="n"><?= $t['pct_una_visita'] === null ? '—' : (int) $t['una_visita'] . ' <span class="desc">(' . (int) $t['pct_una_visita'] . '%)</span>' ?></td>
+            <td data-th="En una visita" class="n"><?= $t['pct_una_visita'] === null ? '—' : (int) $t['una_visita'] . ' de ' . (int) $t['cerrados'] . ' <span class="desc">(' . (int) $t['pct_una_visita'] . '%)</span>' ?></td>
             <td data-th="Días a la 1.ª atención" class="n"><?= $t['dias_primera'] === null ? '—' : $e(number_format((float) $t['dias_primera'], 1, ',', '.')) ?></td>
             <td data-th="Abiertos ahora" class="n"><?= (int) $t['abiertos_ahora'] ?></td>
             <td data-th="Repuestos vencidos" class="n <?= $t['pendientes_vencidos'] ? 'mal' : '' ?>"><?= (int) $t['pendientes_vencidos'] ?></td>
@@ -241,7 +254,8 @@ Ui::cabecera($u, 'reportes.php', [], ['titulo' => 'Reportes']);
       </table>
     </div>
     <p class="sub" style="margin:6px 0 0">
-      «En una visita»: de sus casos con informe, cuántos cerraron sin dejar equipo trabado. «Días a la 1.ª atención»:
+      «En una visita»: de sus casos con orden de cierre, cuántos se cerraron el mismo día de la primera visita y sin dejar
+      equipo trabado; los que tienen la orden abierta no cuentan todavía. «Días a la 1.ª atención»:
       promedio entre la creación del caso en SAP y la primera orden. «Repuestos vencidos»: solicitudes suyas
       paradas más de 48 h sin validar. Un caso complejo cuenta igual que uno simple: la tabla se lee junto con el trabajo.
     </p>
