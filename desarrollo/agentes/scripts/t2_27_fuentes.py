@@ -129,6 +129,53 @@ def bajar_ultimo_adjunto(carpeta: str, patron: str, dias: int = 21, antes_de: dt
             pass
 
 
+def bajar_adjuntos(carpeta: str, patron: str, dias: int = 35) -> list[Path]:
+    """Baja TODOS los adjuntos de `carpeta` que calcen con `patron` en los últimos `dias`.
+
+    Solo lectura (EXAMINE, BODY.PEEK). El nombre del adjunto se lee de la estructura del
+    mensaje ANTES de bajarlo: si ya está en _ENTRADAS no se descarga otra vez (cada Excel
+    de KFC pesa 15–33 MB). Sirve para armar la serie semanal del indicador de KFC.
+    """
+    e = env()
+    rx = re.compile(patron, re.I)
+    ENTRADAS.mkdir(parents=True, exist_ok=True)
+    nuevos = []
+    M = imaplib.IMAP4_SSL(e["IMAP_HOST"], int(e["IMAP_PORT"]))
+    try:
+        M.login(e["IMAP_USER"], e["IMAP_PASSWORD"])
+        typ, _ = M.select(f'"{carpeta}"', readonly=True)
+        if typ != "OK":
+            raise SystemExit(f"No se pudo abrir la carpeta {carpeta!r} del correo en modo lectura.")
+        desde = (dt.date.today() - dt.timedelta(days=dias)).strftime("%d-%b-%Y")
+        typ, ids = M.search(None, f"SINCE {desde}")
+        for i in ids[0].split():
+            typ, d = M.fetch(i, "(BODY.PEEK[HEADER.FIELDS (DATE)] BODYSTRUCTURE)")
+            estructura = b" ".join(p[0] if isinstance(p, tuple) else p for p in d)
+            nombres = [_decodificar(n.decode("utf-8", "replace")) for n in re.findall(rb'"(?:NAME|FILENAME)" "([^"]+)"', estructura, re.I)]
+            quiere = [n for n in nombres if rx.search(n)]
+            if not quiere:
+                continue
+            cab = email.message_from_bytes(next(p[1] for p in d if isinstance(p, tuple)))
+            fecha = email.utils.parsedate_to_datetime(cab["Date"])
+            faltan = [n for n in quiere if not (ENTRADAS / f"{fecha:%Y-%m-%d} {carpeta} {n}").exists()]
+            if not faltan:
+                continue
+            typ, d = M.fetch(i, "(BODY.PEEK[])")
+            msg = email.message_from_bytes(next(p[1] for p in d if isinstance(p, tuple)))
+            for parte in msg.walk():
+                nombre = _decodificar(parte.get_filename())
+                if nombre in faltan:
+                    destino = ENTRADAS / f"{fecha:%Y-%m-%d} {carpeta} {nombre}"
+                    destino.write_bytes(parte.get_payload(decode=True))
+                    nuevos.append(destino)
+        return nuevos
+    finally:
+        try:
+            M.logout()
+        except Exception:
+            pass
+
+
 # ---------------------------------------------------------------------------
 #  El Excel semanal de KFC («REPORTE 2026 SEMANA NN - MANTENIMIENTO CORRECTIVO»)
 # ---------------------------------------------------------------------------

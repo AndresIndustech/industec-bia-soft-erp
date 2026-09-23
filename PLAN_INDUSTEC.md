@@ -1427,6 +1427,50 @@ identidad entre la firma del PDF y el padrón — el mismo pendiente que tiene
 | Escribir la migración 012 y las tres piezas de código | **Aplicar la 012 en Hostinger** (toca `casos_gestion`, la tabla viva) | Tocar `avisos_sap.estatus_general` por cualquier vía |
 | Correr `prueba_continuidad.php` y las baterías locales | **Desplegar a darkviolet** (T2.23 tiene cambios sin desplegar: se coordina o se pisa) | Enlazar o cerrar casos en bloque «porque se parecen» |
 | Medir el fenómeno contra la base y el catálogo (solo lectura) | Subir `sw.js` de versión | Borrar o reescribir un `ot_cierre` que ya existía |
+
+### T2.27 · Los reportes que KFC le pide a la administración, generados, y un tablero para la gerencia (2026-09-23)
+
+Andrés pidió armar los reportes «tal cual se los pide KFC», revisando el
+correo de la administradora (`servicioalcliente@`, 2.130 enviados y 8.829
+recibidos) y el Drive, y sumar reportes para monitorear el negocio. Todo se
+leyó en **solo lectura**: el correo con `EXAMINE` + `BODY.PEEK`, el Drive por su
+espejo. Lo que se encontró, y lo que queda construido, está medido en
+`ESTADO.md` **§1r**. Los informes del análisis (qué pide KFC, qué envía ella y
+el formato de cada reporte) quedaron en el scratchpad de la conversación y **no
+en el repo**: citan correos del cliente.
+
+**El ciclo real con KFC, del correo:** el lunes Erika Zambrano (KFC) manda el
+export de SAP de todo el año. El martes la administración manda su
+`STATUS_PENDIENTES`. El **miércoles a las 13h00** vence la respuesta al export.
+El jueves es la reunión, donde se discute un solo número por proveedor. INDUSTEC
+quedó en 18,87 % (semana 35) y 47,62 % (semana 37), «el mayor rezago».
+
+| Sub | Qué | Estado | Criterio de aceptación |
+|---|---|---|---|
+| **T2.27.1** | `STATUS_PENDIENTES` de los martes (`t2_27_status_semanal.py`) | ✅ | Columnas objetivas ≥ 95 % idénticas celda a celda contra lo hecho a mano, por aviso: **95,3 %** (semana 4) y **96,1 %** (semana 3). Excel abre sin reparar y su recálculo = los 17 valores guardados |
+| **T2.27.2** | Respuesta del miércoles al REPORTE SEMANA NN (`t2_27_respuesta_kfc.py`) | ✅ | RESUMEN con los mismos avisos que el de ella: **65 de 65**. Las 5 tablas dinámicas de KFC siguen en el libro, que Excel abre sin reparar |
+| **T2.27.3** | Tablero de gerencia (`t2_27_tablero_gerencia.py`) | ✅ | El indicador de KFC reproducido exacto: **7 de 7** cifras publicadas (semanas 35 y 37) |
+| **T2.27.4** | Presentación de gestión por zona (`t2_27_presentacion_gestion.py`) | ✅ | Órdenes por zona y mes = SQL directo; PowerPoint abre las 26 diapositivas |
+| **T2.27.5** | Propuesta de pedido de kits de preventivo (`t2_27_kits_preventivo.py`) | ✅ como propuesta | Los 5 locales del pedido real de UIO del 14-sep están en la propuesta |
+| T2.27.6 | Formato semanal de facturación de constructivos y correctivos | 🔒 | **Bloqueado:** lleva SUBTOTAL, IVA y TOTAL, y ningún sistema guarda esos valores. Se necesita la fuente de precios (proformas) |
+| T2.27.7 | Que corran solos (Tarea programada martes y miércoles 07h00) | ⏳ | **Requiere aprobación de Andrés:** registra tareas en Windows. El lanzador ya existe: `scripts\reportes_kfc.bat` |
+| T2.27.8 | ESTATUS IND que aprende de las correcciones de ella | ⏳ | Hoy coincide **36 de 65 (55 %)**. Con sus respuestas de cada semana se puede medir qué regla falla. Criterio: ≥ 75 % sobre 4 semanas seguidas |
+
+**Hallazgos que cambian cosas de otras tareas (medidos, sin tocar nada):**
+- **El cronograma de preventivos no está reprogramado.** Ninguno de los 368 ingresos
+  tiene fecha vigente distinta de la original, y la ejecución va 2 a 3 semanas
+  detrás. K062 y V074 figuran CUMPLIDOS, pero el 21-sep se pidió kit para ellos.
+  R006 figura con el ingreso 1 pendiente desde enero. Es de **T2.24**.
+- **La palanca del indicador es cerrar en SAP.** En la semana 39, 10 de los 41
+  correctivos abiertos de INDUSTEC ya tienen orden de cierre. Cerrarlos en SAP
+  (IW22, acceso desde el 31-07) da **24,4 %** antes de hacer una sola visita. Es
+  una decisión operativa de la gerencia, no del sistema.
+
+| Autónomo | Requiere aprobación de Andrés | Prohibido |
+|---|---|---|
+| Leer el correo en solo lectura y guardar los adjuntos en `SALIDAS IA\REPORTES\KFC\_ENTRADAS` | Registrar las Tareas programadas (T2.27.7) | Enviar un correo, o marcar, mover o borrar uno |
+| Generar los reportes «(generado agente)» en `SALIDAS IA\REPORTES\KFC` | Poner un reporte en el sitio web (hoy son archivos de la estación) | Sobrescribir un archivo de la administración o del Drive |
+| SELECT contra darkviolet (`t2_27_fuentes.consultar_servidor`, que rechaza lo demás) | Escribir en `ingresos_preventivos` para enlazar lo ejecutado (es T2.24) | Inventar presupuesto, responsable, causa técnica o fecha de ingreso: van en blanco o en rojo |
 ---
 
 # FASE 3 · DECISIÓN — Noviembre
@@ -1724,6 +1768,20 @@ python verificar_seguridad.py   # 28 · 0
 ```
 
 ### La siguiente acción, concreta
+
+**P. T2.27 · Los reportes para KFC y el tablero de gerencia** — ✅ **cinco
+generadores hechos y verificados el 2026-09-23**. Es lo más nuevo. Se corren
+con `desarrollo\agentes\scripts\reportes_kfc.bat martes|miercoles|tablero|kits|presentacion`,
+y la administradora tiene su guía en `SALIDAS IA\REPORTES\KFC\LEEME.md`. Cifras
+y evidencia en `ESTADO.md` **§1r**; tareas y permisos en **T2.27**. Lo que sigue:
+
+> 1. **Que la administradora use el del miércoles con la semana 40** (llega el
+>    lunes 28-sep) y devuelva sus correcciones del ESTATUS IND. Es el insumo de
+>    T2.27.8, y es la única forma de saber si la propuesta le ahorra trabajo.
+> 2. **Pedirle a Andrés la aprobación de T2.27.7** (tareas programadas martes y
+>    miércoles 07h00). Sin eso, depende de que alguien se acuerde.
+> 3. **Llevar a la gerencia el hallazgo de la palanca de SAP** (T2.27, «hallazgos»):
+>    es una decisión de operación, no de sistema.
 
 **N. T2.26 · El formulario del técnico** — ✅ **hecho y desplegado el
 2026-09-22**, y es lo más nuevo de esta sección. Andrés reportó que «Emitir la

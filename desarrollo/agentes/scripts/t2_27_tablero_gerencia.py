@@ -84,7 +84,10 @@ def archivos_kfc(carpeta: Path) -> dict:
         elif "ACTUALIZADO" in u:
             sem[n].setdefault("viernes", p)
         elif "CORRECTIVO" in u and "ORDENES ND" not in u and "RESPUESTA" not in u and "ORIGINAL" not in u:
-            sem[n].setdefault("lunes", p)
+            # El de Recibidos (el que manda KFC) manda sobre la respuesta de Enviados, aunque su
+            # hoja FILTRO sea la misma: así la serie no depende de que se haya respondido.
+            if "lunes" not in sem[n] or (" INBOX " in p.name and " INBOX " not in sem[n]["lunes"].name):
+                sem[n]["lunes"] = p
     return sem
 
 
@@ -413,7 +416,15 @@ def main():
     if not sap:
         raise SystemExit("No encontré el Excel de KFC de esta semana. Pásalo con --sap.")
     status = Path(a.status) if a.status else (F.bajar_ultimo_adjunto("Sent", r"STATUS_PENDIENTES.*\.xlsx$", dias=10, antes_de=corte + dt.timedelta(days=1)) or [None])[0]
-    historial = Path(a.historial) if a.historial else F.ENTRADAS
+    if a.historial:
+        historial = Path(a.historial)
+    else:
+        # La serie del indicador se arma con los Excel de KFC de las últimas cinco semanas: el del
+        # lunes y el ANALISIS/ACTUALIZADO del viernes. Solo baja los que todavía no están.
+        nuevos = F.bajar_adjuntos("INBOX", r"REPORTE.*SEMANA.*\.xlsx$", dias=35)
+        if nuevos:
+            print(f"  bajados del correo para la serie: {len(nuevos)}")
+        historial = F.ENTRADAS
     res = calcular(sap, historial, status, corte)
     destino = F.SALIDAS / f"{corte:%Y-%m-%d}" / f"TABLERO GERENCIA SEMANA {res['semana']} (generado agente).xlsx"
     escribir(res, destino)

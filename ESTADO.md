@@ -3,7 +3,7 @@
 > **Empieza por aquí.** Este archivo dice dónde vamos; [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) dice qué hay que construir y con qué criterios.
 > Si vas a trabajar, **anótate primero en §5 (Trabajo en paralelo)** antes de tocar nada.
 
-**Última actualización:** 2026-09-22
+**Última actualización:** 2026-09-23
 **Fase en curso:** 2 · Automatización — **construida y desplegada en el sitio de pruebas; lo que sigue es el piloto en UIO** (paquete en `desarrollo/sistema_ots/piloto/`). La Fase 1 quedó cerrada
 **Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
 
@@ -859,6 +859,85 @@ la que dejó T2.23.
   haga falta para las otras baterías.
 
 ---
+
+## 1r. T2.27 · Los reportes que KFC le pide a la administración, generados, y el tablero de gerencia (2026-09-23)
+
+Andrés pidió armar los reportes «tal cual se los pide KFC», revisando el correo
+de la administradora, y sumar reportes para monitorear el negocio. Se leyó
+`servicioalcliente@industec.me` (2.130 enviados, 8.829 recibidos) **en solo
+lectura** (`EXAMINE` + `BODY.PEEK`: ningún mensaje cambió de estado) y el espejo
+del Drive. Plan, subtareas y permisos en **T2.27** del plan.
+
+**Lo que pide KFC, del correo:**
+
+| Cuándo | Qué | Quién |
+|---|---|---|
+| Lunes | Export de SAP de todo el año, ~44.000 filas, 16 MB | Erika Zambrano (KFC) a los 4 proveedores |
+| Martes | `STATUS_PENDIENTES_SEMANA N MES` (lo mira por los equipos parados) | Isabel → Lincango, Vásquez, Valero |
+| **Miércoles 13h00** | El export devuelto con la hoja RESUMEN y el ESTATUS IND | Isabel → Erika Zambrano |
+| Jueves | Reunión semanal y CONTACT REPORT, con un número por proveedor | KFC |
+| Por vuelta | Pedido de kits de preventivo | Isabel → Edgar Armero (bodega) |
+| Periódica | Presentación de gestión por zona | Reuniones de indicadores |
+
+**Lo construido, y con qué se verificó:**
+
+| Generador | Verificación | Resultado |
+|---|---|---|
+| `t2_27_status_semanal.py` (martes) | Semana 4 desde la 3 y semana 3 desde la 2; celda a celda por aviso contra lo que ella mandó | Objetivas **95,3 %** y **96,1 %** (criterio ≥ 95 %). Excel abre sin reparar; su recálculo = los **17** valores guardados |
+| `t2_27_respuesta_kfc.py` (miércoles) | Semana 38 contra su respuesta | RESUMEN **65 de 65** avisos; ESTATUS IND **36 de 65** (55 %, es propuesta); las **5** tablas dinámicas de KFC intactas |
+| `t2_27_tablero_gerencia.py` | El indicador de KFC contra lo que KFC publicó; la serie se arma sola bajando del correo sus Excel de las últimas 5 semanas (11 archivos) | **7 de 7** exactas (la semana 34, 29,55 %, no tiene cifra publicada con qué compararla): sem. 35 INDUSTEC 18,87 · IN HOUSE 11,11 · Megaservicios 58,46 · Servicenturiosa 40,71 · ND 60,42; sem. 37 INDUSTEC 47,62 · IN HOUSE 93,43 · Megaservicios 56,00 |
+| `t2_27_presentacion_gestion.py` | Órdenes por zona y mes contra SQL directo; se abrió en PowerPoint | Iguales (UIO 163/177, LARB 242/234, CNLJ 276/295); **26** diapositivas |
+| `t2_27_kits_preventivo.py` | Contra el pedido real de UIO del 14-sep | Los **5** locales pedidos están en la propuesta |
+
+**El indicador de KFC, reconstruido.** No estaba escrito en ningún lado: de los
+correctivos abiertos del lunes (por el proveedor del lunes), cuántos avisos del
+lunes siguen abiertos el viernes (por el proveedor del viernes). Un ND que KFC
+reasigna a INDUSTEC a mitad de semana le cuenta en contra. Con eso, **semana 39:
+INDUSTEC tiene 41 abiertos en SAP y 10 ya los cerró con su orden: cerrarlos en SAP
+(IW22) da 24,4 % sin una sola visita.**
+
+**Defectos del trabajo a mano que el generador no repite:** las fórmulas del
+RESUMEN de los martes tenían rangos fijos y la semana 4 le dijo a KFC «Cuenca–Loja:
+9 órdenes» cuando eran 21. El subtítulo de la semana no se actualizaba, y la
+presentación de oct–nov 2025 traía un local que no existe («K131»).
+
+**Evidencia** (salida literal, recortada a las líneas del criterio):
+
+```
+$ python scripts/t2_27_status_semanal.py --fecha 2026-09-22 --anterior <S3> --sap <SEMANA 39> --comparar <S4 real>
+  OBJETIVAS (A–H, L), en ambos: 326 de 342 idénticas (95.3 %).
+  Criterio ≥95 % de celdas objetivas idénticas: CUMPLE
+$ (Excel por COM) Valores guardados : 53,9,16,28,12,41,9,7,2,16,13,3,28,21,7,53,82
+                  Recalculado Excel : 53,9,16,28,12,41,9,7,2,16,13,3,28,21,7,53,82   Iguales: True
+$ python scripts/t2_27_respuesta_kfc.py --sap <SEMANA 38> ... --comparar <su respuesta>
+  Avisos: generado 65 · real 65 · en ambos 65 / Idénticos: 36 de 65 (55.4 %)
+$ (Excel por COM) FILTRO(0 TD), TD(5 TD), #O_ND(0 TD), RESUMEN, RESUMEN IND, ND INDUSTEC
+$ python scripts/t2_27_tablero_gerencia.py ...
+  semana 35: abiertos lunes INDUSTEC 53 · indicador KFC INDUSTEC 18.87 %
+  semana 37: abiertos lunes INDUSTEC 42 · indicador KFC INDUSTEC 47.62 %
+$ cmd /c scripts\reportes_kfc.bat miercoles          (modo real, bajando del correo)
+  41 correctivos de INDUSTEC abiertos o en tratamiento · ND de INDUSTEC: 5
+```
+
+**Hallazgos, medidos y sin tocar nada:**
+- **El cronograma de preventivos no está reprogramado.** Ninguno de los 368 ingresos
+  cambió de fecha, y la ejecución va 2 a 3 semanas detrás. K062 y V074 figuran
+  CUMPLIDOS, pero se volvió a pedir kit para ellos. R006 figura con el ingreso 1
+  pendiente desde enero. Por eso el pedido de kits es propuesta y no pedido.
+- **Las «cerradas de la semana» del martes no salen de ninguna fuente.** Se probaron
+  las órdenes de cierre y el cierre técnico de SAP, en dos ventanas cada uno. El
+  generador usa una definición explícita (órdenes de cierre del martes al lunes) y
+  deja imponer otra con `--cerradas`.
+- **KFC cambia columnas entre semanas.** Las semanas 32, 34 y 36 no traen «ESTATUS B»
+  ni «ÁREA», y el ACTUALIZADO llama «Notificación» al aviso. El lector exige solo 6
+  columnas y acepta sinónimos.
+
+**Lo que NO se pudo comprobar:**
+- Que la administradora use los archivos generados, y cuánto tiempo le ahorran.
+  Nadie los ha abierto todavía fuera de esta conversación.
+- El ESTATUS IND de la semana 39: todavía no hay respuesta suya con qué compararlo.
+- La facturación semanal (T2.27.6): no hay fuente de valores monetarios.
+- Nada de esto corre solo todavía: las tareas programadas requieren aprobación (T2.27.7).
 
 ## 1q. Las cifras del inicio y de Reportes, contra los datos reales (2026-09-22, a pedido de Andrés)
 
@@ -1815,7 +1894,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| ~~Revisión de las estadísticas del inicio y de Reportes~~ ✅ hecha y desplegada (§1q) · **en curso: reportes para Grupo KFC tal como los pide, y reportes de monitoreo** (pedidos por Andrés) | Conversación "estadísticas" (estación) | 2026-09-22 | **Lee** el correo `servicioalcliente@` en solo lectura (EXAMINE/PEEK), el espejo del Drive y las dos bases. Escribirá generadores nuevos de reportes y salidas en `SALIDAS IA\REPORTES`. No escribe en ninguna tabla |
+| ~~Revisión de las estadísticas del inicio y de Reportes~~ · ~~Reportes para Grupo KFC y tablero de gerencia (T2.27)~~ | ✅ **Terminadas el 2026-09-23** | — | Estadísticas desplegadas en darkviolet (§1q, `verificar_cifras.py` 21·0). Cinco generadores nuevos en `desarrollo/agentes/scripts/t2_27_*.py` y el lanzador `reportes_kfc.bat`; salidas en `SALIDAS IA\REPORTES\KFC`. **No escribió en ninguna tabla ni en el correo** (solo lectura). Detalle en §1r |
 | ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |
 | ~~**T2.26 · El formulario del técnico: desbloqueado, predictivo y sin señal**~~ | ✅ **Terminada y desplegada el 2026-09-22** | — | `guia.js`, `app.js`, `cola.js`, `sw.js` (v13) y dos baterías nuevas. **No tocó la base, ni el árbol canónico, ni ningún PHP.** Verificado: 120·0, 57·0, 62·0, 42·0 locales; 37·0 bandeja; **4·0** `verificar_sync_cerrada.mjs`. Detalle, cifras y lo que quedó sin comprobar en **§1o**. ⚠ `verificar_http.py` (81/86) y `verificar_emision.py` (aborta) piden **`preparar_prueba.php`**: el arnés se quedó sin ningún caso con local |
 | ~~**T2.25 · Continuidad entre casos del mismo equipo**~~ | ✅ **Terminada, aplicada y desplegada el 2026-09-21** | — | Migración 012 en darkviolet y seis archivos desplegados. Verificado: **25·0** la batería nueva, 37·0 bandeja, 86·0 http, `verificar_esquema.php` TODO OK; y 36·0 · 120·0 · 57·0 · 62·0 en local. Lo único que queda es **que Andrés la mire**, y que alguien la use con un caso real. Detalle en **§1l** |
