@@ -1471,6 +1471,48 @@ quedó en 18,87 % (semana 35) y 47,62 % (semana 37), «el mayor rezago».
 | Leer el correo en solo lectura y guardar los adjuntos en `SALIDAS IA\REPORTES\KFC\_ENTRADAS` | Registrar las Tareas programadas (T2.27.7) | Enviar un correo, o marcar, mover o borrar uno |
 | Generar los reportes «(generado agente)» en `SALIDAS IA\REPORTES\KFC` | Poner un reporte en el sitio web (hoy son archivos de la estación) | Sobrescribir un archivo de la administración o del Drive |
 | SELECT contra darkviolet (`t2_27_fuentes.consultar_servidor`, que rechaza lo demás) | Escribir en `ingresos_preventivos` para enlazar lo ejecutado (es T2.24) | Inventar presupuesto, responsable, causa técnica o fecha de ingreso: van en blanco o en rojo |
+### T2.28 · Las observaciones de la revisión con INDUSTEC, y lo que la administradora actualizó (2026-09-22/23)
+
+**La especificación completa, ejecutable por subtarea, está en
+[`T2_28_OBSERVACIONES_INDUSTEC.md`](T2_28_OBSERVACIONES_INDUSTEC.md)**: qué leer,
+qué tocar, contratos de datos, SQL de cada migración, criterios con su comando y
+tabla de permisos. **No se repite aquí**; esto es el índice. Aprobada por Andrés el
+2026-09-23. Se escribió como «T2.27», pero ese número ya era de los reportes para
+KFC: por eso es T2.28 y sus scripts se llaman `t2_28_*`.
+
+| Observación / pedido | Subtareas |
+|---|---|
+| 1 · Fotos del antes y del después (por equipo, obligatorias) | T2.28.7 |
+| 2 · El correo del local se edita como el administrador, con lista precargada | T2.28.2, T2.28.3 |
+| 3 · Buscar equipos escribiendo | T2.28.5 |
+| 4 · Marca, modelo y serie que se quedan (y un Excel del maestro de equipos) | T2.28.6 |
+| 5 · Paso a paso de preventivo y selección rápida de correctivo, que aprende | T2.28.12, .13, .14 |
+| 6 · Casos sin local, arnés de pruebas aislado, bitácora de prueba escondida | T2.28.8, T2.28.1, T2.28.9 |
+| 7/8 · Catálogo de repuestos (base: catálogo de bodega de KFC, 1.611 códigos SAP con imagen) | T2.28.10 |
+| 9 · Parts Town: enlace a la ficha del repuesto y la guía de INDUSTEC | T2.28.11 |
+| Correos internos y del cliente configurables; nada fijo en el formulario | T2.28.2, T2.28.4 |
+| El cronograma quedó atrás del Excel de la administradora (87 ingresos reprogramados el 22-sep) | T2.28.16 |
+| Todas las órdenes del Archivo con PDF accesible (132 sin PDF: 24 + 97 duplicados + 11) | T2.28.17 |
+| Que el robot trabaje bien (InspectorBot en GRAVE: SSH colgado, `pdfs` abortó dos veces) | T2.28.18 |
+
+**Orden de ejecución** (§5 de la especificación): Fase 0 línea base → **Fase 1** con
+el robot y el Archivo primero (urgente), el arnés aislado y los análisis de solo
+lectura en paralelo → Fase 2, el formulario en serie (un solo agente) → Fase 3 las
+cargas que esperan decisión → Fase 4 la biblioteca de actividades.
+
+**Puertas humanas** (bloquean solo su subtarea): D1 correos al maestro · D2 fuente
+y carga de repuestos · D3 semilla de actividades y aprobación del jefe técnico ·
+D4 modelo y costo de la API de IA (cobro, lo decide Andrés) · D5 decidir V090 en el
+buzón · D6 cuenta comercial con Parts Town (opcional) · D7 fuente única del
+cronograma y motivos reales de la reprogramación · D8 marcar los 97 duplicados del
+Archivo. Supuestos confirmados al aprobar: S-2 (marca y modelo obligatorios, con
+«sin placa») y S-3 (migraciones aditivas autónomas con volcado previo; toda
+escritura de datos se aprueba en el momento).
+
+**Contacto con T2.27:** los destinatarios `uso='REPORTE'` del módulo de correos son
+los que deben leer los envíos programados de T2.27.7, y T2.28.16 resuelve el
+«cronograma no reprogramado» que avisa T2.27.5.
+
 ---
 
 # FASE 3 · DECISIÓN — Noviembre
@@ -1769,6 +1811,20 @@ python verificar_seguridad.py   # 28 · 0
 
 ### La siguiente acción, concreta
 
+**Q. T2.28 · Las observaciones de la revisión con INDUSTEC** — 📋 **especificada y
+aprobada el 2026-09-23, sin empezar**. Es la siguiente a construir. La
+especificación entera está en [`T2_28_OBSERVACIONES_INDUSTEC.md`](T2_28_OBSERVACIONES_INDUSTEC.md);
+cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
+
+> 1. **Fase 0** de la especificación (línea base) y, en la Fase 1, **T2.28.18**: el
+>    robot. InspectorBot está en **GRAVE** porque el paso `pdfs` del nocturno abortó
+>    las dos corridas del 23-sep por un `ssh … mkdir` colgado 300 s, y con él 24
+>    PDF que la estación tiene no llegaron al Archivo.
+> 2. **T2.28.1**, el arnés que ya no toma casos reales. Todas las demás subtareas
+>    corren baterías de servidor.
+> 3. Las decisiones D1–D8 de Andrés se piden cuando su subtarea llegue, con la cifra
+>    exacta, no antes.
+
 **P. T2.27 · Los reportes para KFC y el tablero de gerencia** — ✅ **cinco
 generadores hechos y verificados el 2026-09-23**. Es lo más nuevo. Se corren
 con `desarrollo\agentes\scripts\reportes_kfc.bat martes|miercoles|tablero|kits|presentacion`,
@@ -1806,7 +1862,9 @@ en los errores **33, 34 y 35**.
 >    camino entero con una orden inválida a propósito, para no escribir en el
 >    servidor.
 
-**O. Sembrar el administrador de cada local (lo siguiente, y está medido)** —
+**O. Sembrar el administrador de cada local** — ➡️ **absorbida por T2.28.3 el
+2026-09-23** (con el correo de cada administrador y la lista precargada que pidió
+Andrés). El texto de abajo queda como antecedente. —
 El campo **«Administrador del local» es obligatorio y se teclea a mano en el
 100 % de las órdenes**: `locales_admin` tiene **1 fila**, y es de prueba. En la
 estación hay **7.386 órdenes históricas con `ots.admin_nombre`, que cubren 99 de
@@ -2544,6 +2602,18 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     **mudo** (sale 255 sin salida); usa `file_put_contents('php://stderr', …)`.
     Y una pantalla incluida con `include` corta el proceso en `Ui::pie()`: dibuja
     una por proceso. `pruebas/servidor/verificar_cifras.py` ya lo hace así.
+
+40. **Un campo editable no sirve si el que envía lee otra fuente.** El correo del
+    local del formulario estaba en solo lectura; volverlo editable no habría
+    cambiado nada: `reunirOrden()` ni siquiera lo mandaba, y `Emision::encolar()`
+    y el PDF lo tomaban **siempre del maestro** (`Emision.php:251, 371`). Antes
+    de dar por arreglado un campo, seguirlo hasta quien lo consume: el envío, el
+    PDF y la cola. Es el error nº 17 visto desde la pantalla.
+41. **Dos conversaciones el mismo día tomaron el mismo número de tarea.** El
+    2026-09-23 la de los reportes para KFC y la de las observaciones de INDUSTEC
+    escribieron las dos «T2.27»; la segunda tuvo que renumerarse a T2.28 antes de
+    publicar. **Antes de nombrar una tarea:** `grep -n "^### T2\." PLAN_INDUSTEC.md`,
+    mirar §5.1 de `ESTADO.md` y `ls desarrollo/agentes/scripts | grep t2_NN`.
 
 ### Lo que no se toca, nunca
 

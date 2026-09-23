@@ -860,6 +860,37 @@ la que dejó T2.23.
 
 ---
 
+## 1s. T2.28 · Lo que se midió para planificar las observaciones de INDUSTEC (2026-09-22/23, solo lectura)
+
+**No se construyó nada: es la medición que sostiene el plan.** La especificación,
+con cada cifra y su fuente, está en [`T2_28_OBSERVACIONES_INDUSTEC.md`](T2_28_OBSERVACIONES_INDUSTEC.md)
+§2, §2b y §2c; aquí van las que cambian decisiones.
+
+| Qué | Cifra | Cómo se midió |
+|---|---|---|
+| Correo real del local en el maestro | **4 de 100** (95 son `servicioalcliente@industec.me`) | `SELECT` en `locales` (estación) |
+| La orden lleva el correo del local | **No**: `reunirOrden()` no lo manda; la cola y el PDF lo toman del maestro | lectura de `app.js` y `Emision.php:251, 371` |
+| `G:\Mi unidad\INDUSTEC IA\CORREOS LOCALES INDUSTEC.xlsx` (22-sep) | **95 locales; 92 iguales al histórico de órdenes, 0 distintos**; zona igual en todos; 5 locales sin correo | cruce con `ots.correo_local` |
+| Buzón del jefe de zona | UIO `jefezona-uio@`, LARB `jefetecniconacional@`, CNLJ `jefezonacuenca-loja@` — **iguales en producción (`submit.php:165-169`) y en el maestro** | dos fuentes |
+| Tope del SMTP | **50 correos por hora**; producción lo excedió 40 veces el 2025-09-22 | `error_normal.log` del sistema viejo |
+| Administradores por local en el histórico | **1.294 pares en 99 locales**; mediana 8 por local; variantes y ruido que hay que limpiar | `ots.admin_nombre` |
+| Cronograma de preventivos | **87 ingresos reprogramados** por la administradora en su Excel el 22-sep y no en el sistema; **37** convierten y difieren (UIO, 9 a 2027); ~50 en formatos que el importador no lee | Excel contra `ingresos_preventivos` por `sql_remoto` |
+| Catálogo de bodega de KFC (PDF) | **1.611 códigos SAP y 1.586 imágenes**, con el número de parte en el formato de Parts Town; se extrae limpio con `pdfplumber` | `extract_tables()` |
+| Histórico de marca/modelo/serie | 9.646 filas, pero **5 de 767** cruzan con el catálogo del formulario (otra numeración, `S/N`, `Xxx`) | cruce (error nº 35) |
+| Texto de actividades para la semilla | **2.956** descripciones de preventivo por equipo y **6.619** de correctivo | estación |
+| Archivo | **7.772** órdenes; **7.640** con PDF íntegro en disco; **132 sin PDF** = 24 que la estación sí tiene + **97 duplicados por nombre** (`R002` y `R002EC`) + 11 por investigar; 1 PDF sin fila | `sql_remoto` + `find` por SSH |
+| InspectorBot, 2026-09-23 09:59 | **GRAVE**: el paso `pdfs` del nocturno abortó las dos corridas del 23 por un `ssh … mkdir` colgado 300 s; 9 errores en 24 h | `inspectorbot_estado.py` |
+| «Errores» que no lo son | reconexión del IMAP cada ~10 min; 4 PDF con fecha inválida (`''`, `20026-07-30`) que **sí se guardan** en cuarentena pero se anotan como `ERROR` cada noche | `vigilante-*.log`, `t1_7_ingesta.py:211` |
+| Casos sin local | **2**, ambos `V090 SUPER AKI LA JOYA GYE` | `casos_sap.json` |
+
+**Lo que NO se comprobó:** que los 7.640 PDF abran por `pdf.php` con sesión (se
+comprobó el disco, no la web: hace falta el arnés); la causa de los cuelgues de SSH
+(hay una hipótesis —sesiones simultáneas del vigilante y del nocturno— y T2.28.18a
+la mide antes de arreglar nada); y el formato exacto de los enlaces de Parts Town
+(el sitio se arma con JavaScript: T2.28.11 lo prueba con un navegador).
+
+---
+
 ## 1r. T2.27 · Los reportes que KFC le pide a la administración, generados, y el tablero de gerencia (2026-09-23)
 
 Andrés pidió armar los reportes «tal cual se los pide KFC», revisando el correo
@@ -1894,6 +1925,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
+| **T2.28 · Observaciones de la revisión con INDUSTEC** — especificada y aprobada, **sin empezar** | Libre — nadie la tiene tomada | 2026-09-23 | Se toma por fases (`T2_28_OBSERVACIONES_INDUSTEC.md` §5). La Fase 1 empieza por el robot (InspectorBot en GRAVE) y el arnés aislado. El carril de la estación es dueño de `hostinger_ssh.py` y `saneamiento_nocturno.py`; el del formulario, de `app.js`, `index.html`, las tres reglas y `sw.js`. Cifras en **§1s** |
 | ~~Revisión de las estadísticas del inicio y de Reportes~~ · ~~Reportes para Grupo KFC y tablero de gerencia (T2.27)~~ | ✅ **Terminadas el 2026-09-23** | — | Estadísticas desplegadas en darkviolet (§1q, `verificar_cifras.py` 21·0). Cinco generadores nuevos en `desarrollo/agentes/scripts/t2_27_*.py` y el lanzador `reportes_kfc.bat`; salidas en `SALIDAS IA\REPORTES\KFC`. **No escribió en ninguna tabla ni en el correo** (solo lectura). Detalle en §1r |
 | ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |
 | ~~**T2.26 · El formulario del técnico: desbloqueado, predictivo y sin señal**~~ | ✅ **Terminada y desplegada el 2026-09-22** | — | `guia.js`, `app.js`, `cola.js`, `sw.js` (v13) y dos baterías nuevas. **No tocó la base, ni el árbol canónico, ni ningún PHP.** Verificado: 120·0, 57·0, 62·0, 42·0 locales; 37·0 bandeja; **4·0** `verificar_sync_cerrada.mjs`. Detalle, cifras y lo que quedó sin comprobar en **§1o**. ⚠ `verificar_http.py` (81/86) y `verificar_emision.py` (aborta) piden **`preparar_prueba.php`**: el arnés se quedó sin ningún caso con local |
