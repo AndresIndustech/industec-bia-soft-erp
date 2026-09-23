@@ -1690,6 +1690,15 @@ vaciar ese pendiente: T2.22, con el criterio de qué informe manda cuando un
 aviso tiene más de uno (varios sí lo tienen) pendiente de decidir antes de
 escribir nada en bloque.
 
+**Sumado el 2026-09-22 — el sitio de pruebas quedó sin datos ni usuarios de
+prueba** (a pedido de Andrés; cifras en `ESTADO.md` §1p). Quedan 22 usuarios,
+todos reales. **Pendiente de personas, no de código:** Kevin Chimbo tiene que
+asignar los avisos 10355931 y 10356012, que el arnés había acaparado. Isabel
+tiene que confirmar si el 10355931 está cerrado en SAP. Y Andrés decide si la
+bitácora conserva sus 1.219 filas de prueba, que hoy es inalterable. **Para
+volver a correr las baterías de servidor** hay que ejecutar antes
+`preparar_prueba.php` y, al terminar, `limpiar_pruebas.php` (error nº 37).
+
 ### Antes de dar nada por verificado
 
 Las baterías **están todas en verde al 2026-09-13**, y esa es la línea base que
@@ -2453,6 +2462,17 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     el arnés antes. Desde el 2026-09-22 la batería **lo dice en su salida** en
     vez de dejar cinco fallos crípticos. Es el error nº 30 aplicado a dos
     baterías concretas.
+
+37. **El arnés de pruebas toma casos REALES y abiertos, y nadie lo deshace.**
+    `preparar_prueba.php` asigna al técnico de prueba dos avisos reales de UIO
+    sin técnico. El 2026-09-21 tomó el 10355931 y el 10356012, de prioridad ALTA
+    y abiertos en SAP. Las baterías los «cerraron» con órdenes de prueba y
+    ningún técnico real los vio durante un día. Isabel llegó a marcar uno como
+    cerrado en SAP. Además, `deshacer_prueba.php` solo **desactiva** las
+    cuentas y deja fuera seguimientos, sesiones y `locales_admin`. **Regla:**
+    después de correr baterías de servidor, siempre `php
+    ~/respaldos/limpiar_pruebas.php` (simulacro → `--ejecutar` con sus
+    cifras). Y la bitácora **no se limpia**: la 009 la hizo inalterable.
 
 ### Lo que no se toca, nunca
 

@@ -3,7 +3,7 @@
 > **Empieza por aquí.** Este archivo dice dónde vamos; [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) dice qué hay que construir y con qué criterios.
 > Si vas a trabajar, **anótate primero en §5 (Trabajo en paralelo)** antes de tocar nada.
 
-**Última actualización:** 2026-09-21
+**Última actualización:** 2026-09-22
 **Fase en curso:** 2 · Automatización — **construida y desplegada en el sitio de pruebas; lo que sigue es el piloto en UIO** (paquete en `desarrollo/sistema_ots/piloto/`). La Fase 1 quedó cerrada
 **Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
 
@@ -860,6 +860,59 @@ la que dejó T2.23.
 
 ---
 
+## 1p. Sitio de pruebas sin datos ni usuarios de prueba (2026-09-22, a pedido de Andrés)
+
+Andrés pidió «dejar solo la información real», cuentas de prueba incluidas.
+Respaldo previo: `D:\RESPALDOS\_ORIGEN_APP\_bd\volcado_20260923T003724Z.sql.gz`
+(sha256 `a4ed5e56ec90…`, verificado local contra remoto por `t2_4_volcado_bd.py`).
+Script nuevo: `app/pruebas/servidor/limpiar_pruebas.php` (simulacro por defecto;
+`--ejecutar='<cifras>'` aborta si una sola cambió; todo en una transacción).
+
+| Retirado de darkviolet | Filas |
+|---|---|
+| Cuentas `tec_prueba_uio_a/b`, `jefe_prueba_uio`, `jefe_prueba_cnlj`, `admin_prueba` | **5 borradas** (no desactivadas) |
+| Órdenes OT-9073…OT-9112, sus correos retenidos y su entrada en el Archivo | 40 · 40 · 10 |
+| PDF y fotos en disco | 49 (40 + 9) |
+| Pendientes y sus notas · novedades · equipo propuesto · seguimientos | 4 y 42 · 2 · 1 · 11 |
+| «Administrador de Prueba» aprendidos en `locales_admin` | 2 |
+| `sesiones_log` de las cuentas de prueba | 347 |
+| `casos_gestion`: avisos sintéticos 99990011/12 | 2 |
+| Técnicos de prueba en `catalogos/tecnicos.json` | 21 → 19 |
+| `~/respaldos/claves_prueba.json`, `prueba_deshacer.json`, `tecnicos.json.antes_prueba` | borrados |
+| Espejo local `_ORIGEN_APP`: OT-9073…9082 y 1 carpeta de fotos | 11 |
+
+**🔴 Dos casos reales devueltos:** `preparar_prueba.php` había tomado los avisos
+**10355931** (impresora, G018EC) y **10356012** (máquina de hielo, G007EC),
+**abiertos en SAP, prioridad ALTA, del 2026-09-21**. Los tenía el técnico de
+prueba y los «cerraban» órdenes de prueba; Isabel incluso marcó el 10355931 como
+cerrado en SAP. Nadie real los veía. Ahora vuelven a **NUEVO**, sin fila en
+`casos_gestion`, que es el estado previo que registró el propio arnés
+(`existia: false`). **Kevin Chimbo tiene que asignarlos, y hay que confirmar con
+Isabel si el 10355931 está cerrado de verdad en SAP.**
+
+**Verificado después** (consultas independientes del script): usuarios **22**, 0
+con «prueba»; `ot_capturadas` 0, `email_queue` 0, `ot_fotos` 0, `ot_archivo`
+APP 0 (total 7.738); pendientes 0, novedades 0, seguimientos 0, `locales_admin`
+0; 0 casos con cierre OT-9xxx; 0 PDF OT-9xxx y 0 carpetas de fotos en disco; el
+simulacro de nuevo responde «No hay cuentas de prueba: nada que limpiar». Intactos
+los datos reales: `cronograma_novedades` 175, `ot_archivo_solicitudes` 15.
+
+**Lo que NO se borró, y por qué:**
+- **La bitácora** (1.219 filas de prueba): la 009 la hizo inalterable con
+  disparadores. El primer intento abortó con «La bitacora no se borra (009)» y la
+  transacción revirtió todo. Quedan como historial, con la fila
+  `LIMPIEZA_PRUEBAS` que registra lo retirado. Borrarlas exige quitar el
+  disparador: es decisión de Andrés.
+- El contador `correlativos` (`CORRECTIVO:UIO` = 9112): solo es un número, como
+  se decidió el 2026-09-13.
+- Los 15 «pedir copia» de `ajumbo`/`abasantes` del 2026-09-13: son cuentas reales.
+
+**Consecuencia:** las baterías de servidor (`verificar_*.py`) necesitan de nuevo
+`preparar_prueba.php`, que recrea las cuentas **y vuelve a tomar dos casos reales
+abiertos**. Después de correrlas: `limpiar_pruebas.php` (error nº 37 del plan).
+
+---
+
 ## 1o. T2.26 · El formulario del técnico: desbloqueado, predictivo y capaz de trabajar sin señal (2026-09-22)
 
 Andrés entró como `ajumbo` al caso **10355894**, pulsó «Emitir la orden de este
@@ -1702,6 +1755,8 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
+| **Revisión de las estadísticas del inicio y de Reportes; «sin atender» regularizadas en neutro** (pedida por Andrés) | Conversación "estadísticas" (estación) | 2026-09-22 | Solo **lee** la base de darkviolet. Toca `inicio`/`reportes` (PHP y JS del tablero). No escribe en ninguna tabla |
+| ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |
 | ~~**T2.26 · El formulario del técnico: desbloqueado, predictivo y sin señal**~~ | ✅ **Terminada y desplegada el 2026-09-22** | — | `guia.js`, `app.js`, `cola.js`, `sw.js` (v13) y dos baterías nuevas. **No tocó la base, ni el árbol canónico, ni ningún PHP.** Verificado: 120·0, 57·0, 62·0, 42·0 locales; 37·0 bandeja; **4·0** `verificar_sync_cerrada.mjs`. Detalle, cifras y lo que quedó sin comprobar en **§1o**. ⚠ `verificar_http.py` (81/86) y `verificar_emision.py` (aborta) piden **`preparar_prueba.php`**: el arnés se quedó sin ningún caso con local |
 | ~~**T2.25 · Continuidad entre casos del mismo equipo**~~ | ✅ **Terminada, aplicada y desplegada el 2026-09-21** | — | Migración 012 en darkviolet y seis archivos desplegados. Verificado: **25·0** la batería nueva, 37·0 bandeja, 86·0 http, `verificar_esquema.php` TODO OK; y 36·0 · 120·0 · 57·0 · 62·0 en local. Lo único que queda es **que Andrés la mire**, y que alguien la use con un caso real. Detalle en **§1l** |
 | ~~T2.23 · Rediseño de la interfaz de preventivos~~ | ✅ **Terminada el 2026-09-21** | — | `cronograma.html/.js/.css` y `sw.js` a v11. No tocó la base, ni el árbol canónico, ni el contrato de `cronograma.php`/`cronograma_accion.php`. Cifras, evidencia y lo que quedó sin comprobar en **§1k**. Falta desplegar a darkviolet y correr las baterías de servidor |
