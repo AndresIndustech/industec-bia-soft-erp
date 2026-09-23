@@ -1453,8 +1453,20 @@ quedó en 18,87 % (semana 35) y 47,62 % (semana 37), «el mayor rezago».
 | **T2.27.4** | Presentación de gestión por zona (`t2_27_presentacion_gestion.py`) | ✅ | Órdenes por zona y mes = SQL directo; PowerPoint abre las 26 diapositivas |
 | **T2.27.5** | Propuesta de pedido de kits de preventivo (`t2_27_kits_preventivo.py`) | ✅ como propuesta | Los 5 locales del pedido real de UIO del 14-sep están en la propuesta |
 | T2.27.6 | Formato semanal de facturación de constructivos y correctivos | 🔒 | **Bloqueado:** lleva SUBTOTAL, IVA y TOTAL, y ningún sistema guarda esos valores. Se necesita la fuente de precios (proformas) |
-| T2.27.7 | Que corran solos (Tarea programada martes y miércoles 07h00) | ⏳ | **Requiere aprobación de Andrés:** registra tareas en Windows. El lanzador ya existe: `scripts\reportes_kfc.bat` |
+| **T2.27.7** | Que corran solos, desde el panel **«Automatización»** (`automatizacion.php`) | ✅ **construida e INACTIVA** (2026-09-23, pedido de Andrés) | Migración 020 en darkviolet (5 tareas, **las 5 inactivas**, 23 destinatarios sembrados de los hilos reales). Programador de la estación `t2_27_programador.py`. `verificar_automatizacion.py` **27 · 0** (activar se probó dentro de una transacción revertida). **Activar es un paso aparte, con aprobación de la administradora:** ver «Para activar» abajo |
 | T2.27.8 | ESTATUS IND que aprende de las correcciones de ella | ⏳ | Hoy coincide **36 de 65 (55 %)**. Con sus respuestas de cada semana se puede medir qué regla falla. Criterio: ≥ 75 % sobre 4 semanas seguidas |
+
+**Para activar T2.27.7 (cuando la administradora apruebe; nada de esto está hecho):**
+1. En `automatizacion.php`, por cada tarea: revisar horario, modo y destinatarios, y pulsar
+   **Activar**. Pide escribir quién aprobó y cómo, y queda registrado con quien pulsó.
+   **Empezar en modo AVISAR:** el borrador va a `servicioalcliente@` para que ella lo revise
+   y lo envíe. ENVIAR (directo a KFC) solo después de semanas de AVISAR sin correcciones.
+2. Agregar `SMTP_HOST=smtp.titan.email`, `SMTP_PORT=465`, `SMTP_USER`, `SMTP_PASSWORD` y
+   `SMTP_DE` a `desarrollo/agentes/config/.env`. Sin eso, AVISAR y ENVIAR quedan en ERROR
+   con el motivo y no sale nada.
+3. Registrar la Tarea programada de Windows: `t2_27_programador.py --instalar-tarea` imprime
+   el comando exacto (cada 30 min de 06:00 a 20:00). Sin tareas activas no hace nada.
+4. Comprobar la primera corrida en el panel («Últimas corridas»).
 
 **Hallazgos que cambian cosas de otras tareas (medidos, sin tocar nada):**
 - **El cronograma de preventivos no está reprogramado.** Ninguno de los 368 ingresos
@@ -1834,8 +1846,9 @@ y evidencia en `ESTADO.md` **§1r**; tareas y permisos en **T2.27**. Lo que sigu
 > 1. **Que la administradora use el del miércoles con la semana 40** (llega el
 >    lunes 28-sep) y devuelva sus correcciones del ESTATUS IND. Es el insumo de
 >    T2.27.8, y es la única forma de saber si la propuesta le ahorra trabajo.
-> 2. **Pedirle a Andrés la aprobación de T2.27.7** (tareas programadas martes y
->    miércoles 07h00). Sin eso, depende de que alguien se acuerde.
+> 2. **T2.27.7 está construida e INACTIVA** en el panel «Automatización» del sitio de
+>    pruebas. Activarla es decisión de la administradora; los cuatro pasos están en T2.27,
+>    «Para activar».
 > 3. **Llevar a la gerencia el hallazgo de la palanca de SAP** (T2.27, «hallazgos»):
 >    es una decisión de operación, no de sistema.
 

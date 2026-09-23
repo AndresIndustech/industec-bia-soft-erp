@@ -381,6 +381,15 @@ ALTER TABLE locales_admin
    - En modo PRUEBA sigue sin conectar.
 5. `nucleo/Catalogo.php::fusionarCorreos(array &$locales)` superpone sobre `locales.json` el `correo_local` **APROBADO** en `locales_correo_propuesto` (como `fusionarPropuestos`, líneas 71-93). Va en `try/catch`.
 6. `envio.php` (orden nueva, líneas 365-382): si el correo del local de la orden es válido, no es `@industec.me` y es distinto del maestro, `INSERT … ON DUPLICATE KEY UPDATE veces = veces + 1` en `locales_correo_propuesto` (campo `LOCAL`).
+> **Decisión de Andrés del 2026-09-23 (después de aprobar esta especificación):** la configuración
+> de correos va **dentro del panel «Automatización»** (`automatizacion.php`, T2.27.7), que ya existe
+> en darkviolet y tiene la sección **«Correos de las órdenes»** reservada para esto. Lo que sigue
+> describe el contenido: puede vivir en `correos.php` enlazado desde el panel o como sección del
+> mismo, pero el lugar donde la administradora lo busca es el panel. La pestaña «Reportes
+> automáticos» de abajo **ya no hace falta**: los destinatarios de cada reporte están en
+> `automatizacion_destinatarios` (migración 020), por reporte, porque el esquema de la 013 no
+> distingue entre reportes. Los números 013–019 siguen reservados para T2.28; T2.27.7 usó la 020.
+
 7. **`correos.php`** (nueva; permiso `correos.configurar`, respaldo `['SUPERADMIN','ADMIN']`; POST con CSRF y PRG como `equipos.php`). Pestañas:
    - **Por zona** (UIO, LARB, CNLJ, OTRA), cada una con tres bloques:
      1. **«Buzón del jefe de zona (INDUSTEC)»**: se asigna solo al sembrar, siempre va en copia, **se puede editar pero no desactivar ni borrar**. Texto: «Es el buzón institucional de la zona: no cambia aunque cambie quien lo maneja».

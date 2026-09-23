@@ -968,7 +968,47 @@ $ cmd /c scripts\reportes_kfc.bat miercoles          (modo real, bajando del cor
   Nadie los ha abierto todavía fuera de esta conversación.
 - El ESTATUS IND de la semana 39: todavía no hay respuesta suya con qué compararlo.
 - La facturación semanal (T2.27.6): no hay fuente de valores monetarios.
-- Nada de esto corre solo todavía: las tareas programadas requieren aprobación (T2.27.7).
+- Nada de esto corre solo todavía: las tareas programadas están construidas e **INACTIVAS** en el panel «Automatización» (§1r-bis) y se activan con la aprobación de la administradora.
+
+### 1r-bis. T2.27.7 · El panel «Automatización», con las cinco tareas INACTIVAS (2026-09-23)
+
+Andrés pidió construir las tareas programadas **dentro del panel donde va a ir la
+configuración de correos**, y **no activarlas**: se activan luego con la
+aprobación de la administradora. Quedó así:
+
+| Pieza | Dónde | Qué hace |
+|---|---|---|
+| `automatizacion.php` | darkviolet, menú «Automatización» (solo SUPERADMIN y ADMIN) | Horario, modo y destinatarios de cada reporte; **Activar** pide la nota de quién aprobó; historial de cambios; últimas corridas. Sección «Correos de las órdenes» reservada para T2.28.2 |
+| Migración `020_automatizacion.sql` | darkviolet | 4 tablas nuevas (aditiva), el permiso y las 5 tareas **inactivas** con 23 destinatarios tomados de los hilos reales. La 013–019 siguen reservadas para T2.28 |
+| `automatizacion_cli.php` | darkviolet, solo por línea de órdenes (404 por web) | Lo único que la estación puede hacer: leer la configuración y registrar corridas. Rechaza una corrida «de horario» de una tarea inactiva |
+| `t2_27_programador.py` | estación | Corre lo ACTIVO en su horario, avisa o envía según el modo y registra. **No está registrado en Windows**: `--instalar-tarea` imprime el comando para cuando se active |
+
+**Evidencia** (respaldo previo de la base: `D:\RESPALDOS\_ORIGEN_APP\_bd\volcado_20260923T154323Z.sql.gz`,
+sha256 `6b01035588eeb3c0…`; la 020 aplicada dos veces sin duplicar nada):
+
+```
+$ PYTHONUTF8=1 python verificar_automatizacion.py
+ok  020: las cinco INACTIVAS                                                   [0, 0, 0, 0, 0]
+ok  020: 23 destinatarios sembrados del correo enviado                         23
+ok  cli registrar: rechaza una corrida de horario de una tarea INACTIVA        {"error": "la tarea está inactiva: ..."}
+ok  activar sin nota: se rechaza
+ok  activar con la nota de quién aprobó: se activa                             (dentro de una transacción revertida)
+ok  con la tarea activa no se cambia el modo
+ok  la transacción se revirtió: sigue INACTIVA                                 0
+ok  ni una corrida ni un cambio quedaron guardados                             {corridas: 0, cambios: 0} → {0, 0}
+ok  JEFE_ZONA: no entra (403) / TECNICO: no entra (403)
+ok  programador sin tareas activas: no corre nada                              "Tareas activas en el panel: 0 de 5."
+27 comprobaciones · 0 fallos
+```
+
+Además: en modo ENVIAR al cliente solo va el reporte (nunca la REVISIÓN ni el texto del
+correo) y con su nombre de siempre, sin «(generado agente)»; y sin `SMTP_*` en
+`config/.env` —hoy no están— no puede salir ningún correo. Baterías locales 120·0 y 57·0.
+
+**Lo que NO se comprobó:** la pantalla no se abrió en un navegador (se dibujó por
+línea de órdenes como la administradora y se revisó el HTML); el envío real por SMTP
+nunca se probó, a propósito; y el programador no corrió ninguna tarea de verdad.
+Para activarla: T2.27 del plan, «Para activar».
 
 ## 1q. Las cifras del inicio y de Reportes, contra los datos reales (2026-09-22, a pedido de Andrés)
 
@@ -1925,6 +1965,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
+| ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
 | **T2.28 · Observaciones de la revisión con INDUSTEC** — especificada y aprobada, **sin empezar** | Libre — nadie la tiene tomada | 2026-09-23 | Se toma por fases (`T2_28_OBSERVACIONES_INDUSTEC.md` §5). La Fase 1 empieza por el robot (InspectorBot en GRAVE) y el arnés aislado. El carril de la estación es dueño de `hostinger_ssh.py` y `saneamiento_nocturno.py`; el del formulario, de `app.js`, `index.html`, las tres reglas y `sw.js`. Cifras en **§1s** |
 | ~~Revisión de las estadísticas del inicio y de Reportes~~ · ~~Reportes para Grupo KFC y tablero de gerencia (T2.27)~~ | ✅ **Terminadas el 2026-09-23** | — | Estadísticas desplegadas en darkviolet (§1q, `verificar_cifras.py` 21·0). Cinco generadores nuevos en `desarrollo/agentes/scripts/t2_27_*.py` y el lanzador `reportes_kfc.bat`; salidas en `SALIDAS IA\REPORTES\KFC`. **No escribió en ninguna tabla ni en el correo** (solo lectura). Detalle en §1r |
 | ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |

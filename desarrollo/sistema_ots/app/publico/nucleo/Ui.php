@@ -72,6 +72,9 @@ final class Ui
            decidir. */
         ['equipos.php',     'equipos.aprobar',    'Equipos nuevos', 'equipos', ['SUPERADMIN', 'ADMIN']],
         ['bitacora.php',    'bitacora.ver',       'Bitácora',    null,        ['SUPERADMIN', 'ADMIN']],
+        /* T2.27.7: lo que el sistema hace solo (los reportes programados) y, cuando
+           T2.28.2 lo construya, a quién le escriben las órdenes. Solo administración. */
+        ['automatizacion.php', 'automatizacion.configurar', 'Automatización', null, ['SUPERADMIN', 'ADMIN']],
     ];
 
     /** Lo que ya está construido. El resto no se dibuja: un 404 no es un módulo. */
@@ -83,6 +86,8 @@ final class Ui
         'documentos.php', 'bitacora.php',
         // T2.14.8 (2026-09-13): la confirmación de los equipos propuestos (D8).
         'equipos.php',
+        // T2.27.7 (2026-09-23): el panel de automatización, con las tareas inactivas.
+        'automatizacion.php',
     ];
 
     /** El técnico usa su bandeja, no el buzón de escritorio: son otra cosa. */
