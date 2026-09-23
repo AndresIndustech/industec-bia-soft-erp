@@ -143,7 +143,11 @@ COLUMNAS_SAP = {
     "Estatus de la Orden": "estatus_orden", "ESTATUS C": "estatus_c", "Estatus 2 de la Orden": "estatus_orden_2",
     "RESPONSABLE": "responsable", "Circunstancia": "circunstancia", "Denominación objeto": "denominacion",
     "ÁREA": "area", "Local": "local", "PROVEEDOR": "proveedor", "REGIÓN": "region",
+    "Equipo": "equipo_sap",
 }
+# Sin estas no hay reporte. Las demás son opcionales: KFC agrega y quita columnas entre
+# semanas (las semanas 32, 34 y 36 no traen «ESTATUS B» ni «ÁREA») y eso no debe tumbar nada.
+OBLIGATORIAS_SAP = {"aviso", "fecha_notificacion", "descripcion", "estatus_a", "proveedor", "local"}
 
 
 def _fecha(v):
@@ -173,11 +177,19 @@ def leer_sap_semanal(ruta: Path) -> dict:
         raise SystemExit(f"{ruta.name}: no tiene la hoja FILTRO; ¿cambió el formato del reporte de KFC?")
     filas = wb["FILTRO"].iter_rows(values_only=True)
     enc = [str(h).strip() if h is not None else "" for h in next(filas)]
-    idx = {}
+    # Sinónimos que usa KFC según el archivo: el «ACTUALIZADO» del viernes llama «Notificación»
+    # al aviso, y algunas tablas dicen «DESCRIPCIÓN2». Solo se aplican si falta el nombre de siempre.
+    for sinonimo, nombre in (("Notificación", "AVISO"), ("DESCRIPCIÓN2", "DESCRIPCIÓN")):
+        if nombre not in enc and sinonimo in enc:
+            enc[enc.index(sinonimo)] = nombre
+    idx, faltan = {}, []
     for nombre, campo in COLUMNAS_SAP.items():
-        if nombre not in enc:
+        if nombre in enc:
+            idx[campo] = enc.index(nombre)
+        elif campo in OBLIGATORIAS_SAP:
             raise SystemExit(f"{ruta.name}: falta la columna {nombre!r} en FILTRO. Columnas: {enc}")
-        idx[campo] = enc.index(nombre)
+        else:
+            faltan.append(nombre)
     datos, repetidas = {}, 0
     for r in filas:
         if not r or r[idx["aviso"]] in (None, ""):
@@ -186,7 +198,9 @@ def leer_sap_semanal(ruta: Path) -> dict:
         if aviso in datos:
             repetidas += 1
             continue
-        fila = {campo: r[i] for campo, i in idx.items()}
+        fila = {campo: (r[i] if i < len(r) else None) for campo, i in idx.items()}
+        for nombre in faltan:
+            fila[COLUMNAS_SAP[nombre]] = None
         for f in ("fecha_notificacion", "fecha_orden", "cierre_tecnico"):
             fila[f] = _fecha(fila[f])
         for k, v in fila.items():
