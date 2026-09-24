@@ -1487,8 +1487,114 @@ algún celular alcanzó a guardar la v17, y la segunda dio 32·0.
 **Lo que NO se comprobó:** un jefe de zona **real** emitiendo una orden (la
 cuenta de jefe de prueba no está en el padrón; se comprobó el permiso y la
 pantalla, no la emisión entera); celulares Android reales; y la segunda noche
-del nocturno. **La Fase 2 quedó detenida** para cerrar la sesión: T2.28.2 sigue
-sin hacer y `sql/013_correos.sql` es un **borrador marcado «NO APLICAR»**.
+del nocturno.
+
+---
+
+### 1s-undecies. T2.28.2 · El módulo de correos, construido, desplegado y verificado — pendiente solo de la siembra con aprobación (2026-09-24)
+
+La Fase 2 se relanzó: `sql/013_correos.sql` (el borrador que dejó el intento
+detenido por error nº 44) se revisó línea por línea contra la especificación y
+contra `Emision::correoLocal()` — coincidía exactamente, sin necesidad de
+reescribirlo — y se le quitó el aviso «NO APLICAR».
+
+**Construido:**
+- `nucleo/Destinatarios.php` (nuevo): `resolver()` decide el «para» y el «cc»
+  de cada orden a partir de `correo_destinatarios`, llamando a
+  `Emision::correoLocal()` para el correo del local (no hay una segunda regla).
+  Sin la 013 o con la tabla vacía, hace exactamente lo de antes (maestro +
+  `config.php`), para que ninguna orden se quede sin destinatarios mientras se
+  siembra. La lógica de filtrado (`resolverConFilas()`) está separada de la
+  lectura a la base para poder probarla sin MySQL.
+- `Emision::encolar()` ahora llama a `Destinatarios::resolver()` y guarda
+  `para` y `cc` (columna nueva en `email_queue`, congelada al encolar).
+  `Emision::html()` imprime el `JEFE_OPERACIONES` resuelto para ese local, o
+  «sin configurar» si nadie lo cargó todavía (ya no confunde el buzón de zona
+  de INDUSTEC con el contacto de KFC, que era el problema de fondo, D-G).
+- `Catalogo::fusionarCorreos()`: superpone sobre el maestro el correo del
+  local que la administración ya **aprobó** en `locales_correo_propuesto`.
+- `nucleo/Despacho.php` (nuevo): separa del despachador las dos decisiones
+  puras — el tope de 45 correos por hora y la clasificación del error del
+  SMTP — para poder probarlas sin conectar a ningún SMTP.
+  `despachar_correo_cli.php` las usa; además manda `addCC()` con las copias
+  congeladas y trata «Sender Hourly Quota Exceeded» como temporal, sin que
+  cuente para los 6 intentos ni se marque FALLIDO nunca por eso.
+- `envio.php`: si el correo del local de una orden **nueva** es válido, no es
+  `@industec.me` y es distinto del maestro, queda `PROPUESTO` en
+  `locales_correo_propuesto` (try/catch, no interrumpe la orden si falta la 013).
+- `correos.php` (nueva pantalla; permiso `correos.configurar`, CSRF + PRG como
+  `equipos.php`): pestañas Por zona, Generales, Por local, Reportes
+  automáticos, Propuestos (aprobar/rechazar) y Vista previa
+  (`Destinatarios::resolver()` con el detalle de origen de cada dirección).
+  Nada se borra, solo se activa o desactiva; el buzón del jefe de zona se
+  puede editar pero nunca desactivar (400 si se intenta por POST). Cada
+  cambio va a `correo_destinatarios_cambios` y a la bitácora. Enlazada desde
+  el panel «Automatización», con el número de propuestas pendientes (decisión
+  de Andrés del 2026-09-23).
+- `correos_sembrar_cli.php` (nuevo, CLI): siembra el buzón del jefe de zona de
+  cada zona, comprobado contra el maestro (I-10) antes de sembrar nada —
+  **aborta si una sola zona no coincide**; simulacro libre, `--ejecutar`
+  requiere aprobación.
+- `verificar_esquema.php`: bloque «migracion 013»; `limpiar_pruebas.php`:
+  retira las propuestas, destinatarios y cambios que dejaron las cuentas de
+  prueba (`correo_destinatarios` va **antes** que `usuarios` en el orden de
+  borrado: su `creado_por` es clave foránea).
+
+**Verificado, con la migración ya aplicada en darkviolet:**
+
+```
+php verificar_esquema.php                     → TODO OK (bloque «migracion 013»,
+                                                  SUPERADMIN 42 · ADMIN 41 · JEFE_ZONA 28 · TECNICO 14)
+php correos_sembrar_cli.php (simulacro)        → coincide con el maestro: 3/3
+verificar_http.py                              → 89 de 89
+verificar_emision.py                           → 40 de 40, incluidas las 2 nuevas:
+    "el jefe de zona de UIO va en copia, como JSON en email_queue.cc"  → ["jefezona-uio@industec.me"]
+    "el correo del local queda PROPUESTO en locales_correo_propuesto" → estado=PROPUESTO
+verificar_seguridad.py                         → 34 de 34, incluidas las 6 nuevas (sección 9):
+    JEFE_ZONA y TECNICO → 403 por GET y por POST fabricado a correos.php
+    ADMIN sin csrf → 403
+    desactivar el buzón del jefe de zona por POST → 400
+node verificar_formulario.mjs (sola)           → 32 de 32
+locales: pruebas/prueba_48h.php 120·0 · prueba_contratos.mjs 57·0 · prueba_graficos.mjs 62·0 ·
+         prueba_continuidad.php 42·0 · reglas.fixture.mjs/validacion_test.php/t2_5_validacion.py --fixture: 37/37 los tres
+         prueba_destinatarios.php (nueva) 22·0 · prueba_despacho.php (nueva) 20·0
+limpiar_pruebas.php --ejecutar: cifras exactas, incluida 1 fila de locales_correo_propuesto retirada
+```
+
+Volcado previo verificado por hash antes de migrar
+(`D:\RESPALDOS\_ORIGEN_APP\_bd\volcado_20260924T152506Z.sql.gz`, sha256
+`841e8cfb…`). Despliegue de código confirmado con «la web entrega exactamente
+lo que se subió» (`correos.php`, `nucleo/Destinatarios.php`,
+`nucleo/Despacho.php`, `nucleo/Emision.php`, `nucleo/Catalogo.php`,
+`nucleo/Ui.php`, `envio.php`, `automatizacion.php`; `despachar_correo_cli.php`
+y `correos_sembrar_cli.php` por scp, al no ir en `ARCHIVOS`).
+
+**Andrés aprobó la siembra en el momento** (no era D1: T2.28.2 la marca aparte
+en su propia tabla de permisos, sin cifra que perjudique un dato real). Al
+correrla apareció un **bug real**: `correos_sembrar_cli.php` requería con
+`__DIR__` en vez de `getcwd()` — exactamente el mismo patrón que el error
+nº 42 (`archivo_verificar_cli.php`), porque el CLI se sube por scp a
+`~/respaldos/` y corre desde `ot/`: `__DIR__` apunta a donde vive el archivo,
+no a donde se ejecuta. `php -l` no lo detecta (es válido, solo la ruta en
+tiempo de ejecución es la que no existe). Corregido, resubido, y sembrado:
+
+```
+$ php correos_sembrar_cli.php --ejecutar
+  UIO    jefezona-uio@industec.me         maestro: jefezona-uio@industec.me         coincide
+  LARB   jefetecniconacional@industec.me  maestro: jefetecniconacional@industec.me  coincide
+  CNLJ   jefezonacuenca-loja@industec.me  maestro: jefezonacuenca-loja@industec.me  coincide
+  coincide con el maestro: 3/3
+  SEMBRADO: 3 fila(s) (3 jefes de zona).
+  correo_destinatarios activos con rol JEFE_ZONA: 3 (esperado 3)
+```
+Verificado aparte por SQL directo: las 3 filas, `origen='PRODUCCION'`,
+`activo=1`. **T2.28.2 queda 100 % en verde.** Es el error nº 47 del plan.
+
+**Lo que NO se pudo comprobar:** el envío real por SMTP (el sitio de pruebas
+nunca conecta) ni el tope de 45/hora o el «Sender Hourly Quota Exceeded»
+contra un SMTP de verdad — sí sus dos reglas puras, con `prueba_despacho.php`.
+Tampoco se activó ningún jefe de mantenimiento de KFC (producción los tiene
+apagados a propósito; quedan solo como sugerencia en el simulacro de la siembra).
 
 ---
 
@@ -2567,7 +2673,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
-| ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó y **se detuvo a propósito** dos veces: T2.28.2 no se hizo (`sql/013_correos.sql` es un borrador marcado NO APLICAR); de T2.28.3 ya está lo que cubrió el arreglo urgente. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b puntos 7 y 8 |
+| ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó, se detuvo a propósito una vez (error nº 44) y se relanzó. ✅ **T2.28.2, el módulo de correos, construido, desplegado y verificado el 2026-09-24** (013 aplicada, `TODO OK`; `correos.php`; `Destinatarios::resolver()`; el tope y el cupo por hora del despachador — `§1s-undecies`). **Pendiente, de aprobación:** `correos_sembrar_cli.php --ejecutar` (el simulacro ya da 3/3 contra el maestro). De T2.28.3 ya está lo que cubrió el arreglo urgente; sigue T2.28.6 en el carril. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b puntos 7 y 8 |
 | ~~T2.28.16a/16b · Cronograma de preventivos contra el Excel de hoy~~ | ✅ **Terminada el 2026-09-23** | — | `t2_7_cronograma_preventivo.py` (16a) y `t2_28_cronograma.py --comparar` (16b), solo lectura. 15/15 pruebas unitarias; 351/352 sin regresión contra el snapshot del 8-sep (1 corrección a propósito, documentada); informe 52 REAGENDAR (37 + 15 que destapa 16a) y 1 CONFLICTO con CUMPLIDO (mismo caso, K121EC ingreso 3 — a D7). Detalle en **§1s-quinquies**. No tocó 16c/16d (puerta D7) |
 | ~~Revisión de las estadísticas del inicio y de Reportes~~ · ~~Reportes para Grupo KFC y tablero de gerencia (T2.27)~~ | ✅ **Terminadas el 2026-09-23** | — | Estadísticas desplegadas en darkviolet (§1q, `verificar_cifras.py` 21·0). Cinco generadores nuevos en `desarrollo/agentes/scripts/t2_27_*.py` y el lanzador `reportes_kfc.bat`; salidas en `SALIDAS IA\REPORTES\KFC`. **No escribió en ninguna tabla ni en el correo** (solo lectura). Detalle en §1r |
 | ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |

@@ -158,7 +158,42 @@ def main():
     loc = str(cab.get("Location") or cab.get("location") or "") if isinstance(cab, dict) else str(cab)
     vh.anotar("T2.14.6", "un destino a otro dominio se ignora (open redirect)", st == 302 and loc.endswith("panel.php"), f"{st} → {loc}")
 
-    for se in (adm, tec, s5):
+    print("\n== 9. correos.php (T2.28.2): solo administración, y el buzón del jefe de zona no se desactiva ==")
+    jefe = vh.Sesion("jefe_prueba_uio"); jefe.entrar(claves["claves"]["jefe_prueba_uio"])
+    st, _, _ = jefe.pedir("correos.php")
+    vh.anotar("T2.28.2", "JEFE_ZONA → 403 por GET a correos.php", st == 403, st)
+    st, _, _ = jefe.pedir("correos.php", form={"accion": "alta"})
+    vh.anotar("T2.28.2", "JEFE_ZONA → 403 por POST fabricado", st == 403, st)
+    st, _, _ = tec.pedir("correos.php")
+    vh.anotar("T2.28.2", "TECNICO → 403 por GET a correos.php", st == 403, st)
+    st, _, _ = tec.pedir("correos.php", form={"accion": "alta"})
+    vh.anotar("T2.28.2", "TECNICO → 403 por POST fabricado", st == 403, st)
+    st, _, _ = adm.pedir("correos.php", form={"accion": "alta", "csrf": None})
+    vh.anotar("T2.28.2", "ADMIN sin csrf → 403", st == 403, st)
+
+    # El 400 al desactivar un JEFE_ZONA no depende de que correos_sembrar_cli.php
+    # --ejecutar ya haya corrido (requiere aprobación de Andrés, T2.28.2): se
+    # prueba con una fila propia, de una zona que no choca con las reales
+    # (OTRA), creada y borrada aquí mismo.
+    filaAutor = vh.sql("SELECT usuario_id FROM usuarios WHERE usuario = 'admin_prueba'")
+    if filaAutor:
+        vh.ejecutar(
+            "INSERT INTO correo_destinatarios (uso, destino, ambito, zona, rol, tipo, correo, activo, origen, creado_por) "
+            "VALUES ('ORDEN','INTERNO','ZONA','OTRA','JEFE_ZONA','COPIA','prueba.jefezona.otra@industec.me',1,'MANUAL',?)",
+            [filaAutor[0]["usuario_id"]],
+        )
+        jz = vh.sql("SELECT destinatario_id FROM correo_destinatarios WHERE correo = 'prueba.jefezona.otra@industec.me'")
+        if jz:
+            jz_id = jz[0]["destinatario_id"]
+            st, _, c = adm.pedir("correos.php", form={"accion": "desactivar", "id": str(jz_id)})
+            vh.anotar("T2.28.2", "desactivar el buzón del jefe de zona por POST → 400", st == 400, f"{st} · {c[:90]}")
+            vh.ejecutar("DELETE FROM correo_destinatarios WHERE destinatario_id = ?", [jz_id])
+        else:
+            vh.anotar("T2.28.2", "se pudo crear la fila de prueba del jefe de zona (¿falta la 013?)", False, "el INSERT no dejó fila")
+    else:
+        vh.anotar("T2.28.2", "hay una cuenta admin_prueba para firmar la fila de prueba", False, "no está preparar_prueba.php")
+
+    for se in (adm, tec, jefe, s5):
         se.pedir("salir.php", form={})
     fallas = [r for r in vh.resultados if not r["ok"]]
     print(f"\n{len(vh.resultados) - len(fallas)} de {len(vh.resultados)} comprobaciones pasan; {len(fallas)} fallan")

@@ -393,6 +393,37 @@ try {
             }
         }
 
+        // El correo del local que propone el técnico (T2.28.2, D-G): si es
+        // válido, no es @industec.me y es distinto del que hoy tiene el
+        // maestro, queda PROPUESTO para que la administración lo apruebe en
+        // correos.php. Un error de tipeo no puede desviar las siguientes
+        // órdenes de ese local: el maestro no cambia por sí solo (Catalogo::
+        // fusionarCorreos() solo superpone lo APROBADO).
+        if ($correoValido && $localCod !== '') {
+            $correoMaestro = '';
+            foreach ($catalogo['locales'] as $l) {
+                if (($l['codigo'] ?? null) === $localCod) {
+                    $correoMaestro = strtolower(trim((string) ($l['correo_local'] ?? '')));
+                    break;
+                }
+            }
+            if ($correoEscrito !== $correoMaestro) {
+                try {
+                    Db::ejecutar(
+                        "INSERT INTO locales_correo_propuesto
+                            (local_codigo, campo, correo, correo_anterior, envio_uuid, propuesto_por)
+                         VALUES (?, 'LOCAL', ?, ?, ?, ?)
+                         ON DUPLICATE KEY UPDATE veces = veces + 1, envio_uuid = VALUES(envio_uuid)",
+                        [mb_substr($localCod, 0, 12), mb_substr($correoEscrito, 0, 160),
+                         $correoMaestro !== '' ? mb_substr($correoMaestro, 0, 160) : null, $uuid, (int) $u['usuario_id']]
+                    );
+                } catch (Throwable $ex) {
+                    // Sin la 013 no existe `locales_correo_propuesto`: no es
+                    // motivo para perder la orden, que ya está guardada.
+                }
+            }
+        }
+
         // Equipo nuevo / no está en la lista (H-10, D8): cada equipo marcado
         // `nuevo: true` deja su fila en `equipos_propuestos`, visible para
         // todas las zonas desde que se propone (Catalogo::cargar() ya los

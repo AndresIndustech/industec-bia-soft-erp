@@ -79,8 +79,15 @@ $hay = Automatizacion::disponible();
 $tareas = $hay ? Automatizacion::tareas() : [];
 $cambios = $hay ? Automatizacion::cambios(25) : [];
 $activas = count(array_filter($tareas, fn($t) => (int) $t['activa'] === 1));
+// T2.28.2: cuántas propuestas de correo de local esperan aprobación en
+// correos.php. try/catch porque la 013 puede no estar aplicada todavía.
+try {
+    $correosPendientes = (int) (Db::uno("SELECT COUNT(*) n FROM locales_correo_propuesto WHERE estado = 'PROPUESTO'")['n'] ?? 0);
+} catch (Throwable $ex) {
+    $correosPendientes = 0;
+}
 
-Ui::cabecera($u, 'automatizacion.php', [], ['titulo' => 'Automatización']);
+Ui::cabecera($u, 'automatizacion.php', ['correos' => $correosPendientes], ['titulo' => 'Automatización']);
 ?>
 <div class="wrap ancho">
   <div class="titulo entra">
@@ -225,10 +232,13 @@ Ui::cabecera($u, 'automatizacion.php', [], ['titulo' => 'Automatización']);
   <?php endforeach; ?>
 
   <h2 id="correos">Correos de las órdenes</h2>
-  <?= Ui::aviso('neutro', '<b>Se construye en T2.28.2, en este mismo panel.</b>'
-      . '<p>Quién recibe cada orden emitida: el buzón del jefe de zona, las copias internas y las del cliente, '
-      . 'con vista previa de a quién llega. Mientras tanto, las órdenes usan la configuración de hoy '
-      . '(el maestro de locales y el archivo de configuración del servidor).</p>') ?>
+  <?= Ui::aviso($correosPendientes > 0 ? 'ambar' : 'neutro',
+      '<b>Quién recibe cada orden emitida</b> -el buzón del jefe de zona, las copias internas y las del cliente, '
+      . 'el jefe de operaciones de cada local- se configura en <a href="correos.php"><b>Correos</b></a>, con vista '
+      . 'previa de a quién llega.'
+      . ($correosPendientes > 0
+          ? '<p><b>' . $correosPendientes . '</b> correo(s) de local propuestos por técnicos esperan aprobación.</p>'
+          : '<p>Sin propuestas de correo de local pendientes.</p>')) ?>
 
   <h2>Historial de cambios</h2>
   <?php if (!$cambios): ?>

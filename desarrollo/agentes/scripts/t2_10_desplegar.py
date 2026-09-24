@@ -101,6 +101,9 @@ ARCHIVOS = [
     "nucleo/Avisos.php",
     # La emisión (T2.13, la 008): número, PDF y cola de correo. El logo va dentro del PDF.
     "nucleo/Emision.php", "nucleo/plantilla_ot.php", "nucleo/logo-industec.png",
+    # T2.28.2: a quién va cada correo de una orden (Emision::encolar() y
+    # Emision::html() ya lo requieren) y la clasificación pura del despachador.
+    "nucleo/Destinatarios.php", "nucleo/Despacho.php",
 
     # --- La app del técnico. `cola.js` es lo que evita perder una orden
     #     llenada sin señal: si falta, el botón de enviar no guarda nada. -----
@@ -121,6 +124,8 @@ ARCHIVOS = [
     "equipos.php",
     # T2.27.7: el panel de automatización y la puerta CLI de la estación.
     "automatizacion.php", "automatizacion_cli.php", "nucleo/Automatizacion.php",
+    # T2.28.2: a quién van los correos de las órdenes (D-C, D-G).
+    "correos.php",
     # T2.14.5: los reportes por zona con exportación (Excel, PDF, PowerPoint) y
     # el cronograma que escribe.
     "reporte_exportar.php", "nucleo/Reportes.php", "nucleo/reporte_pdf.php", "cronograma_accion.php",
@@ -173,6 +178,9 @@ ARCHIVOS = [
 #   "sin cerrar" que destapó T2.23 — a mano, una sola vez. Lee
 #   catalogos/t2_24_2_cierres_masivo.json, que se sube junto con él y NO entra
 #   en --todo por ser dato, no código. Ver ESTADO.md §1k y PLAN T2.24.2)
+#   correos_sembrar_cli.php (T2.28.2: siembra el buzón del jefe de zona en
+#   correo_destinatarios; simulacro libre, --ejecutar requiere aprobación de
+#   Andrés. Se sube por scp junto con la migración 013, no por --todo)
 #                        herramientas de línea de órdenes. Las que ya están en
 #                        el servidor cortan con 404 por web; el resto no tienen
 #                        por qué llegar. Los dos CLI de T2.14.6 se suben con

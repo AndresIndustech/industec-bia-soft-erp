@@ -78,6 +78,14 @@ $pasos = [
     'casos_gestion'      => "aviso LIKE '9999%'",
     // Aprendidos del campo «administrador» de las órdenes de prueba.
     'locales_admin'      => "nombre = 'Administrador de Prueba'",
+    // T2.28.2: lo que dejaron las cuentas de prueba en el módulo de correos
+    // -propuestas de correo de local, filas que una cuenta de prueba dio de
+    // alta o editó, y sus cambios-. correo_destinatarios va ANTES que
+    // `usuarios`: su `creado_por` tiene clave foránea (fk_dest_creado) y un
+    // DELETE de la cuenta con filas todavía colgando ahí abortaría por RESTRICT.
+    'locales_correo_propuesto'    => "propuesto_por IN ($ei) OR revisado_por IN ($ei)",
+    'correo_destinatarios_cambios' => "por IN ($ei)",
+    'correo_destinatarios' => "creado_por IN ($ei) OR actualizado_por IN ($ei)",
     'ot_archivo_solicitudes' => "usuario_id IN ($ei)",
     'usuario_permisos'   => "usuario_id IN ($ei)",
     'sesiones_log'       => "usuario_id IN ($ei) OR usuario IN ($en)",

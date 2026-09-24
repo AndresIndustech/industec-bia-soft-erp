@@ -1,9 +1,9 @@
 -- ****************************************************************************
--- BORRADOR — NO APLICAR TODAVIA. Lo escribió el agente de T2.28.2 el 2026-09-24
--- y el trabajo se detuvo a propósito antes de revisarlo, probarlo y aplicarlo
--- (PLAN_INDUSTEC.md §11b, punto 7). Quien retome T2.28.2 lo revisa contra la
--- especificación y contra Emision::correoLocal() antes de subirlo, y borra
--- este aviso al aplicarlo.
+-- Revisado línea por línea contra T2_28_OBSERVACIONES_INDUSTEC.md (T2.28.2) y
+-- contra Emision::correoLocal() el 2026-09-24: coincide con la especificación,
+-- no duplica la regla del correo del local (Destinatarios::resolver() llama a
+-- Emision::correoLocal(), no la reescribe) y no necesitó cambios. El borrador
+-- anterior (error nº 44, PLAN_INDUSTEC.md §11b punto 7) se completa aquí.
 -- ****************************************************************************
 -- ============================================================================
 -- 013_correos.sql — A quién va cada correo, en una tabla que edita la

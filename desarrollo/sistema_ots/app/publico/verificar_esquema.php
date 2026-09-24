@@ -88,13 +88,16 @@ foreach ($db->query('SELECT rol, COUNT(*) n FROM rol_permisos GROUP BY rol') as 
 // La 020 suma 1 a SUPERADMIN y ADMIN: `automatizacion.configurar`. Hasta el
 // 2026-09-24 no estaba contada aquí y este chequeo daba FALLA en esos dos roles.
 // La 021 suma 1 a JEFE_ZONA: `ots.crear` (el jefe de zona también atiende).
+// La 013 suma 1 a SUPERADMIN y ADMIN: `correos.configurar`.
 $mas012 = $hay012 ? 1 : 0;
 $mas020 = (int) $db->query("SELECT COUNT(*) FROM permisos WHERE codigo = 'automatizacion.configurar'")->fetchColumn() > 0 ? 1 : 0;
 // La 021 se reconoce por el libro de migraciones y no por la fila que agrega:
 // contar la propia fila haría que el chequeo nunca pudiera fallar.
 $mas021 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE archivo LIKE '%021_jefe_atiende.sql'")->fetchColumn() > 0 ? 1 : 0;
+$hay013 = $hayTabla('correo_destinatarios');
+$mas013 = $hay013 ? 1 : 0;
 $esperado = $hay009
-    ? ['SUPERADMIN' => 39 + $mas012 + $mas020, 'ADMIN' => 38 + $mas012 + $mas020,
+    ? ['SUPERADMIN' => 39 + $mas012 + $mas020 + $mas013, 'ADMIN' => 38 + $mas012 + $mas020 + $mas013,
        'JEFE_ZONA' => 26 + $mas012 + $mas021, 'TECNICO' => 13 + $mas012]
     : ($hay007
         ? ['SUPERADMIN' => 26, 'ADMIN' => 25, 'JEFE_ZONA' => 17, 'TECNICO' => 9]
@@ -229,6 +232,46 @@ if ($hay009) {
         comprobar("permiso $p",
                   (int) $db->prepare('SELECT COUNT(*) FROM permisos WHERE codigo = ?')
                            ->execute([$p]) ? (int) $db->query("SELECT COUNT(*) FROM permisos WHERE codigo = " . $db->quote($p))->fetchColumn() : 0, 1);
+    }
+
+    // La 013 es a quién va cada correo de una orden, editable desde correos.php
+    // (T2.28.2, obs. 2 y 8 de la revisión con INDUSTEC).
+    if ($hay013) {
+        echo "\nmigracion 013\n";
+        foreach (['correo_destinatarios', 'correo_destinatarios_cambios', 'locales_correo_propuesto'] as $t) {
+            comprobar("tabla $t", $hayTabla($t) ? 'si' : 'no', 'si');
+        }
+        $claves = static function (string $tabla, string $indice) use ($db): string {
+            $f = $db->query("SHOW KEYS FROM `$tabla` WHERE Key_name = " . $db->quote($indice)
+                          . " AND Non_unique = 0")->fetchAll();
+            return implode(',', array_column($f, 'Column_name'));
+        };
+        // Las dos claves de negocio (I-9), sobre la columna calculada
+        // `ambito_clave`: una dirección no se repite en el mismo ámbito, y
+        // un solo jefe de zona por zona / jefe de operaciones por local.
+        comprobar('uq_destinatario (I-9)', $claves('correo_destinatarios', 'uq_destinatario'),
+                  'uso,destino,ambito_clave,correo');
+        comprobar('uq_rol (I-9)', $claves('correo_destinatarios', 'uq_rol'), 'uso,ambito_clave,rol_unico');
+        // MariaDB guarda JSON como alias de LONGTEXT con un CHECK de validez:
+        // SHOW COLUMNS informa «longtext», no «json» (mismo criterio que las
+        // demás columnas JSON de este archivo, columna datos/antes/despues:
+        // se comprueba que exista, no el nombre del tipo que MariaDB reporta).
+        $colsQueue = array_column($db->query('SHOW COLUMNS FROM email_queue')->fetchAll(), 'Field');
+        comprobar('email_queue.cc existe', in_array('cc', $colsQueue, true) ? 'si' : 'no', 'si');
+        $colsAdmin = array_column($db->query("SHOW COLUMNS FROM locales_admin LIKE 'correo_%'")->fetchAll(), 'Field');
+        comprobar('locales_admin lleva correo_veces y correo_visto (T2.28.3)', count($colsAdmin), 2);
+        $fuente = $db->query("SHOW COLUMNS FROM locales_admin LIKE 'fuente'")->fetch();
+        comprobar('locales_admin.fuente admite HISTORICO', str_contains((string) $fuente['Type'], "'HISTORICO'") ? 'si' : 'no', 'si');
+        comprobar('permiso correos.configurar repartido a SUPERADMIN y ADMIN',
+                  (int) $db->query("SELECT COUNT(*) FROM rol_permisos WHERE permiso = 'correos.configurar'")->fetchColumn(), 2);
+        /* Prueba negativa: aplicar la migración NO siembra destinatarios (S-3).
+           Eso lo hace correos_sembrar_cli.php --ejecutar, con aprobación de
+           Andrés y su cifra exacta -- por eso aquí solo se informa, sin comprobar
+           un número fijo: 0 antes de sembrar, 3 después (los tres jefes de zona). */
+        echo '  (destinatarios activos por uso: '
+           . json_encode(array_column($db->query(
+               "SELECT uso, COUNT(*) n FROM correo_destinatarios WHERE activo = 1 GROUP BY uso")->fetchAll(), 'n', 'uso'))
+           . ")\n";
     }
 }
 

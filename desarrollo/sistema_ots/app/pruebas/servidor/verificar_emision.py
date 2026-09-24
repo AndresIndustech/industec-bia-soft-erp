@@ -189,6 +189,20 @@ def main():
     anotar("correo", "el correo queda aprendido para la próxima orden de ese local",
            bool(aprendido) and aprendido[0]["correo"] == CORREO_PRUEBA, aprendido)
 
+    # T2.28.2: a quién más va la orden (Destinatarios::resolver()) y la
+    # propuesta que deja para que la administración apruebe el correo del
+    # local. El jefe de zona sale del maestro aunque la 013 todavía no esté
+    # sembrada (Destinatarios::resolver() cae a "lo de hoy" sin la tabla), así
+    # que esto no depende de correos_sembrar_cli.php --ejecutar.
+    cc = sql("SELECT cc FROM email_queue WHERE id_industec = ?", [ot])
+    anotar("correo", "el jefe de zona de UIO va en copia, como JSON en email_queue.cc",
+           bool(cc) and cc[0]["cc"] and "jefezona-uio@industec.me" in (cc[0]["cc"] or ""),
+           (cc[0]["cc"] or "")[:120] if cc else "sin fila")
+    propuesto = sql("SELECT estado, veces, correo_anterior FROM locales_correo_propuesto WHERE local_codigo = ? AND correo = ?",
+                     [local, CORREO_PRUEBA])
+    anotar("correo", "el correo del local queda PROPUESTO en locales_correo_propuesto para que la administración lo apruebe",
+           bool(propuesto) and propuesto[0]["estado"] == "PROPUESTO", propuesto)
+
     print("\n== el PDF: qué lleva y quién lo abre ==")
     php = ('require "nucleo/Emision.php"; $in = json_decode(stream_get_contents(STDIN), true); '
            '$c = Db::uno("SELECT * FROM ot_capturadas WHERE id_industec = ?", [$in["ot"]]); '

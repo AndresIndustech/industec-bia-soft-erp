@@ -30,6 +30,15 @@ declare(strict_types=1);
  * TOPE DIARIO: Titan corta en 1.000 por buzón y día. `correo_tope_dia` en
  * config.php (900 por omisión) detiene el despacho ese día y lo dice.
  *
+ * TOPE POR HORA (T2.28.2, §2c): Titan además corta en 45 por hora y lo dice
+ * con «Sender Hourly Quota Exceeded», un 4xx que por su número parecería
+ * temporal de todos modos, pero como el límite es contra el envío en curso
+ * -no un rechazo de ESE correo- se trata aparte: nunca cuenta para los 6
+ * intentos y siempre reintenta a los 60 min, sin marcar FALLIDO por eso. Y
+ * antes de gastar ni un intento, esta corrida se detiene si ya van 45
+ * ENVIADO en la última hora, para no chocar con el tope en cada corrida de 5
+ * minutos.
+ *
  * SOLO CLI, con candado de instancia única.
  *
  * CRON DE hPANEL (lo programa Andrés; cada 5 minutos):
@@ -44,6 +53,7 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 require_once __DIR__ . '/nucleo/Emision.php';
 require_once __DIR__ . '/nucleo/Auth.php';
+require_once __DIR__ . '/nucleo/Despacho.php';   // T2.28.2: el tope por hora y la clasificación del error, en un solo lugar probado
 
 $max = 30;
 foreach ($argv as $i => $a) {
@@ -96,6 +106,16 @@ if ($enviadosHoy >= $tope) {
 }
 $max = min($max, $tope - $enviadosHoy);
 
+// --- El tope por hora (T2.28.2) -----------------------------------------------
+$enviadosHora = (int) (Db::uno(
+    "SELECT COUNT(*) n FROM email_queue WHERE estado = 'ENVIADO' AND enviado_en >= NOW() - INTERVAL 1 HOUR"
+)['n'] ?? 0);
+if (Despacho::superoTopeHora($enviadosHora)) {
+    echo "$hoy · tope por hora alcanzado ($enviadosHora de " . Despacho::TOPE_HORA . "): no se conecta esta corrida\n";
+    exit(0);
+}
+$max = min($max, Despacho::TOPE_HORA - $enviadosHora);
+
 // --- Reclamo atómico ---------------------------------------------------------
 $marca = bin2hex(random_bytes(6));
 Db::ejecutar(
@@ -112,10 +132,6 @@ if ($lote === []) {
     echo "$hoy · nada pendiente de enviar\n";
     exit(0);
 }
-
-// Esperas crecientes entre intentos, en minutos: 5 min, 15 min, 1 h, 4 h, 24 h.
-const ESPERAS = [5, 15, 60, 240, 1440];
-const MAX_INTENTOS = 6;
 
 $ok = 0; $temporales = 0; $permanentes = 0;
 foreach ($lote as $c) {
@@ -141,6 +157,11 @@ foreach ($lote as $c) {
         if ($m->getToAddresses() === []) {
             throw new RuntimeException('550 sin destinatarios válidos');
         }
+        // T2.28.2: las copias que Destinatarios::resolver() congeló al encolar.
+        $cc = json_decode((string) ($c['cc'] ?? ''), true) ?: [];
+        foreach ($cc as $dir) {
+            if (filter_var($dir, FILTER_VALIDATE_EMAIL)) { $m->addCC($dir); }
+        }
         $m->Subject = (string) $c['asunto'];
         $m->Body    = (string) $c['cuerpo'];
         if ($adjunto !== null && is_file($adjunto)) {
@@ -162,27 +183,27 @@ foreach ($lote as $c) {
         echo "  enviado  {$c['id_industec']} (intento $intento, " . count($para) . " destinatarios)\n";
     } catch (Throwable $e) {
         $msg = mb_substr($e->getMessage(), 0, 300);
-        // 5xx es permanente (buzón inexistente, rechazado por política): no se insiste.
-        $permanente = (bool) preg_match('/\b5\d\d\b/', $msg) || $intento >= MAX_INTENTOS;
-        if ($permanente) {
+        // La clasificación (permanente / temporal / cupo por hora) es la misma
+        // regla que prueba Despacho::clasificar() sin tocar SMTP ni la base
+        // (T2.28.2, §2c): aquí solo se aplica lo que ya decidió.
+        $c2 = Despacho::clasificar($msg, (int) $c['intentos']);
+        if ($c2['permanente']) {
             Db::ejecutar("UPDATE email_queue
                              SET estado = 'FALLIDO', intentos = ?, ultimo_intento_en = NOW(), error_ultimo = ?,
                                  motivo = ?, tomado_en = NULL
                            WHERE correo_id = ?",
-                         [$intento, $msg, $intento >= MAX_INTENTOS ? 'agotó los ' . MAX_INTENTOS . ' intentos' : 'rechazo permanente del SMTP',
-                          $c['correo_id']]);
+                         [$c2['intentosGuardar'], $msg, $c2['motivo'], $c['correo_id']]);
             Auth::bitacora('CORREO_FALLIDO', 'ot', (string) $c['id_industec'], $msg, null, 'FALLIDO',
-                           ['correo_id' => $c['correo_id'], 'intento' => $intento], false);
+                           ['correo_id' => $c['correo_id'], 'intento' => $c2['intentosGuardar']], false);
             $permanentes++;
             echo "  FALLIDO  {$c['id_industec']}: $msg\n";
         } else {
-            $espera = ESPERAS[min($intento - 1, count(ESPERAS) - 1)];
             Db::ejecutar("UPDATE email_queue
                              SET estado = 'PENDIENTE', intentos = ?, ultimo_intento_en = NOW(), error_ultimo = ?,
                                  proximo_intento_en = DATE_ADD(NOW(), INTERVAL ? MINUTE), tomado_en = NULL
-                           WHERE correo_id = ?", [$intento, $msg, $espera, $c['correo_id']]);
+                           WHERE correo_id = ?", [$c2['intentosGuardar'], $msg, $c2['espera'], $c['correo_id']]);
             $temporales++;
-            echo "  reintento {$c['id_industec']} en $espera min: $msg\n";
+            echo "  reintento {$c['id_industec']} en {$c2['espera']} min" . ($c2['cupoHora'] ? ' (cupo por hora del SMTP)' : '') . ": $msg\n";
         }
     }
 }

@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/Auth.php';       // la bitácora de la regeneración y del correo sin destino
 require_once __DIR__ . '/Catalogo.php';
+require_once __DIR__ . '/Destinatarios.php';   // T2.28.2: a quién va la cola y qué imprime el PDF
 
 /**
  * Emision.php — Convierte una orden recibida en una orden de trabajo: su número,
@@ -259,43 +260,57 @@ final class Emision
         return trim((string) ($local['correo_local'] ?? ''));
     }
 
-    /** @return string el estado en que quedó el correo */
+    /**
+     * @return string el estado en que quedó el correo
+     *
+     * A quién va la orden lo decide `Destinatarios::resolver()` (T2.28.2): el
+     * correo del local, el buzón del jefe de zona, las copias internas y las
+     * del cliente que configuró la administración en `correos.php`. Sin la
+     * 013 aplicada o sin filas todavía, `resolver()` hace exactamente lo de
+     * antes (maestro + config.php), así que esta función no necesita saber
+     * si la migración llegó o no.
+     */
     private static function encolar(array $c, array $orden, string $id): string
     {
-        $local = self::local((string) ($c['local_codigo'] ?? ''));
-        $zona  = (string) ($c['zona'] ?? '');
-        $cfg   = Db::config();
-        $para  = [];
-        foreach (array_merge([self::correoLocal($orden, $local), $local['correo_jefe_op'] ?? ''],
-                             (array) ($cfg['correo_por_zona'][$zona] ?? []),
-                             (array) ($cfg['correo_fijos'] ?? [])) as $m) {
-            $m = trim((string) $m);
-            if ($m !== '' && filter_var($m, FILTER_VALIDATE_EMAIL) && !in_array($m, $para, true)) { $para[] = $m; }
-        }
+        $local  = self::local((string) ($c['local_codigo'] ?? ''));
+        $zona   = (string) ($c['zona'] ?? '');
+        $cadena = (string) ($local['cadena'] ?? ($c['cadena'] ?? ''));
+        $codLocal = (string) ($c['local_codigo'] ?? '');
+        $dest = Destinatarios::resolver('ORDEN', $zona, $codLocal !== '' ? $codLocal : null,
+                                        $cadena !== '' ? $cadena : null, $orden['correo_local'] ?? null);
+        $para = $dest['para'];
+        $cc   = $dest['cc'];
         $prueba = self::modo() === 'PRUEBA';
         /* En producción una orden sin destinatarios no se encola como si fuera a
            salir: queda FALLIDO con el motivo y en la bitácora (E-15). */
         $sinDestino = !$prueba && $para === [];
         if ($sinDestino) {
             Auth::bitacora('CORREO_SIN_DESTINATARIO', 'ot', $id,
-                           'el local no tiene correo y config.php no define correo_fijos', null, null, [], false);
+                           'el local no tiene correo y no hay ningún destinatario configurado', null, null, [], false);
         }
         $cuerpo = "Se ha generado una nueva OT: $id\nZona: $zona\nLocal: " . ($c['local_codigo'] ?? '')
                 . "\nORDEN SAP: " . ($c['aviso'] ?? 'sin aviso')
                 . "\nTipo de Trabajo: " . ucfirst(strtolower((string) $c['modulo']))
                 . "\nEstado de OT: " . ($orden['estado_ot'] ?? '') . "\nTécnico: " . ($orden['tecnico'] ?? '');
-        Db::ejecutar("INSERT INTO email_queue (captura_id, id_industec, tipo, para, asunto, cuerpo, adjunto, estado, motivo)
-                      VALUES (?, ?, 'EMISION', ?, ?, ?, ?, ?, ?)
+        // `cc` es copia congelada al encolar (T2.28.2): si mañana cambia la
+        // configuración, la bitácora de este correo sigue diciendo a quién fue
+        // de verdad. NULL en vez de '[]' cuando no hay copias, para no ensuciar
+        // el reporte de correos.php con corchetes vacíos.
+        Db::ejecutar("INSERT INTO email_queue (captura_id, id_industec, tipo, para, cc, asunto, cuerpo, adjunto, estado, motivo)
+                      VALUES (?, ?, 'EMISION', ?, ?, ?, ?, ?, ?, ?)
                       ON DUPLICATE KEY UPDATE
+                        para     = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', VALUES(para), para),
+                        cc       = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', VALUES(cc), cc),
                         estado   = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', 'PENDIENTE', estado),
                         intentos = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', 0, intentos),
                         proximo_intento_en = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', NULL, proximo_intento_en),
                         motivo   = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', NULL, motivo)",
                      [(int) $c['captura_id'], $id, json_encode($para, JSON_UNESCAPED_UNICODE),
+                      $cc !== [] ? json_encode($cc, JSON_UNESCAPED_UNICODE) : null,
                       'ORDEN DE TRABAJO INDUSTEC - ' . $id, $cuerpo, $id . '.pdf',
                       $prueba ? 'RETENIDO' : ($sinDestino ? 'FALLIDO' : 'PENDIENTE'),
-                      $prueba ? 'sitio de pruebas: los correos no salen (irían al local, a Grupo KFC y al buzón de la administradora)'
-                              : ($sinDestino ? 'sin destinatarios: el local no tiene correo y config.php no define correo_fijos' : null)]);
+                      $prueba ? 'sitio de pruebas: los correos no salen (irían al local, a Grupo KFC y a las copias configuradas)'
+                              : ($sinDestino ? 'sin destinatarios: el local no tiene correo y no hay ningún destinatario configurado' : null)]);
         return (string) Db::uno("SELECT estado FROM email_queue WHERE id_industec = ? AND tipo = 'EMISION'", [$id])['estado'];
     }
 
@@ -387,7 +402,11 @@ final class Emision
             'tecnico'         => (string) ($orden['tecnico'] ?? ''),
             'admin'           => (string) ($orden['admin'] ?? ''),
             'correo_local'    => self::correoLocal($orden, $local),
-            'correo_jefe_op'  => (string) ($local['correo_jefe_op'] ?? ''),
+            // T2.28.2 (D-G): el jefe de operaciones de KFC, no el buzón de zona
+            // de INDUSTEC (ese va siempre en copia, no en esta línea). Casi
+            // ningún local lo tiene todavía: «sin configurar» es lo esperado
+            // hasta que la administración lo cargue en correos.php.
+            'correo_jefe_op'  => Destinatarios::jefeOperaciones($codLocal, (string) ($local['cadena'] ?? '')) ?? 'sin configurar',
             'equipos'         => $equipos,
             'inicio'          => $orden['inicio'] ?? null,
             'fin'             => $orden['fin'] ?? null,

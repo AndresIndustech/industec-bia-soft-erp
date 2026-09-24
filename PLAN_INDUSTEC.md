@@ -1866,21 +1866,35 @@ cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 >    libre y sugerencias propias en vez de `<datalist>`; y la lista de casos de
 >    «Emitir» que `.paso-caja` recortaba. `sw.js` **v16**. Evidencia en
 >    `ESTADO.md` **§1s-nonies**.
-> 7. **La Fase 2 es la siguiente construcción, y hay que relanzarla bien.** Se
->    lanzó el 2026-09-23 y **se detuvo a propósito**: el agente de T2.28.2 recibió
->    el mensaje de Andrés «reinicia el robot tú» y lo ejecutó **en vez de su
->    tarea** (error nº 44), así que **T2.28.2 no se hizo** (ni la 013, ni
->    `Destinatarios.php`, ni `correos.php`). De **T2.28.3** ya está hecho, por el
->    arreglo urgente: el correo del local editable y en la orden, `admins_v2`, el
->    aprendizaje del correo en `locales_admin.correo` y `Emision::correoLocal()`.
->    Le falta: quitar `#correojefeop` y la línea «también se enviará a» (depende
->    de T2.28.2), `formulario_v: 2`, y la regla `CORREO_INVALIDO` en las tres
->    implementaciones y el fixture (hoy solo avisa el formulario y el servidor
->    cae al maestro). **`Destinatarios::resolver()` debe usar
->    `Emision::correoLocal()`**, no escribir una segunda regla del correo del local.
->    `sql/013_correos.sql` es un **borrador marcado «NO APLICAR»** (quedó a
->    medio escribir cuando T2.28.2 se detuvo, error nº 44): revisarlo contra la
->    especificación antes de subirlo.
+> 7. ✅ **T2.28.2, el módulo de correos, construido, desplegado y verificado el
+>    2026-09-24.** La Fase 2 se relanzó (se había detenido una vez por el error
+>    nº 44) y esta vez llegó completa: migración `013_correos.sql` aplicada en
+>    darkviolet (`verificar_esquema.php` → TODO OK, bloque «migracion 013»);
+>    `nucleo/Destinatarios.php` con `resolver()`, que llama a
+>    `Emision::correoLocal()` para el correo del local (no hay una segunda
+>    regla) y cae a «lo de hoy» si la tabla está vacía; `Emision::encolar()` y
+>    `Emision::html()` ya la usan; `nucleo/Despacho.php` (nuevo) separa el tope
+>    de 45/hora y la clasificación del error del SMTP del despachador, para
+>    poder probarlas sin conectar a nada — `despachar_correo_cli.php` ya manda
+>    `addCC()` y trata «Sender Hourly Quota Exceeded» como temporal, nunca
+>    FALLIDO; `envio.php` deja el correo del local propuesto en
+>    `locales_correo_propuesto`; y la pantalla **`correos.php`** con sus seis
+>    pestañas (Por zona, Generales, Por local, Reportes, Propuestos, Vista
+>    previa), enlazada desde «Automatización». Evidencia completa, con las
+>    cifras exactas de cada batería, en `ESTADO.md` **§1s-undecies**.
+>    **Lo único que queda, y requiere aprobación de Andrés** (no lo ejecuta un
+>    agente): `php correos_sembrar_cli.php --ejecutar` en el servidor —el
+>    simulacro ya muestra que las tres zonas coinciden con el maestro (3/3)—,
+>    con lo que `SELECT COUNT(*) ... WHERE rol='JEFE_ZONA' AND activo=1` pasa
+>    de **0** a **3**. No bloquea la emisión mientras tanto: sin sembrar, la
+>    orden sigue saliendo igual que antes (confirmado por `verificar_emision.py`).
+>    A **T2.28.3** (el correo y el administrador del local, editables con listas
+>    precargadas) le sigue faltando lo que no cubrió el arreglo urgente: quitar
+>    `#correojefeop` y la línea «también se enviará a» del formulario (ya puede
+>    hacerse, con `correos.php` construido), `formulario_v: 2`, la regla
+>    `CORREO_INVALIDO` en las tres implementaciones y el fixture, y
+>    `correosDelLocal()`/`t2_28_admins.py` (la siembra del histórico de
+>    administradores, la acción O).
 > 8. ✅ **Tres pedidos directos de INDUSTEC, desplegados el 2026-09-24** (por
 >    delante de la Fase 2, `sw.js` **v18**): el equipo se busca escribiendo y,
 >    si no está, se puede crear («+ Crear «…» como equipo nuevo»); los
@@ -2765,6 +2779,30 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     obligatorio como la migración misma, con verificación cruzada (I-10)
     contra una fuente independiente antes de subir — aquí, las cuentas activas
     de `usuarios` en el servidor.
+
+46. **En MariaDB, `SHOW COLUMNS` de una columna `JSON` informa `longtext`, no
+    `json`.** MariaDB implementa `JSON` como un alias de `LONGTEXT` con un
+    `CHECK` de validez; no es un tipo nativo como en MySQL 8. Un chequeo de
+    `verificar_esquema.php` que comparara el nombre del tipo (`'json'`) contra
+    la columna nueva `email_queue.cc` de la 013 daba FALLA con la migración ya
+    bien aplicada — se detectó antes de cerrar la tarea, comparando contra el
+    servidor real. **Regla:** para comprobar una columna JSON en este
+    proyecto, sigue el criterio que ya usan `bitacora.datos` y
+    `correo_destinatarios_cambios.antes/despues`: comprobar que la columna
+    **existe**, no el nombre del tipo que devuelve `SHOW COLUMNS`.
+
+47. **Un CLI que se sube por scp a `~/respaldos/` y corre desde otro
+    directorio no puede usar `__DIR__` para sus `require`.** El mismo patrón
+    del error nº 42 (`archivo_verificar_cli.php`), esta vez en
+    `correos_sembrar_cli.php` (T2.28.2): `require __DIR__ . '/nucleo/Db.php'`
+    buscaba en `~/respaldos/nucleo/`, que no existe — el código vive ahí tras
+    el scp, pero se ejecuta con `cd ot/ && php ~/respaldos/…`. `php -l` no lo
+    detecta porque la sintaxis es válida; solo se ve corriéndolo de verdad
+    contra el servidor. **Regla, ya la seguían `archivo_verificar_cli.php` y
+    `preparar_prueba.php`:** todo CLI pensado para subirse a `~/respaldos/`
+    usa `require getcwd() . '/nucleo/…'`, nunca `__DIR__`. Antes de aprobar un
+    `--ejecutar` nuevo, correr primero el simulacro sin `--ejecutar` como
+    prueba de humo — así se encontró este, antes de tocar ningún dato.
 
 ### Lo que no se toca, nunca
 

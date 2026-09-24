@@ -42,6 +42,7 @@ final class Catalogo
             return null;
         }
         self::fusionarPropuestos($equipos);
+        self::fusionarCorreos($locales);
         return [
             'locales'  => array_values($locales),
             'tecnicos' => array_values($tecnicos),
@@ -90,6 +91,34 @@ final class Catalogo
                 'propuesto'     => true,
             ];
         }
+    }
+
+    /**
+     * Superpone sobre el maestro el correo del local que la administración ya
+     * APROBÓ en `locales_correo_propuesto` (T2.28.2, migración 013): el correo
+     * que escribió un técnico no cambia el maestro por su cuenta con solo
+     * proponerse (`envio.php`), únicamente cuando alguien con `correos.configurar`
+     * lo aprueba en `correos.php`. Si la 013 no está aplicada o no hay nada
+     * aprobado, `locales.json` sigue tal cual (try/catch, como fusionarPropuestos).
+     */
+    private static function fusionarCorreos(array &$locales): void
+    {
+        try {
+            $filas = Db::todos(
+                "SELECT local_codigo, correo FROM locales_correo_propuesto
+                  WHERE campo = 'LOCAL' AND estado = 'APROBADO'"
+            );
+        } catch (Throwable $e) {
+            return;
+        }
+        if ($filas === []) { return; }
+        $porLocal = [];
+        foreach ($filas as $f) { $porLocal[(string) $f['local_codigo']] = (string) $f['correo']; }
+        foreach ($locales as &$l) {
+            $cod = (string) ($l['codigo'] ?? '');
+            if ($cod !== '' && isset($porLocal[$cod])) { $l['correo_local'] = $porLocal[$cod]; }
+        }
+        unset($l);
     }
 
     /**
