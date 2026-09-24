@@ -67,6 +67,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -122,10 +123,18 @@ def inventario_local(origen: Path) -> tuple[dict, dict]:
 
 
 def inventario_remoto(destino: str) -> dict:
-    """nombre -> {bytes, sha|None} de lo que ya está en el servidor."""
+    """nombre -> {bytes, sha|None} de lo que ya está en el servidor.
+
+    T2.28.18b: es exactamente el `mkdir` + `find -maxdepth 1` que colgó el paso
+    `pdfs` del nocturno hasta su tope de 300 s, dos veces el 2026-09-23 — un
+    comando trivial no tiene por qué esperar 5 minutos para fallar. 60 s le
+    sobra de margen, e `idempotente=True` porque repetir un `mkdir -p` o un
+    `find` de solo lectura no cambia nada: se reintenta con espera creciente
+    en vez de tirar el lote entero por un cuelgue de red.
+    """
     salida = H.ssh(f"mkdir -p \"$HOME\"/{shlex.quote(destino)} && "
                    f"find \"$HOME\"/{shlex.quote(destino)} -maxdepth 1 -type f -name '*.pdf' -printf '%f\\t%s\\n'",
-                   timeout=300)
+                   timeout=60, idempotente=True)
     remoto = {}
     for linea in salida.splitlines():
         if "\t" in linea:
@@ -196,7 +205,7 @@ def subir_lote(i: int, nombres: list[str], local: dict, sello: str, destino: str
             info = tarfile.TarInfo("_MANIFIESTO.sha256")
             info.size = len(manifiesto)
             tar.addfile(info, io.BytesIO(manifiesto))
-        H.ssh(f"mkdir -p \"$HOME\"/{carpeta}")
+        H.ssh(f"mkdir -p \"$HOME\"/{carpeta}", timeout=60, idempotente=True)
         scp_relativo(tar_local, f"{TEMPORAL}/{sello}/{lote}.tar")
 
     # 1) Desempacar y verificar ANTES de mover: si algo llegó mal, el lote no se mueve.
@@ -219,6 +228,25 @@ def subir_lote(i: int, nombres: list[str], local: dict, sello: str, destino: str
     buenos = [n for n in nombres if n not in set(malos)]
     log(f"  {lote}: {len(buenos)} verificados en el destino" + (f", {len(malos)} con otra huella allá" if malos else ""))
     return buenos, malos
+
+
+# Un solo reintento por lote (T2.28.18b): "un lote que falla se reintenta; si
+# vuelve a fallar, se registra, se sigue con el siguiente". Ya es idempotente
+# por hash (T2.19), así que repetir un lote entero no duplica ni pisa nada —
+# lo peor que hace es volver a subir lo que ya se subió, que `mv -n` ignora.
+_ESPERA_REINTENTO_LOTE = 15
+
+
+def _intentar_lote(i: int, nombres: list[str], local: dict, sello: str, destino: str, log) -> tuple[list, list]:
+    for intento in (1, 2):
+        try:
+            return subir_lote(i, nombres, local, sello, destino, log)
+        except (H.ErrorSsh, subprocess.TimeoutExpired) as e:
+            log(f"  lote_{i:03d}: intento {intento}/2 ERROR — {e}")
+            if intento == 2:
+                return [], list(nombres)
+            time.sleep(_ESPERA_REINTENTO_LOTE)
+    return [], list(nombres)          # inalcanzable; deja el tipo claro
 
 
 # --- Orquestación ----------------------------------------------------------------------
@@ -256,11 +284,7 @@ def correr(origen: Path, ejecutar: bool, destino: str, limite: int, lote_mb: flo
         return res
 
     for i, grupo in enumerate(lotes(faltan, local, int(lote_mb * 1e6)), start=1):
-        try:
-            buenos, malos = subir_lote(i, grupo, local, sello, destino, log)
-        except H.ErrorSsh as e:
-            log(f"  lote_{i:03d}: ERROR — {e}")
-            buenos, malos = [], list(grupo)
+        buenos, malos = _intentar_lote(i, grupo, local, sello, destino, log)
         res["subidos"] += len(buenos)
         res["fallidos"] += malos
 
@@ -268,7 +292,7 @@ def correr(origen: Path, ejecutar: bool, destino: str, limite: int, lote_mb: flo
         log("reindexando el Archivo (archivo_indexar_cli.php --solo-pdf) ...")
         try:
             log(H.ssh(f"cd {H.DOCROOT_PRUEBAS} && php archivo_indexar_cli.php --solo-pdf", timeout=3600).strip())
-        except H.ErrorSsh as e:
+        except (H.ErrorSsh, subprocess.TimeoutExpired) as e:
             log(f"ERROR al reindexar: {e}")
             res["fallidos"].append("(reindexar)")
     log(f"subidos y verificados: {res['subidos']} · fallidos: {len(res['fallidos'])}")
@@ -289,7 +313,7 @@ def main() -> int:
     try:
         res = correr(args.origen, args.ejecutar, DESTINO_PRUEBA if args.destino_prueba else DESTINO,
                      args.limite, args.lote_mb)
-    except H.ErrorSsh as e:
+    except (H.ErrorSsh, subprocess.TimeoutExpired) as e:
         sys.exit(f"NO CONECTA a Hostinger: {e}")
     LOGS.mkdir(parents=True, exist_ok=True)
     (LOGS / f"subir_pdfs-{res['sello']}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")

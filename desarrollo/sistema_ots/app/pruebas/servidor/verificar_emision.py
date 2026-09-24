@@ -117,9 +117,22 @@ def main():
     anotar("008", "dos filas en ot_fotos para esa orden", int(n) == 2, n)
 
     print("\n== la orden, emitida ==")
+    # T2.28.1: esta batería es la que EMITE DE VERDAD, y usa su propio aviso
+    # sintético (99990021), limpio -sin pendiente- para que concluirlo lo
+    # cierre sin más. verificar_http.py usa el otro (99990022, que
+    # preparar_prueba.php deja en ESPERA_REPUESTO): así ninguna de las dos deja
+    # a la otra sin ningún caso con local (error nro 36).
+    AVISO_EMISION = "99990021"
     st, _, c = sa.pedir("catalogos.php")
     cat = json.loads(c)
-    caso = next(x for x in cat["avisos"]["datos"] if x.get("local"))
+    caso = next((x for x in cat["avisos"]["datos"] if x.get("aviso") == AVISO_EMISION), None)
+    if caso is None:
+        print(f"  AVISO: el tecnico de prueba no tiene el aviso sintetico {AVISO_EMISION} con local. "
+              "Corre ~/respaldos/preparar_prueba.php antes de creerle a lo que sigue.")
+        anotar("008", f"el técnico A tiene el aviso {AVISO_EMISION} para emitir de verdad", False,
+               sorted(x.get("aviso") for x in cat["avisos"]["datos"]))
+        (SALIDA / "resultado_emision.json").write_text(json.dumps(resultados, ensure_ascii=False, indent=1), encoding="utf-8")
+        return 1
     local = caso["local"]
     equipos = (cat.get("equipos") or {}).get(local) or []
     eq = ({"equipo_sap": str(equipos[0]["equipo_sap"]), "tipo": equipos[0].get("tipo", "")} if equipos

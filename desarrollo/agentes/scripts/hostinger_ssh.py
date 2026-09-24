@@ -46,16 +46,20 @@ Uso directo:
 from __future__ import annotations
 
 import argparse
+import contextlib
+import csv
 import os
 import re
 import shlex
 import subprocess
 import sys
 import tempfile
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import BASE, leer_env  # noqa: E402
+from comun import BASE, LOGS, leer_env  # noqa: E402
 
 HOST = "82.25.73.181"
 PUERTO = 65002
@@ -83,9 +87,135 @@ _VERBOS_ESCRITURA = re.compile(
     r"(?:^|[;&|(\s])(rm|rmdir|mv|cp|tee|chmod|chown|touch|mkdir|truncate|unlink|dd|ln|shred|rsync)\s")
 _REDIRECCIONES_INOCUAS = re.compile(r"(?:\d?>>?|&>)\s*/dev/null|\d>&\d")
 
+# --- T2.28.18a: medir antes de arreglar --------------------------------------------
+# El diagnostico del 2026-09-23 es una HIPOTESIS (sesiones del vigilante y del
+# nocturno pisandose), no una causa medida (error n.35). Esto deja rastro de
+# CADA llamada real -- se mida cuando se mida -- sin inventar la conclusion hoy.
+RUTA_LLAMADAS = LOGS / "ssh_llamadas.csv"
+_CAMPOS_LLAMADAS = ["momento_utc", "proceso", "cuenta", "comando", "duracion_seg", "resultado"]
+
+# --- T2.28.18b: el semaforo entre procesos de la estacion ---------------------------
+# N sesiones a la vez, entre TODOS los procesos (vigilante + nocturno + una corrida a
+# mano). Por omision 2, hasta que 18a de un numero real medido; ver INDUSTEC_SSH_MAX_SESIONES.
+MAX_SESIONES_SIMULTANEAS = int(os.environ.get("INDUSTEC_SSH_MAX_SESIONES", "2"))
+_DIR_SEMAFORO = LOGS / "ssh_sesiones"
+# Mas que el timeout mas largo que este modulo usa hoy (sftp_bajar/sftp_lote, 7200 s =
+# 2 h): un candado mas viejo que esto no es una sesion lenta, es un proceso que murio
+# sin soltarlo, y bloquearia el semaforo para siempre si nadie lo pisara.
+_TTL_SESION_HUERFANA = 3 * 3600
+# Reintento con espera creciente (15 s, 60 s, 180 s), SOLO para comandos que quien
+# llama marca `idempotente=True` (mkdir -p, ls, find: repetirlos no cambia nada).
+# Un UPDATE nunca se marca asi.
+_ESPERAS_REINTENTO = (15, 60, 180)
+
 
 class ErrorSsh(RuntimeError):
     pass
+
+
+def _proceso_actual() -> str:
+    """vigilante / nocturno / otro. Lo declara quien arranca el proceso raiz
+    (`os.environ["INDUSTEC_PROCESO"] = ...` en t2_9_buzon_vigilante.py y en
+    saneamiento_nocturno.py) y todo subproceso que lancen lo hereda solo: es
+    una variable de entorno, no un parametro que haya que pasar a mano por
+    cada script intermedio."""
+    return (os.environ.get("INDUSTEC_PROCESO") or "otro").strip() or "otro"
+
+
+def _resumen_comando(comando: str, limite: int = 160) -> str:
+    """Una linea de una sola linea para el CSV: los guiones de
+    `guion_con_credenciales()` traen saltos de linea de sobra."""
+    plano = " ".join(comando.split())
+    return plano if len(plano) <= limite else plano[: limite - 3] + "..."
+
+
+def _registrar_llamada(comando: str, duracion: float, resultado: str, env: dict | None) -> None:
+    """Una fila por llamada real a Hostinger (T2.28.18a). Nunca debe tumbar la
+    llamada que esta midiendo: si el CSV no se puede escribir (disco lleno,
+    permisos), se avisa por stderr y se sigue -- medir es secundario a que el
+    trabajo real salga."""
+    try:
+        LOGS.mkdir(parents=True, exist_ok=True)
+        nuevo = not RUTA_LLAMADAS.exists()
+        with open(RUTA_LLAMADAS, "a", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            if nuevo:
+                w.writerow(_CAMPOS_LLAMADAS)
+            w.writerow([
+                datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                _proceso_actual(),
+                usuario(env),
+                _resumen_comando(comando),
+                f"{duracion:.1f}",
+                resultado,
+            ])
+    except Exception as e:
+        print(f"AVISO: no se pudo anotar en {RUTA_LLAMADAS.name}: {type(e).__name__}: {e}",
+              file=sys.stderr)
+
+
+@contextlib.contextmanager
+def _semaforo_sesion(espera_maxima: float = 600.0):
+    """Como maximo MAX_SESIONES_SIMULTANEAS sesiones SSH/SCP/SFTP reales a la
+    vez, entre todos los procesos de la estacion (T2.28.18b).
+
+    Un archivo por cupo en logs/ssh_sesiones/: crearlo con O_CREAT|O_EXCL es
+    atomico entre procesos (tambien en Windows), asi que quien lo crea es
+    dueno del cupo hasta que lo borra -- sin carrera posible entre dos
+    procesos que prueban al mismo tiempo. Un candado mas viejo que
+    `_TTL_SESION_HUERFANA` se toma por abandonado (un proceso que murio sin
+    soltarlo) y se pisa. Si pasan los `espera_maxima` segundos sin conseguir
+    cupo, se sigue igual sin el: mejor una sesion de mas que dejar el proceso
+    colgado para siempre por un candado que no suelta.
+    """
+    _DIR_SEMAFORO.mkdir(parents=True, exist_ok=True)
+    limite = time.monotonic() + espera_maxima
+    propio = None
+    while propio is None:
+        for n in range(max(1, MAX_SESIONES_SIMULTANEAS)):
+            candidato = _DIR_SEMAFORO / f"sesion_{n}.lock"
+            try:
+                fd = os.open(str(candidato), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                try:
+                    os.write(fd, f"{os.getpid()} {_proceso_actual()} {time.time()}".encode())
+                finally:
+                    os.close(fd)
+                propio = candidato
+                break
+            except FileExistsError:
+                try:
+                    if time.time() - candidato.stat().st_mtime > _TTL_SESION_HUERFANA:
+                        candidato.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        if propio is not None or time.monotonic() >= limite:
+            break
+        time.sleep(0.5)
+    try:
+        yield
+    finally:
+        if propio is not None:
+            try:
+                propio.unlink()
+            except OSError:
+                pass
+
+
+def _correr(cmd: list[str], timeout: int, env: dict | None, resumen: str) -> subprocess.CompletedProcess:
+    """El unico lugar que de verdad llama a subprocess.run() contra Hostinger:
+    cede su turno al semaforo entre procesos, mide cuanto tarda y deja el
+    rastro en `ssh_llamadas.csv`, tanto si sale bien como si se cuelga hasta
+    su tiempo limite (T2.28.18a/18b)."""
+    with _semaforo_sesion():
+        t0 = time.monotonic()
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _registrar_llamada(resumen, time.monotonic() - t0, "timeout", env)
+            raise
+    _registrar_llamada(resumen, time.monotonic() - t0,
+                       "ok" if r.returncode == 0 else f"codigo={r.returncode}", env)
+    return r
 
 
 # --- Identidad --------------------------------------------------------------------
@@ -178,13 +308,24 @@ def opciones_base() -> list[str]:
 
     Si aparece un `ssh fallo (codigo 255)` que no se reproduce a mano:
         icacls config\\clave_hostinger /inheritance:r /grant:r "%USERNAME%:(F)"
+
+    T2.28.18b (buena practica, mientras 18a mide la causa real de los cuelgues
+    del 2026-09-23): `ConnectTimeout` mas bajo (10 s: si el TCP no abre en ese
+    tiempo, no va a abrir); `ConnectionAttempts=2` (reintenta la conexion TCP
+    una vez sola antes de rendirse, dentro de la MISMA llamada a ssh);
+    `ServerAliveCountMax=3` explicito junto al `ServerAliveInterval` de
+    siempre, para que una sesion que dejo de responder (el sintoma del `mkdir`
+    colgado 300 s) se corte a los ~45 s en vez de esperar el `timeout` entero,
+    y para que no dependa del valor por omision de OpenSSH si algun dia cambia.
     """
     return [
         "-i", str(llave()),
         "-o", "BatchMode=yes",
         "-o", "StrictHostKeyChecking=accept-new",
-        "-o", "ConnectTimeout=20",
+        "-o", "ConnectTimeout=10",
+        "-o", "ConnectionAttempts=2",
         "-o", "ServerAliveInterval=15",
+        "-o", "ServerAliveCountMax=3",
     ]
 
 
@@ -215,16 +356,43 @@ def afirmar_solo_lectura(comando: str, escritura_produccion: bool = False) -> No
 
 # --- Transporte -------------------------------------------------------------------
 def ssh_crudo(comando: str, timeout: int = 300, escritura_produccion: bool = False,
-              env: dict | None = None) -> subprocess.CompletedProcess:
+              env: dict | None = None, idempotente: bool = False) -> subprocess.CompletedProcess:
+    """`idempotente=True` (T2.28.18b): SOLO para comandos que repetirlos no
+    cambia nada (`mkdir -p`, `ls`, `find`) -- nunca un `UPDATE`. Si el comando
+    se cuelga hasta `timeout` o sale con codigo distinto de 0, se reintenta
+    con espera creciente (15 s, 60 s, 180 s) antes de rendirse. Sin esto, el
+    `ssh ... mkdir` que colgo el paso `pdfs` del nocturno dos veces el
+    2026-09-23 aborta el lote entero a la primera."""
     afirmar_solo_lectura(comando, escritura_produccion)
     cmd = ["ssh", "-p", str(PUERTO)] + opciones_base() + [destino(env), comando]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    resumen = _resumen_comando(comando)
+    esperas = _ESPERAS_REINTENTO if idempotente else ()
+    for intento in range(len(esperas) + 1):
+        if intento > 0:
+            time.sleep(esperas[intento - 1])
+        ultimo_intento = intento == len(esperas)
+        try:
+            r = _correr(cmd, timeout, env, resumen)
+        except subprocess.TimeoutExpired:
+            if ultimo_intento:
+                raise
+            continue
+        if r.returncode == 0 or ultimo_intento:
+            return r
+    raise AssertionError("inalcanzable: el bucle de reintentos siempre devuelve o lanza")
 
 
 def ssh(comando: str, timeout: int = 300, escritura_produccion: bool = False,
-        env: dict | None = None) -> str:
-    """Corre un comando en el servidor y devuelve stdout. Levanta ErrorSsh si falla."""
-    r = ssh_crudo(comando, timeout, escritura_produccion, env)
+        env: dict | None = None, idempotente: bool = False) -> str:
+    """Corre un comando en el servidor y devuelve stdout. Levanta ErrorSsh si falla.
+
+    `idempotente` se reenvia tal cual a `ssh_crudo()` (T2.28.18b): quien
+    llama a `ssh()` -- la envoltura que casi todo el proyecto usa -- tambien
+    tiene que poder marcar un comando como reintentable, no solo quien llama
+    a `ssh_crudo()` directo. Sin este parametro aqui, `t2_19_subir_pdfs.py`
+    no podia pasarlo y `ssh()` lo rechazaba con TypeError (detectado corriendo
+    la simulacion real el 2026-09-24)."""
+    r = ssh_crudo(comando, timeout, escritura_produccion, env, idempotente)
     if r.returncode != 0:
         raise ErrorSsh(
             f"ssh fallo (codigo {r.returncode})\n"
@@ -241,7 +409,7 @@ def scp_bajar(remoto: str, local: Path, timeout: int = 900, env: dict | None = N
     local.parent.mkdir(parents=True, exist_ok=True)
     cmd = (["scp", "-P", str(PUERTO)] + opciones_base() +
            [f"{destino(env)}:{remoto}", local.as_posix()])
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    r = _correr(cmd, timeout, env, f"scp bajar {remoto}")
     if r.returncode != 0 or not local.is_file():
         raise ErrorSsh(f"scp fallo (codigo {r.returncode}) bajando {remoto}\n"
                        f"  stderr: {(r.stderr or '').strip()[:400]}")
@@ -257,7 +425,7 @@ def scp_subir(local: Path, remoto: str, timeout: int = 900, env: dict | None = N
         raise ErrorSsh(f"no existe el archivo local a subir: {local}")
     cmd = (["scp", "-P", str(PUERTO)] + opciones_base() +
            [local.as_posix(), f"{destino(env)}:{remoto}"])
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    r = _correr(cmd, timeout, env, f"scp subir {remoto}")
     if r.returncode != 0:
         raise ErrorSsh(f"scp fallo (codigo {r.returncode}) subiendo {local.name}\n"
                        f"  stderr: {(r.stderr or '').strip()[:400]}")
@@ -291,7 +459,7 @@ def sftp_lote(lineas: list[str], timeout: int = 7200,
         batch = f.name
     try:
         cmd = (["sftp", "-P", str(PUERTO)] + opciones_base() + ["-b", batch, destino(env)])
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        return _correr(cmd, timeout, env, f"sftp lote ({len(lineas)} lineas)")
     finally:
         os.unlink(batch)
 

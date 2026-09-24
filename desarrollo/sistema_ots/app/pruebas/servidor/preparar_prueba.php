@@ -7,21 +7,38 @@ declare(strict_types=1);
  *
  * Solo línea de órdenes, desde la carpeta ot/:  php ~/respaldos/preparar_prueba.php
  *
- * - Crea (o renueva) 4 cuentas: tec_prueba_uio_a, tec_prueba_uio_b, jefe_prueba_uio
- *   y jefe_prueba_cnlj, activas y sin clave provisional. Las claves se generan al
- *   azar y van SOLO a ~/respaldos/claves_prueba.json (0600, fuera de la web).
- * - Asigna al técnico A dos casos abiertos reales de UIO que estén en el catálogo y
- *   sin técnico, y le abre un pendiente de prueba en el primero.
- * - Le crea al técnico A dos avisos sintéticos que no están en el catálogo (T2.13.2 y
- *   T2.13.3): 99990011 ASIGNADO y 99990012 ATENDIDO sin orden de cierre.
+ * - Crea (o renueva) 5 cuentas: tec_prueba_uio_a, tec_prueba_uio_b, jefe_prueba_uio,
+ *   jefe_prueba_cnlj y admin_prueba, activas y sin clave provisional. Las claves se
+ *   generan al azar y van SOLO a ~/respaldos/claves_prueba.json (0600, fuera de la web).
+ * - Le crea al técnico A dos avisos SINTÉTICOS CON LOCAL (T2.28.1): 99990021
+ *   (G007EC, UIO) y 99990022 (G018EC, UIO), escritos en
+ *   catalogos/casos_prueba.json — nunca tomados de casos_sap.json, que es lo que
+ *   pidió KFC. `Casos::catalogo()` los fusiona SOLO para una cuenta de prueba o
+ *   por CLI (nucleo/Casos.php, pruebaAplica()); la administradora, que también
+ *   prueba el sitio con su cuenta real, no los ve en su buzón. Los dos quedan
+ *   ASIGNADO al técnico A; 99990022 pasa además a ESPERA_REPUESTO con un
+ *   pendiente abierto, A PROPÓSITO: así sigue «abierto» (Casos::ABIERTOS_TECNICO
+ *   incluye ESPERA_REPUESTO) incluso después de que una batería lo concluya, y
+ *   ninguna bateria deja a otra sin ningún caso con local (error nº 36). Cada uno
+ *   lleva su equipo de prueba en `equipos_propuestos` (uuid 99990000-…-0021 y
+ *   …-0022), con una denominación que la preselección de T2.26 encuentra por tipo.
+ *
+ *   HASTA el 2026-09-23 esto asignaba al técnico A dos casos REALES y abiertos
+ *   de UIO —porque los sintéticos no tenían local y envio.php los rechazaba— y
+ *   así quedaron secuestrados los avisos 10355931 y 10356012: un jefe de zona de
+ *   verdad dejó de verlos en su buzón. No se repite: el arnés ya no toca ningún
+ *   caso que no empiece por 9999 (T2.28.1).
+ * - Le crea al técnico A otros dos avisos sintéticos que no están en NINGÚN
+ *   catálogo, ni siquiera el de prueba (T2.13.2 y T2.13.3): 99990011 ASIGNADO y
+ *   99990012 ATENDIDO sin orden de cierre. Estos siguen sin local a propósito:
+ *   prueban el camino de un caso «sin dato en el catálogo».
  * - Crea en CNLJ un pendiente vencido y una novedad, ambos marcados PRUEBA, para
  *   intentar alcanzarlos desde UIO.
  * - Agrega los dos técnicos de prueba a catalogos/tecnicos.json (con copia previa),
  *   porque envio.php exige que quien firma esté en el padrón.
  *
  * Idempotente. Todo lo que cambia queda en ~/respaldos/prueba_deshacer.json y se
- * revierte con deshacer_prueba.php. No toca datos del cliente salvo la asignación
- * de esos dos casos, que se devuelve a como estaba.
+ * revierte con deshacer_prueba.php. No toca ningún caso real (I-2, T2.28.1).
  */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require getcwd() . '/nucleo/Db.php';
@@ -69,29 +86,85 @@ $tecA = $ids['tec_prueba_uio_a'];
 $jefe = $ids['jefe_prueba_uio'];
 $jcnl = $ids['jefe_prueba_cnlj'];
 
-// ------------------------------------------- 2. dos casos de UIO para el técnico A
-$cat   = json_decode((string) file_get_contents('catalogos/casos_sap.json'), true) ?: [];
-$casos = $cat['datos'] ?? [];
-// Los reales que ya tiene; los sintéticos (9999xxxx, abajo) no cuentan como estos dos.
-$elegidos = array_column(Db::todos("SELECT aviso FROM casos_gestion WHERE asignado_a = ? AND aviso NOT LIKE '9999%'",
-                                   [$tecA]), 'aviso');
-foreach ($casos as $c) {
-    if (count($elegidos) >= 2) { break; }
-    $a = (string) ($c['aviso'] ?? '');
-    if ($a === '' || ($c['zona'] ?? '') !== 'UIO' || in_array($a, $elegidos, true)) { continue; }
-    $g = Db::uno('SELECT * FROM casos_gestion WHERE aviso = ?', [$a]);
-    if ($g !== null && !($g['estado'] === 'NUEVO' && $g['asignado_a'] === null
-                         && in_array($g['zona'], [null, 'UIO'], true))) { continue; }
-    $d['casos'][$a] = ['existia' => $g !== null, 'antes' => $g];
+// ------------------------- 2. dos avisos sintéticos CON LOCAL (T2.28.1), nunca un
+// caso real (I-2). `Casos::catalogo()` los fusiona desde catalogos/casos_prueba.json
+// solo para una cuenta de prueba o por CLI (nucleo/Casos.php, pruebaAplica()): la
+// administradora que prueba el sitio con SU cuenta no los ve en su buzón. El
+// `activo_fijo` lleva el mismo TIPO que el equipo de `equipos_propuestos` de abajo
+// para que la preselección de T2.26 lo encuentre por tipo (app.js, normalizarTipo()).
+$TIPO_PRUEBA = 'EQUIPO PRUEBA ARNES';
+$SINT_LOCAL  = [
+    '99990021' => ['local' => 'G007EC', 'uuid' => '99990000-0000-4000-8000-000000000021'],
+    '99990022' => ['local' => 'G018EC', 'uuid' => '99990000-0000-4000-8000-000000000022'],
+];
+// El maestro de locales del sitio NO es una tabla SQL: vive en
+// catalogos/locales.json (Catalogo::carpeta(), campo `codigo`), igual que lo
+// lee el resto de la app (envio.php, catalogos.php). Una versión anterior de
+// este script consultaba `SELECT ... FROM locales`, una tabla que nunca
+// existió en esta base y que hacía abortar preparar_prueba.php entero.
+$localesJson = json_decode((string) file_get_contents('catalogos/locales.json'), true);
+$localesPorCodigo = [];
+foreach (($localesJson['datos'] ?? $localesJson ?? []) as $l) { $localesPorCodigo[$l['codigo'] ?? ''] = $l; }
+
+// array_map('strval', ...) porque PHP convierte a int cualquier clave de
+// array que sea una cadena solo de dígitos ('99990021' -> 99990021): sin
+// esto, $aviso llega como int al foreach y str_pad() revienta más abajo bajo
+// strict_types (ya pasó una vez al escribir este script).
+$elegidos    = array_map('strval', array_keys($SINT_LOCAL));
+$casosPrueba = [];
+foreach ($SINT_LOCAL as $aviso => $info) {
+    $aviso = (string) $aviso;
+    $localFila = $localesPorCodigo[$info['local']] ?? null;
+    if ($localFila === null) {
+        fwrite(STDERR, "El local de prueba {$info['local']} no está en catalogos/locales.json: revisa SINT_LOCAL.\n");
+        exit(1);
+    }
+    $activoFijo = $TIPO_PRUEBA . '-MOD-SN' . $aviso;
+    $casosPrueba[] = [
+        'aviso'               => $aviso,
+        'aviso_crudo'         => str_pad($aviso, 12, '0', STR_PAD_LEFT),
+        'caso'                => 'Mant. Correctivo',
+        'detalle'             => 'PRUEBA del arnés (T2.28.1): no es un aviso real',
+        'prioridad'           => 'MEDIA',
+        'fecha_creacion'      => date('Y-m-d'),
+        'fecha_estimada'      => date('Y-m-d'),
+        'activo_fijo'         => $activoFijo,
+        'descripcion_trabajo' => 'PRUEBA automatizada (T2.28.1): no es una intervención real.',
+        'local'               => $info['local'],
+        'local_nombre'        => $localFila['nombre'],
+        'cadena'              => $localFila['cadena'],
+        'zona'                => 'UIO',
+        'zona_por_buzon'      => 'UIO',
+        'zona_por_local'      => 'UIO',
+        'zona_discrepa'       => '',
+        'estado_alerta'       => 'SIN_ALERTA',
+        'alertas'             => [],
+        'recibido'            => date('Y-m-d'),
+    ];
+    // El equipo de prueba, visible en el catálogo del local (Catalogo::
+    // fusionarPropuestos()) para que app.js lo ofrezca y lo preseleccione.
+    Db::ejecutar("INSERT INTO equipos_propuestos
+                      (equipo_uuid, local_codigo, zona, tipo, marca, modelo, serie, activo_fijo, propuesto_por)
+                  VALUES (?, ?, 'UIO', ?, 'MARCA DE PRUEBA', 'MOD', ?, ?,
+                          (SELECT usuario_id FROM usuarios WHERE usuario = 'tec_prueba_uio_a'))
+                  ON DUPLICATE KEY UPDATE estado = 'PROPUESTO', revisado_por = NULL, revisado_en = NULL,
+                                          nota = NULL, local_codigo = VALUES(local_codigo)",
+                 [$info['uuid'], $info['local'], $TIPO_PRUEBA, 'SN' . $aviso, $activoFijo]);
+    // Siempre ASIGNADO al técnico A al preparar: es nuestro propio dato de
+    // prueba, así que se reinicia en cada corrida (mismo criterio que los
+    // sintéticos 99990011/12 de abajo), sin el candado "asignado_a IS NULL"
+    // que sí hacía falta cuando esto tomaba casos reales de otra persona.
     Db::ejecutar('INSERT INTO casos_gestion (aviso, zona) VALUES (?, ?)
-                  ON DUPLICATE KEY UPDATE zona = COALESCE(zona, VALUES(zona))', [$a, 'UIO']);
+                  ON DUPLICATE KEY UPDATE zona = COALESCE(zona, VALUES(zona))', [$aviso, 'UIO']);
     Db::ejecutar("UPDATE casos_gestion SET asignado_a = ?, asignado_por = ?, asignado_en = NOW(),
-                         tecnico_auto = 0, estado = 'ASIGNADO'
-                   WHERE aviso = ? AND asignado_a IS NULL", [$tecA, $jefe, $a]);
-    $elegidos[] = $a;
+                         tecnico_auto = 0, estado = 'ASIGNADO', ot_cierre = NULL, atendido_en = NULL
+                   WHERE aviso = ?", [$tecA, $jefe, $aviso]);
 }
-if (count($elegidos) < 2) { fwrite(STDERR, "No hay dos casos de UIO libres en el catálogo.\n"); exit(1); }
-$d['elegidos'] = array_values($elegidos);
+file_put_contents('catalogos/casos_prueba.json.tmp',
+    json_encode(['generado' => date('c'), 'fuente' => 'preparar_prueba.php (T2.28.1)', 'datos' => $casosPrueba],
+                JSON_UNESCAPED_UNICODE));
+rename('catalogos/casos_prueba.json.tmp', 'catalogos/casos_prueba.json');
+$d['elegidos'] = $elegidos;
 
 // ------ 2b. avisos sintéticos del técnico A, fuera del catálogo (T2.13.2 y T2.13.3)
 // Los 9999xxxx no existen en SAP: prueban lo que no está en el catálogo sin tocar
@@ -108,15 +181,21 @@ foreach ($SINT as $a => $est) {
 $d['sinteticos'] = array_map('strval', array_keys($SINT));
 
 // ------------------- 3. pendiente de prueba del técnico A (el reloj corre: parado)
+// Sobre $elegidos[1] (99990022), A PROPÓSITO y no sobre [0]: ESPERA_REPUESTO
+// sigue contando como «abierto» (Casos::ABIERTOS_TECNICO), así que este aviso
+// queda disponible con local para cualquier batería aunque otra ya lo haya usado
+// para concluir una orden -- es lo que evita que una deje a otra sin ningún caso
+// con local para trabajar (error nº 36). $elegidos[0] (99990021) queda limpio,
+// para la batería que necesita emitir de verdad y cerrarlo (verificar_emision.py).
 if (empty($d['pendientes']['uio'])) {
     Db::ejecutar("INSERT INTO pendientes (aviso, zona, activo_fijo, equipo_desc, deshabilitado, diagnostico,
                                           abierto_por, abierto_en)
                   VALUES (?, 'UIO', 'PRUEBA-UIO', 'Equipo de prueba', 1,
                           'PRUEBA de alcance (T2.12.6): no es un equipo real', ?, NOW() - INTERVAL 2 HOUR)
-                  ON DUPLICATE KEY UPDATE diagnostico = VALUES(diagnostico)", [$elegidos[0], $tecA]);
+                  ON DUPLICATE KEY UPDATE diagnostico = VALUES(diagnostico)", [$elegidos[1], $tecA]);
     $d['pendientes']['uio'] = (int) Db::uno("SELECT pendiente_id FROM pendientes
-                                              WHERE aviso = ? AND activo_fijo = 'PRUEBA-UIO'", [$elegidos[0]])['pendiente_id'];
-    Db::ejecutar("UPDATE casos_gestion SET estado = 'ESPERA_REPUESTO' WHERE aviso = ?", [$elegidos[0]]);
+                                              WHERE aviso = ? AND activo_fijo = 'PRUEBA-UIO'", [$elegidos[1]])['pendiente_id'];
+    Db::ejecutar("UPDATE casos_gestion SET estado = 'ESPERA_REPUESTO' WHERE aviso = ?", [$elegidos[1]]);
 }
 
 // --------- 4. en CNLJ: un pendiente vencido (50 h, parado) y una novedad, de prueba

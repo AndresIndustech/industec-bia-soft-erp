@@ -889,6 +889,408 @@ comprobó el disco, no la web: hace falta el arnés); la causa de los cuelgues d
 la mide antes de arreglar nada); y el formato exacto de los enlaces de Parts Town
 (el sitio se arma con JavaScript: T2.28.11 lo prueba con un navegador).
 
+### 1s-bis. T2.28.0 · Línea base antes de empezar a construir (2026-09-23)
+
+`master` al día con `origin/master` (0 commits de diferencia) y las cuatro ramas
+`pc/*` ya fusionadas — confirmado con el bucle de §11b. `git status --short` solo
+muestra `desarrollo/sitio_web/` sin trackear (ajeno, ver su fila en §5.1) y la
+edición de la conversación "estadísticas" en esta misma tabla (T2.27.7, no toca
+nada de T2.28). Nada que fusionar ni que resolver antes de construir.
+
+Batería local completa, las seis piezas, **todas en verde** — línea base que hay
+que igualar o mejorar en cada subtarea:
+
+```
+prueba_48h.php               120 comprobaciones · 0 fallos
+prueba_contratos.mjs          57 comprobaciones · 0 fallos
+prueba_graficos.mjs           62 comprobaciones · 0 fallos
+prueba_continuidad.php        42 comprobaciones · 0 fallos
+reglas.fixture.mjs (JS)       37/37 casos del fixture
+validacion_test.php (PHP)     37/37 casos del fixture
+t2_5_validacion.py --fixture  37/37 casos del fixture (Python)
+```
+
+Las tres implementaciones de reglas de validación (`reglas.js`, `Validacion.php`,
+`t2_5_validacion.py`) siguen de acuerdo en los 37 casos del fixture común
+(`fixture_validacion.json`) — condición de partida del error nº 33 evitado, que
+cualquier regla nueva de T2.28 debe conservar en las tres.
+
+`sw.js` parte de **`ot-industec-v15`** (línea 38: «estilo.css — distintivo
+"regularizado", neutro en vez del rojo de "sin atender"», 2026-09-22). Cada
+subtarea que toque la lista de precarga suma 1 (§5.2 del plan).
+
+*Criterio de T2.28.0 cumplido: línea base pegada aquí, fila en §5.1.* Nada de
+código tocado en esta fase.
+
+### 1s-ter. T2.28.4a · Correos del maestro, analizado (2026-09-23, segunda pasada)
+
+`t2_28_correos.py --analizar` (solo lectura, ya existía escrito de un intento
+anterior sin cuota: se revisó, compiló con `py_compile` y se corrió contra la
+base real). Fuente `G:\Mi unidad\INDUSTEC IA\CORREOS LOCALES INDUSTEC.xlsx`,
+sha256 `5f4f8d3b0f926c9e78d18bab7d3108d0f6c934dd8c4ca3ae04a14ff068d5fad5`
+(anotado también en la hoja «De donde sale» del Excel de salida). **95 filas
+leídas, las 95 resueltas** (0 en la hoja «Códigos por alias» sin resolver).
+
+**Correo del local:** A=**94**, B=**6**, C=**0** (repetible: dos corridas
+seguidas dan lo mismo). La especificación (línea 503) esperaba A=92/B=8/C=0.
+**No se forzó el número esperado (I-7):** el script solo avisa por consola y
+sale con código 1, tal como lo dejó el intento anterior.
+
+**La discrepancia tiene una explicación con evidencia, no solo confirmación.**
+Los +2 en A son exactamente `BR17EC` y `CN042EC` — los **únicos dos códigos de
+todo el Excel que resuelven por ALIAS** (`BS17EC`→`BR17EC`, `CN42EC`→`CN042EC`,
+hoja «Códigos por alias»), los mismos dos ejemplos del error nº 1 del proyecto
+que ya cita el propio script. Para ambos, el correo más frecuente en `ots`
+coincide exacto con el del Excel. Se descartó que fuera un dato nuevo del día
+(`SELECT ... GROUP BY local_codigo HAVING MIN(fecha_atencion)='2026-09-23'` →
+0 filas: ningún local tiene su primer correo histórico fechado hoy). Hipótesis
+más probable, **sin confirmar al 100 %** (no hay acceso a la consulta exacta de
+la medición original): esa medición cruzó el Excel contra `ots.correo_local`
+por código directo, sin pasar por `locales_alias`, y esos dos locales cayeron
+a "sin histórico". Quedó documentado en el propio script, junto a
+`ESPERADO_A`, para que no haya que reinvestigarlo. **Decisión pendiente de
+persona:** si se corrige la cifra de la línea 503 del documento a 94/6/0 o se
+deja como está — no es una decisión de este script.
+
+**Jefe KFC** (sin cifra esperada, informativo): A=79, B=2, C=11, SIN_DATO=8.
+
+**Sin prueba local dedicada:** no existe una batería para este script; la
+única verificación disponible fue correrlo contra la base real, dos veces.
+
+Salida: `SALIDAS IA\OTS\CORREOS LOCALES (generado agente).xlsx`. **T2.28.4b
+sigue bloqueada por la puerta D1** — no se tocó (ni el `--ejecutar` del script,
+que sigue saliendo solo con el mensaje de bloqueo, ni `locales`, ni ninguna
+tabla del servidor).
+
+### 1s-quater. T2.28.10a · Catálogo de repuestos, analizado (2026-09-23, segunda pasada)
+
+`t2_28_repuestos.py --analizar` (solo lectura, ya existía escrito de un
+intento anterior sin cuota: se leyó entero, compiló limpio con `py_compile` y
+se corrió contra las tres fuentes reales, sin cambiarle una línea — estaba
+completo). Las fuentes 2 y 3 son de solo lectura bajo `D:\RESPALDOS\_ORIGEN_DRIVE`
+y la fuente 1 bajo `G:\Mi unidad` (ninguna se tocó, I-2/I-3).
+
+**Fuente 1 — catálogo de bodega (PDF), 1.623 filas leídas, 0 descartadas:**
+**1.611 códigos SAP distintos** (criterio cumplido exacto) y **1.574 con
+imagen guardada** en `SALIDAS IA\OTS\repuestos_img\` (criterio ≥ 1.500
+cumplido; contados también en disco: `ls repuestos_img | wc -l` → 1574). Las
+tres muestras de la especificación aparecen con su código SAP: `Hen22455` →
+**15000758**, `Hen29898` → **17000121**, `Man000007926` → **17000144**.
+
+**Fuente 2 — stock de bodega ene-2026 (Excel), 129 filas leídas, 0
+descartadas, 129 códigos SAP distintos.** La especificación (línea 660) dice
+«130 repuestos»; la hoja real tiene 129. Mismo patrón que el error nº 21 (un
+conteo se refuta contra el dato, no al revés): gana el código, se deja la
+diferencia anotada aquí y en la hoja «Resumen» del Excel de salida, no se
+fuerza el 130.
+
+**Fuente 3 — Inventario 2023, dónde se usa (Excel): 57.451 filas leídas,
+10.190 descartadas** (sin nombre de parte y sin número de parte), **47.261
+cargables, 11.854 combinaciones (marca, número) distintas.**
+
+**Cruces:** de los 1.611 códigos de la fuente 1, **118 tienen fila de stock**
+(fuente 2, por código SAP) y **777 encontraron dónde se usan** (fuente 3, por
+marca + número de parte, con y sin el prefijo de Parts Town).
+
+**Salida:** `SALIDAS IA\OTS\CATALOGO DE REPUESTOS - PROPUESTA (generado
+agente).xlsx`, con las seis hojas que pide la especificación (Resumen,
+Catalogo con 1.611 filas de datos, Sin numero de parte con 58, Marcas por
+unificar con 69, Cruces, Vigencia) — verificado abriendo el archivo y
+contando filas por hoja, no solo por el log de la corrida.
+
+**Sin prueba local dedicada:** no existe una batería para este script (mismo
+caso que T2.28.4a); la única verificación disponible fue correr
+`--analizar` contra las fuentes reales y comprobar el Excel y las imágenes
+resultantes a mano.
+
+**No se tocó nada de 10b/10c/10d** (migración `017_catalogo_repuestos.sql`,
+`--exportar`, `repuestos_cargar_cli.php`, `repuestos_catalogo.php`): están
+detrás de la puerta **D2** (decisión de Andrés sobre la fuente elegida y el N
+a cargar), fuera del alcance de esta subtarea. No se tocó la base, ningún PHP
+del servidor, ni se hizo `git commit`/`git push` — cambios en el árbol de
+trabajo, sin confirmar.
+
+---
+
+### 1s-quinquies. T2.28.16a/16b · El cronograma de preventivos, convertido y comparado contra el sistema (2026-09-23, segunda pasada, solo lectura)
+
+**16a — `t2_7_cronograma_preventivo.py` lee el Excel de hoy (22-sep) con tres
+reglas nuevas:** abreviaturas de mes (`sep`, `dic`, `nov`, con o sin punto ni
+«y»), el día pegado al mes sin espacio (`julio3` → `julio 3`, typeo real de la
+administradora en K121EC) y el cambio de año dentro de la fila cuando un
+ingreso en palabras da una fecha anterior al ingreso previo del mismo local
+(G020EC ingreso 4, `11 Y 12 ENERO` → 2027, porque el ingreso 3 ya fue en
+octubre-2026). La resolución vive en `resolver_fila()`/`resolver_ingreso()`,
+una sola implementación que también usa 16b — no hay una segunda copia de la
+regla que pueda desalinearse.
+
+```
+$ .venv/Scripts/python.exe scripts/t2_7_cronograma_preventivo.py --pruebas
+PRUEBAS: 15 casos, 0 fallos.
+
+$ .venv/Scripts/python.exe scripts/t2_7_cronograma_preventivo.py
+cronograma leido: 92 locales
+formas de las celdas: {'NO_RECONOCIDO': 1, 'NUMERICA': 85, 'PALABRAS': 214, 'PENDIENTE': 10, 'TIPADA': 54, 'VACIA': 4}
+con fecha real         : 353 (95.9%)
+sin convertir          : 5
+no se convirtieron (no se adivinan) -- una por una:
+   G051EC ingreso 3: None (VACIA)
+   G051EC ingreso 4: None (VACIA)
+   R001EC ingreso 3: None (VACIA)
+   R001EC ingreso 4: None (VACIA)
+   H032EC ingreso 4: '01-12/2026' (NO_RECONOCIDO)
+```
+
+**Criterio «0 `NO_RECONOCIDO` con números de día»: 1 excepción real,
+documentada, no adivinada (I-7).** `H032EC` ingreso 4 trae `'01-12/2026'` —
+ni una fecha `dd-dd/mm/aaaa` (falta el mes) ni ninguna de las formas de §2b.
+Es la única celda de las 368 con esa forma (barrida por regex sobre las 4
+columnas de fecha, 0 más). Adivinar si «01-12» es día-día o mes-mes habría
+sido inventar un dato que va a KFC (I-7): queda `NO_RECONOCIDO` y listada,
+para que la administradora la aclare.
+
+**Prueba de no regresión contra el snapshot del 8-sep**
+(`SALIDAS IA/OTS/app_ots/catalogos/cronograma_preventivo.json`, generado
+2026-09-08 14:54, ANTES de estos cambios): de los 352 ingresos que ya
+convertían entonces, reprocesados hoy con `parsear_ingreso()`/`a_fechas()` dan
+**el mismo resultado en 351 de 352**. La única diferencia es, otra vez,
+`K121EC` ingreso 3 (`'30 y 31 de julio3 de agosto'`): el 8-sep dio
+`2026-08-30..31` (2 días, todos en agosto — el bug del typeo pegado, que
+asignaba todo a agosto y perdía el 3 de agosto); hoy da `2026-07-30..08-03`
+(3 días: 30 y 31 de julio, 3 de agosto), que es lo que el texto realmente
+dice. **Es la corrección a propósito de 16a, no una regresión** — está
+documentada en el comentario de `parsear_ingreso()` con esta misma celda como
+caso real. Verificación ad hoc en el scratchpad de la sesión (no forma parte
+del repo; se puede rehacer con el snapshot citado arriba).
+
+**16b — `t2_28_cronograma.py --comparar`** (solo lectura: Excel +
+`ingresos_preventivos` del sitio de pruebas vía `sql_remoto`/SSH). Salida:
+`SALIDAS IA\OTS\CRONOGRAMA - EXCEL CONTRA SISTEMA (generado agente).xlsx`
+(hojas `DIFERENCIAS`, `RESUMEN`, `CONFLICTO Y NO_CONVERTIBLE`).
+
+```
+$ .venv/Scripts/python.exe scripts/t2_28_cronograma.py --comparar
+ingresos comparados : 368
+  REAGENDAR       : 52
+  SIN_CAMBIO      : 300
+  CONFLICTO       : 1
+  NO_CONVERTIBLE  : 15
+  SIN_FILA_SISTEMA: 0
+CONFLICTO con CUMPLIDO: 1
+```
+
+**Desglose de los 52 `REAGENDAR`** (script ad hoc que simula el parser previo
+a 16a sobre las mismas celdas de hoy): **37 ya los daba el parser anterior**
+— coincide exacto con la cifra de la medición original del plan (§1s) — y
+**15 son nuevos, todos por la abreviatura de mes** (`21 y 22 sep`,
+`10 11 DIC`, `16 17 Y 18 NOV`, etc., en G001/G002/G003/G005/G006/R002/R006/
+R007/R009/R011/R014EC). Es exactamente «37 + lo que destape 16a» del
+criterio.
+
+**El único `CONFLICTO` es con un `CUMPLIDO`, y tiene la misma causa que la
+excepción de arriba: `K121EC` ingreso 3.** El sistema tiene
+`plan_original = plan_vigente = 2026-08-30..31` (lo que el importador del
+8-sep leyó, ya con el bug del typeo) y esa orden ya está `CUMPLIDO`. El Excel
+de hoy, leído bien, dice `2026-07-30..08-03`. **No es un defecto de 16a: es
+16a destapando que el cronograma vigente del sistema para este ingreso nació
+mal leído**, y el técnico ya trabajó contra esa fecha equivocada. No se tocó
+nada (`plan_original_*` intocable, prohibido reagendar un `CUMPLIDO` en esta
+subtarea) — queda en la hoja `CONFLICTO Y NO_CONVERTIBLE` del informe para
+que D7 lo resuelva con la administradora.
+
+**3 locales revisados a mano contra el Excel** (criterio de 16b): `G001EC`
+(`21 y 22 sep` → `2026-09-21..22` REAGENDAR; `10 11 DIC` → `2026-12-10..11`
+REAGENDAR), `G020EC` (`16 Y 19 octubre` → `2026-10-16..19` REAGENDAR;
+`11 Y 12 ENERO` → `2027-01-11..12`, con el año corregido y motivo explicado,
+REAGENDAR), `K121EC` (el caso de arriba, CONFLICTO). Las tres coinciden con
+la celda cruda del Excel, comprobado con `openpyxl` directo.
+
+**No se tocó `hostinger_ssh.py`** (modificado por T2.28.18 en otro carril, se
+usó tal cual está en el working tree, solo lectura vía `sql_remoto`). **No se
+tocaron `plan_original_*`, no se reagendó nada, no se escribió en el Excel de
+la administradora.** 16c y 16d (detrás de D7) no se empezaron.
+
+**`t2_28_cronograma.py` no tiene batería de pruebas propia** (no existe un
+`--pruebas` para 16b, a diferencia de 16a): su corrección descansa en reusar
+`resolver_fila()` de 16a (ya con 15/15 pruebas) y en la verificación ad hoc de
+esta pasada (no forma parte del repo) — el desglose 37+15 y el cruce manual
+de 3 locales contra la celda cruda del Excel. Dicho explícitamente para que
+la siguiente conversación no lo dé por probado con un fixture que no existe.
+
+*Verificado: compila (`py_compile`), 15/15 pruebas unitarias, 351/352 sin
+regresión contra el snapshot del 8-sep (1 corrección documentada), informe
+16b generado y sus cifras coinciden con la cuenta impresa por el script y con
+3 locales revisados a mano. **No se corrió ninguna batería de servidor**
+(esta subtarea es de solo lectura sobre `sql_remoto`, no toca el formulario
+ni PHP; no aplica).*
+
+---
+
+### 1s-sexies. T2.28.1 · El arnés ya no secuestra casos reales, y T2.28.17b · el Archivo accesible por la web (2026-09-24, segunda pasada)
+
+**Carril: el arnés de pruebas del servidor** (`nucleo/Casos.php`,
+`preparar_prueba.php`, `limpiar_pruebas.php`, `verificar_http.py`,
+`verificar_emision.py`, `verificar_bandeja.py`, `verificar_formulario.mjs`,
+`pruebas/servidor/LEEME.md`, y el nuevo `verificar_archivo_pdf.py`). Un
+intento anterior había dejado el código sustancialmente escrito (el diseño de
+T2.28.1 completo, `prueba_casos_prueba.php` con sus 7 casos) y se quedó sin
+cuota antes de correrlo de verdad contra el servidor. Esta pasada verificó lo
+hecho, encontró y corrigió **dos bugs reales** que esa corrida habría
+destapado, y completó el ciclo entero contra darkviolet.
+
+**Lo que ya estaba bien y se confirmó, sin reescribir:** `Casos::catalogo()`
+fusiona `catalogos/casos_prueba.json` solo para una cuenta de prueba (login
+con `_prueba`) o por CLI, nunca para una cuenta real; `preparar_prueba.php`
+ya no toca ningún aviso que no empiece por `9999`; `prueba_casos_prueba.php`
+(nuevo, prueba de unidad PHP, no toca el servidor) pasa **7/7**.
+
+**Dos bugs reales, encontrados al correr contra el servidor de verdad (no
+los atrapa ninguna prueba local) y corregidos, en `preparar_prueba.php`:**
+1. Consultaba `SELECT nombre, cadena FROM locales WHERE local_codigo = ?`
+   — esa tabla **no existe** en el esquema de darkviolet; el maestro de
+   locales del sitio vive en `catalogos/locales.json`. Corregido: se lee ese
+   JSON (mismo campo `codigo` que usa `Catalogo.php`).
+2. Al iterar `foreach ($SINT_LOCAL as $aviso => $info)` con claves
+   `'99990021'`/`'99990022'`, PHP convierte a **entero** cualquier clave que
+   sea solo dígitos sin ceros a la izquierda: `$aviso` llegaba `int` y
+   `str_pad()` reventaba bajo `strict_types`. Corregido con un cast explícito
+   a `string`.
+
+**Un tercer hallazgo, más caro:** el `nucleo/Casos.php` corregido nunca se
+había desplegado al sitio — `pruebas/servidor/*.php` sube por scp a
+`~/respaldos/`, pero `app/publico/nucleo/*.php` sube por `t2_10_desplegar.py`,
+y solo se había corrido lo primero. Con el `Casos.php` viejo en el servidor,
+`catalogo()` seguía devolviendo solo `casos_sap.json` (885 avisos, cero
+`9999xxxx`), aunque `pruebaAplica()` diera `true` y `casos_prueba.json`
+estuviera bien escrito — un falso negativo silencioso. Desplegado con
+`t2_10_desplegar.py nucleo/Casos.php`; hash confirmado igual en disco y en
+"la web entrega exactamente lo que se subió". Detalle y regla para que no se
+repita: error nº 42 del plan.
+
+**Paso 1 (T2.28.1) — evidencia:**
+```
+SELECT COUNT(*) FROM casos_gestion g JOIN usuarios u ON u.usuario_id=g.asignado_a
+WHERE u.usuario LIKE '%_prueba%' AND g.aviso NOT LIKE '9999%'          -> 0
+```
+Locales, todas en verde y sin regresión: `prueba_48h.php` 120·0,
+`prueba_contratos.mjs` 57·0, `prueba_graficos.mjs` 62·0,
+`prueba_continuidad.php` 42·0, `prueba_casos_prueba.php` 7·0, y las tres
+implementaciones de reglas de validación 37/37 (JS, PHP, Python). Ciclo
+completo de servidor, con `preparar_prueba.php` → las cuatro baterías (en
+cualquier orden, cada una con su aviso: `verificar_http.py` 99990022,
+`verificar_emision.py` 99990021) → `limpiar_pruebas.php`:
+`verificar_http.py` **86·0**, `verificar_emision.py` **34·0**,
+`verificar_bandeja.py` **37·0**, `verificar_formulario.mjs` (con Edge)
+**12·0**. `limpiar_pruebas.php --ejecutar` cuadró exacto contra su propio
+simulacro las dos veces que corrió.
+
+**Paso 2 (T2.28.17b) — evidencia.** `verificar_archivo_pdf.py`, nuevo:
+muestra estratificada de 300 órdenes `en_servidor=1` (origen × zona × año,
+semilla fija 20280917, reproducible). **300/300 con sesión ADMIN** (200,
+`application/pdf`, cuerpo `%PDF-`), **300/300 con sesión TECNICO** (D1
+2026-09-12 dio lectura del Archivo a los cuatro roles — confirmado en
+`rol_permisos`, así que un técnico entra a cualquier orden, no solo a las
+suyas) y **300/300 sin sesión → 302**. Los **9 sitios** que arman
+`pdf.php?ot=` (grep contra lo desplegado): `app.js:1490` (guarda `emitida`),
+`casos.php:926,1027` (`$d['pdf']` / `Emision::existePdf(`), `mis.php:417,
+439,484,1009` (`Emision::existePdf(`), `ordenes.php:356,357`
+(`en_servidor`) — los 9 con guarda. Solo **`ordenes.php`** ofrece el botón
+literal «Pedir copia»; en `casos.php`/`mis.php`/`app.js` el enlace
+simplemente se omite o se avisa en texto cuando el PDF no está, sin un botón
+alterno (se anota tal cual, no se hace pasar por lo mismo, I-7). Total:
+**914/914 comprobaciones pasan, 0 fallan**.
+
+**Lo que NO se pudo comprobar tal como pedía el diseño (I-7):** la muestra de
+300 no se estratificó por origen HISTORICO/CORREO/APP porque hoy
+`ot_archivo` en darkviolet **solo tiene origen=CORREO** con `en_servidor=1`
+(7.664 filas de 7.772; ver `DISTINCT origen`). El volcado del árbol canónico
+(HISTORICO) y de las órdenes de la app (APP) a esa tabla del sitio de pruebas
+es T2.28.17a/17c/17d/17e, de otro carril, y no había corrido a esta fecha. La
+estratificación real que sí se hizo fue por origen (el único presente) ×
+zona × año.
+
+**Limpieza:** las dos corridas de `limpiar_pruebas.php --ejecutar` dejaron el
+sitio en 0 cuentas de prueba, 0 avisos `9999xxxx`, 0 casos reales tocados —
+confirmado después de cada una.
+
+*No se tocó ningún archivo fuera del carril declarado. No se hizo `git
+commit` ni `git push` (regla de esta pasada). Nada de esto escribió en
+`casos_gestion` sobre un aviso que no empiece por `9999`.*
+
+### 1s-septies. T2.28.18a/18b/18c · El robot ya no se cuelga en silencio, y T2.28.17a/17c/17e · el Archivo, subido y reconciliado (2026-09-24, segunda pasada)
+
+**Carril: el robot y el Archivo** (`hostinger_ssh.py`, `t2_19_subir_pdfs.py`,
+`t1_7_ingesta.py`, `t2_9_buzon_vigilante.py`, `saneamiento_nocturno.py`, y el
+nuevo `archivo_verificar_cli.php`). Un intento anterior dejó escrita la
+instrumentación completa y se quedó sin cuota antes de correrla contra el
+servidor real; esta pasada corrigió dos bugs que solo salieron al correr de
+verdad, y completó 17a/17c/17e.
+
+**18a — instrumentación de `logs/ssh_llamadas.csv`, validada con tráfico
+real** (no la medición de 48 h, que sigue pendiente de dos noches reales):
+183 llamadas reales anotadas en la sesión, 179 `ok`, 1 `timeout` (900 s, a las
+22:09:23, del propio vigilante en vivo contra producción — dato real,
+consistente con el síntoma que motivó T2.28.18). `logs/ssh_sesiones/` quedó
+vacío al terminar (0 candados huérfanos) con el vigilante en vivo (PID 13340)
+corriendo en paralelo — el semáforo funciona bajo concurrencia real entre dos
+procesos. **Tope de sesiones de Hostinger sin confirmar de primera mano**: no
+hubo acceso a hPanel en esta sesión.
+
+**18b — mejoras de buena práctica aplicadas** (`ConnectTimeout=10`,
+`ConnectionAttempts=2`, `ServerAliveCountMax=3`, timeouts de 60 s para
+comandos triviales con reintento 15/60/180 s solo si son idempotentes,
+semáforo de 2 sesiones simultáneas entre procesos, `t2_19_subir_pdfs.py`
+reintenta un lote antes de darlo por fallido). `saneamiento_nocturno.py` ya
+anota `INDUSTEC_PROCESO=nocturno`. **No se reinició el vigilante en vivo**
+(un proceso ya arrancado no recoge el `.py` nuevo): queda para que Andrés lo
+reinicie tras revisar el diff. El criterio «dos noches seguidas con
+`pdfs: ok`» necesita el nocturno real corriendo con este código, dos
+madrugadas — no se puede cumplir en una sesión.
+
+**18c — la entrega a `observaciones_calidad` ya está hecha** (verificado por
+SQL directo): 4 filas, regla `FECHA_INVALIDA_EN_PDF_ORIGINAL`, estado
+`ABIERTA`, exactamente los 4 casos de la especificación, con el valor leído
+tal cual (sin corregir, I-7).
+
+**17a — `archivo_verificar_cli.php` contra el servidor real (solo
+lectura).** Se encontraron y corrigieron dos bugs de la pasada anterior que
+ningún `py_compile`/`php -l` atrapa: el CLI usaba `__DIR__` en vez de
+`getcwd()` (marcaba las 7.640 filas como íntegras=0, falso) y
+`hostinger_ssh.ssh()` no reenviaba `idempotente` a `ssh_crudo()` (tumbaba la
+primera llamada real de `t2_19`). Corregidos, subidos y corridos:
+**7.640/7.640 íntegros** antes de subir los 24 PDF pendientes, **7.664/7.664**
+después.
+
+**17c — los 24 PDF que la estación tenía, subidos de verdad.** Simulación
+(«faltan: 24, 18.4 MB») → `--ejecutar` («subidos y verificados: 24 ·
+fallidos: 0») → reindexado automático. Criterio exacto:
+`SELECT COUNT(*) FROM ot_archivo WHERE origen='HISTORICO' AND en_servidor=0`
+→ **0**. `SELECT COUNT(*) FROM ot_archivo WHERE en_servidor=1` → **7.664**.
+
+**17e — reconciliación de las 108 filas restantes sin PDF** (97 duplicados
+por nombre medidos hace dos días + 11 «por investigar»: el número subió a 108
+porque 17a/17c ya cambiaron la foto). Cruce por correlativo+aviso+zona contra
+las filas que sí tienen PDF: **las 108 tienen una hermana con el documento —
+0 casos genuinamente sin documento hoy.** El PDF huérfano
+`OT-2180-CN042-10347141-CNLJ.pdf` quedó indexado como
+`OT-2180-CN042EC-10347141-CNLJ` (`en_servidor=1`) dentro de la misma subida.
+**No se tocó `duplicado_de`** (T2.28.17d, requiere D8): las 108 siguen
+visibles en el Archivo hasta que Andrés apruebe el `UPDATE` con la lista
+exacta. Hallazgo aparte, sin tocar: en el servidor hay además una tercera
+variante en minúsculas del mismo archivo
+(`OT-2180-Cn042-10347141-CNLJ.pdf`) — anomalía para revisar junto con 17d.
+
+**Escrituras reales contra el sitio de pruebas en esta pasada:** 24 PDF
+subidos a `darkviolet-armadillo-872352/public_html/ot/ordenes_pdf/` +
+reindexado. Dentro del alcance autorizado (regla 9) y verificado con el
+criterio SQL exacto.
+
+*Verificado: `py_compile`/`php -l` en verde en los 7 archivos tocados;
+`t2_19_pruebas.py` 16/16 (única prueba local existente para este carril). No
+existe prueba local para `hostinger_ssh.py`, `t1_7_ingesta.py`,
+`t2_9_buzon_vigilante.py` ni `saneamiento_nocturno.py` — dicho explícito, no
+asumido. No se hizo `git commit` ni `git push`.*
+
 ---
 
 ## 1r. T2.27 · Los reportes que KFC le pide a la administración, generados, y el tablero de gerencia (2026-09-23)
@@ -1966,7 +2368,8 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
-| **T2.28 · Observaciones de la revisión con INDUSTEC** — especificada y aprobada, **sin empezar** | Libre — nadie la tiene tomada | 2026-09-23 | Se toma por fases (`T2_28_OBSERVACIONES_INDUSTEC.md` §5). La Fase 1 empieza por el robot (InspectorBot en GRAVE) y el arnés aislado. El carril de la estación es dueño de `hostinger_ssh.py` y `saneamiento_nocturno.py`; el del formulario, de `app.js`, `index.html`, las tres reglas y `sw.js`. Cifras en **§1s** |
+| ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). Pendiente de **personas**: que Andrés reinicie el vigilante en vivo (PID 13340, código viejo) y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b. La **Fase 2** (T2.28.2 en adelante, en serie, toca `app.js`/`index.html`/las tres reglas/`Emision.php`/`sw.js`) es la siguiente construcción, sin empezar |
+| ~~T2.28.16a/16b · Cronograma de preventivos contra el Excel de hoy~~ | ✅ **Terminada el 2026-09-23** | — | `t2_7_cronograma_preventivo.py` (16a) y `t2_28_cronograma.py --comparar` (16b), solo lectura. 15/15 pruebas unitarias; 351/352 sin regresión contra el snapshot del 8-sep (1 corrección a propósito, documentada); informe 52 REAGENDAR (37 + 15 que destapa 16a) y 1 CONFLICTO con CUMPLIDO (mismo caso, K121EC ingreso 3 — a D7). Detalle en **§1s-quinquies**. No tocó 16c/16d (puerta D7) |
 | ~~Revisión de las estadísticas del inicio y de Reportes~~ · ~~Reportes para Grupo KFC y tablero de gerencia (T2.27)~~ | ✅ **Terminadas el 2026-09-23** | — | Estadísticas desplegadas en darkviolet (§1q, `verificar_cifras.py` 21·0). Cinco generadores nuevos en `desarrollo/agentes/scripts/t2_27_*.py` y el lanzador `reportes_kfc.bat`; salidas en `SALIDAS IA\REPORTES\KFC`. **No escribió en ninguna tabla ni en el correo** (solo lectura). Detalle en §1r |
 | ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |
 | ~~**T2.26 · El formulario del técnico: desbloqueado, predictivo y sin señal**~~ | ✅ **Terminada y desplegada el 2026-09-22** | — | `guia.js`, `app.js`, `cola.js`, `sw.js` (v13) y dos baterías nuevas. **No tocó la base, ni el árbol canónico, ni ningún PHP.** Verificado: 120·0, 57·0, 62·0, 42·0 locales; 37·0 bandeja; **4·0** `verificar_sync_cerrada.mjs`. Detalle, cifras y lo que quedó sin comprobar en **§1o**. ⚠ `verificar_http.py` (81/86) y `verificar_emision.py` (aborta) piden **`preparar_prueba.php`**: el arnés se quedó sin ningún caso con local |

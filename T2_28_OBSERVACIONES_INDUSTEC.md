@@ -502,6 +502,16 @@ El Excel viejo del espejo (`Oficina Industec\CORREOS LOCALES UIO.xlsx`) queda so
   - Si el archivo está abierto en Excel, abortar con un mensaje claro (I-4).
 - **Cifras esperadas** (medidas el 2026-09-23): correo del local **A = 92**, **C = 0**. B = 3 locales del Excel sin histórico, más los 5 que el Excel no trae (`G044EC`, `G045EC`, `G047EC`, `G054EC`, `T050EC`). Si 4a da otra cosa, **no seguir**: documentar la discrepancia y preguntar.
 
+> **4a corrido el 2026-09-23 (segunda pasada):** da **A=94/B=6/C=0**, no A=92/B=8/C=0.
+> No se forzó el número esperado. La diferencia de 2 tiene una explicación con
+> evidencia (no solo confirmada): son `BR17EC` y `CN042EC`, los únicos dos
+> códigos del Excel que resuelven por alias (no directo) contra el maestro —
+> hipótesis más probable: la medición de más arriba cruzó por código directo,
+> sin pasar por `locales_alias`, y esos dos cayeron a "sin histórico" en vez de
+> a nivel A. Detalle completo en `ESTADO.md` §1s-ter y en el comentario junto a
+> `ESPERADO_A` en `t2_28_correos.py`. Decidir si esta cifra reemplaza a la de
+> arriba queda para quien revise esto — no se tocó `--ejecutar` (4b, D1).
+
 **4b · `--ejecutar` (tras D1):**
 - **Precondición:** `SELECT COUNT(*) FROM correo_destinatarios WHERE uso='ORDEN' AND rol='JEFE_ZONA' AND activo=1` en el servidor = **3** (T2.28.2 sembrado). **Si no, `sys.exit(1)`**: sin eso, dejar de leer el buzón de zona del maestro dejaría a INDUSTEC sin copia.
 - Relee el Excel de análisis: nivel A, más las filas con `DECISION ADMIN` llena (I-5), más las propuestas APROBADAS del servidor (`--recoger`, vía `hostinger_ssh.sql_remoto`).

@@ -115,8 +115,14 @@ def main():
             ejecutar("DELETE FROM pendientes WHERE pendiente_id = ?", [f["pendiente_id"]])
         ejecutar("UPDATE casos_gestion SET estado = 'ASIGNADO' WHERE aviso = ? AND asignado_a = ?", [ABIERTO, a])
 
+    # T2.28.1: el local sale de cualquier aviso sintético con local que el
+    # técnico tenga abierto (99990021 o 99990022, nunca un caso real). Si por
+    # el orden de las baterías los dos ya están cerrados, se cae a G007EC -el
+    # local de 99990021- para que esta comprobación no dependa de que otra
+    # bateria haya corrido antes (error nro 36): no arma una orden con local
+    # vacío, que envio.php rechazaría por un motivo ajeno a lo que se prueba.
     real = next((x for x in av.values() if x.get("local")), {})
-    local = real.get("local")
+    local = real.get("local") or "G007EC"
     equipos = (cat_a.get("equipos") or {}).get(local) or []
     eq = ({"equipo_sap": str(equipos[0].get("equipo_sap")), "tipo": equipos[0].get("tipo", "")} if equipos
           else {"tipo": (cat_a.get("tipos") or ["FREIDORA"])[0]})

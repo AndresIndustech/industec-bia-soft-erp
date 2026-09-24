@@ -72,6 +72,11 @@ def main():
 
     ok, con_error, sin_texto = 0, 0, 0
     errores_detalle = []
+    # T2.28.18c: una recuperacion (RECUPERADO_CON_FECHA_NULL) no es un error --
+    # la orden SI quedo registrada, con fecha_atencion=NULL y en cuarentena.
+    # Va en su propia lista para que el resumen no la imprima con "ERROR:"
+    # (error n.25: el ruido esperable no debe parecer una falla).
+    avisos_detalle = []
     por_zona = {}
 
     for idx, p in enumerate(pdfs, 1):
@@ -173,6 +178,11 @@ def main():
                         """UPDATE ots SET fecha_atencion=NULL WHERE id_industec=%s""",
                         (id_industec,),
                     )
+                    # El valor tal como lo trae el PDF (p.ej. "20026-07-30"), ANTES
+                    # de ponerlo en None -- es lo que va a observaciones_calidad
+                    # abajo, sin corregir (I-7: no es nuestra decision si es 2026 o
+                    # 2025; lo decide quien tiene el documento en la mano).
+                    valor_leido = extraido.get("fecha_atencion")
                     # el INSERT fallo antes de crear la fila; se reintenta el
                     # INSERT completo pero con fecha_atencion=NULL desde el inicio
                     extraido["fecha_atencion"] = None
@@ -208,7 +218,28 @@ def main():
                         )
                     ok += 1
                     por_zona[zona] = por_zona.get(zona, 0) + 1
-                    errores_detalle.append((str(p), f"RECUPERADO_CON_FECHA_NULL:{e}"))
+                    avisos_detalle.append((str(p), f"RECUPERADO_CON_FECHA_NULL: valor leido={valor_leido!r}"))
+                    # Entrega a observaciones_calidad (Agente 1). UNIQUE
+                    # uq_obs_ot_regla (id_industec, regla) lo hace idempotente: una
+                    # corrida nocturna que reprocesa el mismo PDF actualiza la
+                    # misma fila, no la duplica -- "una sola vez" por diseno, no
+                    # porque se corra una sola vez (T2.28.18c). Va en su PROPIO
+                    # try/except: si esto fallara, no debe convertir una fila que
+                    # SI se recupero en "con error".
+                    try:
+                        cur.execute(
+                            """INSERT INTO observaciones_calidad
+                                   (id_industec, zona, tecnico_nombre, regla, dimension_dama,
+                                    severidad, evidencia, estado)
+                               VALUES (%s,%s,%s,'FECHA_INVALIDA_EN_PDF_ORIGINAL','EXACTITUD','ALTA',%s,'ABIERTA')
+                               ON DUPLICATE KEY UPDATE evidencia=VALUES(evidencia)""",
+                            (id_industec, zona, _trunc(extraido.get("tecnico_nombre"), 120),
+                             _trunc(f"El PDF trae fecha_atencion={valor_leido!r} (valor leido tal cual, "
+                                    f"sin corregir -- I-7). La orden quedo en cuarentena con motivo "
+                                    f"FECHA_INVALIDA_EN_PDF_ORIGINAL. Archivo: {p}", 2000)),
+                        )
+                    except mysql.connector.Error as e_obs:
+                        print(f"  AVISO: no se pudo anotar {id_industec} en observaciones_calidad: {e_obs}")
                     continue
                 except mysql.connector.Error as e2:
                     errores_detalle.append((str(p), f"ERROR_BD_TRAS_REINTENTO:{e2}"))
@@ -327,6 +358,12 @@ def main():
         print("  ERROR:", e)
     if len(errores_detalle) > 20:
         print(f"  ... y {len(errores_detalle) - 20} mas")
+    # T2.28.18c: recuperaciones, NO errores -- para que una noche sin
+    # errores reales de verdad de 0 lineas "ERROR:" en el registro.
+    for a in avisos_detalle[:20]:
+        print("  AVISO:", a)
+    if len(avisos_detalle) > 20:
+        print(f"  ... y {len(avisos_detalle) - 20} avisos mas")
 
     cur.execute("SELECT COUNT(*) FROM ots")
     total_bd = cur.fetchone()[0]

@@ -21,6 +21,13 @@ declare(strict_types=1);
  * vuelve a correr preparar_prueba.php. `--ejecutar` recibe el JSON de cifras que
  * imprimió el simulacro y aborta sin tocar nada si una sola no coincide (I-10):
  * entre el simulacro y la ejecución pudo entrar una orden real.
+ *
+ * DESDE EL 2026-09-23 (T2.28.1) preparar_prueba.php ya no toma casos reales: sus
+ * dos avisos con local (99990021, 99990022) son sintéticos, escritos en
+ * catalogos/casos_prueba.json, y por eso este script también borra ese archivo.
+ * Las filas de casos_gestion y equipos_propuestos de esos dos avisos ya las
+ * cubrían los patrones genéricos de abajo (`aviso LIKE '9999%'` y `equipo_uuid
+ * LIKE '99990000-%'`): no hizo falta agregar un paso nuevo para ellas.
  */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require getcwd() . '/nucleo/Db.php';
@@ -87,6 +94,10 @@ $archivos = array_map(fn($o) => "ordenes_pdf/$o.pdf", $ots);
 foreach (Db::todos("SELECT ruta FROM ot_fotos WHERE usuario_id IN ($ei)") as $r) { $archivos[] = 'ordenes_fotos/' . $r['ruta']; }
 $cifras['archivos_en_disco'] = count(array_filter($archivos, 'is_file'));
 
+// El catálogo de prueba del arnés (T2.28.1): 0 o 1, nunca más de un archivo.
+$casosPruebaJson = 'catalogos/casos_prueba.json';
+$cifras['casos_prueba_json'] = is_file($casosPruebaJson) ? 1 : 0;
+
 if ($ejecutar === null) {
     echo "SIMULACRO — no se tocó nada. Cuentas: ", implode(', ', CUENTAS), " (ids $ei)\n";
     foreach ($cifras as $t => $n) { printf("  %-24s %6d\n", $t, $n); }
@@ -139,5 +150,11 @@ rename("$tj.tmp", $tj);
 $R = rtrim((string) getenv('HOME'), '/') . '/respaldos';
 foreach (['claves_prueba.json', 'prueba_deshacer.json', 'tecnicos.json.antes_prueba'] as $f) { @unlink("$R/$f"); }
 
+// El catálogo de prueba (T2.28.1): sin él, Casos::catalogo() no tiene qué
+// fusionar en la próxima preparar_prueba.php, así que no deja basura si esta
+// corrida es la última del ciclo.
+$casosPruebaBorrado = $cifras['casos_prueba_json'] === 1 && @unlink($casosPruebaJson);
+
 echo "HECHO: ", json_encode($hecho), "\n";
-echo "archivos borrados del disco: $borrados de {$cifras['archivos_en_disco']} · padrón de técnicos: $antes → ", count($j['datos']), "\n";
+echo "archivos borrados del disco: $borrados de {$cifras['archivos_en_disco']} · padrón de técnicos: $antes → ", count($j['datos']),
+     " · casos_prueba.json borrado: ", $casosPruebaBorrado ? 'sí' : ($cifras['casos_prueba_json'] === 0 ? 'no existía' : 'NO'), "\n";

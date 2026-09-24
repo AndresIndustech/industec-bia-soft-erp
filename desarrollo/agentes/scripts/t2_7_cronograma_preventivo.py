@@ -43,8 +43,10 @@ DECISIONES DE MODELO, TOMADAS CONTRA LOS DATOS:
 
 Uso:
     .venv/Scripts/python.exe scripts/t2_7_cronograma_preventivo.py
+    .venv/Scripts/python.exe scripts/t2_7_cronograma_preventivo.py --pruebas  # sin Excel ni base
 """
 
+import argparse
 import json
 import re
 import sys
@@ -72,7 +74,13 @@ COL_MINIMA = 9
 
 MES = {"enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
        "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
-       "noviembre": 11, "diciembre": 12}
+       "noviembre": 11, "diciembre": 12,
+       # Abreviaturas (T2.28.16a, medido sobre el Excel del 2026-09-22: "21 y 22
+       # sep", "10 11 DIC"). El punto opcional ("sep.") no necesita entrada aparte:
+       # \b ya marca limite de palabra antes de un caracter que no es de palabra.
+       "ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
+       "jul": 7, "ago": 8, "sep": 9, "sept": 9, "set": 9, "oct": 10,
+       "nov": 11, "dic": 12}
 
 # 10-11/01/2026 | 17-18-19/01/2026 | 22-24/04/2026 (ya sin espacios)
 RE_NUM = re.compile(r"^([0-9]{1,2}(?:[-/][0-9]{1,2})*?)/([0-9]{1,2})/([0-9]{4})$")
@@ -123,11 +131,20 @@ def parsear_ingreso(valor):
     # el 1 y el 30 de JUNIO -- una ventana de 30 dias en vez de dos dias
     # seguidos. Regla: cada dia pertenece al primer mes que aparece DESPUES de
     # el en el texto; si no hay ninguno despues, al ultimo que hubo antes.
+    #
+    # K121EC ingreso 3 trae "30 y 31 de julio3 de agosto": el "3" quedo pegado
+    # a "julio" sin espacio (typeo de la administradora). Sin separarlos, \b
+    # no reconoce "julio" (no hay limite de palabra antes del "3") y el "3" se
+    # pierde como digito: la celda convertia entera a agosto, perdiendo el 30 y
+    # el 31 de julio. Se inserta un espacio sintetico en el limite letra-digito
+    # antes de buscar meses y dias, solo para esta busqueda (t sigue intacto
+    # para el resto de las ramas).
+    t_meses = re.sub(r"(?<=[a-z])(?=[0-9])|(?<=[0-9])(?=[a-z])", " ", t)
     meses = [(mm.start(), MES[mm.group(0)]) for mm in
-             re.finditer(r"\b(" + "|".join(MES) + r")\b", t)]
+             re.finditer(r"\b(" + "|".join(MES) + r")\b", t_meses)]
     if meses:
         pares = []
-        for dm in re.finditer(r"\b(\d{1,2})\b", t):
+        for dm in re.finditer(r"\b(\d{1,2})\b", t_meses):
             dia = int(dm.group(1))
             if not (1 <= dia <= 31):
                 continue
@@ -160,6 +177,74 @@ def a_fechas(res):
         return None
     fechas = sorted(set(fechas))
     return fechas[0], fechas[-1], [f.isoformat() for f in fechas]
+
+
+def resolver_ingreso(numero, forma, res, crudo, anterior_inicio, anterior_texto, anterior_numero):
+    """(res, anio_motivo) -> (fechas resueltas, motivo del año si se corrigio).
+
+    Separada de main() para poder probarla con fechas de juguete (pruebas_unitarias),
+    sin abrir el Excel ni la base. Ver el comentario de CAMBIO DE ANO DENTRO DE LA
+    FILA en main(): la forma en palabras nunca trae año, se asume ANIO, y si con
+    ese supuesto el ingreso queda antes que el ingreso anterior YA resuelto del
+    mismo local, se corrige el año (nunca el mes ni el dia: eso seria inventar).
+    """
+    f = a_fechas(res) if res else None
+    motivo = None
+    if f and forma == "PALABRAS" and anterior_inicio is not None:
+        inicio, fin, dias = f
+        saltos = 0
+        while inicio < anterior_inicio and saltos < 3:
+            res = [(a + 1, m, d) for a, m, d in res]
+            f = a_fechas(res)
+            inicio, fin, dias = f
+            saltos += 1
+        if saltos:
+            motivo = (
+                f"el ingreso {numero} ({crudo!r}) da {inicio.isoformat()} con el "
+                f"año {ANIO} supuesto, antes que el ingreso {anterior_numero} del "
+                f"mismo local ({anterior_texto!r}, {anterior_inicio.isoformat()}); "
+                f"se asume {inicio.year}."
+            )
+    return f, motivo
+
+
+def resolver_fila(fila):
+    """Los 4 ingresos de un local del Excel -> lista de dicts ya con plan
+    (inicio/fin/dias_declarados/duracion_dias), forma de origen y el motivo del
+    año cuando se asumio o se corrigio. NO toca la base ni la realidad (eso es
+    de main()): así T2.28.16b (`t2_28_cronograma.py --comparar`) reusa esta
+    misma resolución -- incluido el cambio de año dentro de la fila -- sin
+    reescribir la regla en un segundo archivo y arriesgarse a que diverjan
+    (el error que describe el docstring de comun.py sobre `empujar`).
+    """
+    resultado = []
+    anterior_inicio, anterior_texto, anterior_numero = None, None, None
+    for numero, forma, res, crudo in fila["ingresos"]:
+        texto_origen = str(crudo) if crudo is not None else None
+        item = {
+            "numero": numero,
+            "forma_origen": forma,
+            "texto_origen": texto_origen,
+            "anio_supuesto": forma == "PALABRAS",
+            "anio_motivo": None,
+            "plan": None,
+        }
+        f, motivo = resolver_ingreso(numero, forma, res, crudo,
+                                      anterior_inicio, anterior_texto, anterior_numero)
+        if motivo:
+            item["anio_motivo"] = motivo
+        if f:
+            inicio, fin, dias = f
+            item["plan"] = {"inicio": inicio.isoformat(), "fin": fin.isoformat(),
+                             "dias_declarados": dias, "duracion_dias": (fin - inicio).days + 1}
+            if item["anio_supuesto"] and not item["anio_motivo"]:
+                item["anio_motivo"] = (
+                    f"la forma en palabras no trae año: se asume {ANIO} (el de la hoja)."
+                )
+            anterior_inicio = inicio
+            anterior_texto, anterior_numero = texto_origen, numero
+        resultado.append(item)
+    return resultado
 
 
 def leer_cronograma():
@@ -237,7 +322,11 @@ def main():
             sin_maestro.append(loc)
         ots_local = realidad.get(loc, [])
 
-        for numero, forma, res, crudo in fila["ingresos"]:
+        # La resolucion (forma, plan, cambio de ano) es identica a la que usa
+        # T2.28.16b para comparar contra el sistema: una sola implementacion
+        # en resolver_fila(), no dos que puedan divergir.
+        for it in resolver_fila(fila):
+            numero, forma = it["numero"], it["forma_origen"]
             reg = {
                 "id": f"{loc}-{ANIO}-{numero}",
                 "local": loc,
@@ -249,21 +338,18 @@ def main():
                 "kit": fila["kit"],
                 "kit_texto": fila["observacion"] or None,
                 "forma_origen": forma,
-                "texto_origen": str(crudo) if crudo is not None else None,
-                "anio_supuesto": forma == "PALABRAS",
+                "texto_origen": it["texto_origen"],
+                "anio_supuesto": it["anio_supuesto"],
+                "anio_motivo": it["anio_motivo"],
                 "plan_original": None,
                 "plan_vigente": None,
                 "real": {"inicio": None, "fin": None, "aviso": None, "ots": [], "cerrado": False},
                 "novedades": [],
                 "estado": None,
             }
-            f = a_fechas(res) if res else None
-            if f:
-                inicio, fin, dias = f
-                plan = {"inicio": inicio.isoformat(), "fin": fin.isoformat(),
-                        "dias_declarados": dias, "duracion_dias": (fin - inicio).days + 1}
-                reg["plan_original"] = plan
-                reg["plan_vigente"] = dict(plan)    # al nacer coinciden
+            if it["plan"]:
+                reg["plan_original"] = it["plan"]
+                reg["plan_vigente"] = dict(it["plan"])    # al nacer coinciden
             elif forma in ("PENDIENTE", "NO_RECONOCIDO", "VACIA"):
                 if forma != "PENDIENTE":
                     sin_convertir.append({"local": loc, "ingreso": numero,
@@ -343,8 +429,8 @@ def main():
     if sin_maestro:
         print(f"\nlocales fuera del maestro: {sorted(set(sin_maestro))}")
     if sin_convertir:
-        print("\nno se convirtieron (no se adivinan):")
-        for s in sin_convertir[:10]:
+        print("\nno se convirtieron (no se adivinan) -- una por una:")
+        for s in sin_convertir:
             print(f"   {s['local']} ingreso {s['ingreso']}: {s['texto']!r} ({s['forma']})")
     print(f"\n-> {destino}")
 
@@ -353,5 +439,91 @@ def main():
         sys.exit(1)
 
 
+# ---------------------------------------------------------------------------
+# T2.28.16a -- pruebas de unidad, una por cada forma de celda de §2b del plan.
+# No abren el Excel ni la base: corren solo contra parsear_ingreso/a_fechas/
+# resolver_ingreso, con datos de juguete. `--pruebas` las corre y nada mas.
+# ---------------------------------------------------------------------------
+def pruebas_unitarias():
+    fallos = []
+    total = [0]
+
+    def check(nombre, real, esperado):
+        total[0] += 1
+        if real != esperado:
+            fallos.append(f"{nombre}: esperaba {esperado!r}, dio {real!r}")
+
+    # Abreviaturas de mes, con y sin "y" entre los dias (medido en el Excel
+    # del 2026-09-22, fila de G001EC/G002EC/G003EC).
+    check("'21 y 22 sep' (abreviatura con 'y')",
+          parsear_ingreso("21 y 22 sep"),
+          ("PALABRAS", [(ANIO, 9, 21), (ANIO, 9, 22)]))
+    check("'10 11 DIC' (abreviatura mayuscula, sin 'y')",
+          parsear_ingreso("10 11 DIC"),
+          ("PALABRAS", [(ANIO, 12, 10), (ANIO, 12, 11)]))
+    check("'16 Y 19 octubre' (mes completo, 'Y' mayuscula)",
+          parsear_ingreso("16 Y 19 octubre"),
+          ("PALABRAS", [(ANIO, 10, 16), (ANIO, 10, 19)]))
+    check("'27 y 02 de marzo' (un solo mes nombrado, no se inventa el anterior)",
+          parsear_ingreso("27 y 02 de marzo"),
+          ("PALABRAS", [(ANIO, 3, 27), (ANIO, 3, 2)]))
+    check("'30 y 31 de julio3 de agosto' (mes y digito pegados sin espacio)",
+          parsear_ingreso("30 y 31 de julio3 de agosto"),
+          ("PALABRAS", [(ANIO, 7, 30), (ANIO, 7, 31), (ANIO, 8, 3)]))
+
+    # Celda tipada por Excel (datetime real), un solo dia: no se inventa el
+    # segundo. Se simula con un objeto date, que es lo que entrega openpyxl
+    # con data_only=True para una celda con formato de fecha.
+    forma, res = parsear_ingreso(date(2026, 10, 5))
+    check("'2026-10-05' tipada -- forma", forma, "TIPADA")
+    check("'2026-10-05' tipada -- un solo dia", res, [(2026, 10, 5)])
+    if res:
+        f = a_fechas(res)
+        check("'2026-10-05' tipada -- no inventa el segundo dia",
+              (f[0], f[1], f[2]), (date(2026, 10, 5), date(2026, 10, 5), ["2026-10-05"]))
+
+    # 11 Y 12 ENERO en el ingreso 4, DESPUES de un ingreso 3 en octubre del
+    # mismo local (G020EC real): el ano supuesto 2026 queda antes que el
+    # ingreso anterior -> se corrige a 2027. resolver_ingreso() es la funcion
+    # que usa main() por cada fila; se prueba aqui sin Excel ni base.
+    forma3, res3 = parsear_ingreso("16 Y 19 octubre")
+    f3, motivo3 = resolver_ingreso(3, forma3, res3, "16 Y 19 octubre", None, None, None)
+    check("ingreso 3 (16 Y 19 octubre) -- sin ingreso anterior, no hay motivo", motivo3, None)
+    forma4, res4 = parsear_ingreso("11 Y 12 ENERO")
+    f4, motivo4 = resolver_ingreso(4, forma4, res4, "11 Y 12 ENERO",
+                                    f3[0], "16 Y 19 octubre", 3)
+    check("'11 Y 12 ENERO' en el ingreso 4 -- salta a 2027",
+          (f4[0].isoformat(), f4[1].isoformat()), ("2027-01-11", "2027-01-12"))
+    check("'11 Y 12 ENERO' en el ingreso 4 -- motivo explicado, no silencioso",
+          motivo4 is not None and "2027" in motivo4 and "ingreso 3" in motivo4, True)
+
+    # No regresion: formas que ya reconocia el script antes de T2.28.16a.
+    check("'12 y 13 de febrero' (ya convertia)",
+          parsear_ingreso("12 y 13 de febrero"),
+          ("PALABRAS", [(ANIO, 2, 12), (ANIO, 2, 13)]))
+    check("'10-11/01/2026' (numerica, ya convertia)",
+          parsear_ingreso("10-11/01/2026"),
+          ("NUMERICA", [(2026, 1, 10), (2026, 1, 11)]))
+    check("'PEND' (ya se marcaba pendiente)",
+          parsear_ingreso("PEND"), ("PENDIENTE", None))
+    check("'22 - 24 / 04 /2026' (rango ambiguo, se guardan los dos extremos)",
+          parsear_ingreso("22 - 24 / 04 /2026"),
+          ("NUMERICA", [(2026, 4, 22), (2026, 4, 24)]))
+
+    if fallos:
+        print(f"PRUEBAS: {len(fallos)} fallo(s) de {total[0]}:")
+        for f in fallos:
+            print(f"   FALLA {f}")
+        sys.exit(1)
+    print(f"PRUEBAS: {total[0]} casos, 0 fallos.")
+
+
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--pruebas", action="store_true",
+                     help="corre las pruebas de unidad (sin Excel ni base) y nada mas")
+    args = ap.parse_args()
+    if args.pruebas:
+        pruebas_unitarias()
+    else:
+        main()

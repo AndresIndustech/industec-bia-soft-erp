@@ -1823,19 +1823,53 @@ python verificar_seguridad.py   # 28 · 0
 
 ### La siguiente acción, concreta
 
-**Q. T2.28 · Las observaciones de la revisión con INDUSTEC** — 📋 **especificada y
-aprobada el 2026-09-23, sin empezar**. Es la siguiente a construir. La
-especificación entera está en [`T2_28_OBSERVACIONES_INDUSTEC.md`](T2_28_OBSERVACIONES_INDUSTEC.md);
+**Q. T2.28 · Las observaciones de la revisión con INDUSTEC** — 📋 **aprobada el
+2026-09-23, Fase 1 prácticamente cerrada el 2026-09-24** (falta solo lo que
+depende de una puerta humana o de tiempo real). La especificación entera está
+en [`T2_28_OBSERVACIONES_INDUSTEC.md`](T2_28_OBSERVACIONES_INDUSTEC.md);
 cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 
-> 1. **Fase 0** de la especificación (línea base) y, en la Fase 1, **T2.28.18**: el
->    robot. InspectorBot está en **GRAVE** porque el paso `pdfs` del nocturno abortó
->    las dos corridas del 23-sep por un `ssh … mkdir` colgado 300 s, y con él 24
->    PDF que la estación tiene no llegaron al Archivo.
-> 2. **T2.28.1**, el arnés que ya no toma casos reales. Todas las demás subtareas
->    corren baterías de servidor.
-> 3. Las decisiones D1–D8 de Andrés se piden cuando su subtarea llegue, con la cifra
->    exacta, no antes.
+> 1. ✅ **T2.28.18a/18b/18c, el robot, terminadas el 2026-09-24.**
+>    InspectorBot **ya no debería seguir en GRAVE** (queda confirmarlo
+>    corriéndolo de nuevo): el `ssh … mkdir` colgado tenía timeout de 60 s con
+>    reintento en vez de 300 s fijo, hay un semáforo entre el vigilante y el
+>    nocturno, y `t2_19_subir_pdfs.py` ya no aborta el lote a la primera.
+>    Evidencia real (183 llamadas SSH anotadas, 0 candados huérfanos con el
+>    vigilante en vivo corriendo en paralelo) en `ESTADO.md` **§1s-septies**.
+>    **Pendiente, de personas:** que Andrés reinicie el vigilante en vivo
+>    (PID 13340, sigue con el código viejo) y confirme el tope de sesiones de
+>    Hostinger en hPanel; y que pasen dos madrugadas reales para la medición
+>    de 48 h de 18a y el criterio «dos noches con `pdfs: ok`» de 18b.
+> 2. ✅ **T2.28.17a/17c/17e, el Archivo, terminadas el 2026-09-24.** Los 24 PDF
+>    que la estación tenía ya están subidos (**7.664/7.664 íntegros**, criterio
+>    exacto en 0); las 108 filas restantes sin PDF tienen todas una hermana con
+>    el documento — **0 casos genuinamente perdidos**. Detalle en `ESTADO.md`
+>    **§1s-septies**. Solo queda **17d** (marcar los 97+11 duplicados con
+>    `duplicado_de`), que espera la puerta **D8** con la lista exacta.
+> 3. ✅ **T2.28.1, el arnés, terminada el 2026-09-24.** Ya no toca ningún caso
+>    que no empiece por 9999 (criterio en 0, evidencia en `ESTADO.md` §1s-sexies).
+>    Las demás subtareas ya pueden correr baterías de servidor con
+>    `preparar_prueba.php` → sus baterías → `limpiar_pruebas.php`.
+> 4. ✅ **T2.28.17b, el Archivo accesible por la web, terminada el 2026-09-24**
+>    (914/914, los 9 sitios revisados).
+> 5. Las decisiones D1–D8 de Andrés se piden cuando su subtarea llegue, con la cifra
+>    exacta, no antes. **Toda la Fase 1 de la especificación (§5.1) queda
+>    cerrada** salvo lo de arriba que depende de personas o de tiempo real —
+>    la Fase 2 (T2.28.2 en serie) es la siguiente acción de construcción.
+>
+> **Avance de la Fase 1 (análisis de solo lectura), sumado el 2026-09-23 en
+> segunda pasada:** T2.28.16a/16b ya están **hechas y verificadas** —
+> `t2_7_cronograma_preventivo.py` lee bien el Excel de hoy (15/15 pruebas,
+> solo 1 celda sin reconocer de 368, documentada) y
+> `t2_28_cronograma.py --comparar` da su informe (52 `REAGENDAR`, 1
+> `CONFLICTO`). Detalle completo en `ESTADO.md` **§1s-quinquies**. **Dato
+> nuevo para cuando llegue D7:** el único `CONFLICTO` es con una orden ya
+> `CUMPLIDO` (`K121EC` preventivo de julio-agosto) porque el importador del
+> 8-sep la leyó mal (typeo de la administradora, `julio3` sin espacio); D7
+> tiene que decidir si corrige el registro o confirma que el técnico trabajó
+> en la fecha equivocada — no se tocó nada, queda listado en el informe.
+> T2.28.4a y T2.28.10a (análisis de correos y de repuestos) también están
+> hechas — ver `ESTADO.md` §1s-ter y §1s-quater.
 
 **P. T2.27 · Los reportes para KFC y el tablero de gerencia** — ✅ **cinco
 generadores hechos y verificados el 2026-09-23**. Es lo más nuevo. Se corren
@@ -2627,6 +2661,31 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     escribieron las dos «T2.27»; la segunda tuvo que renumerarse a T2.28 antes de
     publicar. **Antes de nombrar una tarea:** `grep -n "^### T2\." PLAN_INDUSTEC.md`,
     mirar §5.1 de `ESTADO.md` y `ls desarrollo/agentes/scripts | grep t2_NN`.
+
+42. **Un `nucleo/*.php` corregido en el checkout no corrige nada hasta que se
+    despliega.** Al cerrar T2.28.1 (2026-09-24) la corrida real contra
+    darkviolet mostró `catalogo() count=885` sin un solo aviso `9999xxxx`
+    fusionado, con `pruebaAplica()` en verdad `true` y `casos_prueba.json` en
+    verdad correcto: el servidor seguía sirviendo el `nucleo/Casos.php`
+    **de antes** del cambio, porque `pruebas/servidor/*.php` se sube por scp a
+    `~/respaldos/` pero `app/publico/nucleo/*.php` se sube por
+    `t2_10_desplegar.py` — dos mecanismos distintos, y solo se había corrido el
+    primero. **Regla:** cuando una tarea toca un archivo de `app/publico/`
+    (cualquiera, no solo `nucleo/`), `t2_10_desplegar.py <archivo>` es un paso
+    tan obligatorio como subir las baterías, y se comprueba con un debug CLI
+    contra el servidor (no basta con que la prueba de unidad local pase: esa
+    corre contra el checkout, nunca contra lo desplegado). Del mismo diagnóstico
+    salieron dos bugs reales en `preparar_prueba.php`, ambos corregidos: (a)
+    consultaba `SELECT ... FROM locales`, una tabla que **no existe** en el
+    esquema de darkviolet (el maestro de locales del sitio vive en
+    `catalogos/locales.json`, no en SQL); y (b) al iterar `foreach ($arr as
+    $aviso => ...)` sobre un array con claves `'99990021'`/`'99990022'`, PHP
+    convierte a **entero** cualquier clave que sea solo dígitos sin ceros a la
+    izquierda — `$aviso` llegaba `int` y `str_pad()` reventaba bajo
+    `strict_types`. Los dos bugs son del tipo que una prueba de unidad local
+    (`prueba_casos_prueba.php`, que no toca el arreglo `$SINT_LOCAL` de
+    `preparar_prueba.php` ni la tabla `locales`) no atrapa: solo salieron al
+    correr de verdad contra el servidor.
 
 ### Lo que no se toca, nunca
 

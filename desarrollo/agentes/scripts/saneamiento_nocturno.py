@@ -129,6 +129,12 @@ def main() -> int:
     a = ap.parse_args()
     if a.log:
         abrir_log("saneamiento")
+    # T2.28.18a/18b: identifica este proceso en logs/ssh_llamadas.csv de
+    # hostinger_ssh.py (igual que t2_9_buzon_vigilante.py con "vigilante").
+    # Cada paso de PASOS corre como SUBPROCESO (correr_paso -> subprocess.run):
+    # la hereda sola del entorno del padre, sin que t1_7_ingesta.py,
+    # t2_19_subir_pdfs.py, etc. tengan que declararla cada uno.
+    os.environ["INDUSTEC_PROCESO"] = "nocturno"
     if not tomar_candado():
         return 2
     inicio = datetime.now(timezone.utc)

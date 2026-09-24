@@ -19,9 +19,10 @@
    escribe nada en el servidor ni se gasta un correlativo. Que la orden SALE de
    verdad con la app cerrada se prueba en `verificar_sync_cerrada.mjs`.
 
-   Necesita ~/respaldos/preparar_prueba.php corrido, y un caso con local
-   asignado al tecnico de prueba. Si solo quedan los avisos sinteticos del
-   arnes, sale con codigo 2 y lo DICE, en vez de dar un falso verde.
+   Necesita ~/respaldos/preparar_prueba.php corrido. Desde T2.28.1 usa uno de
+   los avisos sinteticos CON local del tecnico de prueba (99990021 o 99990022,
+   nunca un caso real); si ninguno de los dos sigue abierto con local, sale con
+   codigo 2 y lo DICE, en vez de dar un falso verde.
 
    OJO (error nº 31 del plan): se corre SOLA. Otra bateria con las mismas
    cuentas de prueba desplaza la sesion y el resultado no significa nada.
@@ -177,15 +178,19 @@ try {
     return j.avisos.datos.map(a => ({aviso:a.aviso, local:a.local, activo:a.equipo_denominacion}));
   })()`);
   console.log('casos abiertos:', JSON.stringify(abiertos));
-  /* Con local: los avisos sinteticos del arnes (9999xxxx) no lo traen, y una
-     orden sin local no se puede validar. Si no hay ninguno, se DICE que no se
-     pudo comprobar en vez de dar un falso verde (I-7): el arnes del servidor
-     es compartido y otra conversacion puede haber consumido los casos. */
+  /* T2.28.1: preparar_prueba.php le da al tecnico de prueba DOS avisos
+     sinteticos con local (99990021, 99990022), nunca un caso real. El 99990022
+     queda en ESPERA_REPUESTO a proposito, que sigue contando como "abierto"
+     (Casos::ABIERTOS_TECNICO) aunque otra bateria ya lo haya usado para
+     concluir una orden -asi ninguna deja a esta sin terreno (error nro 36)-.
+     Esta bateria NO envia ninguna orden (la cola se vacia antes de reconectar,
+     mas abajo), asi que toma cualquiera de los dos que siga abierto. Si por
+     algun motivo no queda ninguno, se DICE que no se pudo comprobar en vez de
+     dar un falso verde (I-7): no se inventa un caso real para reemplazarlo. */
   const caso = abiertos.filter((a) => a.local)[0];
   if (!caso) {
-    console.log('\nNO COMPROBADO: el tecnico de prueba no tiene ahora ningun caso con local');
-    console.log('  (solo quedan los sinteticos del arnes). Vuelve a correr preparar_prueba.php');
-    console.log('  cuando la otra conversacion suelte el arnes, y repite esta bateria.');
+    console.log('\nNO COMPROBADO: el tecnico de prueba no tiene ahora ningun aviso sintetico (99990021/22) con local abierto.');
+    console.log('  Corre ~/respaldos/preparar_prueba.php de nuevo y repite esta bateria.');
     process.exit(2);
   }
   console.log('se prueba con:', JSON.stringify(caso));

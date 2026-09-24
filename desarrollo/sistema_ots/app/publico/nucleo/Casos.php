@@ -47,10 +47,67 @@ final class Casos
         return [];
     }
 
-    /** El catálogo completo, tal como lo dejó el último barrido. */
+    /**
+     * El catálogo completo, tal como lo dejó el último barrido, más el
+     * catálogo de prueba del arnés cuando corresponde (T2.28.1).
+     *
+     * Hasta el 2026-09-23 `preparar_prueba.php` no tenía más remedio que
+     * asignarle al técnico de prueba dos casos REALES abiertos, porque los
+     * avisos sintéticos (9999xxxx) no traían `local` y `envio.php` rechazaba
+     * cualquier orden contra ellos. Así quedaron secuestrados los avisos
+     * 10355931 y 10356012: un jefe de zona de verdad dejó de verlos en su
+     * buzón. Ahora el arnés escribe sus propios avisos sintéticos CON local en
+     * `catalogos/casos_prueba.json`, y esta función los fusiona aquí — nunca
+     * los toma prestados de lo que pidió KFC.
+     */
     public static function catalogo(): array
     {
-        return self::$catalogo ??= self::leerJson('casos_sap.json', 'datos');
+        if (self::$catalogo !== null) {
+            return self::$catalogo;
+        }
+        $cat = self::leerJson('casos_sap.json', 'datos');
+        if (self::pruebaAplica()) {
+            $existentes = [];
+            foreach ($cat['datos'] ?? [] as $c) { $existentes[(string) ($c['aviso'] ?? '')] = true; }
+            $prueba = self::leerJson('casos_prueba.json', 'datos');
+            foreach ($prueba['datos'] ?? [] as $c) {
+                $aviso = (string) ($c['aviso'] ?? '');
+                // Solo avisos con la forma de los sintéticos del arnés, y jamás
+                // pisando uno que ya esté en el catálogo real: un dato de
+                // prueba nunca sustituye uno real (I-7).
+                if (preg_match('/^9999\d{4}$/', $aviso) !== 1 || isset($existentes[$aviso])) { continue; }
+                $cat['datos'][] = $c;
+                $existentes[$aviso] = true;
+            }
+        }
+        return self::$catalogo = $cat;
+    }
+
+    /**
+     * ¿Se fusiona el catálogo de prueba? Solo en el sitio de pruebas
+     * (`Emision::modo() === 'PRUEBA'`) y solo para quien está probando:
+     *
+     *   - CON sesión: decide la sesión, aunque se consulte por CLI —
+     *     `alcance_cli.php <usuario>` simula la de cualquiera—. Una cuenta
+     *     real, aunque sea la de la administradora entrando a probar el
+     *     sitio, nunca trae los casos de prueba a su buzón: el login tiene
+     *     que llevar «_prueba» (las cinco cuentas que crea
+     *     `preparar_prueba.php`).
+     *   - SIN sesión: basta con CLI. Es el caso de los propios scripts de
+     *     mantenimiento del arnés (`preparar_prueba.php`, `limpiar_pruebas.php`,
+     *     `archivo_verificar_cli.php`…), que no abren sesión web ninguna.
+     */
+    private static function pruebaAplica(): bool
+    {
+        require_once __DIR__ . '/Emision.php';
+        if (Emision::modo() !== 'PRUEBA') {
+            return false;
+        }
+        $u = Auth::actual();
+        if ($u !== null) {
+            return str_contains((string) ($u['usuario'] ?? ''), '_prueba');
+        }
+        return PHP_SAPI === 'cli';
     }
 
     /** Qué se atendió ya, por aviso. Vacío si todavía no se ha cruzado. */

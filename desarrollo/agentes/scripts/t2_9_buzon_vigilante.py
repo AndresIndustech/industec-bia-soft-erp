@@ -62,6 +62,7 @@ import argparse
 import hashlib
 import imaplib
 import json
+import os
 import re
 import select
 import socket
@@ -442,6 +443,12 @@ def main() -> None:
     args = ap.parse_args()
     if args.log:
         abrir_log("vigilante")
+    # T2.28.18a: identifica este proceso en logs/ssh_llamadas.csv de
+    # hostinger_ssh.py. Va como variable de entorno (no como parametro) porque
+    # este proceso llama a t2_11_informes_ot.py y t2_4_sync_hostinger.py como
+    # SUBPROCESOS: la heredan solos, sin que cada script intermedio tenga que
+    # reenviarla a mano.
+    os.environ["INDUSTEC_PROCESO"] = "vigilante"
     env = cargar_env()
 
     if args.una_vez:
@@ -461,7 +468,19 @@ def main() -> None:
     while True:
         M = None
         try:
-            M = abrir(env)
+            try:
+                M = abrir(env)
+            except Exception as e:
+                # T2.28.18c: esto SI es un error -- no el IDLE que Titan corta
+                # solo cada ~20 min (eso se anota como "conexión perdida" más
+                # abajo, family "aviso" en clasificar()). Aquí la reconexión
+                # misma no prendió: es lo único de este bucle que de verdad
+                # necesita que alguien mire.
+                log(f"ERROR: no se pudo (re)conectar al buzón "
+                    f"({type(e).__name__}: {e}); reintento en {espera}s")
+                time.sleep(espera)
+                espera = min(espera * 2, REINTENTO_MAXIMO)
+                continue
             espera = REINTENTO_INICIAL          # conectó: se reinicia el castigo
             if not primera:
                 # Lo que llegó con la conexión caída no avisa por IDLE: se barre
@@ -503,6 +522,11 @@ def main() -> None:
             log("detenido a mano")
             break
         except Exception as e:
+            # Sesión que SI estaba viva y se cortó (IDLE que Titan cierra solo,
+            # "socket error: EOF" al examinar, etc.): esperable, se reconecta.
+            # AVISO, no error (T2.28.18c) -- clasificar() ya lo pone en la
+            # familia "aviso" con solo buscar "conexión perdida" en el texto.
+            # Si la reconexión de verdad falla, lo dice el bloque de arriba.
             log(f"conexión perdida ({type(e).__name__}: {e}); reintento en {espera}s")
             time.sleep(espera)
             # Retroceso exponencial: si el correo o la red están caídos, no se

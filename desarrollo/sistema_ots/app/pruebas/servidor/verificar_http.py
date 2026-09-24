@@ -219,18 +219,18 @@ def main():
     anotar("T2.12.5", "los dos rechazos quedan en la bitácora con exito = 0", len(rech) >= 2, f"{len(rech)} filas: {[r['accion'] for r in rech]}")
 
     print("\n== T2.13.1 · la orden que manda la app ==")
-    # El caso se toma de lo que el tecnico tiene ABIERTO ahora y CON local, no
-    # de `elegidos[1]` a ciegas: ese aviso deja de estar abierto en cuanto algo
-    # lo atiende -paso el 2026-09-22 con el 10355931- y entonces `local` queda
-    # en None y los cinco envios de aqui abajo fallan con "sin local", que no
-    # tiene nada que ver con lo que se esta probando. Mismo criterio que usa
-    # verificar_emision.py.
-    abiertos = [a for a in cat_a.get("avisos", {}).get("datos", []) if a.get("local")]
-    caso = next((a for a in abiertos if a["aviso"] in elegidos), abiertos[0] if abiertos else {})
-    aviso = caso.get("aviso") or elegidos[1]
+    # T2.28.1: cada bateria del arnes usa su PROPIO aviso sintetico con local,
+    # para que ninguna deje a otra sin terreno (error nro 36) si se corren en
+    # cualquier orden: esta usa 99990022 (elegidos[1]), que preparar_prueba.php
+    # deja en ESPERA_REPUESTO a proposito -sigue "abierto" (Casos::
+    # ABIERTOS_TECNICO) aunque esta misma prueba lo concluya-. El 99990021
+    # (elegidos[0]) queda para verificar_emision.py, que lo emite de verdad.
+    AVISO_HTTP = elegidos[1] if len(elegidos) > 1 else "99990022"
+    caso = next((a for a in cat_a.get("avisos", {}).get("datos", []) if a.get("aviso") == AVISO_HTTP), {})
+    aviso = caso.get("aviso") or AVISO_HTTP
     local = caso.get("local")
     if not local:
-        print("  AVISO: el tecnico de prueba no tiene ningun caso abierto con local. "
+        print(f"  AVISO: el tecnico de prueba no tiene el aviso sintetico {AVISO_HTTP} con local. "
               "Corre ~/respaldos/preparar_prueba.php antes de creerle a lo que sigue.")
     equipos = (cat_a.get("equipos") or {}).get(local) or []
     eq = ({"equipo_sap": str(equipos[0].get("equipo_sap")), "tipo": equipos[0].get("tipo", "")} if equipos
@@ -285,10 +285,11 @@ def main():
     anotar("S2.ASG09", "admin: panel.php tiene una tarjeta «Por zona» por cada zona",
            st == 200 and tarjetas == 3, f"{st} · tarjetas={tarjetas}")
 
-    # preparar_prueba.php deja elegidos[0] en ESPERA_REPUESTO, pero verificar_ciclo.py
-    # lo devuelve a ASIGNADO al resolver su pendiente: el estado se fija aquí para
-    # que la comprobación no dependa del orden en que se corran las baterías.
-    caso_espera = elegidos[0]
+    # preparar_prueba.php deja elegidos[1] (99990022) en ESPERA_REPUESTO a
+    # propósito (T2.28.1), y verificar_ciclo.py puede devolverlo a ASIGNADO al
+    # resolver su pendiente: el estado se fija aquí para que la comprobación no
+    # dependa del orden en que se corran las baterías.
+    caso_espera = elegidos[1]
     estado_previo = sql("SELECT estado FROM casos_gestion WHERE aviso = ?", [caso_espera])[0]["estado"]
     ejecutar("UPDATE casos_gestion SET estado = 'ESPERA_REPUESTO' WHERE aviso = ?", [caso_espera])
     inicio_asg = sql("SELECT NOW() n")[0]["n"]
