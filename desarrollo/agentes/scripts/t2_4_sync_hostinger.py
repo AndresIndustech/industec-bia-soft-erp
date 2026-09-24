@@ -164,10 +164,25 @@ def destino_de(modulo: str) -> Path:
     return DESTINO / modulo
 
 
-def ssh_ejecutar(env: dict, comando: str, timeout: int = 300) -> str:
+def ssh_ejecutar(env: dict, comando: str, timeout: int = 300, idempotente: bool = False) -> str:
     """Corre un comando en el servidor y devuelve stdout. Levanta si falla.
     (Se deja como funcion del modulo para que t2_4_pruebas la pueda sustituir.)"""
+    if idempotente:
+        return H.ssh(comando, timeout=timeout, env=env, idempotente=True)
     return H.ssh(comando, timeout=timeout, env=env)
+
+
+# T2.28.18b, aplicado aquí el 2026-09-24: listar dos archivos no puede esperar
+# cinco minutos. La noche del 24, ocho de estos `ls` se colgaron 300 s cada uno
+# —40 de los 43 min del paso `sync`— mientras el resto del espejo andaba, y las
+# carpetas tienen de 1 a 4 archivos: no es su tamaño, son las sesiones SSH que
+# se cuelgan de forma intermitente (T2.28.18a, logs/ssh_llamadas.csv). Tiempo
+# límite de comando trivial, con reintento, y un tope para todo el paso: lo que
+# no alcance se baja la noche siguiente (se versiona por fecha, no se pierde).
+AUX_TIMEOUT_SEG = 60
+AUX_BAJADA_SEG = 120
+AUX_PRESUPUESTO_SEG = 15 * 60
+_aux_limite: float | None = None
 
 
 def inventario_remoto(env: dict, modulo: str, recientes_min: int = 0):
@@ -344,20 +359,28 @@ def sincronizar_modulo(env: dict, modulo: str, solo_inventario: bool,
 def sincronizar_auxiliares(env: dict, modulo: str) -> None:
     """Contadores y logs del sistema viejo. Son chicos y cambian siempre, asi
     que se bajan completos cada vez, versionados por fecha."""
+    global _aux_limite
+    if _aux_limite is None:                   # el tope es para todos los módulos juntos
+        _aux_limite = time.monotonic() + AUX_PRESUPUESTO_SEG
     sello = datetime.now().strftime("%Y-%m-%d")
     destino = DESTINO / modulo / "_auxiliares" / sello
     destino.mkdir(parents=True, exist_ok=True)
     docroot = (env.get("HOSTINGER_DOCROOT") or "").strip() or DOCROOT_VIEJO
     for ruta in AUXILIARES.get(modulo, []):
+        if time.monotonic() > _aux_limite:
+            print(f"    aviso: se agotaron los {AUX_PRESUPUESTO_SEG // 60} min de los auxiliares; "
+                  f"{ruta} se baja la noche siguiente")
+            continue
         remoto = f"{docroot}/{ruta}"
         sub = destino / Path(ruta).name
         sub.mkdir(exist_ok=True)
         try:
-            salida = ssh_ejecutar(env, f"cd {shlex.quote(remoto)} 2>/dev/null && ls -1 || true")
+            salida = ssh_ejecutar(env, f"cd {shlex.quote(remoto)} 2>/dev/null && ls -1 || true",
+                                  timeout=AUX_TIMEOUT_SEG, idempotente=True)
             nombres = [n.strip() for n in salida.splitlines() if n.strip()]
             if not nombres:
                 continue
-            H.sftp_bajar([(f"{remoto}/{n}", sub / n) for n in nombres], timeout=300, env=env)
+            H.sftp_bajar([(f"{remoto}/{n}", sub / n) for n in nombres], timeout=AUX_BAJADA_SEG, env=env)
         except Exception as e:
             print(f"    aviso: no se pudieron traer los auxiliares de {ruta}: {e}")
 
@@ -386,8 +409,10 @@ def main() -> None:
     except FileExistsError:
         edad = time.time() - CANDADO.stat().st_mtime
         if edad < CANDADO_VENCE_SEG:
+            # La marca la lee el vigilante para no mover su sello; el código de
+            # salida sigue en 0 porque el nocturno lo toma como paso correcto.
             print(f"Ya hay otra sincronizacion en curso (candado de hace {edad / 60:.0f} min). "
-                  f"No se baja nada en esta corrida.")
+                  f"No se baja nada en esta corrida. SALTADO_POR_CANDADO")
             return
         print(f"Habia un candado de hace {edad / 3600:.1f} h: la corrida anterior murio "
               f"sin soltarlo. Se toma y se sigue.")

@@ -267,9 +267,11 @@ def _proceso_real(procesos: list) -> tuple[dict | None, int]:
     robot. El bueno es el hijo -el que hace el trabajo-, pero quien manda es la
     raíz del árbol: se toma como robot el proceso cuyo padre NO está en la
     lista, y se cuenta un robot por cada raíz. Cuatro procesos (dos raíces) sí
-    serían dos robots de verdad, y eso es una alarma legítima: `t2_9` no tiene
-    candado de instancia única, así que dos vigilantes escribirían el mismo
-    registro y el mismo `vigilante_estado.json`.
+    serían dos robots de verdad, y eso es una alarma legítima: dos vigilantes
+    escribirían el mismo registro y el mismo `vigilante_estado.json`. Desde el
+    2026-09-24 `t2_9` toma un candado de instancia única (`logs/vigilante.lock`)
+    y el segundo se cierra solo; si aun así aparecen dos, uno corre código de
+    antes de ese cambio.
     """
     if not procesos:
         return None, 0
@@ -694,8 +696,10 @@ def calcular_alertas(e: dict) -> list[dict]:
         cuando = en_cuanto(robot["rescate"])
         add(GRAVE, "El robot está caído",
             "No hay ningún proceso del vigilante corriendo.",
-            f"La Tarea programada lo levanta sola {cuando}. Si no vuelve, "
-            f"ejecuta scripts\\vigilante.bat.")
+            f"La Tarea programada lo levanta sola {cuando}. Si no vuelve, lánzala "
+            f"desde el Programador de tareas («INDUSTEC - Vigilante del buzon» → "
+            f"Ejecutar), no con el .bat a mano: la Tarea no reconoce como suyo un "
+            f"robot lanzado fuera de ella y seguiría intentando levantar otro.")
     else:
         if robot["codigo_congelado"]:
             cuales = ", ".join(c["archivo"] for c in robot["codigo_congelado"])
@@ -704,11 +708,14 @@ def calcular_alertas(e: dict) -> list[dict]:
                 f"({robot['inicio']:%d/%m %H:%M}). Python no recoge los cambios "
                 f"de un .py ya cargado.",
                 "Reinícialo: termina el proceso y la Tarea programada lo levanta "
-                "en ≤10 min, o corre scripts\\vigilante.bat.")
+                "en ≤10 min (o ejecútala desde el Programador de tareas; no "
+                "con el .bat a mano).")
         if robot["robots"] > 1:
             add(GRAVE, f"Hay {robot['robots']} robots corriendo a la vez",
-                "El vigilante no tiene candado de instancia única: dos procesos "
-                "escriben el mismo registro y el mismo vigilante_estado.json.",
+                "Dos procesos escriben el mismo registro y el mismo "
+                "vigilante_estado.json. El candado de instancia única "
+                "(logs\\vigilante.lock) debería impedirlo: uno de los dos corre "
+                "código de antes del 2026-09-24.",
                 "Deja uno solo. Cierra el que arrancaste a mano.")
         if robot["silencioso"]:
             porque = ("y lleva más de una hora en el mismo trabajo, que ya es "

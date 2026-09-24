@@ -149,7 +149,24 @@
           lista.appendChild(m);
         }
       }
+      // Solo el buscador de equipos trae `crear`: si lo escrito no es igual a
+      // nada de la lista, se ofrece registrarlo como equipo nuevo (reporte de
+      // INDUSTEC, 2026-09-24). Local y caso siguen sin texto libre, a propósito.
+      var q = busca.value.trim();
+      if (cfg.crear && q.length >= 3 && !items.some(function (it) { return baja(cfg.etiqueta(it)) === baja(q)
+            || baja(it.etiqueta || '') === baja(q); })) {
+        var c = document.createElement('li');
+        c.className = 'combo-opt combo-crear'; c.setAttribute('role', 'option');
+        c.dataset.k = '__crear__';
+        c.innerHTML = cfg.crearEtiqueta ? cfg.crearEtiqueta(q) : ('+ Crear «' + esc(q) + '»');
+        c.addEventListener('mousedown', function (e) { e.preventDefault(); crearYElegir(); });
+        lista.appendChild(c);
+      }
       abrir();
+    }
+    function crearYElegir() {
+      var it = cfg.crear(busca.value.trim());
+      if (it) { items.push(it); elegir(it); }
     }
 
     function abrir() { lista.hidden = false; busca.setAttribute('aria-expanded', 'true'); abierto = true; }
@@ -182,6 +199,7 @@
       else if (e.key === 'Enter' && abierto && activa >= 0 && opts[activa]) {
         e.preventDefault();
         var k = opts[activa].dataset.k;
+        if (k === '__crear__') { crearYElegir(); return; }
         var it = items.filter(function (x) { return String(cfg.clave(x)) === k; })[0];
         if (it) elegir(it);
       } else if (e.key === 'Escape') { cerrar(); }
@@ -576,6 +594,7 @@
     var l = localesPorCodigo[cod];
     var chips = $('#chipsLocal');
     prepararAdmin(cod);
+    refrescarAcompanantes();
     if (!l) {
       chips.hidden = true;
       proponerCorreo('');
@@ -627,16 +646,44 @@
     wrap.innerHTML =
       '<div class="bloque-tit"><span>Acompañante</span>' +
       '<button type="button" class="btn danger" data-quitar-tec="' + i + '">Quitar</button></div>' +
-      '<select class="tec-sel" data-tec-sel="' + i + '"><option value="">Elige al técnico…</option>' +
-      opcionesTecnicos() + '</select>';
+      '<select class="tec-sel" data-tec-sel="' + i + '">' + opcionesTecnicos('') + '</select>';
     $('#tecnicos').appendChild(wrap);
     wrap.querySelector('[data-quitar-tec]').addEventListener('click', function () { wrap.remove(); });
   }
-  function opcionesTecnicos() {
-    return CAT.tecnicos.slice().sort(function (a, b) { return a.nombre.localeCompare(b.nombre); })
-      .map(function (t) {
-        return '<option value="' + t.id + '">' + esc(t.nombre) + ' · ' + esc(t.tipo) + ' (' + esc(t.zona) + ')</option>';
-      }).join('');
+
+  /* Pedido de INDUSTEC (2026-09-24): de acompañante solo se ofrecen los
+     empleados activos de la zona de la orden, con el jefe de zona primero
+     -suele acompañar- y sin quien la emite, que ya firma como responsable.
+     El padrón (`tecnicos.json`) trae solo a los vigentes, con su zona; hasta
+     ese día estaba 18 días atrasado y listaba a todos, de las tres zonas. */
+  function zonaDeLaOrden() {
+    var l = localesPorCodigo[$('#local').value];
+    return l ? l.zona : ((YO && YO.zona) || '');
+  }
+  function etiquetaCargo(tipo) {
+    var t = baja(tipo || '');
+    if (t.indexOf('jefe') !== -1) return 'jefe de zona';
+    return t || 'técnico';
+  }
+  function opcionesTecnicos(elegido) {
+    var zona = zonaDeLaOrden();
+    var yo = YO && YO.nombre ? baja(YO.nombre) : '';
+    var lista = (CAT.tecnicos || []).filter(function (t) {
+      if (elegido && String(t.id) === String(elegido)) return true;   // lo ya elegido no desaparece
+      return (!zona || t.zona === zona) && baja(t.nombre) !== yo;
+    }).sort(function (a, b) {
+      var ja = etiquetaCargo(a.tipo) === 'jefe de zona', jb = etiquetaCargo(b.tipo) === 'jefe de zona';
+      return ja !== jb ? (ja ? -1 : 1) : a.nombre.localeCompare(b.nombre);
+    });
+    var cab = zona ? 'Elige a quien te acompañó (' + esc(zona) + ')…' : 'Elige a quien te acompañó…';
+    return '<option value="">' + cab + '</option>' + lista.map(function (t) {
+      return '<option value="' + t.id + '"' + (String(t.id) === String(elegido) ? ' selected' : '') + '>' +
+             esc(t.nombre) + ' · ' + esc(etiquetaCargo(t.tipo)) + (zona && t.zona !== zona ? ' (' + esc(t.zona) + ')' : '') +
+             '</option>';
+    }).join('');
+  }
+  function refrescarAcompanantes() {
+    $$('#tecnicos .tec-sel').forEach(function (s) { s.innerHTML = opcionesTecnicos(s.value); });
   }
 
   /* ---------- Equipos (bloque repetible, mínimo 1) ---------- */
@@ -653,8 +700,18 @@
     wrap.innerHTML =
       '<div class="bloque-tit"><span>Equipo #' + (i + 1) + '</span>' +
       '<button type="button" class="btn danger" data-quitar-eq="' + i + '">Quitar</button></div>' +
-      '<label>Equipo</label>' +
-      '<select class="eq-sel" data-eq-sel="' + i + '"><option value="">Elige el local primero…</option></select>' +
+      // T2.28.5 y reporte de INDUSTEC del 2026-09-24: se escribe para buscar y,
+      // si no está, se crea. El <select> sigue siendo la fuente de verdad
+      // (oculto): lo leen reunirOrden, las reglas, el borrador y las baterías.
+      '<label for="eqBusca' + i + '">Equipo</label>' +
+      '<div class="combo" id="eqCombo' + i + '">' +
+      '<input type="text" id="eqBusca' + i + '" class="combo-input" role="combobox" aria-expanded="false"' +
+      ' aria-controls="eqLista' + i + '" aria-autocomplete="list" autocomplete="off" spellcheck="false"' +
+      ' placeholder="Escribe el equipo: freidora, hielo, código de activo…">' +
+      '<button type="button" class="combo-clear" id="eqClear' + i + '" hidden aria-label="Borrar equipo">&times;</button>' +
+      '<ul class="combo-lista" id="eqLista' + i + '" role="listbox" hidden></ul>' +
+      '</div>' +
+      '<select class="eq-sel" id="eqSel' + i + '" data-eq-sel="' + i + '" hidden tabindex="-1"><option value="">Elige el local primero…</option></select>' +
       '<div class="nota-regular" data-eq-nuevo-nota="' + i + '" hidden style="margin-top:8px">' +
       '<b>Se registra como equipo nuevo.</b> Queda visible para todas las zonas y la ' +
       'administración lo revisa antes de sumarlo al catálogo del local.</div>' +
@@ -694,9 +751,37 @@
       sincronizarFallas();
     });
     var selEq = wrap.querySelector('.eq-sel');
+    selEq._combo = crearCombo({
+      wrap: '#eqCombo' + i, input: '#eqBusca' + i, lista: '#eqLista' + i,
+      hidden: '#eqSel' + i, clear: '#eqClear' + i,
+      vacio: 'Elige el local primero.',
+      clave: function (it) { return it.k; },
+      etiqueta: function (it) { return (it.nuevo ? 'Equipo nuevo · ' : '') + it.etiqueta; },
+      buscarEn: function (it) { return [it.etiqueta, it.grupo, limpiarTipo(it.tipo), it.cod].join(' '); },
+      grupo: function (it) { return it.grupo || null; },
+      fila: function (it) { return esc(it.etiqueta); },
+      alElegir: function () { selEq.dispatchEvent(new Event('change', { bubbles: true })); },
+      alLimpiar: function () { selEq.dispatchEvent(new Event('change', { bubbles: true })); },
+      crearEtiqueta: function (q) {
+        return '<b>+ Crear «' + esc(q) + '» como equipo nuevo</b> <span class="cad">no está en la lista del local</span>';
+      },
+      crear: function (texto) {
+        if (!localesPorCodigo[$('#local').value]) { return null; }
+        return itemDeOpcion(asegurarOpcionNueva(selEq, texto));
+      }
+    });
     selEq.addEventListener('change', function () {
       var opt = selEq.selectedOptions[0];
       var esNuevo = selEq.value.indexOf('TIPO:') === 0;
+      // El buscador muestra lo que dice el <select> cuando hay un equipo elegido,
+      // también si lo eligió el programa (preselección del caso, borrador,
+      // corregir). Cuando el <select> queda vacío NO se toca: eso pasa justo
+      // cuando la persona empieza a escribir, y borrarle el texto dejaba la
+      // lista sin filtrar y sin la opción de crear (batería H, 2026-09-24).
+      if (selEq.value && opt) {
+        $('#eqBusca' + i).value = (esNuevo ? 'Equipo nuevo · ' : '') + opt.textContent;
+        $('#eqClear' + i).hidden = false;
+      }
       var cod = wrap.querySelector('[data-eq-cod="' + i + '"]');
       cod.value = esNuevo ? '' : ((opt && opt.dataset.cod) || '');
       cod.readOnly = !esNuevo;
@@ -757,12 +842,18 @@
 
     var ogn = document.createElement('optgroup');
     ogn.label = 'Equipo nuevo / no está en la lista';
+    ogn.dataset.nuevo = '1';
     (CAT.tipos || []).slice().sort().forEach(function (t) {
       var o = new Option(limpiarTipo(t), 'TIPO:' + t);
       o.dataset.tipo = t;
       ogn.appendChild(o);
     });
     sel.appendChild(ogn);
+    // El buscador se recarga con las opciones nuevas ANTES de la preselección
+    // de abajo: cargar() deja el valor vacío, y la preselección lo vuelve a poner.
+    if (sel._combo) {
+      sel._combo.cargar(Array.prototype.filter.call(sel.options, function (o) { return o.value; }).map(itemDeOpcion));
+    }
 
     // H-09: el equipo del aviso viene preseleccionado. Si hay más de un
     // candidato -- varios activos iguales -- no se adivina: se deja vacío y se
@@ -818,6 +909,32 @@
         if (!equipoParecidos.length) { equipoSinCandidato = limpiarTipo(af.split('-')[0]).trim(); }
       }
     }
+  }
+
+  /* Una opción del <select> de equipo, en la forma que usa su buscador. */
+  function itemDeOpcion(o) {
+    var g = o.parentNode && o.parentNode.tagName === 'OPTGROUP' ? o.parentNode.label : '';
+    return { k: o.value, etiqueta: o.textContent, grupo: g, tipo: o.dataset.tipo || '',
+             cod: o.dataset.cod || '', nuevo: o.value.indexOf('TIPO:') === 0 };
+  }
+
+  /* La opción «equipo nuevo» para un tipo escrito a mano. Si ya existe (del
+     catálogo de tipos o creada antes), se reutiliza; si no, se crea dentro del
+     grupo «Equipo nuevo». El tipo va en mayúsculas y sin espacios de más: es lo
+     que llega a `equipos_propuestos` y lo que la administración revisa. */
+  function asegurarOpcionNueva(sel, texto) {
+    var tipo = String(texto || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    if (!tipo) { return null; }
+    var valor = 'TIPO:' + tipo;
+    var ya = Array.prototype.filter.call(sel.options, function (o) {
+      return o.value === valor || (o.value.indexOf('TIPO:') === 0 && normalizarTipo(o.dataset.tipo) === normalizarTipo(tipo));
+    })[0];
+    if (ya) { return ya; }
+    var o = new Option(tipo, valor);
+    o.dataset.tipo = tipo;
+    o.dataset.creado = '1';
+    (sel.querySelector('optgroup[data-nuevo]') || sel).appendChild(o);
+    return o;
   }
 
   /* ¿Dos tipos son de la misma familia? Se comparan PALABRAS COMPLETAS desde el

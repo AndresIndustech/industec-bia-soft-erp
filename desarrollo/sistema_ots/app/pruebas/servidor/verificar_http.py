@@ -170,6 +170,14 @@ def main():
             anotar("T2.12.3", f"{u}: {p}", ok, f"{st} · {len(cuerpo)} B" + (f" · {errores}" if errores else "")
                    + (f" → {cab.get('Location', '')}" if st == 302 else ""))
 
+    print("\n== 2026-09-24 · el jefe de zona también atiende (migración 021) ==")
+    st, _, c = s["jefe_prueba_uio"].pedir("mis.php")
+    anotar("jefe-atiende", "jefe_prueba_uio: mis.php → 200 (tiene ots.crear)", st == 200, st)
+    st, _, c = s["jefe_prueba_uio"].pedir("panel.php")
+    anotar("jefe-atiende", "el menú del jefe muestra «Mis órdenes»", st == 200 and 'href="mis.php"' in c, st)
+    st, _, c = s["admin_prueba"].pedir("panel.php")
+    anotar("jefe-atiende", "a la administración no se le suma «Mis órdenes»", st == 200 and 'href="mis.php"' not in c, st)
+
     print("\n== T2.12.6 · extremos de datos con sesión ==")
     st, _, c = s["tec_prueba_uio_a"].pedir("catalogos.php")
     cat_a = json.loads(c) if st == 200 else {}

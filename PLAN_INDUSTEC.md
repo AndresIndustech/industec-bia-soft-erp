@@ -1829,23 +1829,22 @@ depende de una puerta humana o de tiempo real). La especificación entera está
 en [`T2_28_OBSERVACIONES_INDUSTEC.md`](T2_28_OBSERVACIONES_INDUSTEC.md);
 cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 
-> 1. ✅ **T2.28.18a/18b/18c, el robot, terminadas el 2026-09-24.**
->    InspectorBot **ya no debería seguir en GRAVE** (queda confirmarlo
->    corriéndolo de nuevo): el `ssh … mkdir` colgado tenía timeout de 60 s con
->    reintento en vez de 300 s fijo, hay un semáforo entre el vigilante y el
->    nocturno, y `t2_19_subir_pdfs.py` ya no aborta el lote a la primera.
->    Evidencia real (183 llamadas SSH anotadas, 0 candados huérfanos con el
->    vigilante en vivo corriendo en paralelo) en `ESTADO.md` **§1s-septies**.
->    ✅ **Reiniciado el vigilante el 2026-09-23 21:17** (a pedido directo de
->    Andrés, "reinicia el robot tú"): el PID 13340 con código viejo ya no
->    existe, corre PID 29360 con el código de este commit, confirmado por
->    InspectorBot como instancia única. Detalle y evidencia en `ESTADO.md`
->    **§1s-octies**. **Sigue pendiente, de personas:** que Andrés confirme el
->    tope de sesiones de Hostinger en hPanel (sin acceso a hPanel en ninguna
->    sesión hasta ahora); y que pasen dos madrugadas reales con el código
->    nuevo para la medición de 48 h de 18a y el criterio «dos noches con
->    `pdfs: ok`» de 18b — el saneamiento nocturno de anoche (con código viejo)
->    sigue en alerta `grave` en InspectorBot y no cuenta para ese criterio.
+> 1. ✅ **T2.28.18a/18b/18c, el robot, terminadas y CONFIRMADAS el 2026-09-24.**
+>    InspectorBot pasó de GRAVE a **`salud: BIEN`** (05:02, un solo robot,
+>    candado de instancia única, señal reciente). El nocturno del 24
+>    corrió **completo** con el código nuevo (`sync/volcado/normalizar/buzon/
+>    ingesta/informes/archivo/pdfs:ok`, 106,7 min — 1.ª de las dos noches del
+>    criterio de 18b). Medición real de 18a (324 llamadas SSH, 19:54→09:30):
+>    los 9 cuelgues fueron **todos contra producción** (`yellow-elephant`),
+>    **ninguno contra el sitio de pruebas**. Revisión adversarial con dos
+>    revisores (concurrencia y operación): SEGURO, 5 observaciones menores
+>    aplicadas (candado antes del registro, latido en noches tranquilas,
+>    puesta al día si el arranque falla, espejo que no mueve el sello si lo
+>    salta el candado del nocturno). Nueva `scripts/t2_9_pruebas.py` 13·0.
+>    Detalle y evidencia en `ESTADO.md` **§1s-decies**. **Sigue pendiente, de
+>    personas:** que Andrés confirme el tope de sesiones de Hostinger en
+>    hPanel; y la **segunda** madrugada para cerrar el criterio «dos noches
+>    con `pdfs: ok`».
 > 2. ✅ **T2.28.17a/17c/17e, el Archivo, terminadas el 2026-09-24.** Los 24 PDF
 >    que la estación tenía ya están subidos (**7.664/7.664 íntegros**, criterio
 >    exacto en 0); las 108 filas restantes sin PDF tienen todas una hermana con
@@ -1879,6 +1878,22 @@ cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 >    implementaciones y el fixture (hoy solo avisa el formulario y el servidor
 >    cae al maestro). **`Destinatarios::resolver()` debe usar
 >    `Emision::correoLocal()`**, no escribir una segunda regla del correo del local.
+>    `sql/013_correos.sql` es un **borrador marcado «NO APLICAR»** (quedó a
+>    medio escribir cuando T2.28.2 se detuvo, error nº 44): revisarlo contra la
+>    especificación antes de subirlo.
+> 8. ✅ **Tres pedidos directos de INDUSTEC, desplegados el 2026-09-24** (por
+>    delante de la Fase 2, `sw.js` **v18**): el equipo se busca escribiendo y,
+>    si no está, se puede crear («+ Crear «…» como equipo nuevo»); los
+>    acompañantes de una orden salen solo de la **zona del local**, con el
+>    **jefe de zona primero** y sin quien emite; y **migración 021**
+>    (`ots.crear` para `JEFE_ZONA`) para que el jefe también se asigne casos y
+>    los atienda, con «Mis órdenes» en su menú. De paso: el **padrón de
+>    técnicos del servidor estaba 18 días atrasado** y bloqueaba a 9 técnicos
+>    reales con `TECNICO_NO_VIGENTE` — regenerado y subido, cruzado 19=19
+>    contra las cuentas activas (I-10). Evidencia en `ESTADO.md` **§1s-decies**;
+>    la lección, error nº 45. **No se comprobó**: un jefe de zona real
+>    emitiendo (la cuenta de prueba de jefe no está en el padrón) ni un
+>    Android real.
 >
 > **Avance de la Fase 1 (análisis de solo lectura), sumado el 2026-09-23 en
 > segunda pasada:** T2.28.16a/16b ya están **hechas y verificadas** —
@@ -2735,6 +2750,21 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     workflow (`journal.jsonl`) antes de confiar en su resultado; y un workflow
     en serie comprueba al empezar cada subtarea que la anterior dejó lo que
     prometió (p. ej. `verificar_esquema.php` con la migración), deteniéndose si no.
+
+45. **Regenerar un catálogo en la estación no lo sube solo al servidor.**
+    `t2_8_padron_tecnicos.py` actualizó la tabla `tecnicos` de la estación el
+    2026-09-08 (9 altas, 9 bajas), pero nadie corrió después
+    `t2_5_catalogos.py` + la subida a `catalogos/tecnicos.json` en darkviolet:
+    el servidor siguió sirviendo el padrón del 06-sep durante **18 días**, y la
+    regla `TECNICO_NO_VIGENTE` (BLOQUEA) rechazaba la orden de **9 técnicos
+    reales y activos** que ya no estaban en ese archivo — el mismo patrón del
+    error nº 42 (un dato corregido en la fuente no corrige nada hasta que se
+    despliega), pero con un catálogo generado, no con código. **Regla:**
+    cuando una tarea toca la tabla `tecnicos` (o cualquier tabla que alimente
+    un catálogo generado), regenerar y subir el catálogo es un paso tan
+    obligatorio como la migración misma, con verificación cruzada (I-10)
+    contra una fuente independiente antes de subir — aquí, las cuentas activas
+    de `usuarios` en el servidor.
 
 ### Lo que no se toca, nunca
 

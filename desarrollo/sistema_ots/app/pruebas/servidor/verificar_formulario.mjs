@@ -277,6 +277,51 @@ try {
     afirmar('G3 después de elegir, se sigue pudiendo escribir', editado === elegidoRep + ' (modificado)', editado);
   }
   await nav.captura(join(SALIDA, 'verG2_campos_editables.png'));
+
+  /* H · el equipo se busca escribiendo y, si no está, se crea (pedido del 2026-09-24). */
+  console.log('\n== H · buscar el equipo escribiendo, y crearlo si no está ==');
+  await abrirPasoDe('#eqBusca0'); await sleep(500);
+  await escribir('#eqBusca0', 'arnes');
+  const busq = await nav.ev(`(() => {
+    const ops = [...document.querySelectorAll('#eqLista0 .combo-opt:not(.combo-crear)')].map((o) => o.textContent);
+    return { n: ops.length, ops, visible: !document.querySelector('#eqLista0').hidden };
+  })()`);
+  afirmar('H1 escribir filtra la lista del equipo', busq.visible && busq.n > 0 && busq.ops.every((t) => /arnes/i.test(t)),
+          `${busq.n} opciones · ${busq.ops[0] || ''}`);
+  const s1eq = await centro(`document.querySelector('#eqLista0 .combo-opt:not(.combo-crear)')`);
+  if (s1eq) { await tocar(s1eq); }
+  const eqElegido = await nav.ev(`document.querySelector('#eqSel0').value`);
+  afirmar('H1 tocar una opción elige el equipo', !!eqElegido && eqElegido.indexOf('TIPO:') !== 0, eqElegido);
+  await escribir('#eqBusca0', 'Tostadora de prueba xyz');
+  const crearOpt = await centro(`document.querySelector('#eqLista0 .combo-crear')`);
+  afirmar('H2 si no está, ofrece crearlo', !!crearOpt, crearOpt ? 'aparece «+ Crear…»' : 'no aparece');
+  if (crearOpt) { await tocar(crearOpt); }
+  const creado = await nav.ev(`({ valor: document.querySelector('#eqSel0').value,
+    texto: document.querySelector('#eqBusca0').value,
+    nota: !document.querySelector('[data-eq-nuevo-nota="0"]').hidden })`);
+  afirmar('H2 crearlo lo deja como equipo nuevo', creado.valor === 'TIPO:TOSTADORA DE PRUEBA XYZ' && creado.nota,
+          `${creado.valor} · «${creado.texto}»`);
+  await nav.captura(join(SALIDA, 'verH_equipo_creado.png'));
+
+  /* I · acompañantes: solo la zona de la orden, jefe primero, sin quien emite. */
+  console.log('\n== I · acompañantes de la zona de la orden ==');
+  await abrirPasoDe('#addTecnico'); await sleep(400);
+  await tocar(await centro(`document.querySelector('#addTecnico')`));
+  const acomp = await nav.ev(`(async () => {
+    const j = await (await fetch('catalogos.php', { credentials: 'same-origin' })).json();
+    const yo = await (await fetch('yo.php', { credentials: 'same-origin' })).json();
+    const s = document.querySelector('#tecnicos .tec-sel');
+    const ids = [...s.options].filter((o) => o.value).map((o) => o.value);
+    const porId = Object.fromEntries((j.tecnicos || []).map((t) => [String(t.id), t]));
+    const zonas = [...new Set(ids.map((i) => (porId[i] || {}).zona))];
+    const esperados = (j.tecnicos || []).filter((t) => t.zona === 'UIO' && t.nombre.toLowerCase() !== String(yo.nombre || '').toLowerCase()).length;
+    const primero = porId[ids[0]] || {};
+    const hayJefe = (j.tecnicos || []).some((t) => t.zona === 'UIO' && /jefe/i.test(t.tipo || ''));
+    return { n: ids.length, esperados, zonas, primero: primero.nombre + ' · ' + primero.tipo, primeroEsJefe: /jefe/i.test(primero.tipo || ''), hayJefe };
+  })()`);
+  afirmar('I solo ofrece empleados de la zona de la orden (UIO)', acomp.zonas.length === 1 && acomp.zonas[0] === 'UIO', JSON.stringify(acomp.zonas));
+  afirmar('I son todos los de la zona, menos quien emite', acomp.n === acomp.esperados, `${acomp.n} de ${acomp.esperados}`);
+  afirmar('I el jefe de zona va primero', !acomp.hayJefe || acomp.primeroEsJefe, acomp.primero);
   await nav.send('Emulation.setTouchEmulationEnabled', { enabled: false });
 
   console.log('\n== A · el equipo del caso se preselecciona ==');

@@ -101,6 +101,49 @@ ESPERA_MINIMA_SEG = 45
 # una parada larga, la primera corrida mande a hashear el directorio entero.
 ESPEJO_VENTANA_MIN, ESPEJO_VENTANA_MAX = 60, 3 * 24 * 60
 REINTENTO_INICIAL, REINTENTO_MAXIMO = 10, 600
+# T2.28.18c, afinado el 2026-09-24: un intento de reconexión que falla y el
+# siguiente prende no es un error. Los dos «ERROR» de la madrugada del 24 eran
+# eso: la red de la estación se cayó unos segundos (se cortó la sesión y
+# enseguida falló el DNS, `getaddrinfo failed`) y a los 21 s ya estaba
+# reconectado y barriendo lo que llegó. Solo se anota ERROR si el buzón lleva
+# más que esto sin poder reconectarse: ahí sí hay algo que mirar.
+UMBRAL_CAIDA_ERROR_SEG = 300
+# Candado de instancia única. El 2026-09-23 llegó a haber dos vigilantes a la
+# vez (uno lanzado a mano y otro por la Tarea programada), escribiendo el mismo
+# registro y el mismo vigilante_estado.json. Es un bloqueo del sistema operativo
+# sobre el archivo, no un archivo que haya que borrar: si el proceso muere, el
+# sistema lo suelta solo y nunca queda un candado huérfano.
+CANDADO = BASE / "logs" / "vigilante.lock"
+_candado_fd = None
+
+
+RECHAZOS = BASE / "logs" / "candado_vigilante.log"   # no casa con 'vigilante-*.log' a propósito
+
+
+def tomar_candado_unico() -> str:
+    """'tomado' si este es el único vigilante, 'ocupado' si ya hay otro, o
+    'sin candado: <motivo>' si el archivo no se pudo abrir (p. ej. quedó de
+    solo lectura). En ese último caso el robot SIGUE, avisando: un robot caído
+    por no poder abrir su candado es peor que el riesgo de un duplicado, que
+    InspectorBot igual detecta."""
+    global _candado_fd
+    try:
+        import msvcrt
+    except ImportError:                       # fuera de Windows: no se bloquea
+        return "tomado"
+    try:
+        CANDADO.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(str(CANDADO), os.O_RDWR | os.O_CREAT)
+    except OSError as e:
+        return f"sin candado: {type(e).__name__}: {e}"
+    try:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+    except OSError:
+        os.close(fd)
+        return "ocupado"
+    _candado_fd = fd                          # abierto hasta que el proceso termine
+    return "tomado"
 
 
 def ahora() -> str:
@@ -233,6 +276,13 @@ def espejar_produccion() -> bool:
             log(f"   {linea}")
         if r.stderr and r.stderr.strip():
             log(f"   stderr: {r.stderr.strip()[:300]}")
+        return False
+    # t2_4 sale con 0 aunque se salte la corrida porque otra (el nocturno) tiene
+    # su candado. No bajó nada: mover el sello haría que la próxima ventana
+    # empezara después del hueco (revisión del 2026-09-24).
+    if "SALTADO_POR_CANDADO" in (r.stdout or ""):
+        log("AVISO: el espejo de produccion no corrio: el nocturno lo tiene tomado. "
+            "No se mueve el sello; lo recoge el proximo aviso")
         return False
     ESTADO.parent.mkdir(parents=True, exist_ok=True)
     ESTADO.write_text(json.dumps(
@@ -441,8 +491,21 @@ def main() -> None:
     ap.add_argument("--log", action="store_true",
                     help="escribe en logs/ en vez de por pantalla")
     args = ap.parse_args()
+    # El candado ANTES de abrir el registro (revisión del 2026-09-24): si una
+    # instancia rechazada escribiera en vigilante-<hoy>.log cada 10 min,
+    # InspectorBot vería «señal» ahí y nunca avisaría de un robot trabado.
+    candado = "tomado" if args.una_vez else tomar_candado_unico()
+    if candado == "ocupado":
+        # Sale con 0: no es una falla, es la protección funcionando.
+        with open(RECHAZOS, "a", encoding="utf-8") as f:
+            f.write(f"[{ahora()}] ya hay un vigilante corriendo ({CANDADO.name} tomado): "
+                    f"este (PID {os.getpid()}) se cierra sin hacer nada\n")
+        sys.exit(0)
     if args.log:
         abrir_log("vigilante")
+    if candado.startswith("sin candado"):
+        log(f"ERROR: no se pudo abrir {CANDADO.name} ({candado[13:]}); sigo trabajando sin "
+            f"candado de instancia única -- revisa ese archivo")
     # T2.28.18a: identifica este proceso en logs/ssh_llamadas.csv de
     # hostinger_ssh.py. Va como variable de entorno (no como parametro) porque
     # este proceso llama a t2_11_informes_ot.py y t2_4_sync_hostinger.py como
@@ -458,29 +521,45 @@ def main() -> None:
     log(f"buzón {env['IMAP_USER']} en {env['IMAP_HOST']} — SOLO LECTURA")
     # Al arrancar se ponen al día las dos cosas: si el vigilante estuvo caído,
     # ahí dentro hay casos nuevos Y órdenes cerradas que nadie ha procesado.
-    barrer_y_empujar(env, args.dias)
+    ok_inicio = barrer_y_empujar(env, args.dias)
     procesar_informes(args.dias)
     espejar_produccion()
 
     espera = REINTENTO_INICIAL
     ultimo = 0.0
-    primera = True
+    # Si el barrido del arranque falló (p. ej. la estación arrancó sin red), la
+    # primera conexión hace la puesta al día; antes se la saltaba y los casos
+    # quedaban viejos hasta el siguiente correo (revisión del 2026-09-24).
+    primera = bool(ok_inicio)
+    caido_desde = None      # desde cuándo está sin conexión (time.monotonic)
+    intentos = 0            # intentos de reconexión fallidos en esta racha
     while True:
         M = None
         try:
             try:
                 M = abrir(env)
             except Exception as e:
-                # T2.28.18c: esto SI es un error -- no el IDLE que Titan corta
-                # solo cada ~20 min (eso se anota como "conexión perdida" más
-                # abajo, family "aviso" en clasificar()). Aquí la reconexión
-                # misma no prendió: es lo único de este bucle que de verdad
-                # necesita que alguien mire.
-                log(f"ERROR: no se pudo (re)conectar al buzón "
-                    f"({type(e).__name__}: {e}); reintento en {espera}s")
+                intentos += 1
+                if caido_desde is None:
+                    caido_desde = time.monotonic()
+                caido = time.monotonic() - caido_desde
+                detalle = f"{type(e).__name__}: {e}"
+                if caido < UMBRAL_CAIDA_ERROR_SEG:
+                    # Un corte breve de red: se reintenta y casi siempre prende
+                    # al siguiente. AVISO, para que InspectorBot no lo cuente
+                    # como error (clasificar() mira el prefijo).
+                    log(f"AVISO: no se pudo reconectar al buzón (intento {intentos}, "
+                        f"{detalle}); reintento en {espera}s")
+                else:
+                    log(f"ERROR: el buzón lleva {caido / 60:.0f} min sin poder reconectarse "
+                        f"({intentos} intentos; el último: {detalle}); reintento en {espera}s")
                 time.sleep(espera)
                 espera = min(espera * 2, REINTENTO_MAXIMO)
                 continue
+            if intentos:
+                log(f"reconectado tras {intentos} intento(s) fallido(s) y "
+                    f"{time.monotonic() - caido_desde:.0f} s sin conexión")
+            caido_desde, intentos = None, 0
             espera = REINTENTO_INICIAL          # conectó: se reinicia el castigo
             if not primera:
                 # Lo que llegó con la conexión caída no avisa por IDLE: se barre
@@ -518,6 +597,11 @@ def main() -> None:
                     conteo = contar(M)
                 else:
                     conteo = ahora_n
+                    # Latido: sin esta línea, una noche tranquila dejaba el
+                    # registro horas callado y InspectorBot marcaba GRAVE «el robot
+                    # lleva callado demasiado» con el robot sano (revisión del
+                    # 2026-09-24: de 22:10 a 00:39 y de 02:07 a 04:26 del 23-sep).
+                    log(f"escuchando (sin novedades; renovación cada {IDLE_MINUTOS} min)")
         except KeyboardInterrupt:
             log("detenido a mano")
             break
@@ -527,6 +611,8 @@ def main() -> None:
             # AVISO, no error (T2.28.18c) -- clasificar() ya lo pone en la
             # familia "aviso" con solo buscar "conexión perdida" en el texto.
             # Si la reconexión de verdad falla, lo dice el bloque de arriba.
+            if caido_desde is None:
+                caido_desde = time.monotonic()     # la racha empieza con el corte
             log(f"conexión perdida ({type(e).__name__}: {e}); reintento en {espera}s")
             time.sleep(espera)
             # Retroceso exponencial: si el correo o la red están caídos, no se

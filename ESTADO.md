@@ -1398,6 +1398,98 @@ anterior** (comprobado en una copia aparte): es previo y ajeno a este cambio.
 **Cómo lo verá el técnico:** al abrir la app, la primera recarga instala el
 `sw.js` v16 y la segunda sirve el formulario nuevo.
 
+### 1s-decies. El robot sano, el padrón al día, y tres pedidos de INDUSTEC en el formulario (2026-09-24, madrugada)
+
+**El robot: de GRAVE a BIEN.** InspectorBot a las 05:02 → `salud: BIEN`, un
+solo robot (PID 26220, lanzado por su Tarea programada), señal hace 2 min; solo
+quedan dos alertas leves que decide la administración (5 casos con alerta, 2
+sin local: V090, puerta D5).
+
+- **El nocturno del 24 corrió completo con el código nuevo** (1.ª de las dos
+  noches que pide T2.28.18b):
+  `OK · 106.7 min · sync:ok(2605s) · volcado:ok · normalizar:ok · buzon:ok · ingesta:ok(3533s) · informes:ok · archivo:ok · pdfs:ok(80s)`
+  — 10 PDF subidos, 0 fallidos, y las 4 fechas inválidas ya salen como `AVISO`.
+- **T2.28.18a, medición real** (`logs/ssh_llamadas.csv`, 23-sep 19:54 → 24-sep
+  09:30 UTC): **324 llamadas, 311 ok, 9 timeout, 4 código 1**. Los **9 timeouts
+  fueron contra carpetas de PRODUCCIÓN** (`contadores`, `registros`, `uploads`
+  de `yellow-elephant`), **ninguno contra el sitio de pruebas**, y las carpetas
+  de auxiliares tienen de 1 a 4 archivos: no es tamaño, es la sesión que se
+  cuelga. Responde con cifra la pregunta 3 de 18a («¿con un tipo de comando?»).
+  Faltan las otras dos y la segunda noche.
+- **Los 2 «errores» de InspectorBot no eran errores**: cortes de red de la
+  estación de 21 s (sesión cortada y enseguida `getaddrinfo failed`), ya
+  reconectados y barridos. `t2_9`: un intento fallido es `AVISO`; `ERROR` solo si
+  lleva más de 5 min sin reconectar, y dice «reconectado tras N intentos».
+- **Candado de instancia única** (`logs/vigilante.lock`, bloqueo del sistema,
+  sin candado huérfano). Una instancia rechazada deja su nota en
+  `logs/candado_vigilante.log` y **no** en `vigilante-*.log`. Si el candado no se
+  puede abrir, el robot sigue y lo anota como ERROR.
+- **Revisión adversarial con dos revisores independientes** (concurrencia en
+  Windows y operación): los dos dijeron SEGURO, con 5 observaciones menores,
+  **todas aplicadas**: el candado se toma antes de abrir el registro; `os.open`
+  dentro del `try`; **latido** «escuchando (sin novedades…)» en cada renovación
+  (sin él, InspectorBot daba GRAVE «callado» de noche con el robot sano); la
+  puesta al día si el arranque falló; y el espejo saltado por el candado del
+  nocturno ya no mueve el sello (`t2_4` imprime `SALTADO_POR_CANDADO`).
+  InspectorBot ya no aconseja lanzar el `.bat` a mano.
+- **`t2_4_sync_hostinger.py`, auxiliares**: `ls` a 60 s con reintento
+  (idempotente) y tope de 15 min para todo el paso (esta noche fueron 40 min en
+  8 cuelgues de 300 s). `t2_4_pruebas.py` estaba roto **antes** de este cambio
+  (firma vieja de `inventario_remoto`, comprobado en una copia del commit
+  anterior): arreglado, «Todas las pruebas pasan».
+- Pruebas nuevas: `scripts/t2_9_pruebas.py` **13·0** (el vigilante no tenía
+  ninguna).
+
+**El padrón de técnicos del servidor estaba 18 días atrasado — bloqueaba a 9
+técnicos reales.** `catalogos/tecnicos.json` era del 2026-09-06; el 08-sep
+`t2_8` actualizó la tabla `tecnicos` de la estación con el listado nuevo (9 altas,
+9 bajas), pero nadie regeneró ni subió el catálogo. Resultado: Anthony Morales,
+Diego Sisalema, Fernando Tipán, Heitan Taco, Pablo Ortiz, Carlos Farfán, Luis
+Erazo, Diego Cuenca y Adrián Barrozo —cuentas activas— **no estaban en el padrón
+y la regla `TECNICO_NO_VIGENTE` (BLOQUEA) les rechazaba la orden**; y Kevin
+Chimbo figuraba como técnico de CNLJ. Regenerado con `t2_5_catalogos.py`,
+**cruzado antes de escribir contra las cuentas activas del servidor (I-10):
+19 = 19, 0 diferencias, los 3 jefes coinciden**; respaldo del viejo en
+`~/respaldos/tecnicos.json.antes_20260924` (sha `388fa40d…`) y subido con
+sha256 verificado. Es el error nº 45 del plan.
+
+**Los tres pedidos de INDUSTEC en el formulario, desplegados (`sw.js` v18):**
+
+| Pedido | Qué quedó |
+|---|---|
+| Buscar el equipo escribiendo y, si no está, crearlo | Buscador sobre el `<select>` (que sigue siendo la fuente de verdad, oculto). Filtra por nombre, área, tipo y código; si lo escrito no calza con nada, ofrece **«+ Crear «…» como equipo nuevo»** y lo deja como equipo nuevo (va a `equipos_propuestos`, la administración lo aprueba) |
+| Acompañantes: solo los empleados activos de la zona, con el jefe | La lista sale del padrón al día, **solo de la zona del local de la orden**, el **jefe de zona primero** y sin quien emite; se actualiza al cambiar de local |
+| El jefe de zona también se asigna casos y los atiende | Asignarse ya podía. Ahora **migración 021** (`ots.crear` para `JEFE_ZONA`, volcado previo `volcado_20260924T095314Z.sql.gz`, sha `f8d3a75b…`), **«Mis órdenes»** en su menú con **sus** casos asignados y el botón «Emitir la orden de este caso» |
+
+`verificar_esquema.php` → **TODO OK**. De paso se corrigió una **falla previa**:
+la 020 (panel de Automatización) sumó `automatizacion.configurar` a
+SUPERADMIN y ADMIN sin actualizar el verificador, que daba FALLA en esos dos
+roles.
+
+**Evidencia, literal, contra darkviolet:**
+```
+verificar_formulario.mjs  32 comprobaciones · 0 fallos
+  PASA  H1 escribir filtra la lista del equipo    1 opciones · EQUIPO PRUEBA ARNES · … · propuesto
+  PASA  H2 si no está, ofrece crearlo             aparece «+ Crear…»
+  PASA  H2 crearlo lo deja como equipo nuevo      TIPO:TOSTADORA DE PRUEBA XYZ · «Equipo nuevo · TOSTADORA DE PRUEBA XYZ»
+  PASA  I solo ofrece empleados de la zona de la orden (UIO)   ["UIO"]
+  PASA  I son todos los de la zona, menos quien emite          7 de 7
+  PASA  I el jefe de zona va primero              Kevin Omar Chimbo Amaguaña · JEFE TÉCNICO
+verificar_http.py  89 de 89 (3 nuevas: el jefe tiene «Mis órdenes» y mis.php da 200; la administración no)
+verificar_emision.py 38 de 38 · verificar_bandeja.py 37 de 37
+locales: 120·0, 57·0, 62·0, 42·0, 7·0; reglas 37/37; t2_9_pruebas 13·0; t2_4_pruebas OK
+limpiar_pruebas.php --ejecutar: 0 cuentas de prueba, 0 avisos 9999; 10355931 → ajumbo y 10356012 → amorales, intactos
+```
+La primera corrida de la batería H falló (el buscador borraba lo que se escribía
+cuando ya había un equipo elegido); se corrigió, se subió `sw.js` a v18 por si
+algún celular alcanzó a guardar la v17, y la segunda dio 32·0.
+
+**Lo que NO se comprobó:** un jefe de zona **real** emitiendo una orden (la
+cuenta de jefe de prueba no está en el padrón; se comprobó el permiso y la
+pantalla, no la emisión entera); celulares Android reales; y la segunda noche
+del nocturno. **La Fase 2 quedó detenida** para cerrar la sesión: T2.28.2 sigue
+sin hacer y `sql/013_correos.sql` es un **borrador marcado «NO APLICAR»**.
+
 ---
 
 ## 1r. T2.27 · Los reportes que KFC le pide a la administración, generados, y el tablero de gerencia (2026-09-23)
@@ -2475,7 +2567,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
-| ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó y **se detuvo a propósito**: T2.28.2 no se hizo; de T2.28.3 ya está lo que cubrió el arreglo urgente. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b punto 7 |
+| ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó y **se detuvo a propósito** dos veces: T2.28.2 no se hizo (`sql/013_correos.sql` es un borrador marcado NO APLICAR); de T2.28.3 ya está lo que cubrió el arreglo urgente. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b puntos 7 y 8 |
 | ~~T2.28.16a/16b · Cronograma de preventivos contra el Excel de hoy~~ | ✅ **Terminada el 2026-09-23** | — | `t2_7_cronograma_preventivo.py` (16a) y `t2_28_cronograma.py --comparar` (16b), solo lectura. 15/15 pruebas unitarias; 351/352 sin regresión contra el snapshot del 8-sep (1 corrección a propósito, documentada); informe 52 REAGENDAR (37 + 15 que destapa 16a) y 1 CONFLICTO con CUMPLIDO (mismo caso, K121EC ingreso 3 — a D7). Detalle en **§1s-quinquies**. No tocó 16c/16d (puerta D7) |
 | ~~Revisión de las estadísticas del inicio y de Reportes~~ · ~~Reportes para Grupo KFC y tablero de gerencia (T2.27)~~ | ✅ **Terminadas el 2026-09-23** | — | Estadísticas desplegadas en darkviolet (§1q, `verificar_cifras.py` 21·0). Cinco generadores nuevos en `desarrollo/agentes/scripts/t2_27_*.py` y el lanzador `reportes_kfc.bat`; salidas en `SALIDAS IA\REPORTES\KFC`. **No escribió en ninguna tabla ni en el correo** (solo lectura). Detalle en §1r |
 | ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |

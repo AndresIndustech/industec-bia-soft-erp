@@ -85,10 +85,17 @@ foreach ($db->query('SELECT rol, COUNT(*) n FROM rol_permisos GROUP BY rol') as 
 // La 007 suma 7 permisos a SUPERADMIN y ADMIN, 6 a JEFE_ZONA y 4 a TECNICO.
 // La 009 suma 13 a SUPERADMIN y ADMIN, 9 a JEFE_ZONA y 4 a TECNICO.
 // La 012 suma 1 a los cuatro: `casos.continuidad`.
+// La 020 suma 1 a SUPERADMIN y ADMIN: `automatizacion.configurar`. Hasta el
+// 2026-09-24 no estaba contada aquí y este chequeo daba FALLA en esos dos roles.
+// La 021 suma 1 a JEFE_ZONA: `ots.crear` (el jefe de zona también atiende).
 $mas012 = $hay012 ? 1 : 0;
+$mas020 = (int) $db->query("SELECT COUNT(*) FROM permisos WHERE codigo = 'automatizacion.configurar'")->fetchColumn() > 0 ? 1 : 0;
+// La 021 se reconoce por el libro de migraciones y no por la fila que agrega:
+// contar la propia fila haría que el chequeo nunca pudiera fallar.
+$mas021 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE archivo LIKE '%021_jefe_atiende.sql'")->fetchColumn() > 0 ? 1 : 0;
 $esperado = $hay009
-    ? ['SUPERADMIN' => 39 + $mas012, 'ADMIN' => 38 + $mas012,
-       'JEFE_ZONA' => 26 + $mas012, 'TECNICO' => 13 + $mas012]
+    ? ['SUPERADMIN' => 39 + $mas012 + $mas020, 'ADMIN' => 38 + $mas012 + $mas020,
+       'JEFE_ZONA' => 26 + $mas012 + $mas021, 'TECNICO' => 13 + $mas012]
     : ($hay007
         ? ['SUPERADMIN' => 26, 'ADMIN' => 25, 'JEFE_ZONA' => 17, 'TECNICO' => 9]
         : ['SUPERADMIN' => 19, 'ADMIN' => 18, 'JEFE_ZONA' => 11, 'TECNICO' => 5]);

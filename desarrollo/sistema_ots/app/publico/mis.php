@@ -67,7 +67,11 @@ $aten    = Casos::atenciones();
    el catálogo es una ventana que la estación reescribe entera, y un caso
    asignado que quedaba fuera de ella desaparecía de su bandeja sin aviso. */
 $esTecnico = $u['rol'] === 'TECNICO';
-$mios    = $esTecnico
+/* Pedido de INDUSTEC (2026-09-24): el jefe de zona también se asigna casos y los
+   atiende. Para «sus» casos se lo trata como a un técnico: ve los asignados a él,
+   no todo el buzón de la zona (eso lo tiene en casos.php). */
+$propios = in_array($u['rol'], ['TECNICO', 'JEFE_ZONA'], true);
+$mios    = $propios
          ? Casos::delTecnico((int) $u['usuario_id'],
                              array_merge(Casos::ABIERTOS_TECNICO, Casos::CERRADOS_TECNICO), $gestion)
          : Casos::enAlcance($fuente['datos'] ?? [], $gestion);
@@ -249,7 +253,7 @@ if (isset($_GET['ver'])) {
     $a   = $aten[$avisoVer] ?? null;
     $sinCat = !empty($caso['sin_catalogo']);
     // Lo cerrado es historial: se consulta, pero no se vuelve a emitir ni a reportar.
-    $abierto = !$esTecnico || in_array($est, Casos::ABIERTOS_TECNICO, true);
+    $abierto = !$propios || in_array($est, Casos::ABIERTOS_TECNICO, true);
     $pendCaso = Pendientes::disponible()
         ? array_values(array_filter(Pendientes::lista(['grupo' => 'abiertos']),
                                     fn($p) => (string) $p['aviso'] === $avisoVer))
@@ -698,7 +702,7 @@ foreach ($mios as $c) {
     } elseif (in_array($estado, Casos::CERRADOS_TECNICO, true)
               // Al técnico lo reparte el estado de la base: un caso ASIGNADO con
               // una orden todavía abierta sigue siendo trabajo suyo (T2.13.3).
-              || (!$esTecnico && isset($aten[$aviso]))) {
+              || (!$propios && isset($aten[$aviso]))) {
         $grupos['atendidas'][] = $c;
     } else {
         $grupos['pendientes'][] = $c;

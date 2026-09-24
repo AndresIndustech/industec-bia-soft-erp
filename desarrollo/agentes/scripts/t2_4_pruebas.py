@@ -183,7 +183,9 @@ def prueba_divergentes():
         S.CUARENTENA = S.DESTINO / "_cuarentena_hash"
         (S.DESTINO / "uio").mkdir(parents=True)
         (S.DESTINO / "uio" / "OT-0001-K001EC-11111111-UIO.pdf").write_bytes(viejo)
-        S.inventario_remoto = lambda env, mod: (
+        # `recientes_min` se sumó a inventario_remoto después de escribir esta
+        # prueba; sin aceptarlo, la prueba reventaba con TypeError (2026-09-24).
+        S.inventario_remoto = lambda env, mod, recientes_min=None: (
             {"OT-0001-K001EC-11111111-UIO.pdf": {"sha256": h_nuevo, "bytes": len(nuevo)}}, [])
 
         def falso_lote(env, mod, nombres, destino_tmp):

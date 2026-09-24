@@ -52,7 +52,7 @@ final class Ui
      */
     private const MODULOS = [
         ['panel.php',       null,                 'Inicio',      null,        null],
-        ['mis.php',         'ots.crear',          'Mis órdenes', 'mis',       ['TECNICO']],
+        ['mis.php',         'ots.crear',          'Mis órdenes', 'mis',       ['TECNICO', 'JEFE_ZONA']],
         ['casos.php',       'casos.ver',          'Buzón',       'casos',     null],
         ['asignacion.php',  'casos.asignar',      'Asignar',     'asignar',   null],
         ['pendientes.php',  'repuestos.ver',      'Repuestos y equipos', 'repuestos', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO']],
@@ -147,7 +147,9 @@ final class Ui
         foreach (self::MODULOS as [$url, $perm, $etiq, $clave, $respaldo]) {
             if (!in_array($url, self::LISTOS, true)) { continue; }
             if ($u['rol'] === 'TECNICO' && in_array($url, self::OCULTOS_TECNICO, true)) { continue; }
-            if ($u['rol'] !== 'TECNICO' && $url === 'mis.php') { continue; }
+            // «Mis órdenes» es de quien atiende casos: el técnico y, desde el
+            // 2026-09-24, el jefe de zona, que también se asigna casos y los atiende.
+            if (!in_array($u['rol'], ['TECNICO', 'JEFE_ZONA'], true) && $url === 'mis.php') { continue; }
             if (!self::puedeModulo($perm, $respaldo, $u)) { continue; }
             $out[] = ['url' => $url, 'etiqueta' => $etiq, 'clave' => $clave];
         }
