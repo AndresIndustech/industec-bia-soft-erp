@@ -1291,6 +1291,113 @@ existe prueba local para `hostinger_ssh.py`, `t1_7_ingesta.py`,
 `t2_9_buzon_vigilante.py` ni `saneamiento_nocturno.py` — dicho explícito, no
 asumido. No se hizo `git commit` ni `git push`.*
 
+### 1s-octies. El vigilante en vivo, reiniciado (2026-09-23, tercera pasada)
+
+Andrés pidió directamente «reinicia el robot tú», retomando el pendiente que
+§1s-septies había dejado para él (un proceso de Python ya arrancado no recoge
+el `.py` nuevo, así que el `PID 13340` seguía trabajando con el código de
+antes de `5318497` aunque el fix ya estaba en el árbol). Es el reinicio que la
+tabla de T2.28.18 en `T2_28_OBSERVACIONES_INDUSTEC.md` ya listaba como
+**autónomo**.
+
+**Antes de tocar nada:** cero procesos `python.exe`/`pythonw.exe` vivos en la
+estación (el `PID 13340` ya no existía; el ciclo de reintento de la propia
+Tarea programada lo había vuelto a lanzar y a perder varias veces en los
+minutos previos — tres arranques en `logs/vigilante-2026-09-23.log` entre
+21:06 y 21:14, los dos últimos sin llegar a «escuchando»). `git log`/`git
+status` confirmaron que el árbol está en `5318497` (el commit del fix), sin
+cambios sin commitear en el carril del robot.
+
+**Reinicio:** `Start-ScheduledTask -TaskName "INDUSTEC - Vigilante del buzon"`
+(el mismo lanzador que usa la Tarea programada — `scripts\vigilante.bat` —,
+no un `python` suelto). Un solo par de procesos resultante (`PID 29360`
+lanzador → `31104` hijo), sin instancia duplicada.
+
+**Evidencia, literal de `logs/vigilante-2026-09-23.log`:**
+```
+[2026-09-23 21:17:33] vigilante en marcha. Ctrl+C para parar.
+[2026-09-23 21:17:52] revisando los informes de OT...
+[2026-09-23 21:18:46]    empujado (atenciones): HTTP 200 ok tipo=atenciones n=113 antes=113 ...
+[2026-09-23 21:18:46] espejando lo que produccion emitio en los ultimos 60 min...
+[2026-09-23 21:18:56] escuchando (renovación cada 9 min)
+```
+Pasó limpio el paso donde los dos intentos anteriores se habían quedado
+colgados («revisando los informes de OT...», 54 s — el mismo orden de
+magnitud que una corrida sana) y llegó a régimen estable.
+
+**Verificación cruzada, con InspectorBot (fuente independiente del propio
+log):** `python scripts/inspectorbot_estado.py` →
+`Robot vivo, PID 29360, arrancado hace 1 min (1 robot(s), 2 procesos en la
+lista)` · `Señal hace 31 s`. Un solo robot, el PID nuevo, sin el candado de
+instancia única que el propio InspectorBot avisa que falta (línea 710-711 de
+su código) pero sin evidencia de que haya dos corriendo a la vez ahora.
+
+**Lo que NO arregla este reinicio, dicho explícito:** InspectorBot sigue en
+salud **GRAVE** por dos alertas que no tienen que ver con este paso —
+«el saneamiento nocturno falló» (se cortó en el paso `pdfs`, con **código
+viejo**, la noche del 22 al 23) y «el robot arrancó 4 veces en 24 h» (cuenta
+los intentos fallidos previos a este, documentados arriba). Ninguna de las
+dos se resuelve reiniciando: la primera necesita que el saneamiento nocturno
+corra con el código nuevo (T2.28.18b, criterio «dos noches con `pdfs: ok`»,
+que recién puede empezar a contar desde ahora); la segunda es historial de
+hoy y se diluye sola en 24 h. **No se tocó ningún otro archivo ni proceso.**
+
+### 1s-nonies. Arreglo urgente del formulario del técnico, desplegado y verificado (2026-09-24)
+
+Andrés lo pidió «ya funcionando», por encima de la Fase 2. Tres problemas que
+reportó INDUSTEC; los tres **desplegados en darkviolet** y comprobados con
+toques de verdad en un navegador a tamaño de celular (390×844):
+
+| Reporte | Causa encontrada | Arreglo |
+|---|---|---|
+| El correo del administrador muestra `servicioalcliente@` y no deja editar | `#correolocal` con `readonly` justo cuando el maestro trae el buzón genérico (95 de 100 locales). **Y aunque se editara, la cola y el PDF leían el maestro** (error nº 40) | Editable siempre, sin proponer nunca un `@industec.me`. Viaja en la orden (`correo_local`) y `Emision::correoLocal()` lo usa en la cola y el PDF de **esa** orden; el maestro no se toca. `envio.php` lo aprende en `locales_admin.correo` y `catalogos.php` lo ofrece como sugerencia (`admins_v2`, clave nueva para no romper la app en caché) |
+| Repuestos: además de seleccionar, poder escribir | El campo ya era texto libre, pero con `<datalist>`, que en varios Android se ve como un selector cerrado | Sugerencias propias (`crearSugerencias()` en `app.js`) en repuestos, administrador y correo: siempre se escribe; tocar una sugerencia la copia y se sigue editando; completa el n.° de parte si está vacío |
+| En «Emitir», la lista de casos se ve muy reducida y no deja elegir | `.paso-caja` tenía `overflow:hidden`: recortaba la lista flotante al borde del paso, y el buscador de casos está al final del primero | `overflow` visible; las esquinas del encabezado se sostienen con su propio radio |
+
+Archivos: `app.js`, `index.html`, `estilo.css`, `sw.js` (**v15 → v16**),
+`envio.php`, `catalogos.php`, `nucleo/Catalogo.php`, `nucleo/Emision.php`.
+`t2_10_desplegar.py` → «8 de 8 archivos… la web entrega exactamente lo que se
+subió».
+
+**Evidencia, literal:**
+```
+verificar_formulario.mjs  25 comprobaciones · 0 fallos   (bloque G nuevo, 12 de ellas)
+  PASA  G1 la lista de casos se abre al tocar el buscador   {"visible":true,"opciones":3,"alto":227,"overflow":"visible"}
+  PASA  G1 el caso se puede tocar (nada lo tapa ni lo recorta)   alto de la opción 61px
+  PASA  G1 tocar el caso lo elige                            99990021
+  PASA  G2 el correo del local ya no es de solo lectura      {"soloLectura":false,"valor":""}
+  PASA  G2 se puede escribir el correo / el administrador
+  PASA  G3 se puede escribir un repuesto que no está en la lista   repuesto escrito a mano xyz
+  PASA  G3 al escribir, sugiere los repuestos conocidos      «Conj» → 4 sugerencias
+  PASA  G3 después de elegir, se sigue pudiendo escribir     Conjunto de placa de control (modificado)
+  PASA  la orden lleva el correo del local que se escribió   admin.prueba@local-prueba.ec
+verificar_emision.py      38 de 38 (eran 34; 4 nuevas)
+  PASA  correo  la cola va al correo del local que escribió el técnico  ["admin.prueba@local-prueba.ec","jefezona-uio@industec.me"]
+  PASA  correo  el PDF imprime el correo del local que escribió el técnico
+  PASA  correo  el correo queda aprendido para la próxima orden de ese local
+verificar_http.py 86 de 86 · verificar_bandeja.py 37 de 37
+locales: 120·0, 57·0, 62·0, 42·0, 7·0; reglas 37/37 en JS y PHP
+```
+
+**Un hallazgo al limpiar, y es serio:** `limpiar_pruebas.php` seguía con una
+lista fija de los dos avisos reales que el arnés viejo tomó (10355931,
+10356012) y un paso que **borraba sus filas de `casos_gestion`**. Kevin Chimbo
+los había asignado la noche anterior a técnicos reales (ajumbo, amorales). La
+guarda del propio script abortó y no se perdió nada. Corregido: la limpieza
+ya no toca ningún aviso que no empiece por `9999` y se detiene si una cuenta
+de prueba tiene un caso real. Ejecutada después con cifras exactas: **0
+cuentas de prueba, 0 avisos 9999, y los dos casos reales intactos** con
+ajumbo y amorales. Es el error nº 43 del plan.
+
+**Lo que NO se comprobó:** un celular Android de verdad (la prueba emula uno
+en Edge; el `<datalist>` de Android no se puede reproducir ahí, y por eso se
+reemplazó en vez de afinarlo); y una orden real con correo del local, porque
+en el sitio de pruebas los correos quedan retenidos. `prueba_offline.mjs`
+falla con `"[object Object]" is not valid JSON` **también en el commit
+anterior** (comprobado en una copia aparte): es previo y ajeno a este cambio.
+**Cómo lo verá el técnico:** al abrir la app, la primera recarga instala el
+`sw.js` v16 y la segunda sirve el formulario nuevo.
+
 ---
 
 ## 1r. T2.27 · Los reportes que KFC le pide a la administración, generados, y el tablero de gerencia (2026-09-23)
@@ -2368,7 +2475,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
-| ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). Pendiente de **personas**: que Andrés reinicie el vigilante en vivo (PID 13340, código viejo) y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b. La **Fase 2** (T2.28.2 en adelante, en serie, toca `app.js`/`index.html`/las tres reglas/`Emision.php`/`sw.js`) es la siguiente construcción, sin empezar |
+| ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó y **se detuvo a propósito**: T2.28.2 no se hizo; de T2.28.3 ya está lo que cubrió el arreglo urgente. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b punto 7 |
 | ~~T2.28.16a/16b · Cronograma de preventivos contra el Excel de hoy~~ | ✅ **Terminada el 2026-09-23** | — | `t2_7_cronograma_preventivo.py` (16a) y `t2_28_cronograma.py --comparar` (16b), solo lectura. 15/15 pruebas unitarias; 351/352 sin regresión contra el snapshot del 8-sep (1 corrección a propósito, documentada); informe 52 REAGENDAR (37 + 15 que destapa 16a) y 1 CONFLICTO con CUMPLIDO (mismo caso, K121EC ingreso 3 — a D7). Detalle en **§1s-quinquies**. No tocó 16c/16d (puerta D7) |
 | ~~Revisión de las estadísticas del inicio y de Reportes~~ · ~~Reportes para Grupo KFC y tablero de gerencia (T2.27)~~ | ✅ **Terminadas el 2026-09-23** | — | Estadísticas desplegadas en darkviolet (§1q, `verificar_cifras.py` 21·0). Cinco generadores nuevos en `desarrollo/agentes/scripts/t2_27_*.py` y el lanzador `reportes_kfc.bat`; salidas en `SALIDAS IA\REPORTES\KFC`. **No escribió en ninguna tabla ni en el correo** (solo lectura). Detalle en §1r |
 | ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |

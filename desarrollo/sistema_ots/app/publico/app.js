@@ -208,6 +208,75 @@
     };
   }
 
+  /* =======================================================================
+     Sugerencias sobre un campo de TEXTO LIBRE: administrador, correo del
+     local y repuestos. Al revés que crearCombo, aquí manda lo escrito: la
+     lista solo ofrece lo ya conocido y, al tocar una opción, la copia al
+     campo, que sigue editable.
+
+     Reemplaza a <datalist>. En varios Android el datalist se ve como un
+     selector cerrado y los técnicos creían que no podían escribir un repuesto
+     ni un administrador que no estuviera en la lista (reporte de INDUSTEC,
+     2026-09-23). `fuente()` devuelve [{valor, nota?, ...}] y se lee al abrir,
+     así ve siempre el catálogo y el local del momento.
+     ======================================================================= */
+  function crearSugerencias(input, lista, fuente, alElegir) {
+    var TOPE = 30, silencio = false;
+    function opciones() {
+      var q = baja(input.value).trim(), vistas = {};
+      return (fuente() || []).filter(function (o) {
+        if (!o || !o.valor) return false;
+        var k = baja(o.valor);
+        if (vistas[k]) return false;
+        vistas[k] = true;
+        if (!q) return true;
+        var blob = baja(o.valor + ' ' + (o.nota || ''));
+        return q.split(/\s+/).every(function (t) { return blob.indexOf(t) !== -1; });
+      });
+    }
+    function cerrar() { lista.hidden = true; input.setAttribute('aria-expanded', 'false'); }
+    function pintar() {
+      if (silencio) return;
+      var res = opciones();
+      // Lo escrito ya es exactamente lo único que se ofrecería: nada que sugerir.
+      if (!res.length || (res.length === 1 && baja(res[0].valor) === baja(input.value).trim())) { cerrar(); return; }
+      lista.innerHTML = '';
+      res.slice(0, TOPE).forEach(function (o) {
+        var li = document.createElement('li');
+        li.className = 'combo-opt'; li.setAttribute('role', 'option');
+        li.innerHTML = esc(o.valor) + (o.nota ? ' <span class="cad">' + esc(o.nota) + '</span>' : '');
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); elegir(o); });
+        lista.appendChild(li);
+      });
+      if (res.length > TOPE) {
+        var m = document.createElement('li');
+        m.className = 'combo-vacio';
+        m.textContent = '… y ' + (res.length - TOPE) + ' más. Sigue escribiendo para acotar.';
+        lista.appendChild(m);
+      }
+      lista.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+    function elegir(o) {
+      silencio = true;
+      input.value = o.valor;
+      // Los mismos eventos que si lo hubiera tecleado: el borrador sin señal
+      // y las reglas en vivo escuchan `input`/`change`.
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      silencio = false;
+      cerrar();
+      if (alElegir) alElegir(o);
+    }
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-expanded', 'false');
+    input.addEventListener('focus', pintar);
+    input.addEventListener('input', pintar);
+    input.addEventListener('blur', function () { setTimeout(cerrar, 150); });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Escape') cerrar(); });
+    return { pintar: pintar, cerrar: cerrar };
+  }
+
   /* ---------- Combobox de LOCALES ---------- */
   var comboLocal = null;
   function initComboLocal() {
@@ -433,17 +502,72 @@
     f.hidden = false;
   }
 
-  /* H-08: los administradores ya ingresados de este local (`CAT.admins`,
-     de `locales_admin`, más reciente primero). Un `<datalist>` no obliga a
-     elegir de la lista -- el técnico sigue pudiendo escribir uno nuevo-- pero
-     evita reteclear el mismo nombre en cada orden. */
-  function poblarAdminsDatalist(cod) {
-    var dl = $('#adminsLista');
-    if (!dl) return;
-    var nombres = (CAT.admins && CAT.admins[cod]) || [];
-    dl.innerHTML = nombres.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
+  /* H-08 y reporte de INDUSTEC del 2026-09-23: nombre y correo del
+     administrador, los dos EDITABLES. Hasta ese día el correo quedaba de solo
+     lectura con `servicioalcliente@industec.me` en 95 de 100 locales, que es
+     el buzón de INDUSTEC y no el del restaurante.
+
+     `CAT.admins_v2` (locales_admin, más reciente primero) trae nombre y
+     correo; `CAT.admins` es la forma vieja, solo nombres, para un servidor
+     que todavía no tenga el cambio. El correo que se escribe viaja con la
+     orden (`correo_local`) y el servidor lo usa en el PDF y en el envío de
+     ESA orden: el maestro no se toca desde el celular. */
+  function adminsDelLocal(cod) {
+    if (!CAT || !cod) return [];
+    var v2 = (CAT.admins_v2 && CAT.admins_v2[cod]) || null;
+    if (v2) return v2.map(function (a) { return { nombre: a.nombre, correo: a.correo || null }; });
+    return ((CAT.admins && CAT.admins[cod]) || []).map(function (n) { return { nombre: n, correo: null }; });
+  }
+  function esBuzonIndustec(c) { return /@industec\.me\s*$/i.test(c || ''); }
+  function correosDelLocal(cod) {
+    var l = localesPorCodigo[cod], out = [];
+    if (l && l.correo_local && !esBuzonIndustec(l.correo_local)) {
+      out.push({ valor: l.correo_local, nota: 'correo del local' });
+    }
+    adminsDelLocal(cod).forEach(function (a) {
+      if (a.correo) out.push({ valor: a.correo, nota: 'de ' + a.nombre });
+    });
+    return out;
+  }
+
+  /* Lo último que puso el sistema en el correo. Si la persona ya escribió
+     otra cosa, no se le pisa: ni al cambiar de administrador ni de local. */
+  var correoDelSistema = '';
+  function proponerCorreo(v) {
+    var c = $('#correolocal');
+    if (c.value.trim() === '' || c.value.trim() === correoDelSistema) {
+      c.value = v || '';
+      correoDelSistema = c.value;
+    }
+    avisarCorreo();
+  }
+  function avisarCorreo() {
+    var c = $('#correolocal'), msg = $('#msgCorreoLocal');
+    var v = c.value.trim(), l = localesPorCodigo[$('#local').value];
+    var ambar = true, texto;
+    if (v && esBuzonIndustec(v)) {
+      texto = 'Ese es un buzón de INDUSTEC, no el del local. Escribe el correo del restaurante.';
+    } else if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+      texto = 'Revisa el correo: no parece válido.';
+    } else if (!v) {
+      texto = (l && esBuzonIndustec(l.correo_local))
+        ? 'El maestro solo tiene el buzón general de INDUSTEC. Escribe o elige el correo real del local.'
+        : 'Escribe o elige el correo del local o del administrador.';
+    } else if (v === correoDelSistema && l && v === l.correo_local) {
+      texto = 'Viene del maestro. Si cambió, corrígelo aquí.'; ambar = false;
+    } else if (v === correoDelSistema) {
+      texto = 'Propuesto de una orden anterior de este local. Corrígelo si no es el correcto.'; ambar = false;
+    } else {
+      texto = 'La orden saldrá a este correo.'; ambar = false;
+    }
+    msg.textContent = texto;
+    msg.style.color = ambar ? '#b45309' : '';
+  }
+
+  function prepararAdmin(cod) {
     var admin = $('#admin');
-    if (nombres.length && !admin.value) { admin.value = nombres[0]; }
+    var lista = adminsDelLocal(cod);
+    if (lista.length && !admin.value) { admin.value = lista[0].nombre; }
   }
 
   /* ---------- Local: derivar zona, cadena y correos ---------- */
@@ -451,10 +575,11 @@
     var cod = $('#local').value;
     var l = localesPorCodigo[cod];
     var chips = $('#chipsLocal');
-    poblarAdminsDatalist(cod);
+    prepararAdmin(cod);
     if (!l) {
       chips.hidden = true;
-      $('#correolocal').value = ''; $('#correojefeop').value = '';
+      proponerCorreo('');
+      $('#correojefeop').value = '';
       refrescarEquipos();
       return;
     }
@@ -464,24 +589,32 @@
     $('#chipClienteWrap').hidden = false;
     $('#chipCliente').textContent = (l.cadena === 'KFC') ? 'GRUPO KFC' : l.cadena;
 
-    $('#correolocal').value = l.correo_local || '';
+    // Primero el del maestro si es de verdad del local; si no, el del
+    // administrador que se va a proponer; si no, vacío para que lo escriba.
+    var delAdmin = adminsDelLocal(cod).filter(function (a) {
+      return a.correo && a.nombre === $('#admin').value.trim();
+    })[0];
+    var propuesto = (l.correo_local && !esBuzonIndustec(l.correo_local)) ? l.correo_local
+                  : (delAdmin ? delAdmin.correo : (correosDelLocal(cod)[0] || {}).valor);
+    proponerCorreo(propuesto || '');
     $('#correojefeop').value = l.correo_jefe_op || '';
-    var msg = $('#msgCorreoLocal');
-    if (!l.correo_local) {
-      msg.textContent = 'Este local no tiene correo en el maestro — hay que conseguirlo.';
-      msg.style.color = '#b45309';
-      $('#correolocal').readOnly = false;
-      $('#correolocal').placeholder = 'falta en el maestro';
-    } else if (/servicioalcliente@industec\.me/i.test(l.correo_local)) {
-      msg.textContent = 'Es el buzón general de INDUSTEC, no el del restaurante. Falta el correo real del local.';
-      msg.style.color = '#b45309';
-      $('#correolocal').readOnly = true;
-    } else {
-      msg.textContent = 'Se toma del maestro.';
-      msg.style.color = '';
-      $('#correolocal').readOnly = true;
-    }
     refrescarEquipos();
+  }
+
+  function initAdminYCorreo() {
+    crearSugerencias($('#admin'), $('#adminSug'), function () {
+      return adminsDelLocal($('#local').value).map(function (a) {
+        return { valor: a.nombre, nota: a.correo || '', correo: a.correo };
+      });
+    }, function (o) {
+      // Elegir un administrador propone su correo, sin pisar uno escrito a mano.
+      if (o.correo) { proponerCorreo(o.correo); }
+    });
+    crearSugerencias($('#correolocal'), $('#correoSug'), function () {
+      return correosDelLocal($('#local').value);
+    }, avisarCorreo);
+    $('#correolocal').addEventListener('input', avisarCorreo);
+    $('#correolocal').addEventListener('change', avisarCorreo);
   }
 
   /* ---------- Técnicos acompañantes ---------- */
@@ -730,14 +863,26 @@
       var row = document.createElement('div');
       row.className = 'grid g3 parte-row';
       row.style.marginTop = '8px';
+      // Texto libre con sugerencias: el técnico escribe el repuesto como lo
+      // conoce, o toca uno de los frecuentes. No es un selector cerrado.
       row.innerHTML =
-        '<div><label>Repuesto</label><input type="text" class="parte-desc" list="partesLista" placeholder="resistencia 5 kW"></div>' +
+        '<div><label>Repuesto</label><div class="combo">' +
+          '<input type="text" class="parte-desc" autocomplete="off" placeholder="Escribe el repuesto o elige uno">' +
+          '<ul class="combo-lista" role="listbox" hidden></ul></div></div>' +
         '<div><label>Cantidad</label><input type="number" class="parte-cant" min="1" value="1"></div>' +
         '<div><label>N.° de parte</label><input type="text" class="parte-num" placeholder="opcional"></div>';
       cont.appendChild(row);
       row.querySelector('.parte-desc').value = valores.descripcion || '';
       row.querySelector('.parte-cant').value = valores.cantidad || 1;
       row.querySelector('.parte-num').value = valores.numero_parte || '';
+      crearSugerencias(row.querySelector('.parte-desc'), row.querySelector('.combo-lista'), function () {
+        return ((CAT && CAT.repuestos) || []).map(function (r) {
+          return { valor: r.descripcion, nota: r.numero_parte || '', numero_parte: r.numero_parte || '' };
+        });
+      }, function (o) {
+        var num = row.querySelector('.parte-num');
+        if (!num.value.trim() && o.numero_parte) { num.value = o.numero_parte; }
+      });
       return row;
     }
     return {
@@ -802,7 +947,7 @@
     if (!sel || !CAT) return;
     var familia = familiaDe(tipoDelTrabado());
     var opciones = (CAT.diagnosticos || []).filter(function (d) { return !familia || d.familia === familia; });
-    sel.innerHTML = '<option value="">Elige si calza con algo conocido…</option>' +
+    sel.innerHTML = '<option value="">Elige una falla conocida, o escribe la tuya abajo…</option>' +
       opciones.map(function (d) { return '<option value="' + esc(d.codigo) + '">' + esc(d.titulo) + '</option>'; }).join('');
   }
 
@@ -897,6 +1042,8 @@
     $$('#segTipo button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === $('#tipo').value); });
     if (o.dia_intervencion) { $('#dia_intervencion').value = o.dia_intervencion; }
     $('#admin').value = o.admin || '';
+    // Lo que escribió la vez anterior manda sobre lo que proponga el local.
+    if (o.correo_local) { $('#correolocal').value = o.correo_local; correoDelSistema = ''; avisarCorreo(); }
     if (o.fecha_atencion) { $('#fecha_atencion').value = o.fecha_atencion; }
     $('#inicio').value = o.inicio || '';
     $('#fin').value = o.fin || '';
@@ -1199,6 +1346,9 @@
          (T2.13, la 008): quién firma por el local, las observaciones, el
          estado de la orden, la satisfacción y la firma misma. */
       admin: $('#admin').value.trim(),
+      // El correo que escribió o eligió el técnico. El servidor lo usa para
+      // ESTA orden si es válido y no es un buzón de INDUSTEC (Emision::correoLocal).
+      correo_local: $('#correolocal').value.trim().toLowerCase() || null,
       observaciones: $('#observaciones').value.trim(),
       estado_ot: $('#estado_ot').value || null,
       atiempo: $('#atiempo').value || null,
@@ -1547,6 +1697,7 @@
       // H-08/H-11/D8/D9: prellenados de catalogos.php. Si la 009 no está
       // aplicada llegan vacíos y el formulario sigue igual que hoy.
       admins: cat.admins || {},
+      admins_v2: cat.admins_v2 || null,
       familias: arr(cat.familias),
       diagnosticos: arr(cat.diagnosticos),
       repuestos: arr(cat.repuestos_frecuentes)
@@ -1642,10 +1793,9 @@
       bloqueEquipo();
       refrescarAvisos();
 
-      // H-11/D9: el datalist compartido de repuestos, con lo que trae el
-      // catálogo (puede llegar vacío si la 009 no está aplicada).
-      $('#partesLista').innerHTML = (CAT.repuestos || [])
-        .map(function (r) { return '<option value="' + esc(r.descripcion) + '">'; }).join('');
+      // Sugerencias de administrador y correo (los repuestos traen las suyas
+      // en cada fila, desde `crearListaPartes`). Leen CAT al abrirse.
+      initAdminYCorreo();
 
       var params = new URLSearchParams(location.search);
       var tipoPedido = params.get('tipo');

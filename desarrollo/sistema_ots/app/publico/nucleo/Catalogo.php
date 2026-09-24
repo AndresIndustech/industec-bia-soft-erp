@@ -117,6 +117,39 @@ final class Catalogo
     }
 
     /**
+     * Como admins(), pero con el correo que cada administrador dejó en sus
+     * órdenes: `{local: [{nombre, correo}]}`, hasta 8, el más reciente
+     * primero. Va en una clave aparte (`admins_v2`) porque los celulares con
+     * la app vieja en caché esperan `admins` como lista de textos.
+     * Nunca devuelve un `@industec.me`: ese es el buzón de INDUSTEC, no el
+     * del local (el error que dejaba el campo fijo en servicioalcliente@).
+     */
+    public static function adminsV2(): array
+    {
+        try {
+            $filas = Db::todos(
+                "SELECT local_codigo, nombre, correo FROM locales_admin
+                  WHERE activo = 1 ORDER BY local_codigo, visto_ultimo DESC, veces DESC"
+            );
+        } catch (Throwable $e) {
+            return [];
+        }
+        $out = [];
+        foreach ($filas as $f) {
+            $loc = (string) $f['local_codigo'];
+            $out[$loc] = $out[$loc] ?? [];
+            if (count($out[$loc]) >= 8) { continue; }
+            $correo = strtolower(trim((string) ($f['correo'] ?? '')));
+            if ($correo !== '' && (!filter_var($correo, FILTER_VALIDATE_EMAIL)
+                                   || str_ends_with($correo, '@industec.me'))) {
+                $correo = '';
+            }
+            $out[$loc][] = ['nombre' => (string) $f['nombre'], 'correo' => $correo !== '' ? $correo : null];
+        }
+        return $out;
+    }
+
+    /**
      * Familias de equipo, diagnósticos pre-redactados y repuestos frecuentes
      * (H-11, D9), para el selector «Falla encontrada» del formulario. `[]` en
      * cada llave si la 009 no está aplicada: el formulario sigue funcionando

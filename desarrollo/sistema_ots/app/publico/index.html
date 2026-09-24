@@ -168,16 +168,23 @@
 
         <div>
           <label for="admin">Administrador del local (nombre y apellido)</label>
-          <input type="text" name="admin" id="admin" list="adminsLista" required>
-          <!-- H-08: se llena con `CAT.admins[local]` (los ya ingresados en
-               `locales_admin`). No obliga a elegir de la lista: se puede
-               escribir uno nuevo si de verdad es otra persona. -->
-          <datalist id="adminsLista"></datalist>
+          <!-- Sugerencias propias y no un <datalist>: en varios Android el
+               datalist se ve como un selector cerrado y el técnico cree que no
+               puede escribir. Aquí siempre se escribe; la lista solo ayuda. -->
+          <div class="combo">
+            <input type="text" name="admin" id="admin" required autocomplete="off"
+                   placeholder="Escribe el nombre o elige uno de la lista">
+            <ul class="combo-lista" id="adminSug" role="listbox" hidden></ul>
+          </div>
         </div>
         <div>
-          <label>Correo del local</label>
-          <input type="email" name="correolocal" id="correolocal" readonly>
-          <span class="derivado" id="msgCorreoLocal">Se toma del maestro.</span>
+          <label for="correolocal">Correo del local o del administrador</label>
+          <div class="combo">
+            <input type="email" name="correolocal" id="correolocal" autocomplete="off"
+                   inputmode="email" placeholder="Escribe el correo o elige uno de la lista">
+            <ul class="combo-lista" id="correoSug" role="listbox" hidden></ul>
+          </div>
+          <span class="derivado" id="msgCorreoLocal">Escribe o elige el correo del local.</span>
         </div>
         <div>
           <label>Correo del jefe de operaciones</label>
@@ -272,8 +279,9 @@
                  texto sugerido; sigue siendo editable después. -->
             <label for="pen_falla">Falla encontrada (opcional, prellena el diagnóstico)</label>
             <select id="pen_falla">
-              <option value="">Elige si calza con algo conocido…</option>
+              <option value="">Elige una falla conocida, o escribe la tuya abajo…</option>
             </select>
+            <span class="derivado">Si no calza con ninguna, no elijas nada: escribe lo que encontraste en el cuadro de abajo.</span>
             <input type="hidden" id="pen_diagnostico_codigo" name="pen_diagnostico_codigo">
           </div>
           <div style="margin-top:10px">
@@ -313,9 +321,6 @@
           </label>
         </div>
       </div>
-      <!-- Datalist compartido por la lista de repuestos de la orden y la del
-           equipo trabado: se llena una vez con `CAT.repuestos` (H-11/D9). -->
-      <datalist id="partesLista"></datalist>
 
       <!-- ============ ESTADO OT (complementario) ============ -->
       <h2>Estado de la orden</h2>

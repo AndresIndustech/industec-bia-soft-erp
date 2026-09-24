@@ -33,10 +33,13 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require getcwd() . '/nucleo/Db.php';
 
 const CUENTAS = ['tec_prueba_uio_a', 'tec_prueba_uio_b', 'jefe_prueba_uio', 'jefe_prueba_cnlj', 'admin_prueba'];
-// Los dos avisos reales que preparar_prueba.php tomó el 2026-09-21. Su registro
-// dice `existia: false`: antes del arnés no tenían fila en casos_gestion, así que
-// «devolverlos» es borrar la fila y dejarlos NUEVOS para que el jefe los asigne.
-const AVISOS_REALES_TOMADOS = ['10355931', '10356012'];
+/* Hasta el 2026-09-24 aquí había una lista fija con los dos avisos reales que
+   el arnés tomó el 2026-09-21 (10355931, 10356012), y el paso de casos_gestion
+   BORRABA sus filas para «devolverlos». Después de T2.28.1 Kevin Chimbo los
+   asignó a técnicos reales (ajumbo y amorales, 2026-09-23 20:56): esa línea
+   habría borrado sus asignaciones. Lo detuvo la guarda de más abajo. Ya no hay
+   nada que devolver —el arnés no toma casos reales—, así que este script no
+   toca ningún aviso que no empiece por 9999, jamás (I-2). */
 
 $ejecutar = null;
 foreach ($argv as $a) {
@@ -50,14 +53,14 @@ $ei = implode(',', $ids);   // enteros salidos de la base: seguros para interpol
 
 $ots = array_column(Db::todos("SELECT id_industec FROM ot_capturadas WHERE usuario_id IN ($ei) AND id_industec IS NOT NULL"), 'id_industec');
 $eo  = $ots ? implode(',', array_map(fn($o) => Db::conn()->quote($o), $ots)) : "''";
-$ea  = implode(',', array_map(fn($a) => "'$a'", AVISOS_REALES_TOMADOS));
 
-// Un caso real solo se devuelve si lo único que tiene es obra de las cuentas de
-// prueba: asignado a una de ellas y sin orden de cierre real.
-$ajenos = Db::todos("SELECT aviso FROM casos_gestion WHERE aviso IN ($ea)
-                       AND NOT (asignado_a IN ($ei) AND (ot_cierre IS NULL OR ot_cierre IN ($eo)))");
-if ($ajenos) {
-    fwrite(STDERR, 'ABORTA: un aviso real tiene actividad que no es de prueba: ' . json_encode($ajenos) . "\n");
+// Si una cuenta de prueba tiene asignado un caso REAL, algo se lo dio por fuera
+// del arnés (T2.28.1 ya no lo hace). No se «devuelve» borrando: se detiene y lo
+// dice, para que una persona decida qué pasa con ese caso.
+$reales = Db::todos("SELECT aviso FROM casos_gestion WHERE asignado_a IN ($ei) AND aviso NOT LIKE '9999%'");
+if ($reales) {
+    fwrite(STDERR, 'ABORTA: una cuenta de prueba tiene casos reales asignados; nada se tocó: '
+                 . json_encode($reales) . "\n");
     exit(1);
 }
 
@@ -72,7 +75,7 @@ $pasos = [
     'novedades'          => "reportada_por IN ($ei) OR novedad_uuid LIKE '99990000-%'",
     'equipos_propuestos' => "propuesto_por IN ($ei) OR equipo_uuid LIKE '99990000-%'",
     'casos_seguimientos' => "tecnico_id IN ($ei) OR pedido_por IN ($ei)",
-    'casos_gestion'      => "aviso LIKE '9999%' OR aviso IN ($ea)",
+    'casos_gestion'      => "aviso LIKE '9999%'",
     // Aprendidos del campo «administrador» de las órdenes de prueba.
     'locales_admin'      => "nombre = 'Administrador de Prueba'",
     'ot_archivo_solicitudes' => "usuario_id IN ($ei)",

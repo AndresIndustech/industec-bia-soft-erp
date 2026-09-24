@@ -1088,16 +1088,23 @@ body.con-nav-abajo{ padding-bottom:calc(var(--nav-abajo) + env(safe-area-inset-b
 
 /* Un paso del formulario. Los que todavía no tocan quedan plegados y grises;
    no se ocultan, para que se vea cuánto falta. */
+/* SIN overflow:hidden, a propósito. Con él, la lista de un buscador (casos,
+   local, administrador, repuestos) quedaba recortada por el borde del paso:
+   el de «Orden asignada» está al final del primer paso y solo se veía una
+   franja, sin poder tocar ningún caso (reporte de INDUSTEC, 2026-09-23). Las
+   esquinas redondeadas del encabezado se sostienen con su propio radio. */
 .paso-caja{
   border:1px solid var(--border); border-radius:var(--r); background:#fff;
-  margin-bottom:11px; overflow:hidden;
+  margin-bottom:11px;
   transition:border-color var(--t2) var(--curva), box-shadow var(--t2) var(--curva);
 }
 .paso-caja.abierto{ border-color:#bfdbfe; box-shadow:0 0 0 3px rgba(14,165,233,.10); }
 .paso-caja > .cab{
   display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer;
   background:#fff; border:0; width:100%; text-align:left; font-family:inherit;
+  border-radius:calc(var(--r) - 1px);
 }
+.paso-caja.abierto > .cab{ border-radius:calc(var(--r) - 1px) calc(var(--r) - 1px) 0 0; }
 .paso-caja > .cab:hover{ background:var(--bg-alt); }
 .paso-caja > .cab .tit{ flex:1; min-width:0; font-size:14.5px; font-weight:700; color:var(--ink); }
 .paso-caja > .cab .resu{ font-size:12.5px; color:var(--muted); font-weight:400; margin-top:2px; display:block; }

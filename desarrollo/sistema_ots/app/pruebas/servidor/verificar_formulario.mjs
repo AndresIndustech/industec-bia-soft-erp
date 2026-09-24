@@ -139,7 +139,7 @@ const COLA = `(async () => {
     t.onsuccess = () => ok(t.result); t.onerror = () => ok([]);
   });
   return filas.map((f) => ({ uuid: (f.uuid||'').slice(0,8), estado: f.estado,
-    aviso: (f.orden||{}).aviso, local: (f.orden||{}).local,
+    aviso: (f.orden||{}).aviso, local: (f.orden||{}).local, correo_local: (f.orden||{}).correo_local,
     equipos: ((f.orden||{}).equipos||[]).length, firma: !!(f.orden||{}).firma_png,
     fotos: (f.fotos||[]).length, error: f.ultimo_error }));
 })()`;
@@ -195,6 +195,90 @@ try {
   }
   console.log('se prueba con:', JSON.stringify(caso));
 
+  /* G · Lo que reportó INDUSTEC el 2026-09-23, con toques de verdad (touch):
+       1. la lista de «Orden asignada» se veía como una franja y no dejaba
+          elegir el caso: `.paso-caja` la recortaba con overflow:hidden;
+       2. el correo del local era de solo lectura con servicioalcliente@;
+       3. repuestos y administrador parecían un selector cerrado (datalist).
+     No envía nada: solo escribe en el formulario. */
+  console.log('\n== G · casos, correo, administrador y repuestos (reporte del 2026-09-23) ==');
+  await nav.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+  const tocar = async (p) => {
+    await nav.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p.x, y: p.y }] });
+    await sleep(80);
+    await nav.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await sleep(500);
+  };
+  const centro = (expr) => nav.ev(`(() => { const e = ${expr}; if (!e) return null;
+      e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, h: Math.round(r.height) }; })()`);
+  const abrirPasoDe = (sel) => nav.ev(`(() => { const c = document.querySelector(${JSON.stringify(sel)}).closest('.paso-caja');
+      if (c && !c.classList.contains('abierto')) { c.querySelector('.cab').click(); } })()`);
+  const escribir = async (sel, texto, alFinal) => {
+    await tocar(await centro(`document.querySelector(${JSON.stringify(sel)})`));
+    await nav.ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); e.focus();
+      if (${alFinal ? 'true' : 'false'}) { e.setSelectionRange(e.value.length, e.value.length); } else { e.select(); } })()`);
+    await nav.send('Input.insertText', { text: texto });
+    await sleep(500);
+    return nav.ev(`document.querySelector(${JSON.stringify(sel)}).value`);
+  };
+
+  await nav.ir('index.html', 10000);
+  await abrirPasoDe('#avisoBusca'); await sleep(600);
+  await tocar(await centro(`document.querySelector('#avisoBusca')`)); await sleep(700);
+  const lista = await nav.ev(`(() => {
+    const l = document.querySelector('#avisoLista'), caja = l.closest('.paso-caja');
+    return { visible: !l.hidden, opciones: l.querySelectorAll('.combo-opt').length,
+             alto: Math.round(l.getBoundingClientRect().height),
+             overflow: caja ? getComputedStyle(caja).overflow : '(sin paso)' };
+  })()`);
+  afirmar('G1 la lista de casos se abre al tocar el buscador', lista.visible && lista.opciones > 0, JSON.stringify(lista));
+  afirmar('G1 el paso ya no recorta la lista', lista.overflow === 'visible', 'overflow=' + lista.overflow);
+  await nav.captura(join(SALIDA, 'verG1_lista_de_casos.png'));
+  const opt = await centro(`[...document.querySelectorAll('#avisoLista .combo-opt')].find((o) => o.dataset.k === ${JSON.stringify(caso.aviso)})
+                            || document.querySelector('#avisoLista .combo-opt')`);
+  const alcanzable = opt && await nav.ev(`(() => { const e = document.elementFromPoint(${opt.x}, ${opt.y});
+                                                    return !!(e && e.closest('#avisoLista .combo-opt')); })()`);
+  afirmar('G1 el caso se puede tocar (nada lo tapa ni lo recorta)', !!alcanzable, opt ? `alto de la opción ${opt.h}px` : 'sin opción');
+  if (opt) { await tocar(opt); }
+  const elegido = await nav.ev(`document.querySelector('#aviso').value`);
+  afirmar('G1 tocar el caso lo elige', elegido === caso.aviso, elegido || '(vacío)');
+
+  await abrirPasoDe('#correolocal'); await sleep(500);
+  const antes = await nav.ev(`(() => { const c = document.querySelector('#correolocal');
+    return { soloLectura: c.readOnly || c.hasAttribute('readonly'), valor: c.value }; })()`);
+  afirmar('G2 el correo del local ya no es de solo lectura', !antes.soloLectura, JSON.stringify(antes));
+  afirmar('G2 no propone el buzón de INDUSTEC como correo del local', !/@industec\.me/i.test(antes.valor), antes.valor || '(vacío: a escribir)');
+  const correo = await escribir('#correolocal', 'admin.prueba@local-prueba.ec');
+  afirmar('G2 se puede escribir el correo', correo === 'admin.prueba@local-prueba.ec', correo);
+  const admin = await escribir('#admin', 'Nombre Libre de Prueba');
+  afirmar('G2 se puede escribir el administrador', admin === 'Nombre Libre de Prueba', admin);
+
+  await abrirPasoDe('#segRepuesto'); await sleep(500);
+  await tocar(await centro(`document.querySelector('#segRepuesto button[data-v=si]')`));
+  const libre = await escribir('#repuestosLista .parte-desc', 'repuesto escrito a mano xyz');
+  afirmar('G3 se puede escribir un repuesto que no está en la lista', libre === 'repuesto escrito a mano xyz', libre);
+  const frec = await nav.ev(`(async () => { const j = await (await fetch('catalogos.php', { credentials: 'same-origin' })).json();
+                                            return (j.repuestos_frecuentes || []).map((r) => r.descripcion).filter(Boolean); })()`);
+  if (!frec.length) {
+    console.log('    NO COMPROBADO: el catálogo no trae repuestos frecuentes; no hay sugerencias que elegir.');
+  } else {
+    const parcial = frec[0].slice(0, 4);
+    await escribir('#repuestosLista .parte-desc', parcial);
+    const sug = await nav.ev(`(() => { const l = document.querySelector('#repuestosLista .combo-lista');
+      return { visible: !l.hidden, n: l.querySelectorAll('.combo-opt').length }; })()`);
+    afirmar('G3 al escribir, sugiere los repuestos conocidos', sug.visible && sug.n > 0, `«${parcial}» → ${sug.n} sugerencias`);
+    await nav.captura(join(SALIDA, 'verG3_repuesto_sugerencias.png'));
+    const s1 = await centro(`document.querySelector('#repuestosLista .combo-lista .combo-opt')`);
+    if (s1) { await tocar(s1); }
+    const elegidoRep = await nav.ev(`document.querySelector('#repuestosLista .parte-desc').value`);
+    afirmar('G3 tocar una sugerencia la pone en el campo', frec.includes(elegidoRep), elegidoRep);
+    const editado = await escribir('#repuestosLista .parte-desc', ' (modificado)', true);
+    afirmar('G3 después de elegir, se sigue pudiendo escribir', editado === elegidoRep + ' (modificado)', editado);
+  }
+  await nav.captura(join(SALIDA, 'verG2_campos_editables.png'));
+  await nav.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+
   console.log('\n== A · el equipo del caso se preselecciona ==');
   await nav.ir(`index.html?aviso=${caso.aviso}`, 11000);
   const eq = await nav.ev(`(() => {
@@ -246,6 +330,7 @@ try {
     document.querySelectorAll('.paso-caja').forEach((c) => c.classList.add('abierto'));
     const set = (s, v, ev) => { const e = q(s); if (e) { e.value = v; e.dispatchEvent(new Event(ev||'input',{bubbles:true})); } };
     set('#admin', 'Maria Perez');
+    set('#correolocal', 'admin.prueba@local-prueba.ec');
     set('#actividades', 'Revision completa del equipo; queda operando con normalidad.');
     set('#inicio', '2026-09-22T09:00', 'change');
     set('#fin', '2026-09-22T10:30', 'change');
@@ -294,6 +379,10 @@ try {
   afirmar('guarda el caso, el local y la firma',
           !!(cola[0] && cola[0].aviso && cola[0].local && cola[0].firma),
           cola.length ? `aviso=${cola[0].aviso} local=${cola[0].local} firma=${cola[0].firma}` : '');
+  // Error nº 40: si el correo escrito no viaja con la orden, editarlo no sirve.
+  afirmar('la orden lleva el correo del local que se escribió',
+          !!cola[0] && cola[0].correo_local === 'admin.prueba@local-prueba.ec',
+          cola.length ? String(cola[0].correo_local) : '');
   afirmar('el recibo le dice al tecnico que quedo a salvo',
           !(await nav.ev(`document.querySelector('#resultado').hidden`)),
           (await nav.ev(`document.querySelector('#rEstadoTxt').innerText`)).slice(0, 90));

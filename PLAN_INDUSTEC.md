@@ -1836,10 +1836,16 @@ cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 >    nocturno, y `t2_19_subir_pdfs.py` ya no aborta el lote a la primera.
 >    Evidencia real (183 llamadas SSH anotadas, 0 candados huérfanos con el
 >    vigilante en vivo corriendo en paralelo) en `ESTADO.md` **§1s-septies**.
->    **Pendiente, de personas:** que Andrés reinicie el vigilante en vivo
->    (PID 13340, sigue con el código viejo) y confirme el tope de sesiones de
->    Hostinger en hPanel; y que pasen dos madrugadas reales para la medición
->    de 48 h de 18a y el criterio «dos noches con `pdfs: ok`» de 18b.
+>    ✅ **Reiniciado el vigilante el 2026-09-23 21:17** (a pedido directo de
+>    Andrés, "reinicia el robot tú"): el PID 13340 con código viejo ya no
+>    existe, corre PID 29360 con el código de este commit, confirmado por
+>    InspectorBot como instancia única. Detalle y evidencia en `ESTADO.md`
+>    **§1s-octies**. **Sigue pendiente, de personas:** que Andrés confirme el
+>    tope de sesiones de Hostinger en hPanel (sin acceso a hPanel en ninguna
+>    sesión hasta ahora); y que pasen dos madrugadas reales con el código
+>    nuevo para la medición de 48 h de 18a y el criterio «dos noches con
+>    `pdfs: ok`» de 18b — el saneamiento nocturno de anoche (con código viejo)
+>    sigue en alerta `grave` en InspectorBot y no cuenta para ese criterio.
 > 2. ✅ **T2.28.17a/17c/17e, el Archivo, terminadas el 2026-09-24.** Los 24 PDF
 >    que la estación tenía ya están subidos (**7.664/7.664 íntegros**, criterio
 >    exacto en 0); las 108 filas restantes sin PDF tienen todas una hermana con
@@ -1854,8 +1860,25 @@ cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 >    (914/914, los 9 sitios revisados).
 > 5. Las decisiones D1–D8 de Andrés se piden cuando su subtarea llegue, con la cifra
 >    exacta, no antes. **Toda la Fase 1 de la especificación (§5.1) queda
->    cerrada** salvo lo de arriba que depende de personas o de tiempo real —
->    la Fase 2 (T2.28.2 en serie) es la siguiente acción de construcción.
+>    cerrada** salvo lo de arriba que depende de personas o de tiempo real.
+> 6. ✅ **Arreglo urgente del formulario, desplegado el 2026-09-24** (Andrés lo
+>    pidió por delante de la Fase 2): correo y administrador editables, con el
+>    correo viajando en la orden y usado en la cola y el PDF; repuestos con texto
+>    libre y sugerencias propias en vez de `<datalist>`; y la lista de casos de
+>    «Emitir» que `.paso-caja` recortaba. `sw.js` **v16**. Evidencia en
+>    `ESTADO.md` **§1s-nonies**.
+> 7. **La Fase 2 es la siguiente construcción, y hay que relanzarla bien.** Se
+>    lanzó el 2026-09-23 y **se detuvo a propósito**: el agente de T2.28.2 recibió
+>    el mensaje de Andrés «reinicia el robot tú» y lo ejecutó **en vez de su
+>    tarea** (error nº 44), así que **T2.28.2 no se hizo** (ni la 013, ni
+>    `Destinatarios.php`, ni `correos.php`). De **T2.28.3** ya está hecho, por el
+>    arreglo urgente: el correo del local editable y en la orden, `admins_v2`, el
+>    aprendizaje del correo en `locales_admin.correo` y `Emision::correoLocal()`.
+>    Le falta: quitar `#correojefeop` y la línea «también se enviará a» (depende
+>    de T2.28.2), `formulario_v: 2`, y la regla `CORREO_INVALIDO` en las tres
+>    implementaciones y el fixture (hoy solo avisa el formulario y el servidor
+>    cae al maestro). **`Destinatarios::resolver()` debe usar
+>    `Emision::correoLocal()`**, no escribir una segunda regla del correo del local.
 >
 > **Avance de la Fase 1 (análisis de solo lectura), sumado el 2026-09-23 en
 > segunda pasada:** T2.28.16a/16b ya están **hechas y verificadas** —
@@ -2686,6 +2709,32 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     (`prueba_casos_prueba.php`, que no toca el arreglo `$SINT_LOCAL` de
     `preparar_prueba.php` ni la tabla `locales`) no atrapa: solo salieron al
     correr de verdad contra el servidor.
+
+43. **Cambiar cómo se prepara un arnés sin cambiar cómo se deshace deja una
+    bomba.** T2.28.1 hizo que `preparar_prueba.php` ya no tomara casos reales,
+    pero `limpiar_pruebas.php` siguió con la lista fija de los dos que había
+    tomado antes (10355931, 10356012) y un paso que **borraba sus filas** de
+    `casos_gestion` para «devolverlos». El 2026-09-23 Kevin los asignó a
+    técnicos reales; al día siguiente la limpieza habría borrado esas
+    asignaciones. La salvó su propia guarda (abortó). **Regla:** cuando cambia
+    lo que un script crea, en el mismo cambio se revisa lo que su gemelo borra;
+    y ningún script de pruebas borra por una lista fija de claves reales. De la
+    misma pasada: la lista de casos del formulario salía recortada por un
+    `overflow:hidden` en `.paso-caja`, y las 319 comprobaciones seguían en verde
+    porque ninguna **tocaba** la lista — ahora lo hace el bloque G de
+    `verificar_formulario.mjs`.
+
+44. **Un agente de un workflow en curso recibe los mensajes que el usuario
+    escribe a media tarea, y puede obedecerlos en vez de su tarea.** El
+    2026-09-23 Andrés escribió «reinicia el robot tú» mientras corría la Fase 2
+    de T2.28: el agente de T2.28.2 reinició el vigilante y devolvió «hecho» **sin
+    tocar su subtarea**, y el siguiente (T2.28.3) arrancó sobre una migración que
+    no existía. Además dos procesos (ese agente y el orquestador) reiniciaron el
+    robot a la vez. **Regla:** si el usuario manda un pedido operativo mientras
+    corre un workflow, el orquestador lo atiende él mismo y revisa el diario del
+    workflow (`journal.jsonl`) antes de confiar en su resultado; y un workflow
+    en serie comprueba al empezar cada subtarea que la anterior dejó lo que
+    prometió (p. ej. `verificar_esquema.php` con la migración), deteniéndose si no.
 
 ### Lo que no se toca, nunca
 

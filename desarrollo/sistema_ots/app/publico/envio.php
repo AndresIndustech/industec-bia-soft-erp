@@ -367,13 +367,25 @@ try {
         // contar un reintento sería inflar «veces» sin que haya una firma más.
         $adminNombre = trim((string) ($orden['admin'] ?? ''));
         $localCod = trim((string) ($orden['local'] ?? ''));
+        // El correo que escribió o eligió el técnico. Se aprende junto al
+        // nombre del administrador para ofrecerlo en la próxima orden; un
+        // `@industec.me` no se aprende, porque no es el correo del local.
+        $correoEscrito = strtolower(trim((string) ($orden['correo_local'] ?? '')));
+        $correoValido = $correoEscrito !== '' && filter_var($correoEscrito, FILTER_VALIDATE_EMAIL)
+                        && !str_ends_with($correoEscrito, '@industec.me');
+        if ($correoEscrito !== '' && !$correoValido) {
+            $anexos[] = 'El correo del local que escribiste («' . mb_substr($correoEscrito, 0, 80)
+                      . '») no parece un correo válido del local: la orden sale al correo del maestro.';
+        }
         if ($adminNombre !== '' && $localCod !== '') {
             try {
                 Db::ejecutar(
-                    "INSERT INTO locales_admin (local_codigo, nombre, veces, visto_ultimo, fuente)
-                     VALUES (?, ?, 1, NOW(), 'ORDEN')
-                     ON DUPLICATE KEY UPDATE veces = veces + 1, visto_ultimo = NOW(), activo = 1",
-                    [mb_substr($localCod, 0, 12), mb_substr($adminNombre, 0, 120)]
+                    "INSERT INTO locales_admin (local_codigo, nombre, correo, veces, visto_ultimo, fuente)
+                     VALUES (?, ?, ?, 1, NOW(), 'ORDEN')
+                     ON DUPLICATE KEY UPDATE veces = veces + 1, visto_ultimo = NOW(), activo = 1,
+                                             correo = COALESCE(VALUES(correo), correo)",
+                    [mb_substr($localCod, 0, 12), mb_substr($adminNombre, 0, 120),
+                     $correoValido ? mb_substr($correoEscrito, 0, 160) : null]
                 );
             } catch (Throwable $ex) {
                 // Sin la 009 no existe `locales_admin`: no es motivo para

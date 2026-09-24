@@ -241,6 +241,24 @@ final class Emision
         return $r;
     }
 
+    /**
+     * El correo del local para ESTA orden: el que escribió o eligió el técnico,
+     * si es válido y no es un buzón de INDUSTEC; si no, el del maestro.
+     * Hasta el 2026-09-23 el formulario dejaba editar... nada: el campo era de
+     * solo lectura y, aunque no lo fuera, la cola y el PDF leían el maestro,
+     * donde 95 de 100 locales tienen `servicioalcliente@industec.me` (error nº 40:
+     * un campo editable no sirve si el que envía lee otra fuente).
+     */
+    public static function correoLocal(array $orden, array $local): string
+    {
+        $escrito = strtolower(trim((string) ($orden['correo_local'] ?? '')));
+        if ($escrito !== '' && filter_var($escrito, FILTER_VALIDATE_EMAIL)
+            && !str_ends_with($escrito, '@industec.me')) {
+            return $escrito;
+        }
+        return trim((string) ($local['correo_local'] ?? ''));
+    }
+
     /** @return string el estado en que quedó el correo */
     private static function encolar(array $c, array $orden, string $id): string
     {
@@ -248,7 +266,7 @@ final class Emision
         $zona  = (string) ($c['zona'] ?? '');
         $cfg   = Db::config();
         $para  = [];
-        foreach (array_merge([$local['correo_local'] ?? '', $local['correo_jefe_op'] ?? ''],
+        foreach (array_merge([self::correoLocal($orden, $local), $local['correo_jefe_op'] ?? ''],
                              (array) ($cfg['correo_por_zona'][$zona] ?? []),
                              (array) ($cfg['correo_fijos'] ?? [])) as $m) {
             $m = trim((string) $m);
@@ -368,7 +386,7 @@ final class Emision
             'local'           => trim($codLocal . ' · ' . ($local['nombre'] ?? ''), ' ·'),
             'tecnico'         => (string) ($orden['tecnico'] ?? ''),
             'admin'           => (string) ($orden['admin'] ?? ''),
-            'correo_local'    => (string) ($local['correo_local'] ?? ''),
+            'correo_local'    => self::correoLocal($orden, $local),
             'correo_jefe_op'  => (string) ($local['correo_jefe_op'] ?? ''),
             'equipos'         => $equipos,
             'inicio'          => $orden['inicio'] ?? null,

@@ -123,6 +123,7 @@ def main():
     # preparar_prueba.php deja en ESPERA_REPUESTO): así ninguna de las dos deja
     # a la otra sin ningún caso con local (error nro 36).
     AVISO_EMISION = "99990021"
+    CORREO_PRUEBA = "admin.prueba@local-prueba.ec"
     st, _, c = sa.pedir("catalogos.php")
     cat = json.loads(c)
     caso = next((x for x in cat["avisos"]["datos"] if x.get("aviso") == AVISO_EMISION), None)
@@ -143,6 +144,9 @@ def main():
              "repuestos": "", "fecha_atencion": hoy, "inicio": f"{hoy}T08:00", "fin": f"{hoy}T09:45",
              "actividades": "PRUEBA automatizada de la emisión (008): no es una intervención real.",
              "admin": "Administrador de Prueba", "observaciones": "PRUEBA: sin novedades", "estado_ot": "Cerrada",
+             # Reporte de INDUSTEC del 2026-09-23: el correo que escribe el técnico
+             # tiene que llegar a la cola y al PDF, no solo verse en el formulario.
+             "correo_local": CORREO_PRUEBA,
              "atiempo": "Si", "satisfaccion": 9, "firma_presente": True,
              "firma_png": "data:image/png;base64," + base64.b64encode(png(300, 100, (250, 250, 250))).decode(),
              "fotos": [f1, f2], "fotos_cantidad": 2, "tecnico": "Cualquier nombre que mande el celular",
@@ -175,6 +179,15 @@ def main():
            cola[0]["estado"] if cola else "sin fila")
     anotar("008", "y dice por qué no sale", bool(cola) and "sitio de pruebas" in (cola[0]["motivo"] or ""),
            (cola[0]["motivo"] or "")[:70] if cola else "")
+    para = sql("SELECT para FROM email_queue WHERE id_industec = ?", [ot])
+    anotar("correo", "la cola va al correo del local que escribió el técnico",
+           bool(para) and CORREO_PRUEBA in (para[0]["para"] or ""), (para[0]["para"] or "")[:120] if para else "sin fila")
+    anotar("correo", "y no al buzón genérico de INDUSTEC como correo del local",
+           bool(para) and "servicioalcliente@industec.me" not in (para[0]["para"] or ""),
+           (para[0]["para"] or "")[:120] if para else "sin fila")
+    aprendido = sql("SELECT correo FROM locales_admin WHERE local_codigo = ? AND nombre = 'Administrador de Prueba'", [local])
+    anotar("correo", "el correo queda aprendido para la próxima orden de ese local",
+           bool(aprendido) and aprendido[0]["correo"] == CORREO_PRUEBA, aprendido)
 
     print("\n== el PDF: qué lleva y quién lo abre ==")
     php = ('require "nucleo/Emision.php"; $in = json_decode(stream_get_contents(STDIN), true); '
@@ -182,12 +195,14 @@ def main():
            '$h = Emision::html($c, json_decode($c["carga"], true), $c["id_industec"]); '
            'echo json_encode(["prueba" => str_contains($h, "DOCUMENTO DE PRUEBA"), '
            '"admin" => str_contains($h, "Administrador de Prueba"), '
+           '"correo" => str_contains($h, "' + CORREO_PRUEBA + '"), '
            '"fotos" => substr_count($h, "data:image/jpeg;base64,"), "firma" => str_contains($h, "alt=\\"Firma\\""), '
            '"estado" => str_contains($h, "Operativo"), "marca" => str_contains($h, "MarcaPrueba"), '
            '"satisf" => str_contains($h, "9/10"), "tiempo" => str_contains($h, "1h 45m")]);')
     h = json.loads(ssh(f"cd {D} && php -r '{php}'", json.dumps({"ot": ot})))
     anotar("008", "lleva la franja «DOCUMENTO DE PRUEBA»", h.get("prueba") is True, h)
     anotar("008", "las dos fotos, la firma y quién firmó", h.get("fotos") == 2 and h.get("firma") and h.get("admin"), h)
+    anotar("correo", "el PDF imprime el correo del local que escribió el técnico", h.get("correo") is True, h)
     anotar("008", "el estado y la marca del equipo, la satisfacción y el tiempo de atención",
            h.get("estado") and h.get("marca") and h.get("satisf") and h.get("tiempo"), h)
     st, tipo, pdf = binario(sa, f"pdf.php?ot={ot}")

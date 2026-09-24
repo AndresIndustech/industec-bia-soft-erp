@@ -59,6 +59,7 @@ $base = (string) Catalogo::carpeta();
    «Falla encontrada». Si la 009 no está aplicada, cada llave llega vacía y el
    formulario sigue con el diagnóstico y los repuestos en texto libre. */
 $admins = Catalogo::admins();
+$adminsV2 = Catalogo::adminsV2();
 $diagCat = Catalogo::diagnosticos();
 
 /**
@@ -152,6 +153,7 @@ echo json_encode([
     // catálogo de validación (Catalogo::cargar() ya fusionó los equipos
     // propuestos ahí dentro): son datos de apoyo para la interfaz.
     'admins'              => (object) $admins,
+    'admins_v2'           => (object) $adminsV2,
     'familias'            => $diagCat['familias'],
     'diagnosticos'        => $diagCat['diagnosticos'],
     'repuestos_frecuentes' => $diagCat['repuestos'],
