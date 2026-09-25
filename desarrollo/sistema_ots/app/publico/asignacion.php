@@ -238,7 +238,7 @@ Ui::cabecera($u, 'asignacion.php',
         </div>
       </div>
 
-      <h3 id="por-repartir-<?= e($idZona) ?>" style="margin:14px 0 6px">Por repartir (<?= count($zs) ?>)</h3>
+      <h3 id="sin-asignar-<?= e($idZona) ?>" style="margin:14px 0 6px">Por repartir (<?= count($zs) ?>)</h3>
       <p class="sub" style="margin:0 0 10px">
         Casos sin asignar y sin informe<?= $z === '' ? ', sin una zona resuelta contra el maestro de locales' : ' de ' . e($z) ?>.
         Los que llevaban más de una semana sin que nadie los tocara ya se
@@ -303,7 +303,7 @@ Ui::cabecera($u, 'asignacion.php',
                   <input type="hidden" name="csrf" value="<?= e(Auth::csrfToken()) ?>">
                   <input type="hidden" name="accion" value="asignar">
                   <input type="hidden" name="aviso" value="<?= e($c['aviso'] ?? '') ?>">
-                  <input type="hidden" name="volver" value="asignacion.php<?= $fz !== '' ? '?zona=' . e($fz) : '' ?>#por-repartir-<?= e($idZona) ?>">
+                  <input type="hidden" name="volver" value="asignacion.php<?= $fz !== '' ? '?zona=' . e($fz) : '' ?>#sin-asignar-<?= e($idZona) ?>">
                   <select name="tecnico" required class="sel-tec" data-zona="<?= e((string) ($c['zona'] ?? '')) ?>">
                     <option value="">Elige…</option>
                     <?php foreach ($propios as $x): ?>

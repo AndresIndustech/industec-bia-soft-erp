@@ -620,6 +620,535 @@ final class Casos
         return $out;
     }
 
+    /* =====================================================================
+       LA TARJETA POR ZONA (VOCABULARIO.md §8; decisiones D-A y D-B de
+       Andrés, 24-sep-2026)
+
+       Isabel trabaja con SAP/KFC en cuatro cifras por zona: ÓRDENES ABIERTAS,
+       ÓRDENES A ESPERA DE INFORME TÉCNICO, EQUIPOS DESHABILITADOS y el TOTAL
+       DE ÓRDENES ABIERTAS. Aquí vive el ÚNICO cálculo de esas cifras: lo usan
+       el panel (tarjetas, total general, «Cómo va el buzón», «Lo que te toca
+       ahora») y el buzón (`casos.php?grupo=`), para que la cifra y las filas
+       del enlace salgan de la misma función. Es la lección de `sinAsignar()`:
+       una cifra con dos cálculos terminó diciendo dos números.
+
+       Todo lo de este bloque es determinista: `indiceInformes()`, `grupoOrden()`,
+       `clasificar()` y `tarjetasPorZona()` no leen la base ni el disco, reciben
+       lo leído. La lectura vive sola en `informesPorAviso()`. Así se prueba sin
+       levantar MySQL (`pruebas/prueba_panel_zona.php`) y con datos sintéticos.
+       ===================================================================== */
+
+    /** Abierta para INDUSTEC: sigue en el TOTAL DE ÓRDENES ABIERTAS. ATENDIDO no
+     *  (va al pie: «atendidas, por cerrar en SAP»); RESUELTO, NO_COMPETE y
+     *  CERRADO_SIN_ATENCION tampoco. */
+    public const ABIERTAS_INDUSTEC = ['NUEVO', 'ASIGNADO', 'EN_REVISION', 'ESPERA_REPUESTO'];
+
+    /** Capturas que se numeraron pero no salieron (ni PDF ni correo): no son
+     *  una OT INDUSTEC emitida, y la orden sigue a espera de informe técnico. */
+    private const CAPTURA_NO_EMITIDA = ['NUMERADA', 'FALLIDA'];
+
+    /** Días que lleva asignada una orden para contar en «asignadas hace 3+ días». */
+    public const DIAS_ASIGNADA = 3;
+
+    /** El aviso llega con y sin ceros a la izquierda según la fuente
+     *  (`000010352936` en SAP, `10352936` en el nombre de la orden). */
+    private static function claveAviso($a): string
+    {
+        return ltrim(trim((string) $a), '0');
+    }
+
+    /** Estado del equipo tal como lo escribe cada fuente → OPERATIVO,
+     *  DESHABILITADO o null. Cualquier otro texto, o vacío, es «sin dato»:
+     *  nunca se lee como Operativo (I-7). */
+    private static function estadoEquipoDe($v): ?string
+    {
+        $v = strtoupper(trim((string) $v));
+        return in_array($v, ['OPERATIVO', 'DESHABILITADO'], true) ? $v : null;
+    }
+
+    /**
+     * Qué avisos tienen OT INDUSTEC emitida, qué dice cada fuente del equipo y
+     * QUÉ FUENTES RESPONDIERON. Lee atenciones.json y la base, y le pasa lo
+     * leído a `indiceInformes()`. Una fuente que no responde llega como null,
+     * no como lista vacía: «no sé» y «no hay» se pintan distinto (I-7).
+     *
+     * Es la variante de `documentos()` sin `Emision::existePdf()`: la tarjeta
+     * clasifica todas las órdenes del buzón en cada carga y no puede leer el
+     * disco por cada una.
+     */
+    public static function informesPorAviso(array $gestion): array
+    {
+        require_once __DIR__ . '/Pendientes.php';
+
+        $aten = self::atenciones();
+        // `leerJson()` devuelve [] si el archivo no está o no se entiende: solo
+        // si trae su clave 'atenciones' se sabe que la fuente respondió.
+        $atenOk   = isset(self::$atenciones['atenciones']);
+        $generado = $atenOk ? (string) (self::$atenciones['generado'] ?? '') : '';
+
+        $capturadas = null;
+        try {
+            // Solo el arreglo de equipos de la carga: la carga entera trae el
+            // formulario completo y aquí no hace falta.
+            $capturadas = Db::todos(
+                "SELECT aviso, estado, emitida_en, JSON_EXTRACT(carga, '$.equipos') AS equipos
+                   FROM ot_capturadas
+                  WHERE aviso IS NOT NULL AND aviso <> ''
+                    AND estado IN ('EMITIDA','ENVIADA','NUMERADA','FALLIDA','PROCESADA')");
+        } catch (Throwable $e) { $capturadas = null; }      // sin la 008 no responde
+
+        $archivo = null;
+        try {
+            $archivo = Db::todos("SELECT aviso, fecha_atencion FROM ot_archivo
+                                   WHERE aviso IS NOT NULL AND aviso <> ''");
+        } catch (Throwable $e) { $archivo = null; }         // sin la 009 no responde
+
+        $pendientes = null;
+        if (Pendientes::disponible()) {
+            try {
+                /* El «vencido» lo calcula MySQL con la MISMA condición que
+                   `Pendientes::cumplimiento48()` y el grupo `vencidos` de
+                   `Pendientes::lista()`, con su propio NOW(): así la sublínea de
+                   la tarjeta y la lista del enlace no pueden discrepar. La fecha
+                   de la evidencia es la del reloj (`plazo_desde` si se reinició):
+                   es la última vez que alguien declaró el equipo deshabilitado. */
+                $pendientes = Db::todos(
+                    "SELECT p.aviso, COALESCE(p.plazo_desde, p.abierto_en) AS desde,
+                            (p.via = 'SIN_VEREDICTO'
+                             AND COALESCE(p.plazo_desde, p.abierto_en) < DATE_SUB(NOW(), INTERVAL 48 HOUR)) AS vencido
+                       FROM pendientes p
+                      WHERE p.deshabilitado = 1
+                        AND p.estado IN ('" . implode("','", Pendientes::ABIERTOS) . "')");
+            } catch (Throwable $e) { $pendientes = null; }
+        }
+
+        return self::indiceInformes($gestion, $atenOk ? $aten : null, $capturadas, $archivo,
+                                    $pendientes, $generado !== '' ? $generado : null);
+    }
+
+    /**
+     * El índice por aviso, a partir de lo que ya se leyó. Determinista.
+     *
+     * @param array|null $aten       atenciones.json → 'atenciones'; null = no respondió
+     * @param array|null $capturadas filas {aviso, estado, emitida_en, equipos(JSON)}; null = sin la 008
+     * @param array|null $archivo    filas {aviso, fecha_atencion}; null = sin la 009
+     * @param array|null $pendientes filas {aviso, desde, vencido} de solicitudes en trámite
+     *                               con el equipo deshabilitado; null = sin la 007
+     * @return array{avisos:array, cadenas:array, fuentes:array, ot_disponible:bool,
+     *               equipo_disponible:bool, generado:?string}
+     */
+    public static function indiceInformes(array $gestion, ?array $aten, ?array $capturadas,
+                                          ?array $archivo, ?array $pendientes, ?string $generado = null): array
+    {
+        $idx = [];
+        $nodo = static function (string $k) use (&$idx): void {
+            $idx[$k] ??= ['emitida' => false, 'no_emitida' => false, 'equipo' => [], 'vencida' => false];
+        };
+
+        // La OT de cierre que dejó la app o la reconciliación: es de la propia
+        // gestión, que siempre responde.
+        foreach ($gestion as $aviso => $g) {
+            if (trim((string) ($g['ot_cierre'] ?? '')) !== '') {
+                $k = self::claveAviso($aviso);
+                if ($k === '') { continue; }
+                $nodo($k);
+                $idx[$k]['emitida'] = true;
+            }
+        }
+        // Lo que llegó por correo: cualquier OT, con cualquier estado_ot.
+        foreach ($aten ?? [] as $aviso => $a) {
+            $k = self::claveAviso($aviso);
+            if ($k === '' || empty($a['ots'])) { continue; }
+            $nodo($k);
+            $idx[$k]['emitida'] = true;
+            foreach ($a['ots'] as $o) {
+                $est = self::estadoEquipoDe($o['estado_equipo'] ?? null);
+                if ($est !== null) { $idx[$k]['equipo'][] = [$est, (string) ($o['fecha'] ?? '')]; }
+            }
+        }
+        // Lo que emitió la app. NUMERADA o FALLIDA no salió: no cuenta como
+        // emitida, pero deja la marca «con OT INDUSTEC no emitida».
+        foreach ($capturadas ?? [] as $r) {
+            $k = self::claveAviso($r['aviso'] ?? '');
+            if ($k === '') { continue; }
+            $nodo($k);
+            $est = strtoupper((string) ($r['estado'] ?? ''));
+            if (in_array($est, self::CAPTURA_NO_EMITIDA, true)) {
+                $idx[$k]['no_emitida'] = true;
+                continue;
+            }
+            if (($r['emitida_en'] ?? null) === null || $r['emitida_en'] === '') { continue; }
+            $idx[$k]['emitida'] = true;
+            // Deshabilitado si algún equipo lo está; Operativo solo si TODOS lo
+            // están; si alguno viene sin estado y ninguno deshabilitado, la OT
+            // no dice nada del equipo (un null del formulario es «sin dato»).
+            $eqs = is_array($r['equipos'] ?? null) ? $r['equipos'] : json_decode((string) ($r['equipos'] ?? ''), true);
+            if (is_array($eqs) && $eqs !== []) {
+                $vals = array_map(static fn($e) => self::estadoEquipoDe(is_array($e) ? ($e['estado'] ?? null) : null), $eqs);
+                if (in_array('DESHABILITADO', $vals, true)) {
+                    $idx[$k]['equipo'][] = ['DESHABILITADO', (string) $r['emitida_en']];
+                } elseif (!in_array(null, $vals, true)) {
+                    $idx[$k]['equipo'][] = ['OPERATIVO', (string) $r['emitida_en']];
+                }
+            }
+        }
+        foreach ($archivo ?? [] as $r) {
+            $k = self::claveAviso($r['aviso'] ?? '');
+            if ($k === '') { continue; }
+            $nodo($k);
+            $idx[$k]['emitida'] = true;
+        }
+        // La solicitud en trámite con el equipo deshabilitado. Una con
+        // deshabilitado = 0 no llega aquí: no es evidencia de Operativo.
+        foreach ($pendientes ?? [] as $r) {
+            $k = self::claveAviso($r['aviso'] ?? '');
+            if ($k === '') { continue; }
+            $nodo($k);
+            $idx[$k]['equipo'][] = ['DESHABILITADO', (string) ($r['desde'] ?? '')];
+            if (!empty($r['vencido'])) { $idx[$k]['vencida'] = true; }
+        }
+
+        /* Las cadenas de continuidad (la 012): un trabajo con varios avisos se
+           cuenta UNA vez, y para saber si «tiene OT» o qué dice del equipo se
+           miran todos sus avisos. Se arman aquí una sola vez; `cadena()` por
+           orden recorrería la gestión entera 900 veces en cada carga. */
+        $grupos = [];
+        foreach ($gestion as $aviso => $g) {
+            if (trim((string) ($g['continua_de'] ?? '')) === '') { continue; }
+            $raiz = self::raiz((string) $aviso, $gestion);
+            $grupos[$raiz][self::claveAviso($aviso)] = true;
+            $grupos[$raiz][self::claveAviso($raiz)] = true;
+        }
+        $cadenas = [];
+        foreach ($grupos as $raiz => $miembros) {
+            $lista = array_map('strval', array_keys($miembros));
+            foreach ($lista as $m) { $cadenas[$m] = ['raiz' => self::claveAviso($raiz), 'avisos' => $lista]; }
+        }
+
+        $fuentes = ['atenciones' => $aten !== null, 'capturadas' => $capturadas !== null,
+                    'archivo' => $archivo !== null, 'pendientes' => $pendientes !== null];
+        return [
+            'avisos'  => $idx,
+            'cadenas' => $cadenas,
+            'fuentes' => $fuentes,
+            // Filas 1 y 2: sin cualquiera de las tres fuentes de OT, una orden
+            // con su OT emitida se contaría «a espera de informe técnico».
+            'ot_disponible' => $fuentes['atenciones'] && $fuentes['capturadas'] && $fuentes['archivo'],
+            // Fila 3: el estado del equipo sale de las OT (correo y app) y de la
+            // solicitud en trámite; sin una de ellas, «la evidencia más
+            // reciente» puede ser otra.
+            'equipo_disponible' => $fuentes['atenciones'] && $fuentes['capturadas'] && $fuentes['pendientes'],
+            'generado' => $generado,
+        ];
+    }
+
+    /** Los avisos (normalizados) de la cadena de este aviso; él solo si no tiene cadena. */
+    private static function avisosDeCadena(string $aviso, array $informes): array
+    {
+        $k = self::claveAviso($aviso);
+        return $informes['cadenas'][$k]['avisos'] ?? [$k];
+    }
+
+    /** ¿La cadena de esta orden tiene al menos una OT INDUSTEC emitida? */
+    public static function tieneOT(string $aviso, array $informes): bool
+    {
+        foreach (self::avisosDeCadena($aviso, $informes) as $k) {
+            if (!empty($informes['avisos'][$k]['emitida'])) { return true; }
+        }
+        return false;
+    }
+
+    /**
+     * El grupo de la orden en la tarjeta. Precedencia exacta (VOCABULARIO.md §8.2):
+     *
+     *   estado fuera de ABIERTAS_INDUSTEC  -> null (fuera del total)
+     *   ESPERA_REPUESTO                    -> 'ABIERTA'  (D-A: siempre; hubo visita
+     *                                          o diagnóstico aunque no haya OT,
+     *                                          p. ej. «el equipo no quedó operativo»
+     *                                          desde la bandeja del técnico)
+     *   con ≥1 OT INDUSTEC emitida         -> 'ABIERTA'
+     *   sin ninguna                        -> 'ESPERA_INFORME'
+     *
+     * Una orden con OT de cierre cuyo estado aún no pasó a ATENDIDO se cuenta
+     * por su estado: sigue en el total, como abierta, hasta que la reconciliación
+     * la mueva. Quien llama mira `$informes['ot_disponible']` antes de pintar
+     * las filas 1 y 2 (I-7).
+     */
+    public static function grupoOrden(array $caso, ?array $g, array $informes): ?string
+    {
+        $estado = strtoupper(trim((string) ($g['estado'] ?? 'NUEVO'))) ?: 'NUEVO';
+        if (!in_array($estado, self::ABIERTAS_INDUSTEC, true)) { return null; }
+        if ($estado === 'ESPERA_REPUESTO') { return 'ABIERTA'; }
+        return self::tieneOT((string) ($caso['aviso'] ?? ''), $informes) ? 'ABIERTA' : 'ESPERA_INFORME';
+    }
+
+    /**
+     * Estado del equipo de la orden por la evidencia MÁS RECIENTE de su cadena:
+     * 'DESHABILITADO', 'OPERATIVO' o null (sin dato). En empate gana
+     * Deshabilitado, para no esconder la alarma. Un informe posterior que dice
+     * Operativo saca la orden de EQUIPOS DESHABILITADOS aunque la solicitud
+     * siga abierta (su `deshabilitado` no baja nunca: GREATEST).
+     */
+    public static function estadoEquipo(string $aviso, array $informes): ?string
+    {
+        $mejor = null;
+        foreach (self::avisosDeCadena($aviso, $informes) as $k) {
+            foreach ($informes['avisos'][$k]['equipo'] ?? [] as [$est, $fecha]) {
+                if ($mejor === null) { $mejor = [$est, $fecha]; continue; }
+                $c = self::compararFecha($fecha, $mejor[1]);
+                if ($c > 0 || ($c === 0 && $est === 'DESHABILITADO')) { $mejor = [$est, $fecha]; }
+            }
+        }
+        return $mejor[0] ?? null;
+    }
+
+    /** Compara dos fechas de fuentes distintas. El correo trae solo el día y la
+     *  app la hora: si una de las dos es solo día, se comparan por día (y el
+     *  empate lo resuelve quien llama), en vez de dar por anterior al día sin hora. */
+    private static function compararFecha(string $a, string $b): int
+    {
+        $a = trim($a); $b = trim($b);
+        if (strlen($a) <= 10 || strlen($b) <= 10) {
+            return substr($a, 0, 10) <=> substr($b, 0, 10);
+        }
+        return substr($a, 0, 19) <=> substr($b, 0, 19);
+    }
+
+    /** ¿Alguna solicitud de la cadena está vencida (más de 48 h sin validar)? */
+    private static function vencida48(string $aviso, array $informes): bool
+    {
+        foreach (self::avisosDeCadena($aviso, $informes) as $k) {
+            if (!empty($informes['avisos'][$k]['vencida'])) { return true; }
+        }
+        return false;
+    }
+
+    /** ¿Alguna captura de la cadena quedó NUMERADA o FALLIDA? */
+    private static function conOtNoEmitida(string $aviso, array $informes): bool
+    {
+        foreach (self::avisosDeCadena($aviso, $informes) as $k) {
+            if (!empty($informes['avisos'][$k]['no_emitida'])) { return true; }
+        }
+        return false;
+    }
+
+    /**
+     * Clasifica cada orden: su grupo y si entra en el total. Cada cadena de
+     * continuidad cuenta UNA vez: la representa su orden más reciente que siga
+     * abierta; las demás de la cadena quedan fuera del total (grupo null).
+     *
+     * @return array<string,array{grupo:?string,en_total:bool}> por aviso tal como viene
+     */
+    public static function clasificar(array $casos, array $gestion, array $informes): array
+    {
+        $out = [];
+        $rep = [];      // raíz → [aviso, fecha] de la orden que representa la cadena
+        foreach ($casos as $c) {
+            $aviso = (string) ($c['aviso'] ?? '');
+            $grupo = self::grupoOrden($c, $gestion[$aviso] ?? null, $informes);
+            $out[$aviso] = ['grupo' => $grupo, 'en_total' => $grupo !== null];
+            if ($grupo === null) { continue; }
+            $raiz = $informes['cadenas'][self::claveAviso($aviso)]['raiz'] ?? null;
+            if ($raiz === null) { continue; }
+            $clave = [(string) ($c['fecha_creacion'] ?? ''), self::claveAviso($aviso)];
+            if (!isset($rep[$raiz]) || $clave > $rep[$raiz][1]) { $rep[$raiz] = [$aviso, $clave]; }
+        }
+        foreach ($casos as $c) {
+            $aviso = (string) ($c['aviso'] ?? '');
+            if (!$out[$aviso]['en_total']) { continue; }
+            $raiz = $informes['cadenas'][self::claveAviso($aviso)]['raiz'] ?? null;
+            if ($raiz !== null && $rep[$raiz][0] !== $aviso) {
+                $out[$aviso] = ['grupo' => null, 'en_total' => false];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * ¿La orden cae en el filtro `?grupo=` del buzón? Una sola regla para el
+     * enlace de cada cifra de la tarjeta: abiertas | espera_informe | total |
+     * deshabilitados. `null` = no se puede saber (falta una fuente): el buzón
+     * no lista nada y lo dice (I-7).
+     */
+    public static function enGrupo(string $grupo, array $caso, array $clasif, array $informes): ?bool
+    {
+        $k = $clasif[(string) ($caso['aviso'] ?? '')] ?? ['grupo' => null, 'en_total' => false];
+        switch ($grupo) {
+            case 'total':
+                return $k['en_total'];
+            case 'abiertas':
+                return $informes['ot_disponible'] ? $k['grupo'] === 'ABIERTA' : null;
+            case 'espera_informe':
+                return $informes['ot_disponible'] ? $k['grupo'] === 'ESPERA_INFORME' : null;
+            case 'deshabilitados':
+                return $informes['equipo_disponible']
+                    ? $k['en_total'] && self::estadoEquipo((string) ($caso['aviso'] ?? ''), $informes) === 'DESHABILITADO'
+                    : null;
+        }
+        return null;
+    }
+
+    /**
+     * Qué tarjetas se dibujan. La administración ve las tres zonas siempre, y
+     * OTRA ZONA (o cualquier otro código) solo si tiene algo (ASG-21); «sin
+     * zona» no lleva tarjeta sino su línea aparte. El jefe de zona ve solo la
+     * suya: `enAlcance()` ya le recortó las órdenes, así que su tarjeta cuenta
+     * exactamente lo que ve en el buzón.
+     *
+     * @return string[]
+     */
+    public static function zonasVisibles(array $tz, ?string $zonaAlc): array
+    {
+        if ($zonaAlc !== null) { return [$zonaAlc]; }
+        $out = ['UIO', 'LARB', 'CNLJ'];
+        foreach ($tz['zonas'] as $zk => $t) {
+            $zk = (string) $zk;
+            if ($zk === '' || in_array($zk, $out, true)) { continue; }
+            if ($t['total'] + $t['atendidas'] + $t['sin_regularizar'] + $t['en_revision'] > 0) { $out[] = $zk; }
+        }
+        return $out;
+    }
+
+    /** Días enteros desde una fecha hasta hoy, como `Ui::dias()`, con el «hoy» explícito para poder probarlo. */
+    private static function diasDesde(?string $fecha, string $hoy): ?int
+    {
+        $f = substr(trim((string) $fecha), 0, 10);
+        if ($f === '' || strtotime($f) === false) { return null; }
+        return (int) floor((strtotime($hoy) - strtotime($f)) / 86400);
+    }
+
+    /**
+     * Las cifras de la tarjeta por zona, y los totales que dependen de ellas.
+     *
+     * El universo son los `$casos` que ya pasaron por `enAlcance()` (el
+     * catálogo de 90 días del buzón): el mismo que lista `casos.php`, para que
+     * cada cifra sea igual a las filas de su enlace. No se suma
+     * `fueraDeCatalogo()`: no distingue una orden que salió de la ventana de
+     * una que KFC anuló, y el enlace no la mostraría.
+     *
+     * Una cifra que no se puede calcular es null, nunca 0 (I-7): filas 1 y 2 sin
+     * `ot_disponible`; fila 3 y sus sublíneas sin `equipo_disponible`.
+     *
+     * @param string[] $zonasFijas zonas que llevan tarjeta aunque no tengan nada (la del jefe de zona)
+     * @return array{zonas:array<string,array>, tres_zonas:array, total:int, ot_disponible:bool,
+     *               equipo_disponible:bool, sin_tecnico:int, asignadas_3d:?int,
+     *               asignadas_3d_por_estado:int, espera_repuesto:int, en_revision:int,
+     *               atendidas:int, sin_regularizar:int}
+     */
+    public static function tarjetasPorZona(array $casos, array $gestion, array $informes,
+                                           ?string $hoy = null, array $zonasFijas = []): array
+    {
+        $hoy ??= date('Y-m-d');
+        $otOk = (bool) $informes['ot_disponible'];
+        $eqOk = (bool) $informes['equipo_disponible'];
+        $vacia = static fn(): array => [
+            'total' => 0, 'abiertas' => 0, 'abiertas_espera_repuesto' => 0, 'abiertas_sin_asignar' => 0,
+            'espera_informe' => 0, 'sin_asignar' => 0, 'asignadas_3d' => 0,
+            'otro_por_decidir' => 0, 'ot_no_emitida' => 0,
+            'deshabilitados' => 0, 'vencidas' => 0, 'operativos' => 0, 'sin_dato' => 0,
+            'en_revision' => 0, 'atendidas' => 0, 'sin_regularizar' => 0,
+            'sin_tecnico' => 0, 'asignadas_3d_por_estado' => 0, 'espera_repuesto' => 0,
+        ];
+        // Las tres zonas tienen tarjeta aunque estén en cero (y la del jefe de
+        // zona, que llega en `$zonasFijas`): una zona sin órdenes se ve en 0,
+        // no desaparece.
+        $zonas = [];
+        foreach (array_merge(['UIO', 'LARB', 'CNLJ'], $zonasFijas) as $zf) { $zonas[(string) $zf] ??= $vacia(); }
+        $clasif = self::clasificar($casos, $gestion, $informes);
+
+        foreach ($casos as $c) {
+            $aviso  = (string) ($c['aviso'] ?? '');
+            $g      = $gestion[$aviso] ?? null;
+            $estado = strtoupper(trim((string) ($g['estado'] ?? 'NUEVO'))) ?: 'NUEVO';
+            $z      = (string) ($c['zona'] ?? '');
+            $zonas[$z] ??= $vacia();
+            $t = &$zonas[$z];
+
+            // El pie: la tarea diaria de Isabel. Se cuenta por estado, orden por
+            // orden, igual que la lista de su enlace (`casos.php?est=`).
+            if ($estado === 'ATENDIDO')    { $t['atendidas']++; }
+            if ($estado === 'EN_REVISION') { $t['en_revision']++; }
+            if ($estado === 'CERRADO_SIN_ATENCION' && empty($g['regularizado_en'])) { $t['sin_regularizar']++; }
+
+            if (!$clasif[$aviso]['en_total']) { unset($t); continue; }
+            $grupo = $clasif[$aviso]['grupo'];
+            $t['total']++;
+            if ($estado === 'ESPERA_REPUESTO') { $t['espera_repuesto']++; }
+
+            // Sin técnico: no depende de ninguna fuente de OT, por eso la tarea
+            // «N órdenes sin asignar» se puede dar aunque falte atenciones.json.
+            $sinTecnico = in_array($estado, ['NUEVO', 'EN_REVISION'], true) && empty($g['asignado_a']);
+            if ($sinTecnico) { $t['sin_tecnico']++; }
+            $dias = $estado === 'ASIGNADO' ? self::diasDesde($g['asignado_en'] ?? null, $hoy) : null;
+            $viejaAsig = $dias !== null && $dias >= self::DIAS_ASIGNADA;
+            if ($viejaAsig) { $t['asignadas_3d_por_estado']++; }
+
+            // Filas 1 y 2 y sus sublíneas, siempre SOBRE el grupo: una sublínea
+            // no puede pasar de su fila.
+            if ($grupo === 'ABIERTA') {
+                $t['abiertas']++;
+                if ($estado === 'ESPERA_REPUESTO') { $t['abiertas_espera_repuesto']++; }
+                // Sin técnico pero con OT: la firma de la OT no cruzó con nadie del padrón.
+                if ($sinTecnico) { $t['abiertas_sin_asignar']++; }
+            } else {
+                $t['espera_informe']++;
+                if ($sinTecnico) { $t['sin_asignar']++; }
+                if ($viejaAsig)  { $t['asignadas_3d']++; }
+                if (self::otroTrabajoPorDecidir($c, $g))          { $t['otro_por_decidir']++; }
+                if (self::conOtNoEmitida($aviso, $informes))      { $t['ot_no_emitida']++; }
+            }
+
+            // Fila 3: una por orden, por la evidencia más reciente de su equipo.
+            $eq = self::estadoEquipo($aviso, $informes);
+            if ($eq === 'DESHABILITADO') {
+                $t['deshabilitados']++;
+                if (self::vencida48($aviso, $informes)) { $t['vencidas']++; }
+            } elseif ($eq === 'OPERATIVO') {
+                $t['operativos']++;
+            } else {
+                $t['sin_dato']++;
+            }
+            unset($t);
+        }
+
+        foreach ($zonas as &$t) {
+            if (!$otOk) {
+                foreach (['abiertas', 'abiertas_espera_repuesto', 'abiertas_sin_asignar', 'espera_informe',
+                          'sin_asignar', 'asignadas_3d', 'otro_por_decidir', 'ot_no_emitida'] as $k) { $t[$k] = null; }
+            }
+            if (!$eqOk) {
+                foreach (['deshabilitados', 'vencidas', 'operativos', 'sin_dato'] as $k) { $t[$k] = null; }
+            }
+        }
+        unset($t);
+
+        $sumar = static function (array $zs, string $k): ?int {
+            $s = 0;
+            foreach ($zs as $t) { if ($t[$k] === null) { return null; } $s += $t[$k]; }
+            return $s;
+        };
+        $tres = array_intersect_key($zonas, ['UIO' => 1, 'LARB' => 1, 'CNLJ' => 1]);
+        return [
+            'zonas' => $zonas,
+            // La fila 5 del RESUMEN de Isabel: solo las tres zonas. OTRA y
+            // «sin zona» van aparte y no entran.
+            'tres_zonas' => ['total' => $sumar($tres, 'total'),
+                             'deshabilitados' => $sumar($tres, 'deshabilitados'),
+                             'operativos' => $sumar($tres, 'operativos')],
+            // El cuadro de «Cómo va el buzón»: todas, incluidas OTRA y sin zona.
+            'total' => $sumar($zonas, 'total'),
+            'ot_disponible' => $otOk,
+            'equipo_disponible' => $eqOk,
+            'sin_tecnico' => $sumar($zonas, 'sin_tecnico'),
+            'asignadas_3d' => $sumar($zonas, 'asignadas_3d'),
+            'asignadas_3d_por_estado' => $sumar($zonas, 'asignadas_3d_por_estado'),
+            'espera_repuesto' => $sumar($zonas, 'espera_repuesto'),
+            'en_revision' => $sumar($zonas, 'en_revision'),
+            'atendidas' => $sumar($zonas, 'atendidas'),
+            'sin_regularizar' => $sumar($zonas, 'sin_regularizar'),
+        ];
+    }
+
     /**
      * Etiqueta legible del estado.
      *

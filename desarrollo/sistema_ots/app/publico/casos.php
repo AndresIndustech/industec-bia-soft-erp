@@ -4,6 +4,7 @@ require_once __DIR__ . '/nucleo/Casos.php';
 require_once __DIR__ . '/nucleo/Ui.php';   // Ui::coincide() se usa al filtrar, antes de pintar
 require_once __DIR__ . '/nucleo/Pendientes.php';   // el cierre de dos manos mira si queda un pendiente vivo (ASG-01)
 require_once __DIR__ . '/nucleo/Emision.php';   // Emision::existePdf() antes de ofrecer el enlace (ver bloque de abajo)
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // el rótulo del filtro ?grupo= de la tarjeta por zona
 
 /**
  * casos.php — Buzón de casos: lo que KFC pide por el correo de SAP.
@@ -392,7 +393,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vuelta = (string) ($_POST['volver'] ?? '');
     if ($vuelta === 'ordenes.php') {
         $destino = 'ordenes.php';
-    } elseif (preg_match('~^asignacion\.php(?:\?zona=(?:UIO|LARB|CNLJ))?(?:#por-repartir-(?:UIO|LARB|CNLJ))?$~', $vuelta)) {
+    } elseif (preg_match('~^asignacion\.php(?:\?zona=(?:UIO|LARB|CNLJ|OTRA))?(?:#sin-asignar-(?:UIO|LARB|CNLJ|OTRA|SIN))?$~', $vuelta)) {
+        // El ancla es `#sin-asignar-X` desde el vocabulario único (antes
+        // `#por-repartir-X`); cambia a la vez aquí y en asignacion.php, o la
+        // vuelta después de asignar cae al buzón. OTRA y SIN también tienen
+        // su bloque en asignacion.php, y antes su vuelta se perdía.
         $destino = $vuelta;
     } else {
         $destino = 'casos.php';
@@ -467,10 +472,28 @@ $fOtro  = (string) ($_GET['otro'] ?? '');
 if (!in_array($fOtro, ['por_decidir', 'AUTORIZADO', 'NO_AUTORIZADO'], true)) { $fOtro = ''; }
 // «Sin zona» no es una zona más: es la ausencia de una (ASG-21). El buzón no
 // podía filtrarla porque `zona=` vacío no filtra nada.
-$fDiasAsig = (string) ($_GET['dias_asignado'] ?? '');    // asignados sin informe hace N+ días (ASG-15)
+$fDiasAsig = (string) ($_GET['dias_asignado'] ?? '');    // asignadas hace N+ días, a espera de informe técnico (ASG-15)
 $desdeF = $fDias !== '' ? date('Y-m-d', strtotime('-' . (int) $fDias . ' days')) : null;
 
-$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $fEst, $fDiasAsig, $fOtro, $porAviso, $gestion) {
+/* El filtro de la tarjeta por zona del panel: `?grupo=abiertas |
+   espera_informe | total | deshabilitados`, junto con `?zona=`. Se resuelve
+   con LA MISMA función que cuenta la tarjeta (`Casos::clasificar()` y
+   `Casos::enGrupo()`), así la cifra del panel y las filas de su enlace son
+   iguales. Solo se calcula si hace falta: son tres consultas más. */
+$fGrupo = (string) ($_GET['grupo'] ?? '');
+if (!in_array($fGrupo, ['abiertas', 'espera_informe', 'total', 'deshabilitados'], true)) { $fGrupo = ''; }
+$informesG = null;
+$clasifG   = [];
+if ($fGrupo !== '' || $fDiasAsig !== '') {
+    $informesG = Casos::informesPorAviso($gestion);
+    $clasifG   = Casos::clasificar($todos, $gestion, $informesG);
+}
+// Sin la fuente que decide el grupo no se lista «a ojo»: se dice (I-7).
+$grupoNoDisponible = $fGrupo !== '' && (
+    (in_array($fGrupo, ['abiertas', 'espera_informe'], true) && !$informesG['ot_disponible'])
+    || ($fGrupo === 'deshabilitados' && !$informesG['equipo_disponible']));
+
+$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $fEst, $fDiasAsig, $fOtro, $porAviso, $gestion, $fGrupo, $clasifG, $informesG) {
     $g = $gestion[$c['aviso'] ?? ''] ?? null;
     // Por el estado de vista: «sin atender» lista solo lo que falta regularizar,
     // que es a lo que manda el enlace del panel; lo ya explicado va aparte.
@@ -489,10 +512,18 @@ $vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, 
     } elseif ($fZona !== '' && ($c['zona'] ?? '') !== $fZona) {
         return false;
     }
+    if ($fGrupo !== '' && Casos::enGrupo($fGrupo, $c, $clasifG, $informesG) !== true) { return false; }
     if ($fDiasAsig !== '') {
         if (($g['estado'] ?? '') !== 'ASIGNADO') { return false; }
         $d = Ui::dias(substr((string) ($g['asignado_en'] ?? ''), 0, 10) ?: null);
         if ($d === null || $d < (int) $fDiasAsig) { return false; }
+        // El mismo criterio que la sublínea «asignadas hace 3+ días» de la
+        // tarjeta: solo las que siguen A ESPERA DE INFORME TÉCNICO. Antes se
+        // listaban también las que ya tenían su OT INDUSTEC de evaluación,
+        // aunque el enlace dijera «sin informe». Sin las fuentes de OT no se
+        // puede descontarlas y se listan todas (el panel lo dice en la tarea).
+        if ($informesG['ot_disponible']
+            && ($clasifG[(string) ($c['aviso'] ?? '')]['grupo'] ?? null) !== 'ESPERA_INFORME') { return false; }
     }
     if ($fAlert !== '' && ($c['estado_alerta'] ?? '') !== $fAlert) { return false; }
     if ($fPrio !== '' && ($c['prioridad'] ?? '') !== $fPrio) { return false; }
@@ -822,7 +853,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
           <label>&nbsp;</label>
           <button class="btn primary" type="submit" style="height:38px">Filtrar</button>
         </div>
-        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn || $fEst || $fDiasAsig !== '' || $fOtro !== ''): ?>
+        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn || $fEst || $fDiasAsig !== '' || $fOtro !== '' || $fGrupo !== ''): ?>
           <div class="campo">
             <label>&nbsp;</label>
             <a class="btn" href="casos.php" style="height:38px;display:flex;align-items:center">Limpiar</a>
@@ -830,6 +861,21 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
         <?php endif; ?>
       </form>
 
+      <?php if ($fGrupo !== ''):
+        // El rótulo de la fila de la tarjeta de la que se vino, del diccionario.
+        $rotGrupo = Vocabulario::titulo(['abiertas' => 'ABIERTA', 'espera_informe' => 'ESPERA_INFORME',
+                                         'total' => 'TOTAL_ABIERTAS', 'deshabilitados' => 'EQUIPO_DESHABILITADO'][$fGrupo]); ?>
+        <p class="sub" style="margin:0 0 6px">
+          Filtro de la tarjeta por zona: <b><?= e($rotGrupo) ?></b><?= in_array($fZona, ['UIO', 'LARB', 'CNLJ', 'OTRA', 'SIN'], true) ? ' · ' . e(Vocabulario::titulo(Vocabulario::deEstado($fZona === 'SIN' ? '' : $fZona, 'zona'))) : '' ?>.
+          <a href="casos.php">Quitar</a>
+        </p>
+        <?php if ($grupoNoDisponible): ?>
+          <?= Ui::aviso('warn', '<b>' . e($rotGrupo) . ': no disponible.</b>'
+              . '<p>No respondió una de las fuentes que deciden si la orden tiene OT INDUSTEC o qué dice su equipo '
+              . '(atenciones.json, las OT emitidas desde la app o las solicitudes de repuesto). '
+              . 'No se listan órdenes a ojo: la lista saldría distinta de la cifra.</p>') ?>
+        <?php endif; ?>
+      <?php endif; ?>
       <p class="sub" style="margin:0 0 8px">
         <b id="cuenta-casos" data-plantilla="{n}"><?= count($vistos) ?></b>
         de <?= count($todos) ?> casos

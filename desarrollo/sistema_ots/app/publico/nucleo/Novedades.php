@@ -58,14 +58,22 @@ final class Novedades
         'OTRO'              => ['Otra cosa',                    'Lo que no entra en las anteriores.'],
     ];
 
+    /** Rótulo y ayuda de cada estado de la novedad. Desde el 24-sep-2026 salen
+     *  de `vocabulario.json` y los escribe `app/herramientas/generar_vocabulario.php`:
+     *  EN_REVISION se lee «en estudio», para no confundirse con la orden en
+     *  revisión, que es otra cosa. `prueba_vocabulario.php` falla si se desvían.
+     *  TIPOS todavía no está en el diccionario (se unifica en la fase de
+     *  novedades, junto con guia.js) y por eso sigue escrito a mano. */
+    // <vocabulario:ESTADOS> Generado desde vocabulario.json por app/herramientas/generar_vocabulario.php. No se edita a mano.
     public const ESTADOS = [
-        'REPORTADA'        => ['reportada',      'El técnico la registró; nadie la ha revisado'],
-        'EN_REVISION'      => ['en revisión',    'Alguien la está mirando'],
-        'DERIVADA_SAP'     => ['con aviso SAP',  'Se le pidió el aviso a Grupo KFC y ya tiene número'],
-        'ASUMIDA_INDUSTEC' => ['la asume INDUSTEC', 'Entra en nuestra planificación sin aviso nuevo'],
-        'DESCARTADA'       => ['descartada',     'Se revisó y no procedía, con su motivo'],
-        'RESUELTA'         => ['resuelta',       'Ya se atendió'],
+        'REPORTADA'        => ['reportada', 'El técnico la registró y nadie la ha revisado.'],
+        'EN_REVISION'      => ['en estudio', 'Alguien la está mirando.'],
+        'DERIVADA_SAP'     => ['con aviso SAP', 'Se le pidió el aviso a Grupo KFC y ya tiene número.'],
+        'ASUMIDA_INDUSTEC' => ['la asume INDUSTEC', 'Entra en la planificación de INDUSTEC sin aviso nuevo.'],
+        'DESCARTADA'       => ['descartada', 'Se revisó y no procedía, con su motivo.'],
+        'RESUELTA'         => ['resuelta', 'La novedad ya se atendió.'],
     ];
+    // </vocabulario:ESTADOS>
 
     public const RIESGOS = ['ALTO' => 'Alto', 'MEDIO' => 'Medio', 'BAJO' => 'Bajo'];
     public const PENDIENTES = ['REPORTADA', 'EN_REVISION'];

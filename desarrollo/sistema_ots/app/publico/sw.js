@@ -35,7 +35,8 @@
      v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
      recibe el numero de la orden. Con el armazon viejo el celular seguiria
      mandando la orden sin ellas. */
-const VERSION = 'ot-industec-v18';  // v18: el buscador del equipo ya no borra lo que se escribe (2026-09-24)
+const VERSION = 'ot-industec-v19';  // v19: vocabulario.json precargado y UI.T en ui.js — un solo vocabulario para todos los roles (2026-09-24)
+// v18: el buscador del equipo ya no borra lo que se escribe (2026-09-24)
 // v17: el equipo se busca escribiendo y se crea si no está; acompañantes de la zona de la orden (2026-09-24)
 // v16: correo y administrador editables, repuestos con texto libre, lista de casos que ya no se recorta (2026-09-24)
 // v15: estilo.css — distintivo «regularizado», neutro en vez del rojo de «sin atender» (2026-09-22)
@@ -79,6 +80,11 @@ const PRECARGA = [
   // formulario sale entero— pero cachearlo evita que el tecnico vea una cosa
   // con senal y otra sin ella.
   'guia.js',
+  // `vocabulario.json` son las palabras con que la app nombra cada estado
+  // (UI.T en ui.js). No lleva ningún dato: solo el diccionario. ui.js trae un
+  // respaldo embebido, así que si esta precarga fallara la app sigue hablando
+  // igual; con la copia, un cambio de término llega también sin señal.
+  'vocabulario.json',
   'manifest.json',
   'iconos/icono-192.png',
   'iconos/icono-512.png',

@@ -83,14 +83,23 @@ require_once __DIR__ . '/Catalogo.php';
  */
 final class Pendientes
 {
-    /** Las cuatro vías, fijadas por el jefe al validar: etiqueta, ayuda y
+    /* LAS PALABRAS DE VIAS, VEREDICTOS_KFC Y ESTADOS NO SE ESCRIBEN AQUI desde
+     * el 24-sep-2026: salen de `vocabulario.json` (un concepto por estado, el
+     * mismo para todos los roles) y las escribe
+     * `app/herramientas/generar_vocabulario.php`. Siguen siendo constantes
+     * porque pendientes.php y prueba_48h las recorren como tales.
+     * `prueba_vocabulario.php` falla si se desvían del JSON. */
+
+    /** Las cuatro vías, fijadas por el jefe al validar: rótulo, ayuda y
      *  (legacy) primer paso de cuando esto era una compra propia. */
+    // <vocabulario:VIAS> Generado desde vocabulario.json por app/herramientas/generar_vocabulario.php. No se edita a mano.
     public const VIAS = [
-        'REPUESTO'   => ['Repuesto',            'Se pide la pieza a Grupo KFC por requerimiento SAP. Es la vía más frecuente.', 'COTIZANDO'],
-        'REPARACION' => ['Reparación en taller', 'Se pide que el equipo salga a reparación.',                                   'EN_TALLER'],
-        'GARANTIA'   => ['Garantía',             'Le toca al fabricante o al proveedor, sin costo para el cliente.',           'GARANTIA_RECLAMADA'],
-        'BAJA'       => ['Baja',                 'No tiene arreglo razonable. Se propone a Grupo KFC con el informe técnico.', 'BAJA_PROPUESTA'],
+        'REPUESTO'   => ['Repuesto', 'Se pide la pieza a Grupo KFC por requerimiento SAP; es la vía más frecuente.', self::PASOS['REPUESTO'][0]],
+        'REPARACION' => ['Reparación en taller', 'Se pide que el equipo salga a reparación.', self::PASOS['REPARACION'][0]],
+        'GARANTIA'   => ['Garantía', 'Le toca al fabricante o al proveedor, sin costo para el cliente.', self::PASOS['GARANTIA'][0]],
+        'BAJA'       => ['Baja', 'El equipo no tiene arreglo razonable; se propone a Grupo KFC con el informe técnico detallado.', self::PASOS['BAJA'][0]],
     ];
+    // </vocabulario:VIAS>
 
     /** Los pasos de la compra propia de ANTES de la 009. Se conservan tal
      *  cual para las filas que ya estaban en ellos (mostrarlos y dejarlos
@@ -113,7 +122,9 @@ final class Pendientes
         'BAJA'             => ['BAJA_APROBADA', 'RESUELTO'],
     ];
 
-    /** Lo que Grupo KFC puede decidir una vez registrado el requerimiento. */
+    /** Lo que Grupo KFC puede decidir una vez registrado el requerimiento
+     *  (la decisión de KFC; el jefe de zona valida, no decide). */
+    // <vocabulario:VEREDICTOS_KFC> Generado desde vocabulario.json por app/herramientas/generar_vocabulario.php. No se edita a mano.
     private const VEREDICTOS_KFC = [
         'PENDIENTE'        => 'sin decisión de Grupo KFC todavía',
         'REPUESTO_ENVIADO' => 'envía el repuesto',
@@ -121,32 +132,37 @@ final class Pendientes
         'OTRO_PROVEEDOR'   => 'a otro proveedor',
         'BAJA'             => 'da de baja el equipo',
     ];
+    // </vocabulario:VEREDICTOS_KFC>
 
+    /** Rótulo y ayuda de cada estado de la solicitud. Los nueve anteriores a
+     *  la 009 (COTIZANDO, COMPRADO, …) comparten concepto —trámite anterior—
+     *  y llevan su paso de entonces como detalle; los de la 009 en adelante
+     *  son la cadena real técnico -> jefe -> SAP -> KFC. */
+    // <vocabulario:ESTADOS> Generado desde vocabulario.json por app/herramientas/generar_vocabulario.php. No se edita a mano.
     public const ESTADOS = [
-        // -- Anteriores a la 009: solo para las filas que ya estaban aquí. --
-        'SIN_VEREDICTO'      => ['sin validar',        '(anterior a la 009) Corre el plazo de 48 h: el jefe de zona no ha validado todavía la vía'],
-        'COTIZANDO'          => ['cotizando',          '(anterior a la 009) La administración está pidiendo precios de la pieza'],
-        'COMPRADO'           => ['comprado',           '(anterior a la 009) La orden de compra salió; se espera al proveedor'],
-        'EN_BODEGA'          => ['en bodega',          '(anterior a la 009) Llegó a INDUSTEC; falta llevarlo al local'],
-        'ENTREGADO'          => ['entregado',          'Está en el local, en manos del técnico'],
-        'EN_TALLER'          => ['en el taller',       '(anterior a la 009) El equipo salió del local a reparación'],
-        'DEVUELTO_TALLER'    => ['vuelto del taller',  'Regresó reparado; falta montarlo'],
-        'GARANTIA_RECLAMADA' => ['garantía reclamada', '(anterior a la 009) Se presentó el reclamo al fabricante o proveedor'],
-        'GARANTIA_APROBADA'  => ['garantía aceptada',  'La cubren; se espera el reemplazo'],
-        'GARANTIA_NEGADA'    => ['garantía negada',    '(anterior a la 009) No la cubren. Hay que volver a decidir la vía'],
-        'BAJA_PROPUESTA'     => ['baja propuesta',     '(anterior a la 009) Se propuso a Grupo KFC dar de baja el equipo'],
-        'BAJA_APROBADA'      => ['baja aprobada',      'Grupo KFC aceptó la baja'],
-        'RESUELTO'           => ['resuelto',           'El equipo volvió a operar, o su baja quedó ejecutada'],
-        'CANCELADO'          => ['cancelado',          'No procedía; se resolvió de otra forma'],
-        // -- Desde la 009: la cadena real (técnico -> jefe -> SAP -> KFC). --
-        'SOLICITADO'         => ['solicitado',                       'El técnico pidió el repuesto con su diagnóstico; corre el plazo de 48 h para que el jefe lo valide'],
-        'VALIDADO_JEFE'      => ['validado por el jefe',             'El jefe de zona confirmó el diagnóstico y el repuesto; falta que la administración lo registre en SAP'],
-        'REGISTRADO_SAP'     => ['registrado en SAP, esperando a KFC', 'La administración ya lo registró en SAP: se espera la respuesta de Grupo KFC'],
-        'ESPERA_KFC'         => ['esperando a KFC',                  '(reservado) Hoy «registrado en SAP» ya significa esto'],
-        'REPUESTO_ENVIADO'   => ['KFC envía el repuesto',            'Grupo KFC decidió mandar la pieza; falta que llegue al local'],
-        'TALLER_INDUSTEC'    => ['a taller de INDUSTEC',             'Grupo KFC decidió que el equipo se repare en los talleres de INDUSTEC'],
-        'OTRO_PROVEEDOR'     => ['a otro proveedor',                 'Grupo KFC lo mandó a otro proveedor; el seguimiento queda fuera de INDUSTEC'],
+        'SIN_VEREDICTO'      => ['trámite anterior a la 009 · por validar (plazo de 48 h)', 'Solicitud abierta con el modelo de antes de la 009 (cuando INDUSTEC compraba la pieza): se muestra con su paso de entonces y se deja avanzar, pero a una nueva ya no se le ofrece.'],
+        'COTIZANDO'          => ['trámite anterior a la 009 · cotizando', 'Solicitud abierta con el modelo de antes de la 009 (cuando INDUSTEC compraba la pieza): se muestra con su paso de entonces y se deja avanzar, pero a una nueva ya no se le ofrece.'],
+        'COMPRADO'           => ['trámite anterior a la 009 · comprado', 'Solicitud abierta con el modelo de antes de la 009 (cuando INDUSTEC compraba la pieza): se muestra con su paso de entonces y se deja avanzar, pero a una nueva ya no se le ofrece.'],
+        'EN_BODEGA'          => ['trámite anterior a la 009 · en bodega', 'Solicitud abierta con el modelo de antes de la 009 (cuando INDUSTEC compraba la pieza): se muestra con su paso de entonces y se deja avanzar, pero a una nueva ya no se le ofrece.'],
+        'EN_TALLER'          => ['trámite anterior a la 009 · en el taller', 'Solicitud abierta con el modelo de antes de la 009 (cuando INDUSTEC compraba la pieza): se muestra con su paso de entonces y se deja avanzar, pero a una nueva ya no se le ofrece.'],
+        'GARANTIA_RECLAMADA' => ['trámite anterior a la 009 · garantía reclamada', 'Solicitud abierta con el modelo de antes de la 009 (cuando INDUSTEC compraba la pieza): se muestra con su paso de entonces y se deja avanzar, pero a una nueva ya no se le ofrece.'],
+        'GARANTIA_APROBADA'  => ['trámite anterior a la 009 · garantía aceptada', 'Solicitud abierta con el modelo de antes de la 009 (cuando INDUSTEC compraba la pieza): se muestra con su paso de entonces y se deja avanzar, pero a una nueva ya no se le ofrece.'],
+        'GARANTIA_NEGADA'    => ['trámite anterior a la 009 · garantía negada', 'Solicitud abierta con el modelo de antes de la 009 (cuando INDUSTEC compraba la pieza): se muestra con su paso de entonces y se deja avanzar, pero a una nueva ya no se le ofrece.'],
+        'BAJA_PROPUESTA'     => ['trámite anterior a la 009 · baja propuesta', 'Solicitud abierta con el modelo de antes de la 009 (cuando INDUSTEC compraba la pieza): se muestra con su paso de entonces y se deja avanzar, pero a una nueva ya no se le ofrece.'],
+        'ENTREGADO'          => ['repuesto en el local', 'La pieza ya está en el local, en manos del técnico; falta montarla.'],
+        'DEVUELTO_TALLER'    => ['de vuelta del taller', 'El equipo regresó reparado; falta montarlo.'],
+        'BAJA_APROBADA'      => ['baja aprobada por KFC', 'KFC aceptó dar de baja el equipo; falta ejecutarla.'],
+        'RESUELTO'           => ['terminada', 'El equipo volvió a operar o su baja quedó ejecutada: la solicitud ya no espera nada.'],
+        'CANCELADO'          => ['cancelada (no procedía)', 'La solicitud no procedía y se resolvió de otra forma.'],
+        'SOLICITADO'         => ['por validar', 'El técnico pidió el repuesto con su diagnóstico y corre el plazo de 48 h para que el jefe de zona lo valide.'],
+        'VALIDADO_JEFE'      => ['validada, por registrar en SAP', 'El jefe de zona ya validó la solicitud; falta que la administración la registre en SAP.'],
+        'REGISTRADO_SAP'     => ['pendiente OK de OP´S', 'La solicitud ya está registrada en SAP y se espera la aprobación de Operaciones de KFC.'],
+        'ESPERA_KFC'         => ['pendiente OK de OP´S', 'La solicitud ya está registrada en SAP y se espera la aprobación de Operaciones de KFC.'],
+        'REPUESTO_ENVIADO'   => ['repuesto despachado', 'KFC decidió enviar la pieza y la despachó; falta que llegue al local.'],
+        'TALLER_INDUSTEC'    => ['en taller de INDUSTEC', 'KFC decidió que el equipo se repare en los talleres de INDUSTEC y está allá.'],
+        'OTRO_PROVEEDOR'     => ['con otro proveedor', 'KFC mandó el equipo a otro proveedor; el seguimiento queda fuera de INDUSTEC.'],
     ];
+    // </vocabulario:ESTADOS>
 
     /** Los que todavía cuentan como pendiente de alguien: todo el ENUM menos
      *  RESUELTO y CANCELADO (prueba_48h lo comprueba). Incluye lo anterior a

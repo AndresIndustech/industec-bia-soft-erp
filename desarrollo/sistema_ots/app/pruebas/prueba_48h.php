@@ -13,6 +13,9 @@ declare(strict_types=1);
 // Con la ruta absoluta de la estación pegada no corría en ningún otro equipo.
 require_once __DIR__ . '/../publico/nucleo/Ui.php';
 require_once __DIR__ . '/../publico/nucleo/Pendientes.php';
+// Las etiquetas se comparan contra el diccionario, no contra un literal: el
+// texto se cambia en vocabulario.json y esta prueba no tiene por qué saberlo.
+require_once __DIR__ . '/../publico/nucleo/Vocabulario.php';
 
 $fallos = 0;
 $total = 0;
@@ -161,8 +164,10 @@ foreach (Pendientes::PASOS_KFC as $k => $camino) {
     afirmar("camino KFC $k arranca con etiqueta", isset(Pendientes::ESTADOS[$camino[0]]), true);
 }
 afirmar('OTRO_PROVEEDOR no tiene camino', isset(Pendientes::PASOS_KFC['OTRO_PROVEEDOR']), false);
-afirmar('etiqueta del veredicto de KFC', Pendientes::etiquetaVeredictoKfc('TALLER_INDUSTEC'), 'a taller de INDUSTEC');
-afirmar('veredicto KFC desconocido cae en pendiente', Pendientes::etiquetaVeredictoKfc('XX'), 'sin decisión de Grupo KFC todavía');
+afirmar('etiqueta de la decisión de KFC', Pendientes::etiquetaVeredictoKfc('TALLER_INDUSTEC'),
+        Vocabulario::t(Vocabulario::deEstado('TALLER_INDUSTEC', 'decision_kfc')));
+afirmar('decisión de KFC desconocida cae en «sin decisión»', Pendientes::etiquetaVeredictoKfc('XX'),
+        Vocabulario::t(Vocabulario::deEstado('PENDIENTE', 'decision_kfc')));
 afirmar('SOLICITADO se explica sin decir «veredicto»', str_contains(Pendientes::ayudaEstado('SOLICITADO'), 'veredicto'), false);
 
 echo "\n=== Los ocho estados del caso (Ui::ESTADOS) ===\n";
@@ -173,9 +178,10 @@ foreach ($enumCaso as $e) {
     afirmar("  y no sale en crudo", Ui::etiquetaEstado($e) !== $e, true);
 }
 // El defecto original, comprobado al reves.
-afirmar('ATENDIDO ya no sale en crudo', Ui::etiquetaEstado('ATENDIDO'), 'atendido');
+afirmar('ATENDIDO ya no sale en crudo', Ui::etiquetaEstado('ATENDIDO'),
+        Vocabulario::t(Vocabulario::deEstado('ATENDIDO')));
 afirmar('CERRADO_SIN_ATENCION ya no sale en crudo',
-        Ui::etiquetaEstado('CERRADO_SIN_ATENCION'), 'sin atender');
+        Ui::etiquetaEstado('CERRADO_SIN_ATENCION'), Vocabulario::t(Vocabulario::deEstado('CERRADO_SIN_ATENCION')));
 
 echo "\n=== Ui::edad() — la antiguedad del caso ===\n";
 afirmar('creado hoy', strip_tags(Ui::edad(date('Y-m-d'))), 'hoy');
@@ -189,10 +195,14 @@ afirmar('sin fecha: no inventa (I-7)', strip_tags(Ui::edad(null)), '—');
 
 echo "\n=== Ui::zona() — el color nunca es la unica senal ===\n";
 foreach (['UIO', 'LARB', 'CNLJ'] as $z) {
-    afirmar("$z lleva su nombre en texto", str_contains(Ui::zona($z), '>' . $z . '<'), true);
+    // El nombre que se lee sale del diccionario (CNLJ se lee «CUENCA-LOJA»,
+    // 24-sep-2026); la clase de color sigue siendo la del código de la base.
+    afirmar("$z lleva su nombre en texto",
+            str_contains(Ui::zona($z), '>' . Vocabulario::corto(Vocabulario::deEstado($z, 'zona')) . '<'), true);
     afirmar("$z lleva su clase de color", str_contains(Ui::zona($z), 'zona-' . strtolower($z)), true);
 }
-afirmar('sin zona: lo dice con palabras', str_contains(Ui::zona(null), 'sin zona'), true);
+afirmar('sin zona: lo dice con palabras',
+        str_contains(Ui::zona(null), '>' . Vocabulario::corto('SIN_ZONA') . '<'), true);
 afirmar('zona desconocida no revienta', str_contains(Ui::zona('XXX'), 'zona-otra'), true);
 
 echo "\n";

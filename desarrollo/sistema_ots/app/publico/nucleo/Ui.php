@@ -194,7 +194,7 @@ final class Ui
              '<div class="app-yo">',
              '<span class="nom">', self::e($u['nombre']), '</span>',
              '<span class="chip siempre">', self::e($rol), '</span>',
-             '<span class="chip">', $zona ? 'Zona ' . self::e($zona) : 'Las 3 zonas', '</span>',
+             '<span class="chip">', $zona ? self::e(self::nombreZona($zona)) : 'Las 3 zonas', '</span>',
              // Salir es un POST con token: por GET cualquier enlace cerraba la sesión (SEG-25).
              '<form method="post" action="salir.php" class="app-salir">',
              '<input type="hidden" name="csrf" value="', self::e(Auth::csrfToken()), '">',
@@ -301,22 +301,33 @@ final class Ui
      * no repetida en cada pantalla. `Casos::etiquetaEstado()` se quedó corta
      * dos veces —le faltaban ATENDIDO y CERRADO_SIN_ATENCION— y esos casos se
      * dibujaban en crudo, en mayúsculas y con guion bajo, delante del cliente.
+     *
+     * DESDE EL 24-SEP-2026 LAS PALABRAS NO SE ESCRIBEN AQUI: salen del concepto
+     * de cada estado en `vocabulario.json` (término y ayuda) y las escribe
+     * `app/herramientas/generar_vocabulario.php`. Es una constante —y no una
+     * lectura del JSON al vuelo— porque casos.php la recorre como constante y
+     * porque así ninguna pantalla depende de que el JSON haya llegado al
+     * servidor. `prueba_vocabulario.php` falla si se desvía del JSON.
+     *
+     * REGULARIZADO no es un estado de la base: es CERRADO_SIN_ATENCION con
+     * `regularizado_en` (ver `estadoVista()`). Existe porque el 2026-09-21 se
+     * regularizaron 773 en bloque y los gráficos seguían pintando 644 «sin
+     * atender» en rojo, la barra más grande del tablero, cuando no quedaba
+     * ninguno por explicar.
      */
+    // <vocabulario:ESTADOS> Generado desde vocabulario.json por app/herramientas/generar_vocabulario.php. No se edita a mano.
     public const ESTADOS = [
-        'NUEVO'                => ['sin asignar',      'Llegó del correo de SAP y todavía no tiene técnico'],
-        'ASIGNADO'             => ['asignado',         'Tiene técnico; se espera el informe de la orden'],
-        'EN_REVISION'          => ['en revisión',      'El jefe de zona lo mandó a la administración con un motivo'],
-        'ESPERA_REPUESTO'      => ['espera repuesto',  'El técnico fue, y el trabajo depende de un repuesto'],
-        'ATENDIDO'             => ['atendido',         'INDUSTEC emitió la orden. Falta que la administración lo cierre en SAP'],
-        'RESUELTO'             => ['resuelto',         'Cerrado por las dos partes'],
-        'NO_COMPETE'           => ['no nos compete',   'La administración resolvió que no es trabajo de INDUSTEC'],
-        'CERRADO_SIN_ATENCION' => ['sin atender',      'Pasó una semana sin ningún informe y se cerró; hay que regularizarlo ante KFC'],
-        // No es un estado de la base: es CERRADO_SIN_ATENCION con `regularizado_en`
-        // (ver `estadoVista()`). Existe porque el 2026-09-21 se regularizaron 773
-        // en bloque y los gráficos seguían pintando 644 «sin atender» en rojo, la
-        // barra más grande del tablero, cuando no quedaba ninguno por explicar.
-        'REGULARIZADO'         => ['regularizado',     'Se cerró sin atención y la administración ya lo explicó ante KFC'],
+        'NUEVO'                => ['sin asignar', 'Orden que llegó del correo de SAP y todavía no tiene técnico.'],
+        'ASIGNADO'             => ['asignada', 'Orden que ya tiene técnico.'],
+        'EN_REVISION'          => ['en revisión', 'El jefe de zona mandó la orden a la administración con un motivo; la administración la resuelve.'],
+        'ESPERA_REPUESTO'      => ['a espera de repuesto', 'El técnico ya fue o diagnosticó, y el trabajo depende de un repuesto, un taller, una garantía o una baja.'],
+        'ATENDIDO'             => ['atendida, por cerrar en SAP', 'INDUSTEC terminó su parte (OT INDUSTEC de cierre o enlace de continuidad); falta que la administración la cierre en SAP.'],
+        'RESUELTO'             => ['cerrada en SAP', 'La administración confirmó que la orden ya está cerrada en SAP; es el único cierre que cuenta KFC.'],
+        'NO_COMPETE'           => ['no nos compete', 'La administración resolvió que no es trabajo de INDUSTEC; se cierra y se pide a KFC que la derive.'],
+        'CERRADO_SIN_ATENCION' => ['cerrada sin atención', 'Pasó una semana sin ninguna OT INDUSTEC y la orden se cerró; hay que explicarlo ante KFC.'],
+        'REGULARIZADO'         => ['regularizada', 'Se cerró sin atención y la administración ya lo explicó ante KFC.'],
     ];
+    // </vocabulario:ESTADOS>
 
     /**
      * El estado que se MUESTRA. Solo difiere del de la base en un caso: un
@@ -349,14 +360,47 @@ final class Ui
              . self::e(self::etiquetaEstado($e)) . '</span>';
     }
 
+    /**
+     * El rótulo de cada zona: [corto para el chip, término para frases, ayuda].
+     *
+     * CNLJ es la clave de la base y de los nombres de archivo OT-…-CNLJ, y así
+     * se queda; lo que se LEE en pantallas, PDF y correos es «CUENCA-LOJA»
+     * (decisión del 24-sep-2026). Las clases CSS siguen siendo `zona-cnlj`:
+     * las cuentan las pruebas del servidor.
+     */
+    // <vocabulario:ZONAS> Generado desde vocabulario.json por app/herramientas/generar_vocabulario.php. No se edita a mano.
+    private const ZONAS = [
+        'UIO'  => ['UIO', 'zona UIO', 'Quito y sus alrededores.'],
+        'LARB' => ['LARB', 'zona LARB', 'Latacunga, Ambato y Riobamba.'],
+        'CNLJ' => ['CUENCA-LOJA', 'zona Cuenca-Loja', 'Cuenca y Loja.'],
+        'OTRA' => ['OTRA', 'otra zona', 'Local fuera de las tres zonas contratadas.'],
+        ''     => ['sin zona', 'sin zona', 'Orden cuyo local no calza con ningún local del maestro; no entra en ninguna tarjeta hasta que se corrija.'],
+    ];
+    // </vocabulario:ZONAS>
+
     public static function zona(?string $z): string
     {
         $z = strtoupper(trim((string) $z));
         if ($z === '') {
-            return '<span class="zona zona-otra" title="El nombre que manda SAP no calza con ningún local del maestro">sin zona</span>';
+            return '<span class="zona zona-otra" title="' . self::e(self::ZONAS[''][2]) . '">'
+                 . self::e(self::ZONAS[''][0]) . '</span>';
         }
         $cl = in_array($z, ['UIO', 'LARB', 'CNLJ'], true) ? strtolower($z) : 'otra';
-        return '<span class="zona zona-' . $cl . '">' . self::e($z) . '</span>';
+        // Un código que el diccionario no conoce se muestra tal como vino: es el
+        // dato de la base, no un nombre inventado para taparlo (I-7).
+        $rot = self::ZONAS[$z] ?? null;
+        return '<span class="zona zona-' . $cl . '"'
+             . ($rot !== null ? ' title="' . self::e($rot[2]) . '"' : '') . '>'
+             . self::e($rot[0] ?? $z) . '</span>';
+    }
+
+    /** «Zona UIO», «Zona Cuenca-Loja»: la zona dentro de una frase o un chip de
+     *  texto, con mayúscula inicial. Código desconocido: «Zona XYZ», tal cual. */
+    public static function nombreZona(string $z): string
+    {
+        $z = strtoupper(trim($z));
+        $t = self::ZONAS[$z][1] ?? ('zona ' . $z);
+        return mb_strtoupper(mb_substr($t, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($t, 1, null, 'UTF-8');
     }
 
     public static function prioridad(?string $p): string

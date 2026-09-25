@@ -44,6 +44,22 @@
     </IfModule>
 </Files>
 
+# EXCEPCION: vocabulario.json también es público a propósito (2026-09-24).
+# Son las palabras con que el sistema nombra cada estado; lo pide ui.js
+# (UI.T) y el trabajador de servicio lo precarga para el modo sin señal. No
+# lleva ningún dato: ni casos, ni locales, ni personas. Los catálogos siguen
+# cerrados: esta excepción nombra un solo archivo de la raíz, y
+# catalogos/.htaccess niega todo lo suyo por su cuenta.
+<Files "vocabulario.json">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Allow from all
+    </IfModule>
+</Files>
+
 # Cabeceras que el servidor no ponía: sin ellas cualquier sitio podía enmarcar
 # las pantallas, y el navegador adivinaba el tipo de lo que recibía.
 <IfModule mod_headers.c>

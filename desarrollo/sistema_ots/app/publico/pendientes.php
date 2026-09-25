@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Pendientes.php';
 require_once __DIR__ . '/nucleo/Ui.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // el rótulo de la zona del filtro ?zona=
 
 /**
  * pendientes.php — Los repuestos y equipos que quedaron sin concluir, y su reloj.
@@ -120,6 +121,27 @@ if ($grupo === '') {
 }
 
 $lista = Pendientes::lista(['grupo' => $grupo, 'q' => $q]);
+
+/* `?zona=` llega desde la tarjeta por zona del panel: «de ellas, vencidas
+   (48 h)» de cada zona enlaza aquí con su zona, y antes caía en la lista de
+   las tres. Se filtra con la misma resolución de zona que usan
+   `Pendientes::alcance()` y `cumplimiento48()`: la de la orden manda sobre la
+   de la solicitud, porque una orden derivada se lleva su solicitud. Solo
+   estrecha lo que el alcance ya dejó ver: no abre otra zona a nadie. */
+$fZonaP = strtoupper(trim((string) ($_GET['zona'] ?? '')));
+if (!in_array($fZonaP, ['UIO', 'LARB', 'CNLJ', 'OTRA'], true)) { $fZonaP = ''; }
+if ($fZonaP !== '' && $lista) {
+    $avs = array_values(array_unique(array_map(fn($p) => (string) $p['aviso'], $lista)));
+    $zonaOrden = [];
+    foreach (Db::todos('SELECT aviso, zona FROM casos_gestion WHERE aviso IN ('
+                       . implode(',', array_fill(0, count($avs), '?')) . ')', $avs) as $r) {
+        $zonaOrden[(string) $r['aviso']] = (string) ($r['zona'] ?? '');
+    }
+    $lista = array_values(array_filter($lista, static function (array $p) use ($zonaOrden, $fZonaP): bool {
+        $z = $zonaOrden[(string) $p['aviso']] ?? '';
+        return ($z !== '' ? $z : (string) ($p['zona'] ?? '')) === $fZonaP;
+    }));
+}
 $hilos = Pendientes::notasDe(array_map(fn($p) => (int) $p['pendiente_id'], $lista));
 $c48   = Pendientes::cumplimiento48();
 $sinAviso = $esTecnico ? [] : Pendientes::sinAviso();
@@ -339,6 +361,12 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
       </form>
     </div>
 
+    <?php if ($fZonaP !== ''): ?>
+      <p class="sub" style="margin:0 0 8px">
+        Solo la <b><?= $e(Vocabulario::titulo(Vocabulario::deEstado($fZonaP, 'zona'))) ?></b>, desde la tarjeta por zona del inicio.
+        <a href="<?= $e($enlaceG($grupo)) ?>">Ver todas las zonas</a>
+      </p>
+    <?php endif; ?>
     <?php if (!$lista): ?>
       <?php
       $vacio = [

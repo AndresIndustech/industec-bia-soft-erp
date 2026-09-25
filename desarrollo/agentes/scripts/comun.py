@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import os
 import re
 import ssl
@@ -235,6 +236,107 @@ def empujar(env: dict, contenido: bytes, tipo: str = "casos",
             time.sleep(pausa)
     log(f"AGOTADOS los {intentos} intentos de empujar {tipo}: el sitio NO tiene este dato")
     return False
+
+
+# --- Vocabulario unico (2026-09-24) ---------------------------------------------
+# Las palabras con que se nombra cada estado salen de UN archivo,
+# sistema_ots/app/publico/vocabulario.json, el mismo que leen Vocabulario.php
+# (servidor) y UI.T de ui.js (navegador). Isabel pidio que el panel por zona
+# hablara como ella habla con SAP y con KFC, y Andres exigio los mismos
+# terminos en todo el sistema y para todos los roles: los reportes, el STATUS,
+# el tablero de gerencia y los correos que salen de la estacion incluidos. El
+# script pide por CLAVE de concepto (termino("ESPERA_INFORME")), nunca escribe
+# el texto.
+#
+# Se lee la primera vez que se pide, no al importar: `import comun` sigue sin
+# tocar nada. Y una clave que no existe LANZA VocabularioError con la clave y la
+# version (I-7): un reporte a KFC con la clave cruda o con un texto adivinado es
+# peor que un script que se detiene y dice por que.
+VOCABULARIO = BASE.parent / "sistema_ots" / "app" / "publico" / "vocabulario.json"
+
+# Donde esta el mapa estado de la base -> concepto de cada dominio. El mismo
+# cuadro que Vocabulario::DOMINIOS (PHP) y DOMINIOS de ui.js.
+_DOMINIOS = {
+    "caso": ("estados_caso",), "pendiente": ("estados_pendiente",),
+    "novedad": ("estados_novedad",), "preventivo": ("preventivo", "estados"),
+    "via": ("via",), "decision_kfc": ("decision_kfc",), "estado_ot": ("estado_ot",),
+    "estado_equipo": ("estado_equipo",), "zona": ("zona",), "semaforo": ("semaforo",),
+}
+_voc: dict | None = None
+
+
+class VocabularioError(LookupError):
+    """Una clave, un estado o un dominio que el diccionario no tiene."""
+
+
+def vocabulario() -> dict:
+    """El diccionario entero, leido una vez por proceso."""
+    global _voc
+    if _voc is None:
+        try:
+            d = json.loads(VOCABULARIO.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise VocabularioError(f"Vocabulario: no se pudo leer {VOCABULARIO} ({e})") from e
+        if not isinstance(d, dict) or not isinstance(d.get("conceptos"), dict) or "version" not in d:
+            raise VocabularioError(f"Vocabulario: a {VOCABULARIO} le falta 'version' o 'conceptos'")
+        _voc = d
+    return _voc
+
+
+def _campo(clave: str, nombre: str) -> str:
+    d = vocabulario()
+    c = d["conceptos"].get(clave)
+    if not isinstance(c, dict):
+        raise VocabularioError(f"Vocabulario: la clave '{clave}' no existe en vocabulario.json "
+                               f"(version {d['version']})")
+    v = c.get(nombre)
+    if not isinstance(v, str) or not v:
+        raise VocabularioError(f"Vocabulario: la clave '{clave}' no tiene '{nombre}' "
+                               f"(version {d['version']})")
+    return v
+
+
+def termino(clave: str, n: int = 1) -> str:
+    """El termino para una frase: singular si n == 1 y plural en cualquier otro
+    caso, tambien con n == 0 ("0 ordenes")."""
+    return _campo(clave, "termino" if n == 1 else "plural")
+
+
+def titulo(clave: str) -> str:
+    """El rotulo de columna, fila u hoja."""
+    return _campo(clave, "titulo")
+
+
+def ayuda(clave: str) -> str:
+    """La frase que explica el concepto, la misma para todos los roles."""
+    return _campo(clave, "ayuda")
+
+
+def corto(clave: str) -> str:
+    """La forma corta (chip de zona, barra del tecnico); si el concepto no la
+    trae, el termino, como manda la regla 'corto' del diccionario."""
+    _campo(clave, "termino")                      # que exista, o que lo diga
+    c = vocabulario()["conceptos"][clave].get("corto")
+    return c if isinstance(c, str) and c else termino(clave)
+
+
+def de_estado(estado_bd: str, dominio: str = "caso") -> str:
+    """La clave del concepto de un estado de la base. Recorta y pasa a
+    MAYUSCULAS antes de buscar (el semaforo llega como 'amarillo')."""
+    d = vocabulario()
+    camino = _DOMINIOS.get(dominio)
+    if camino is None:
+        raise VocabularioError(f"Vocabulario: el dominio '{dominio}' no existe "
+                               f"(hay: {', '.join(_DOMINIOS)}; version {d['version']})")
+    mapa = d
+    for paso in camino:
+        mapa = mapa.get(paso) if isinstance(mapa, dict) else None
+    e = str(estado_bd or "").strip().upper()
+    clave = mapa.get(e) if isinstance(mapa, dict) else None
+    if not isinstance(clave, str) or not clave:
+        raise VocabularioError(f"Vocabulario: el estado '{e}' del dominio '{dominio}' no tiene "
+                               f"concepto en vocabulario.json (version {d['version']})")
+    return clave
 
 
 def escribir_json_atomico(destino: Path, texto: str, intentos: int = 10) -> None:

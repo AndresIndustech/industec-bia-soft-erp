@@ -11,6 +11,14 @@ independiente sacada de SQL y del JSON crudo. No escribe nada en el servidor: ni
 porque anota una consulta en la bitácora a nombre de la administradora.
 
     PYTHONUTF8=1 python verificar_cifras.py      # 21 · 0 el 2026-09-22
+
+Desde el 2026-09-24 (vocabulario único, tarjeta por zona) el cuadro «Siguen
+abiertos» pasó a «TOTAL DE ÓRDENES ABIERTAS» y CAMBIÓ DE CIFRA: ya no incluye
+ATENDIDO («atendidas, por cerrar en SAP» va al pie de cada tarjeta) y cuenta
+una vez cada cadena de continuidad. La referencia TOTAL_ABIERTAS se calcula
+aparte, por estado y sin pasar por `Casos::grupoOrden()`, para que la
+comprobación no sea tautológica. Además se comprueba que las tarjetas cuadren
+con el cuadro y que cada cifra sea igual a las filas de su enlace.
 """
 import html
 import json
@@ -35,14 +43,27 @@ $rp = new ReflectionProperty(Auth::class, 'usuario'); $rp->setAccessible(true); 
 REF = CABEZA + r"""
 $datos = Casos::catalogo()['datos'] ?? [];
 $enCat = array_flip(array_map('strval', array_column($datos, 'aviso')));
-$ref = ['CSA_SIN' => 0, 'REG' => 0, 'ABIERTOS' => 0, 'N' => count($datos)];
+$ref = ['CSA_SIN' => 0, 'REG' => 0, 'ABIERTOS' => 0, 'TOTAL_ABIERTAS' => 0, 'N' => count($datos)];
 $filas = [];
-foreach (Db::todos('SELECT aviso, estado, regularizado_en FROM casos_gestion') as $f) { $filas[(string) $f['aviso']] = $f; }
+// `continua_de` llega con la 012: sin ella, cada orden es su propia cadena.
+try {
+    $gs = Db::todos('SELECT aviso, estado, regularizado_en, continua_de FROM casos_gestion');
+} catch (Throwable $e) {
+    $gs = Db::todos('SELECT aviso, estado, regularizado_en, NULL AS continua_de FROM casos_gestion');
+}
+foreach ($gs as $f) { $filas[(string) $f['aviso']] = $f; }
+$raices = [];
 foreach ($enCat as $a => $_) {
-    $f = $filas[(string) $a] ?? ['estado' => 'NUEVO', 'regularizado_en' => null];
+    $f = $filas[(string) $a] ?? ['estado' => 'NUEVO', 'regularizado_en' => null, 'continua_de' => null];
     if ($f['estado'] === 'CERRADO_SIN_ATENCION') { $f['regularizado_en'] ? $ref['REG']++ : $ref['CSA_SIN']++; }
     if (!in_array($f['estado'], ['RESUELTO', 'NO_COMPETE', 'CERRADO_SIN_ATENCION'], true)) { $ref['ABIERTOS']++; }
+    // El TOTAL DE ÓRDENES ABIERTAS, por estado y una vez por cadena (la cadena
+    // se guarda plana: todas apuntan a la primera).
+    if (in_array($f['estado'], ['NUEVO', 'ASIGNADO', 'EN_REVISION', 'ESPERA_REPUESTO'], true)) {
+        $raices[trim((string) ($f['continua_de'] ?? '')) ?: (string) $a] = true;
+    }
 }
+$ref['TOTAL_ABIERTAS'] = count($raices);
 $conc = 0; $una = 0; $curso = 0;
 foreach (Casos::atenciones() as $a => $x) {
     if (!isset($enCat[(string) $a])) { continue; }
@@ -99,15 +120,45 @@ ok("rendimiento: nadie con % sin casos cerrados", not [t for t in d["rend"] if t
 h = pagina("panel.php", "[]")
 ok("panel: sin error de PHP", not re.search(r"Fatal error|Uncaught|Warning:", h), f"{len(h)} bytes")
 ok("panel: ya no dice «Vivos en 90 días»", "Vivos en 90 días" not in h)
-m = re.search(r'data-n="(\d+)">0</div>\s*<div class="t">Siguen abiertos', h)
-ok("panel: «Siguen abiertos» = SQL", bool(m) and int(m.group(1)) == ref["ABIERTOS"], m.group(1) if m else "no está")
+ok("panel: ya no dice «Siguen abiertos»", "Siguen abiertos" not in h)
+m = re.search(r'data-n="(\d+)">0</div>\s*<div class="t">TOTAL DE ÓRDENES ABIERTAS', h)
+cuadro = int(m.group(1)) if m else None
+ok("panel: «TOTAL DE ÓRDENES ABIERTAS» = SQL (sin ATENDIDO, una por cadena)", cuadro == ref["TOTAL_ABIERTAS"], cuadro if m else "no está")
+
+# La tarjeta por zona: tres zonas (y OTRA si tiene), cada una con su TOTAL.
+tarjetas = re.findall(r'<div class="zona-card zona-(\w+)">(.*?)</ul></div>', h, re.S)
+ok("panel: una tarjeta por zona (UIO, LARB, CUENCA-LOJA)", len(tarjetas) >= 3, [t[0] for t in tarjetas])
+ok("panel: CNLJ se rotula «ZONA CUENCA-LOJA»", "ZONA CUENCA-LOJA" in h)
+tot_zona = {}
+for cl, cuerpo in tarjetas:
+    mt = re.search(r'TOTAL DE ÓRDENES ABIERTAS</span><span class="zf-n">(?:<a [^>]*>)?<b>(\d+)</b>', cuerpo)
+    tot_zona[cl] = int(mt.group(1)) if mt else None
+mg = re.search(r'data-total-general="(\d+)"', h)
+general = int(mg.group(1)) if mg else None
+ok("panel: total general = UIO + LARB + CUENCA-LOJA",
+   general is not None and general == sum(tot_zona.get(z) or 0 for z in ("uio", "larb", "cnlj")), [general, tot_zona])
+msz = re.search(r'SIN ZONA <a href="casos\.php\?zona=SIN&amp;grupo=total"><b>(\d+)</b>', h)
+sin_zona = int(msz.group(1)) if msz else 0
+ok("panel: Σ tarjetas (con OTRA) + sin zona = cuadro TOTAL",
+   cuadro is not None and sum(v or 0 for v in tot_zona.values()) + sin_zona == cuadro,
+   [sum(v or 0 for v in tot_zona.values()), sin_zona, cuadro])
 m = re.search(r"data-titulo=\"En qué estado están\".*?data-datos='([^']*)'", h, re.S)
 barras = {b["e"]: b for b in json.loads(html.unescape(m.group(1)))} if m else {}
 reg = barras.get("regularizado")
 ok("panel: barra «regularizado» con la cifra y en gris", bool(reg) and reg["v"] == ref["REG"] and reg["c"] != "#e34948", reg)
 ok("panel: sin barra roja «sin atender» cuando no falta regularizar", ref["CSA_SIN"] > 0 or "sin atender" not in barras, barras.get("sin atender", "no está"))
-ok("panel: la tarea «sin regularizar» aparece solo si hay", (ref["CSA_SIN"] > 0) == ("sin regularizar ante KFC" in h))
-ok("panel: «últimos 7 días»", "Llegaron en los últimos 7 días" in h)
+# La tarea (no el pie de la tarjeta, que siempre dice su cifra, aunque sea 0).
+tarea_sr = re.search(r'<span class="num"[^>]*>\d+</span>\s*cerradas? sin atención, sin regularizar ante KFC', h)
+ok("panel: la tarea «sin regularizar» aparece solo si hay", (ref["CSA_SIN"] > 0) == bool(tarea_sr))
+ok("panel: «Órdenes nuevas en 7 días»", "Órdenes nuevas en 7 días" in h)
+
+# Cada cifra de la tarjeta = las filas de su enlace (misma función en los dos lados).
+for zona, cl in (("UIO", "uio"), ("LARB", "larb"), ("CNLJ", "cnlj")):
+    hz = pagina("casos.php", f"['zona' => '{zona}', 'grupo' => 'total']")
+    mc = re.search(r'<b id="cuenta-casos"[^>]*>(\d+)</b>', hz)
+    filas_enlace = int(mc.group(1)) if mc else None
+    ok(f"casos.php?zona={zona}&grupo=total: filas = TOTAL de la tarjeta", filas_enlace == tot_zona.get(cl),
+       [filas_enlace, tot_zona.get(cl)])
 
 for est, esp in (("CERRADO_SIN_ATENCION", ref["CSA_SIN"]), ("REGULARIZADO", ref["REG"])):
     h = pagina("casos.php", f"['est' => '{est}']")
