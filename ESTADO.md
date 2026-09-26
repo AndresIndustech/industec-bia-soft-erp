@@ -912,19 +912,35 @@ en navegador — necesitan el sitio de pruebas; el render de los verificadores u
 **dos consultas SQL nuevas** (`JSON_EXTRACT` sobre `ot_capturadas` y el vencido calculado en SQL) no se han corrido
 contra MariaDB. `prueba_offline.mjs` ya fallaba antes de este trabajo.
 
-### ⚠ NO DESPLEGAR TODAVÍA — el servidor tiene trabajo que no está en GitHub
+### Despliegue: fusionado sobre lo vivo, listo, a la espera de autorización de Andrés
 
-Comparado por hash el 2026-09-26 (solo lectura): de los 73 archivos de `--todo`, 13 **no coinciden con ninguna de las
-56 versiones de git**, y no son antiguos sino **más nuevos**: `app.js`, `index.html`, `reglas.js`, `offline.js`,
-`envio.php`, `catalogos.php`, `equipos.php`, `sw.js` (**v20**, esta rama trae v19), `nucleo/Validacion.php`,
-`Catalogo.php`, `Emision.php`, `Destinatarios.php`, `plantilla_ot.php`. Traen **T2.28.3** (correo del local editable,
-«también se enviará a») y **T2.28.6** (ficha del equipo, casilla «sin placa»). `origin/master` sigue en `bdaaf92`: la
-estación lo desplegó y **no lo ha empujado**. Desplegar esta rama lo pisaría y bajaría `sw.js` de v20 a v19.
-Copia de lo vivo, para la fusión, en el directorio temporal de la sesión (`scratchpad/bia_terminos/vivo/`).
-**Camino:** que la estación commitee y empuje T2.28.3/T2.28.6 → fusionar esta rama sobre eso (los 13 archivos chocan en
-texto) → correr las baterías → recién entonces `t2_10_desplegar.py` con `--comprobar-web`, primero UIO (I-8).
-Pendientes de personas: avisar a Isabel del cambio de cifras; ¿el remitente del correo de la OT
-(«INDUSTEC · Órdenes de trabajo») es contrato?; ¿el % a tiempo del preventivo debe contar las «atrasadas por marcar»?
+Comparado por hash el 2026-09-26 (solo lectura), el servidor tenía **T2.28.3** (correo del local editable) y
+**T2.28.6** (ficha del equipo, «sin placa», `sw.js` v20) que la estación desplegó y **no ha empujado**:
+`origin/master` sigue en `bdaaf92`. Desplegar la rama tal cual los habría pisado, así que se hizo lo que sigue
+(decisión de Andrés, 26-sep: «fusionar sobre lo vivo»):
+
+1. `pc/estado-vivo-darkviolet-2026-09-26` (`d35dfbc`): **copia de 16 archivos bajados del servidor**, cada uno
+   verificado por sha256 contra el disco remoto (15 de `publico/` + `sql/014_ficha_equipo.sql`). Es una
+   **reconstrucción, no autoría de la estación**: cuando la estación empuje su versión, esta copia se descarta.
+2. `pc/vocabulario-sobre-vivo-2026-09-26` (`00e3977`): la fusión. De los 13 archivos que ambos lados tocaban, git
+   fusionó 11 solo; los 2 choques (`catalogos.php`, `sw.js`) eran triviales. `sw.js` pasa a **v21**. Además, cinco
+   textos nuevos de la estación que llamaban «orden» al documento del técnico ahora dicen «OT INDUSTEC».
+   Sobre la fusión: `php -l` 0 errores, `node --check`, `prueba_48h` 125·0, continuidad 42·0, destinatarios 22·0,
+   despacho 20·0, casos_prueba 7·0, vocabulario 154·0, panel_zona 70·0, claves 748·0, contratos 57·0, gráficos 62·0,
+   barra OK, validación 37/37, **lista negra 0**, compuerta de cobertura **APRUEBA**.
+
+**Qué cambiaría en darkviolet** (calculado por contenido, ignorando CRLF/LF): de los 73 archivos de `--todo`,
+**44 cambian y 3 son nuevos** (`vocabulario.json`, `vocabulario_publico.json`, `nucleo/Vocabulario.php`); 26 ya son
+iguales. Conviene subir **solo esos 47 por nombre**, no `--todo`: así los otros 26 conservan su fin de línea. No
+toca `correos_sembrar_cli.php`, `verificar_esquema.php` ni `sql/014` (no están en `--todo` y no cambian).
+**Falta, en este orden:** autorización de Andrés → `t2_10_desplegar.py` con los 47 nombres y `--comprobar-web`,
+**primero UIO** (I-8) → baterías de servidor (`verificar_cifras.py`, `verificar_http.py`, `verificar_bandeja.py`,
+`verificar_reportes.py`, `verificar_emision.py`…) → revisión en pantalla como administración, jefe de zona y técnico
+→ purgar el CDN si `--comprobar-web` avisa. Riesgo a vigilar: las dos consultas SQL nuevas (`JSON_EXTRACT` sobre
+`ot_capturadas` y el vencido en SQL) solo se han probado contra una base falsa.
+Pendientes de personas: avisar a Isabel del cambio de cifras (el TOTAL ya no incluye las atendidas); ¿el remitente
+del correo de la OT («INDUSTEC · Órdenes de trabajo») es contrato?; ¿el % a tiempo del preventivo debe contar las
+«atrasadas por marcar»?
 
 ## 1s. T2.28 · Lo que se midió para planificar las observaciones de INDUSTEC (2026-09-22/23, solo lectura)
 
