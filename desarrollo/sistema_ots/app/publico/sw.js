@@ -35,12 +35,9 @@
      v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
      recibe el numero de la orden. Con el armazon viejo el celular seguiria
      mandando la orden sin ellas. */
-const VERSION = 'ot-industec-v19';  // v19: vocabulario_publico.json precargado y UI.T en ui.js — un solo vocabulario para todos los roles (2026-09-24)
-// v19 cubre también los textos de la ola 2 del vocabulario (app.js, cola.js, offline.js, guia.js,
-// reglas.js, ui.js, index.html y cronograma.js; vocabulario 2026-09-24.6, 26-sep-2026, con la
-// copia pública recortada en lugar del vocabulario.json completo): la v19
-// todavía no se desplegó (la del servidor es la v18), así que una sola subida basta.
-// Si la v19 llegara a desplegarse sin la ola 2, esta pasa a v20.
+const VERSION = 'ot-industec-v21';  // v21: un solo vocabulario para todos los roles — vocabulario_publico.json precargado y UI.T en ui.js; cubre los textos de app.js, cola.js, offline.js, guia.js, reglas.js, ui.js, index.html y cronograma.js (vocabulario 2026-09-24.6, 26-sep-2026)
+// v20: ficha del equipo -marca, modelo y serie que se quedan, casilla «sin placa» (T2.28.6, 2026-09-24)
+// v19: correo del jefe de operaciones ya no es un campo fijo; «también se enviará a» (T2.28.3, 2026-09-24)
 // v18: el buscador del equipo ya no borra lo que se escribe (2026-09-24)
 // v17: el equipo se busca escribiendo y se crea si no está; acompañantes de la zona de la orden (2026-09-24)
 // v16: correo y administrador editables, repuestos con texto libre, lista de casos que ya no se recorta (2026-09-24)

@@ -569,6 +569,45 @@
     return out;
   }
 
+  /* T2.28.3 (obs. 2, D-G): reemplaza el campo fijo «Correo del jefe de
+     operaciones». `CAT.destinatarios_cc[local]` ya viene resuelto del
+     servidor (Destinatarios::copiasPorLocal(), las mismas reglas que usa la
+     emisión), así que aquí solo se arma la frase y el detalle -- funciona
+     sin señal porque viaja dentro del mismo catalogos.php que cachea el
+     trabajador de servicio, no con un fetch aparte. */
+  var tambienEnvioCorreos = [];
+  function actualizarTambienEnvio(cod) {
+    var lista = (CAT && CAT.destinatarios_cc && CAT.destinatarios_cc[cod]) || [];
+    var jefeZona = lista.filter(function (d) { return d.jefe_zona; });
+    var otras = lista.length - jefeZona.length;
+    var resumen;
+    if (jefeZona.length) {
+      resumen = 'jefe de zona de INDUSTEC' + (otras
+        ? ' y ' + otras + (otras === 1 ? ' copia configurada' : ' copias configuradas') + ' por la administración'
+        : '');
+    } else if (lista.length) {
+      resumen = lista.length + (lista.length === 1 ? ' copia configurada' : ' copias configuradas') + ' por la administración';
+    } else {
+      resumen = 'nadie más por ahora (todavía sin copias configuradas para este local)';
+    }
+    tambienEnvioCorreos = lista.map(function (d) { return d.correo; });
+    $('#tambienEnvioResumen').textContent = resumen;
+    $('#tambienEnvioVer').hidden = tambienEnvioCorreos.length === 0;
+    $('#tambienEnvioVer').textContent = 'ver';
+    $('#tambienEnvioVer').setAttribute('aria-expanded', 'false');
+    $('#tambienEnvioLista').hidden = true;
+    $('#tambienEnvioLista').textContent = '';
+  }
+  function initTambienEnvio() {
+    $('#tambienEnvioVer').addEventListener('click', function () {
+      var abierto = $('#tambienEnvioVer').getAttribute('aria-expanded') === 'true';
+      $('#tambienEnvioVer').setAttribute('aria-expanded', abierto ? 'false' : 'true');
+      $('#tambienEnvioVer').textContent = abierto ? 'ver' : 'ocultar';
+      $('#tambienEnvioLista').hidden = abierto;
+      $('#tambienEnvioLista').textContent = abierto ? '' : tambienEnvioCorreos.join(', ');
+    });
+  }
+
   /* Lo último que puso el sistema en el correo. Si la persona ya escribió
      otra cosa, no se le pisa: ni al cambiar de administrador ni de local. */
   var correoDelSistema = '';
@@ -619,7 +658,7 @@
     if (!l) {
       chips.hidden = true;
       proponerCorreo('');
-      $('#correojefeop').value = '';
+      actualizarTambienEnvio(null);
       refrescarEquipos();
       return;
     }
@@ -637,7 +676,7 @@
     var propuesto = (l.correo_local && !esBuzonIndustec(l.correo_local)) ? l.correo_local
                   : (delAdmin ? delAdmin.correo : (correosDelLocal(cod)[0] || {}).valor);
     proponerCorreo(propuesto || '');
-    $('#correojefeop').value = l.correo_jefe_op || '';
+    actualizarTambienEnvio(cod);
     refrescarEquipos();
   }
 
@@ -736,11 +775,21 @@
       '<div class="nota-regular" data-eq-nuevo-nota="' + i + '" hidden style="margin-top:8px">' +
       '<b>Se registra como equipo nuevo.</b> Queda visible para todas las zonas y la ' +
       'administración lo revisa antes de sumarlo al catálogo del local.</div>' +
-      '<div class="grid g3" style="margin-top:8px">' +
-      '  <div><label>Marca</label><input type="text" data-eq-marca="' + i + '"></div>' +
-      '  <div><label>Modelo</label><input type="text" data-eq-modelo="' + i + '"></div>' +
+      // T2.28.6 (obs. 4): la placa se puede leer, o se marca que no se puede
+      // -nunca las dos cosas-. Marcarla apaga y vacía marca/modelo/serie.
+      '<label style="display:flex;align-items:center;gap:9px;margin-top:8px;font-size:13.5px;color:var(--ink)">' +
+      '<input type="checkbox" data-eq-sinplaca="' + i + '" style="width:auto;height:auto;margin:0"> ' +
+      'Sin placa o ilegible</label>' +
+      '<div class="grid g3" data-eq-placa-wrap="' + i + '" style="margin-top:8px">' +
+      '  <div><label>Marca</label><div class="combo">' +
+      '    <input type="text" data-eq-marca="' + i + '" autocomplete="off" placeholder="Escribe la marca o elige una">' +
+      '    <ul class="combo-lista" id="eqMarcaLista' + i + '" role="listbox" hidden></ul></div></div>' +
+      '  <div><label>Modelo</label><div class="combo">' +
+      '    <input type="text" data-eq-modelo="' + i + '" autocomplete="off" placeholder="Elige la marca primero">' +
+      '    <ul class="combo-lista" id="eqModeloLista' + i + '" role="listbox" hidden></ul></div></div>' +
       '  <div><label>Serie</label><input type="text" data-eq-serie="' + i + '"></div>' +
       '</div>' +
+      '<div class="derivado" data-eq-ficha-nota="' + i + '" hidden style="margin-top:6px"></div>' +
       '<div class="grid g2" style="margin-top:8px">' +
       '  <div><label>Código de activo fijo</label><input type="text" data-eq-cod="' + i + '" readonly placeholder="viene con el equipo"></div>' +
       '  <div><label>Estado del equipo</label>' +
@@ -756,6 +805,48 @@
       '<label style="margin-top:8px">Observaciones del equipo</label>' +
       '<textarea data-eq-obs="' + i + '" placeholder="Opcional"></textarea>';
     $('#equipos').appendChild(wrap);
+
+    /* T2.28.6: la casilla «sin placa o ilegible» apaga y vacía marca, modelo
+       y serie -- son mutuamente excluyentes, y así el técnico no deja una
+       marca vieja puesta cuando en realidad no pudo leer la placa. */
+    var campoMarca = wrap.querySelector('[data-eq-marca="' + i + '"]');
+    var campoModelo = wrap.querySelector('[data-eq-modelo="' + i + '"]');
+    var campoSerie = wrap.querySelector('[data-eq-serie="' + i + '"]');
+    var notaFicha = wrap.querySelector('[data-eq-ficha-nota="' + i + '"]');
+    function mostrarNotaFicha(texto) {
+      notaFicha.textContent = texto;
+      notaFicha.hidden = !texto;
+    }
+    wrap.querySelector('[data-eq-sinplaca="' + i + '"]').addEventListener('change', function () {
+      var si = this.checked;
+      [campoMarca, campoModelo, campoSerie].forEach(function (el) {
+        el.disabled = si;
+        if (si) { el.value = ''; }
+      });
+      if (si) { mostrarNotaFicha(''); }
+    });
+    // Sugerencias de marca (catálogo global) y de modelo (filtrado por la
+    // marca ya escrita) -- el mismo ayudante que reemplaza el <datalist> en
+    // todo el proyecto (crearSugerencias), nunca un selector cerrado.
+    crearSugerencias(campoMarca, $('#eqMarcaLista' + i), function () {
+      return (CAT && CAT.marcas || []).map(function (m) { return { valor: m }; });
+    });
+    crearSugerencias(campoModelo, $('#eqModeloLista' + i), function () {
+      var marca = Reglas.normMarca(campoMarca.value);
+      if (!marca || !CAT || !CAT.modelos) { return []; }
+      return (CAT.modelos[marca] || []).map(function (m) { return { valor: m }; });
+    });
+    // Un valor marcador (S/N, XXX...) no es un dato de placa: se vacía al
+    // salir del campo y se sugiere la casilla de arriba, en vez de guardar
+    // un marcador como si fuera la marca, el modelo o la serie real.
+    [campoMarca, campoModelo, campoSerie].forEach(function (el) {
+      el.addEventListener('blur', function () {
+        if (el.value.trim() !== '' && Reglas.esMarcador(el.value)) {
+          el.value = '';
+          mostrarNotaFicha('Eso no parece un dato de la placa. Si el equipo no tiene placa o está ilegible, marca la casilla de arriba.');
+        }
+      });
+    });
 
     wrap.querySelector('[data-quitar-eq]').addEventListener('click', function () {
       if ($$('#equipos .bloque').length <= 1) { alert('Toda ' + UI.T('OT_INDUSTEC') + ' interviene al menos un equipo.'); return; }
@@ -778,7 +869,10 @@
       vacio: 'Elige el local primero.',
       clave: function (it) { return it.k; },
       etiqueta: function (it) { return (it.nuevo ? 'Equipo nuevo · ' : '') + it.etiqueta; },
-      buscarEn: function (it) { return [it.etiqueta, it.grupo, limpiarTipo(it.tipo), it.cod].join(' '); },
+      // T2.28.6: suma la marca y el modelo de la ficha del equipo (si ya se
+      // conoce), para que buscar «Manitowoc» o «IYT0500A» también encuentre
+      // el equipo -misma función de búsqueda que ya existía, extendida.
+      buscarEn: function (it) { return [it.etiqueta, it.grupo, limpiarTipo(it.tipo), it.cod, it.ficha].join(' '); },
       grupo: function (it) { return it.grupo || null; },
       fila: function (it) { return esc(it.etiqueta); },
       alElegir: function () { selEq.dispatchEvent(new Event('change', { bubbles: true })); },
@@ -809,6 +903,26 @@
       cod.placeholder = esNuevo ? 'si lo tiene, opcional' : 'viene con el equipo';
       wrap.querySelector('[data-eq-area-wrap="' + i + '"]').hidden = !esNuevo;
       wrap.querySelector('[data-eq-nuevo-nota="' + i + '"]').hidden = !esNuevo;
+      // T2.28.6: si el equipo elegido ya tiene ficha (de una orden anterior)
+      // y los tres campos siguen vacíos -- nunca se pisa lo que la persona ya
+      // escribió--, se prellenan y se avisa de dónde salieron.
+      var ficha = (!esNuevo && selEq.value && CAT && CAT.fichas) ? CAT.fichas[selEq.value] : null;
+      if (ficha && !campoMarca.value && !campoModelo.value && !campoSerie.value) {
+        if (ficha.sin_placa) {
+          wrap.querySelector('[data-eq-sinplaca="' + i + '"]').checked = true;
+          wrap.querySelector('[data-eq-sinplaca="' + i + '"]').dispatchEvent(new Event('change'));
+          mostrarNotaFicha('En la última ' + UI.T('OT_INDUSTEC') + ' de este equipo se marcó «sin placa o ilegible». Corrígelo si ahora sí se puede leer.');
+        } else if (ficha.marca || ficha.modelo || ficha.serie) {
+          campoMarca.value = ficha.marca || '';
+          campoModelo.value = ficha.modelo || '';
+          campoSerie.value = ficha.serie || '';
+          var fecha = ficha.en ? String(ficha.en).slice(8, 10) + '/' + String(ficha.en).slice(5, 7) : 'una ' + UI.T('OT_INDUSTEC') + ' anterior';
+          mostrarNotaFicha('Datos de la última ' + UI.T('OT_INDUSTEC') + ' (' + fecha + (ficha.por ? ', ' + ficha.por : '')
+            + '). Corrígelos si la placa dice otra cosa.');
+        }
+      } else if (!ficha) {
+        mostrarNotaFicha('');
+      }
       sincronizarFallas();
     });
     poblarEquipoSelect(selEq);
@@ -933,11 +1047,16 @@
     }
   }
 
-  /* Una opción del <select> de equipo, en la forma que usa su buscador. */
+  /* Una opción del <select> de equipo, en la forma que usa su buscador.
+     T2.28.6: suma la marca y el modelo de la ficha (si existe), para que
+     EXTIENDA la búsqueda ya existente (bloque F, T2.28.5) en vez de crear un
+     segundo buscador -- reporte de INDUSTEC, pedido explícito. */
   function itemDeOpcion(o) {
     var g = o.parentNode && o.parentNode.tagName === 'OPTGROUP' ? o.parentNode.label : '';
+    var ficha = (CAT && CAT.fichas && CAT.fichas[o.value]) || null;
     return { k: o.value, etiqueta: o.textContent, grupo: g, tipo: o.dataset.tipo || '',
-             cod: o.dataset.cod || '', nuevo: o.value.indexOf('TIPO:') === 0 };
+             cod: o.dataset.cod || '', nuevo: o.value.indexOf('TIPO:') === 0,
+             ficha: ficha ? [ficha.marca, ficha.modelo].filter(Boolean).join(' ') : '' };
   }
 
   /* La opción «equipo nuevo» para un tipo escrito a mano. Si ya existe (del
@@ -1132,7 +1251,18 @@
       var sel = b.querySelector('.eq-sel');
       if (eqd.valor) { sel.value = eqd.valor; sel.dispatchEvent(new Event('change')); }
       var set = function (s, v) { var el = b.querySelector(s); if (el && v) { el.value = v; } };
-      set('[data-eq-marca]', eqd.marca); set('[data-eq-modelo]', eqd.modelo); set('[data-eq-serie]', eqd.serie);
+      // T2.28.6: la casilla va ANTES que marca/modelo/serie -- marcarla los
+      // vacía (ver el `change` de arriba), así que si el borrador la trae
+      // marcada, primero se marca y recién después (si no aplica) se llenan
+      // los tres campos con lo que el borrador guardó.
+      var chkSinPlaca = b.querySelector('[data-eq-sinplaca]');
+      if (chkSinPlaca) {
+        chkSinPlaca.checked = !!eqd.sin_placa;
+        chkSinPlaca.dispatchEvent(new Event('change'));
+      }
+      if (!eqd.sin_placa) {
+        set('[data-eq-marca]', eqd.marca); set('[data-eq-modelo]', eqd.modelo); set('[data-eq-serie]', eqd.serie);
+      }
       set('[data-eq-area]', eqd.area);
       if (eqd.codigo && sel.value.indexOf('TIPO:') === 0) { set('[data-eq-cod]', eqd.codigo); }
       set('[data-eq-obs]', eqd.obs);
@@ -1215,7 +1345,8 @@
     }
     reconstruirEquipos((o.equipos || []).map(function (eq) {
       return { valor: equipoOrdenAValor(eq), marca: eq.marca, modelo: eq.modelo, serie: eq.serie,
-               codigo: eq.codigo_activo, area: eq.area, obs: eq.obs, estado: eq.estado };
+               codigo: eq.codigo_activo, area: eq.area, obs: eq.obs, estado: eq.estado,
+               sin_placa: eq.sin_placa };
     }));
     var concl = o.concluida !== false;
     $('#concluida').value = concl ? '1' : '0';
@@ -1434,6 +1565,9 @@
       eq.marca = txt('[data-eq-marca]') || null;
       eq.modelo = txt('[data-eq-modelo]') || null;
       eq.serie = txt('[data-eq-serie]') || null;
+      // T2.28.6 (obs. 4): la placa se pudo leer, o no -- nunca las dos cosas.
+      var chkSinPlaca = b.querySelector('[data-eq-sinplaca]');
+      eq.sin_placa = !!(chkSinPlaca && chkSinPlaca.checked);
       eq.codigo_activo = txt('[data-eq-cod]') || null;
       if (eq.nuevo) { eq.area = txt('[data-eq-area]') || null; }
       return eq;
@@ -1505,6 +1639,12 @@
       concluida: $('#concluida').value === '1',
       pendiente: pendienteDeLaOrden(),
       novedades: novedadesDeLaOrden(),
+      // T2.28.3 (§5.4): declara con qué formulario se armó la orden. No
+      // reemplaza `correo_jefe_op` -ya no se manda: lo resuelve el servidor
+      // desde `correo_destinatarios`- ni bloquea nada por sí sola; es la
+      // marca que T2.28.15 va a usar para saber cuándo ya nadie manda el
+      // formato viejo y se puede exigir sin romper compatibilidad.
+      formulario_v: 2,
       _hoy: isoLocal(new Date())
     };
   }
@@ -1847,9 +1987,19 @@
       // aplicada llegan vacíos y el formulario sigue igual que hoy.
       admins: cat.admins || {},
       admins_v2: cat.admins_v2 || null,
+      // T2.28.3: quién más recibe la orden de cada local (jefe de zona +
+      // copias), ya resuelto por Destinatarios::copiasPorLocal(). {} si el
+      // servidor todavía no lo manda (caché vieja de antes de esta versión).
+      destinatarios_cc: cat.destinatarios_cc || {},
       familias: arr(cat.familias),
       diagnosticos: arr(cat.diagnosticos),
-      repuestos: arr(cat.repuestos_frecuentes)
+      repuestos: arr(cat.repuestos_frecuentes),
+      // T2.28.6: la ficha de cada equipo (marca, modelo, serie que se
+      // quedan) y las marcas/modelos más frecuentes para las sugerencias.
+      // {} / [] si el servidor todavía no las manda (caché vieja).
+      fichas: cat.fichas || {},
+      marcas: arr(cat.marcas),
+      modelos: cat.modelos || {}
     };
   }
 
@@ -1945,6 +2095,7 @@
       // Sugerencias de administrador y correo (los repuestos traen las suyas
       // en cada fila, desde `crearListaPartes`). Leen CAT al abrirse.
       initAdminYCorreo();
+      initTambienEnvio();
 
       var params = new URLSearchParams(location.search);
       var tipoPedido = params.get('tipo');

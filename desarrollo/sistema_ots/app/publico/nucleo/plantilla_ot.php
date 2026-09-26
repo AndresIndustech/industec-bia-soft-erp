@@ -89,7 +89,9 @@ $atiempo = strtoupper(str_replace('Í', 'I', mb_strtoupper(trim($d['atiempo'])))
     <div class="eq<?= $i === 0 ? ' primero' : '' ?>">
       <b>Equipo:</b> <?= $e($q['tipo']) ?><?= $q['clase'] ? ' · ' . $e($q['clase']) : '' ?><br>
       <?php if ($q['equipo_sap']): ?><b>Equipo SAP:</b> <?= $e($q['equipo_sap']) ?><br><?php endif; ?>
-      <?php if ($q['marca'] || $q['modelo'] || $q['serie']): ?>
+      <?php if (!empty($q['sin_placa'])): ?>
+        <b>Marca/Modelo/Serie:</b> sin placa o ilegible<br>
+      <?php elseif ($q['marca'] || $q['modelo'] || $q['serie']): ?>
         <b>Marca:</b> <?= $e($q['marca'] ?: '—') ?> · <b>Modelo:</b> <?= $e($q['modelo'] ?: '—') ?>
         · <b>Serie:</b> <?= $e($q['serie'] ?: '—') ?><br>
       <?php endif; ?>

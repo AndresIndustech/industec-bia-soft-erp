@@ -64,8 +64,48 @@
     // T2.14.1 (H-10, D8): equipo nuevo propuesto para el local; no bloquea.
     EQUIPO_NUEVO_PROPUESTO: ADVIERTE,
     // T2.14.1 (H-18, D10): casilla "otro proveedor" marcada sin su nombre.
-    CON_PROVEEDOR_SIN_NOMBRE: BLOQUEA
+    CON_PROVEEDOR_SIN_NOMBRE: BLOQUEA,
+    // T2.28.3 (obs. 2): solo advierte -el correo se corrige en correos.php,
+    // no en el momento- y solo en CAPTURA: el histórico no tiene este campo.
+    CORREO_INVALIDO: ADVIERTE,
+    // T2.28.6 (obs. 4): la ficha del equipo (marca, modelo, serie) solo se
+    // exige en CAPTURA con formulario_v >= 2 -el histórico y los celulares
+    // con la app vieja en caché no traen estos campos, y marcarlos ahí
+    // inventaría un defecto que la orden nunca tuvo (§5.4).
+    EQUIPO_SIN_DATOS_DE_PLACA: BLOQUEA,
+    EQUIPO_SIN_SERIE: ADVIERTE
   };
+
+  /* =======================================================================
+     Normalización de la ficha del equipo (T2.28.6, obs. 4) — MISMO contrato
+     en las tres implementaciones (reglas.js, Validacion.php, t2_5_validacion.py),
+     con casos en el fixture. No son reglas de validación: las usan también
+     app.js (para vaciar y sugerir «sin placa» al escribir un marcador) y
+     envio.php (para no pisar un dato real con un vacío o un marcador).
+
+     esMarcador(s): true si `s` es una de las grafías de "no hay dato" que
+     aparecen en la placa o en lo que teclea el técnico. Mismo espíritu que
+     SIN_REPUESTO de arriba, pero para marca/modelo/serie: S/N, XXX, "-", etc.
+     normMarca(s, sinonimos): mayúsculas, sin espacios dobles, sin tildes; el
+     mapa de sinónimos (de marcas.json, p. ej. TRUE REFRIGERATOR -> TRUE) es
+     opcional y nunca se adivina aquí (I-7): lo arma t2_28_marcas.py para que
+     una persona lo revise antes de usarlo. */
+  var MARCADORES = [
+    'S/N', 'SN', 'S/M', 'SM', 'N/A', 'NA', 'XXX', '-', '—', '--',
+    'NO TIENE', 'SIN SERIE', 'SIN PLACA', '0'
+  ];
+
+  function esMarcador(s) {
+    var n = quitarTildes(String(s == null ? '' : s)).trim().toUpperCase().replace(/\.+$/, '');
+    if (n === '') return true;
+    return MARCADORES.indexOf(n) !== -1;
+  }
+
+  function normMarca(s, sinonimos) {
+    var n = quitarTildes(String(s == null ? '' : s)).toUpperCase().trim().replace(/\s+/g, ' ');
+    if (sinonimos && Object.prototype.hasOwnProperty.call(sinonimos, n)) { return sinonimos[n]; }
+    return n;
+  }
 
   function quitarTildes(s) {
     return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -214,12 +254,40 @@
           add('equipos[' + n + ']', 'EQUIPO_ELEGIBLE_POR_ACTIVO',
             local + " tiene activos de tipo '" + tipoEq + "' en el catálogo; conviene elegir cuál");
         }
+        // --- FICHA DEL EQUIPO (T2.28.6, obs. 4) ---
+        // Solo en CAPTURA y con formulario_v >= 2: el histórico y una app
+        // vieja en caché no traen marca/modelo/serie, y exigirlos ahí
+        // bloquearía órdenes que nunca pidieron ese dato (§5.4). «Hay equipo
+        // elegido» es lo mismo que ya decide EQUIPO_SIN_IDENTIFICAR arriba:
+        // si no eligió nada, ese hallazgo ya lo dice y este no se suma.
+        var hayEquipoElegido = ref !== '' || tipoEq !== '';
+        if (contexto === 'CAPTURA' && (+o.formulario_v || 0) >= 2 && hayEquipoElegido && !eq.sin_placa) {
+          var faltaMarca = esMarcador(eq.marca);
+          var faltaModelo = esMarcador(eq.modelo);
+          if (faltaMarca || faltaModelo) {
+            add('equipos[' + n + ']', 'EQUIPO_SIN_DATOS_DE_PLACA',
+              'falta la marca o el modelo del equipo; marca «sin placa o ilegible» si no se puede leer');
+          }
+          if (esMarcador(eq.serie)) {
+            add('equipos[' + n + ']', 'EQUIPO_SIN_SERIE', 'falta la serie del equipo');
+          }
+        }
       });
 
       // --- TRABAJO CON OTRO PROVEEDOR (H-18, D10) ---
       if (o.con_proveedor_marcado && !String(o.con_proveedor || '').trim()) {
         add('con_proveedor', 'CON_PROVEEDOR_SIN_NOMBRE',
           'marcaste que el trabajo lo hizo otro proveedor pero falta su nombre');
+      }
+
+      // --- CORREO DEL LOCAL (T2.28.3, obs. 2) ---
+      // Solo en CAPTURA: las 7.452 órdenes históricas no traen este campo, y
+      // marcarlas advertiría sobre un dato que nunca se pidió. No bloquea: el
+      // envío sigue, y `Emision::correoLocal()` cae al correo del maestro.
+      if (contexto === 'CAPTURA' && o.correo_local
+          && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(o.correo_local))) {
+        add('correo_local', 'CORREO_INVALIDO',
+          "'" + o.correo_local + "' no parece un correo válido; la OT INDUSTEC saldrá al correo del maestro");
       }
 
       // --- REPUESTOS ---
@@ -308,6 +376,7 @@
   }
 
   var api = { crear: crear, tokensNombre: tokensNombre, quitarTildes: quitarTildes,
+              esMarcador: esMarcador, normMarca: normMarca,
               SEVERIDADES: SEVERIDADES, BLOQUEA: BLOQUEA, ADVIERTE: ADVIERTE, INFORMA: INFORMA };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

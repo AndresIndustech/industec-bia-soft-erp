@@ -96,6 +96,8 @@ $mas020 = (int) $db->query("SELECT COUNT(*) FROM permisos WHERE codigo = 'automa
 $mas021 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE archivo LIKE '%021_jefe_atiende.sql'")->fetchColumn() > 0 ? 1 : 0;
 $hay013 = $hayTabla('correo_destinatarios');
 $mas013 = $hay013 ? 1 : 0;
+// La 014 (T2.28.6) no suma permisos nuevos: la ficha del equipo la escribe
+// envio.php con el mismo permiso ots.crear que ya usa cualquier orden.
 $esperado = $hay009
     ? ['SUPERADMIN' => 39 + $mas012 + $mas020 + $mas013, 'ADMIN' => 38 + $mas012 + $mas020 + $mas013,
        'JEFE_ZONA' => 26 + $mas012 + $mas021, 'TECNICO' => 13 + $mas012]
@@ -271,6 +273,35 @@ if ($hay009) {
         echo '  (destinatarios activos por uso: '
            . json_encode(array_column($db->query(
                "SELECT uso, COUNT(*) n FROM correo_destinatarios WHERE activo = 1 GROUP BY uso")->fetchAll(), 'n', 'uso'))
+           . ")\n";
+    }
+
+    // La 014 es la ficha del equipo -marca, modelo y serie que se quedan-
+    // (T2.28.6, obs. 4 de la revisión con INDUSTEC).
+    $hay014 = $hayTabla('equipos_ficha');
+    if ($hay014) {
+        echo "\nmigracion 014\n";
+        foreach (['equipos_ficha', 'equipos_ficha_cambios'] as $t) {
+            comprobar("tabla $t", $hayTabla($t) ? 'si' : 'no', 'si');
+        }
+        $pk = $db->query("SHOW KEYS FROM equipos_ficha WHERE Key_name='PRIMARY'")->fetch();
+        comprobar('equipos_ficha: PK equipo_clave (I-9)', $pk['Column_name'] ?? '', 'equipo_clave');
+        $colsFicha = array_column($db->query('SHOW COLUMNS FROM equipos_ficha')->fetchAll(), 'Field');
+        foreach (['marca', 'modelo', 'serie', 'sin_placa', 'fuente', 'actualizado_por'] as $c) {
+            comprobar("equipos_ficha.$c", in_array($c, $colsFicha, true) ? 'si' : 'no', 'si');
+        }
+        $colsCambios = array_column($db->query('SHOW COLUMNS FROM equipos_ficha_cambios')->fetchAll(), 'Field');
+        foreach (['campo', 'antes', 'despues', 'por', 'en'] as $c) {
+            comprobar("equipos_ficha_cambios.$c", in_array($c, $colsCambios, true) ? 'si' : 'no', 'si');
+        }
+        /* Prueba negativa (tabla de permisos de T2.28.6): aplicar la
+           migración NO siembra ninguna ficha desde el histórico. Solo se
+           informa, sin exigir 0: las baterías de servidor y el uso real ya
+           escriben filas después de aplicada. */
+        echo '  (fichas de equipo hoy: '
+           . (int) $db->query('SELECT COUNT(*) FROM equipos_ficha')->fetchColumn()
+           . ' · cambios de serie: '
+           . (int) $db->query("SELECT COUNT(*) FROM equipos_ficha_cambios WHERE campo = 'serie'")->fetchColumn()
            . ")\n";
     }
 }

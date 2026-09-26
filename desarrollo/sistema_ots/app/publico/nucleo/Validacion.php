@@ -82,7 +82,51 @@ final class Validacion
         // nombre del proveedor; marcarla sin decir quien es deja un dato inutil
         // para la administracion.
         'CON_PROVEEDOR_SIN_NOMBRE' => self::BLOQUEA,
+        // T2.28.3 (obs. 2): solo advierte -se corrige en correos.php, no
+        // corta el envío- y solo en CAPTURA: el histórico no tiene el campo.
+        'CORREO_INVALIDO' => self::ADVIERTE,
+        // T2.28.6 (obs. 4): la ficha del equipo, solo en CAPTURA con
+        // formulario_v >= 2 (§5.4, misma razón que CORREO_INVALIDO).
+        'EQUIPO_SIN_DATOS_DE_PLACA' => self::BLOQUEA,
+        'EQUIPO_SIN_SERIE' => self::ADVIERTE,
     ];
+
+    /**
+     * Las grafías de "no hay dato" en la placa de un equipo o en lo que
+     * teclea el técnico. Mismo contrato que reglas.js::esMarcador() y
+     * t2_5_validacion.py::es_marcador() -con casos en el fixture-, para que
+     * las tres no se separen.
+     */
+    private const MARCADORES = [
+        'S/N', 'SN', 'S/M', 'SM', 'N/A', 'NA', 'XXX', '-', '—', '--',
+        'NO TIENE', 'SIN SERIE', 'SIN PLACA', '0',
+    ];
+
+    public static function esMarcador(?string $s): bool
+    {
+        $n = self::sinTildes((string) $s);
+        $n = rtrim(strtoupper(trim($n)), '.');
+        return $n === '' || in_array($n, self::MARCADORES, true);
+    }
+
+    /**
+     * Mayúsculas, sin espacios dobles, sin tildes; con un mapa de sinónimos
+     * opcional (de marcas.json, p. ej. TRUE REFRIGERATOR -> TRUE) que
+     * t2_28_marcas.py arma para que una persona lo revise -nunca se adivina
+     * aquí (I-7).
+     */
+    public static function normMarca(?string $s, array $sinonimos = []): string
+    {
+        $n = preg_replace('/\s+/', ' ', trim(self::sinTildes((string) $s)));
+        $n = strtoupper((string) $n);
+        return $sinonimos[$n] ?? $n;
+    }
+
+    private static function sinTildes(string $s): string
+    {
+        $sin = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
+        return $sin === false ? preg_replace('/[^\x20-\x7E]/', '', $s) ?? '' : $sin;
+    }
 
     /** @var array{locales:array,equipos:array,tipos:array,tecnicos:array} */
     private array $cat;
@@ -269,12 +313,40 @@ final class Validacion
                 $add("equipos[$n]", 'EQUIPO_ELEGIBLE_POR_ACTIVO',
                      "$local tiene activos de tipo '$tipoEq' en el catalogo; conviene elegir cual");
             }
+            // --- FICHA DEL EQUIPO (T2.28.6, obs. 4). Solo en CAPTURA y con
+            // formulario_v >= 2: el histórico y una app vieja en caché no
+            // traen estos campos (§5.4). «Hay equipo elegido» es lo mismo
+            // que ya decide EQUIPO_SIN_IDENTIFICAR arriba.
+            $hayEquipoElegido = $ref !== '' || $tipoEq !== '';
+            if ($contexto === 'CAPTURA' && (int) ($o['formulario_v'] ?? 0) >= 2
+                && $hayEquipoElegido && empty($eq['sin_placa'])) {
+                $faltaMarca  = self::esMarcador($eq['marca'] ?? null);
+                $faltaModelo = self::esMarcador($eq['modelo'] ?? null);
+                if ($faltaMarca || $faltaModelo) {
+                    $add("equipos[$n]", 'EQUIPO_SIN_DATOS_DE_PLACA',
+                         'falta la marca o el modelo del equipo; marca «sin placa o ilegible» si no se puede leer');
+                }
+                if (self::esMarcador($eq['serie'] ?? null)) {
+                    $add("equipos[$n]", 'EQUIPO_SIN_SERIE', 'falta la serie del equipo');
+                }
+            }
         }
 
         // --- TRABAJO CON OTRO PROVEEDOR (H-18, D10). -------------------------
         if (!empty($o['con_proveedor_marcado']) && trim((string) ($o['con_proveedor'] ?? '')) === '') {
             $add('con_proveedor', 'CON_PROVEEDOR_SIN_NOMBRE',
                  'marcaste que el trabajo lo hizo otro proveedor pero falta su nombre');
+        }
+
+        // --- CORREO DEL LOCAL (T2.28.3, obs. 2). ------------------------------
+        // Solo en CAPTURA: el histórico no trae este campo, y marcarlo ahí
+        // inventaría un defecto que la orden nunca tuvo. No bloquea: sigue el
+        // envío y Emision::correoLocal() cae al correo del maestro.
+        $correoLocal = (string) ($o['correo_local'] ?? '');
+        if ($contexto === 'CAPTURA' && $correoLocal !== ''
+            && !preg_match('/^[^\s@]+@[^\s@]+\.[^\s@]+$/', $correoLocal)) {
+            $add('correo_local', 'CORREO_INVALIDO',
+                 "'$correoLocal' no parece un correo válido; la OT INDUSTEC saldrá al correo del maestro");
         }
 
         // --- REPUESTOS. La casilla que elimina el 50% del ruido. -------------

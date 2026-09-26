@@ -121,8 +121,14 @@ final class Destinatarios
         return $correo !== '' && filter_var($correo, FILTER_VALIDATE_EMAIL) ? $correo : null;
     }
 
-    /** @return array<int,array<string,mixed>>|null null si la 013 no está o no hay filas para ese uso */
-    private static function filas(string $uso): ?array
+    /**
+     * @return array<int,array<string,mixed>>|null null si la 013 no está o no hay filas para ese uso
+     *
+     * Pública (T2.28.3): catalogos.php lee estas filas UNA sola vez y se las
+     * pasa a copiasPorLocal() para los 100 locales, en vez de dejar que cada
+     * local dispare su propia consulta.
+     */
+    public static function filas(string $uso): ?array
     {
         try {
             $filas = Db::todos('SELECT * FROM correo_destinatarios WHERE uso = ? AND activo = 1', [$uso]);
@@ -130,6 +136,61 @@ final class Destinatarios
             return null;
         }
         return $filas === [] ? null : $filas;
+    }
+
+    /**
+     * Solo las COPIAS que le llegan a una orden de este local -el jefe de
+     * zona, el jefe de operaciones de KFC si ya está configurado, y cualquier
+     * otra copia general o de zona-, para la línea «también se enviará a»
+     * del formulario (T2.28.3, obs. 2).
+     *
+     * NO llama a resolver(): resolver() recalcula el «para» con
+     * Emision::correoLocal(), que a su vez llama a localFila() y esa relee
+     * TODO el catálogo (4 JSON + 2 consultas) por cada llamada. Aquí no hace
+     * falta el «para» -el técnico ya ve y edita el correo del local en su
+     * propio campo-, así que catalogos.php pasa $filas (una sola lectura de
+     * `correo_destinatarios`) y la fila de ESTE local, que ya tiene cargada
+     * del propio locales.json: se sirven los 100 locales de una sola vez sin
+     * repetir 100 veces la carga completa del catálogo.
+     *
+     * Marca `jefe_zona` en cada dirección porque el texto de la línea nombra
+     * al jefe de zona aparte («jefe de zona de INDUSTEC y N copias…»): así el
+     * cliente arma esa frase sin adivinar cuál de las direcciones es cuál.
+     *
+     * @param array<int,array<string,mixed>>|null $filas de self::filas('ORDEN')
+     * @param array<string,mixed> $localFila la fila de este local en locales.json
+     * @return array<int,array{correo:string,jefe_zona:bool}>
+     */
+    public static function copiasPorLocal(?array $filas, array $localFila, string $zona, ?string $local, ?string $cadena): array
+    {
+        $out = [];
+        $vistos = [];
+        $agregar = static function (string $correo, bool $jefeZona) use (&$out, &$vistos): void {
+            $correo = strtolower(trim($correo));
+            if ($correo === '' || !filter_var($correo, FILTER_VALIDATE_EMAIL)) { return; }
+            if (isset($vistos[$correo])) { return; }
+            $vistos[$correo] = true;
+            $out[] = ['correo' => $correo, 'jefe_zona' => $jefeZona];
+        };
+        if ($filas === null || $filas === []) {
+            // Respaldo (sin la 013, o sin filas activas): lo de siempre, con
+            // lo que YA tiene cargado el llamador -sin releer el catálogo-.
+            // Antes de sembrar (T2.28.2), `correo_jefe_op` del maestro ERA el
+            // buzón de zona: se marca jefe_zona=true por la misma razón.
+            if ((string) ($localFila['correo_jefe_op'] ?? '') !== '') {
+                $agregar((string) $localFila['correo_jefe_op'], true);
+            }
+            $cfg = Db::config();
+            foreach ((array) ($cfg['correo_por_zona'][$zona] ?? []) as $m) { $agregar((string) $m, false); }
+            foreach ((array) ($cfg['correo_fijos'] ?? []) as $m) { $agregar((string) $m, false); }
+            return $out;
+        }
+        foreach ($filas as $f) {
+            if ((string) $f['tipo'] !== 'COPIA') { continue; }
+            if (!self::calza($f, $zona, $local, $cadena)) { continue; }
+            $agregar((string) $f['correo'], (string) $f['rol'] === 'JEFE_ZONA');
+        }
+        return $out;
     }
 
     private static function localFila(?string $codigo): array

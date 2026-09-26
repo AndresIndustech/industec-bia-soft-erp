@@ -31,11 +31,8 @@ declare(strict_types=1);
  * dos claves únicas de la 013, `uq_destinatario` y `uq_rol`).
  */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
-// getcwd(), no __DIR__: este CLI se sube por scp a ~/respaldos/ y se corre
-// desde ot/ (ver el uso, arriba). __DIR__ apuntaría a ~/respaldos/nucleo/,
-// que no existe -mismo bug que ya se dio en archivo_verificar_cli.php-.
-require getcwd() . '/nucleo/Db.php';
-require getcwd() . '/nucleo/Catalogo.php';
+require __DIR__ . '/nucleo/Db.php';
+require __DIR__ . '/nucleo/Catalogo.php';
 
 // El mapa de producción: idéntico en las tres copias de submit.php
 // (ot_normal_v3/{uio,larb,cnlj}/submit.php:165-169, $correosPorZona). OTRA no
