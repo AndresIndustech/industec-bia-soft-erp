@@ -860,6 +860,72 @@ la que dejó T2.23.
 
 ---
 
+## 1t. Vocabulario SAP: las mismas palabras para todos los roles (2026-09-24/26, fuera del plan, pedido de la administradora)
+
+**Rama `pc/vocabulario-sap-2026-09-24`** (commits `ab887a8` y `f14bd3f`, subida a GitHub, **sin desplegar**).
+Isabel pidió que el panel «Por zona» hable como SAP y KFC: ÓRDENES ABIERTAS · ÓRDENES A ESPERA DE INFORME
+TÉCNICO · EQUIPOS DESHABILITADOS · TOTAL DE ÓRDENES ABIERTAS. Andrés fijó que **esos términos sean los mismos
+en todo el sistema y para todos los roles**, no solo en su pantalla. Especificación completa, tabla concepto ×
+término × rol y decisiones en [`desarrollo/sistema_ots/VOCABULARIO.md`](desarrollo/sistema_ots/VOCABULARIO.md).
+
+**Qué se encontró antes de tocar nada** (2.158 correos enviados por Isabel, la bandeja, el export SAP semanal de
+KFC, sus planes y todo el código, en solo lectura): **ningún rótulo del panel de entonces** («sin repartir»,
+«vencidos», «asignados», «por cerrar»…) aparece en lo que ella escribe; KFC traduce MEAB→ABIERTO,
+METR→TRATAMIENTO (rótulo «INFORME TÉCNICO») y MECE→CERRADO; y **el formato que ella pide ya existe** en la hoja
+RESUMEN del STATUS_PENDIENTES de los martes. Dentro del sistema, un mismo estado tenía hasta 15 nombres según la
+pantalla y el rol, y hacia KFC salían dos vocabularios distintos.
+
+**Decisiones de Andrés (24-sep):** «a espera de informe técnico» = abiertas **sin ninguna OT INDUSTEC** emitida;
+«órdenes abiertas» = con OT de evaluación y sin cierre (ESPERA_REPUESTO siempre aquí); TOTAL por zona = suma de las
+dos, más el total de las tres zonas; **«orden» = el trabajo que pide KFC (aviso SAP)** y el documento del técnico
+= **«OT INDUSTEC»** (título del PDF, asunto y número OT-NNNN no cambian: contrato); el estado SAP se trae al
+servidor **por fases** (hoy la cifra es la de B.IA y la ayuda lo dice).
+
+**Qué quedó hecho:** `publico/vocabulario.json` (v2026-09-24.6: 104 conceptos, palabras reservadas, contratos que no
+cambian) que leen PHP (`nucleo/Vocabulario.php`), el celular sin señal (`UI.T`, con
+`vocabulario_publico.json` recortado) y los scripts de la estación (`comun.termino`); la tarjeta por zona
+(`Casos::grupoOrden`, `?grupo=` en el buzón para que la cifra sea las filas de su enlace, jefe de zona con la suya,
+«no disponible» en vez de un cero falso); y la migración de **todo** texto visible: oficina, solicitudes y
+preventivo, app del técnico, reportes/PDF/PPT/correos a KFC y los `t2_27_*.py`. Cambian de cifra, y Isabel lo va a
+notar: el TOTAL ya **no incluye las atendidas** por cerrar en SAP (van al pie) y cuenta una vez cada cadena de
+continuidad; «asignadas hace 3+ días» ya no cuenta las que tienen OT de evaluación.
+
+**Verificación (corrida de nuevo por el coordinador, no solo reportada):**
+
+```
+compuerta de cobertura contra las 1.224 apariciones del inventario: 0 en los 9 contadores → APRUEBA
+prueba_lista_negra (sin --informe): 0 hallazgos en 154 archivos      (al empezar: 493)
+prueba_claves_vocabulario: 745 · 0     prueba_vocabulario: 154 · 0     prueba_panel_zona: 70 · 0
+prueba_48h 125·0 · continuidad 42·0 · destinatarios 22·0 · despacho 20·0 · casos_prueba 7·0 · validacion 37/37
+prueba_contratos.mjs 57·0 · prueba_graficos.mjs 62·0 · prueba_barra_tecnico OK · php -l 67/67 · node --check · py_compile
+```
+
+Dos verificadores independientes revisaron el resultado: uno **renderizó las pantallas como administración, jefe
+de zona y técnico** y armó la matriz concepto × rol; otro buscó defectos en el diff. **20 hallazgos, ninguno
+bloqueante, los 20 corregidos**, entre ellos: la frase del correo del martes que se había desviado del contrato con
+Isabel (restaurada palabra por palabra) y una **fuga** — el diccionario público llevaba notas internas con el nombre
+de una empleada y rutas de scripts (ahora solo se sirve la copia recortada; se comprobó que no contiene «Isabel»,
+rutas ni contratos).
+
+**Lo que NO se pudo comprobar:** las baterías de servidor (`verificar_*.py`, `capturar_pantallas.mjs`) y una revisión
+en navegador — necesitan el sitio de pruebas; el render de los verificadores usó una base falsa en memoria, así que
+**dos consultas SQL nuevas** (`JSON_EXTRACT` sobre `ot_capturadas` y el vencido calculado en SQL) no se han corrido
+contra MariaDB. `prueba_offline.mjs` ya fallaba antes de este trabajo.
+
+### ⚠ NO DESPLEGAR TODAVÍA — el servidor tiene trabajo que no está en GitHub
+
+Comparado por hash el 2026-09-26 (solo lectura): de los 73 archivos de `--todo`, 13 **no coinciden con ninguna de las
+56 versiones de git**, y no son antiguos sino **más nuevos**: `app.js`, `index.html`, `reglas.js`, `offline.js`,
+`envio.php`, `catalogos.php`, `equipos.php`, `sw.js` (**v20**, esta rama trae v19), `nucleo/Validacion.php`,
+`Catalogo.php`, `Emision.php`, `Destinatarios.php`, `plantilla_ot.php`. Traen **T2.28.3** (correo del local editable,
+«también se enviará a») y **T2.28.6** (ficha del equipo, casilla «sin placa»). `origin/master` sigue en `bdaaf92`: la
+estación lo desplegó y **no lo ha empujado**. Desplegar esta rama lo pisaría y bajaría `sw.js` de v20 a v19.
+Copia de lo vivo, para la fusión, en el directorio temporal de la sesión (`scratchpad/bia_terminos/vivo/`).
+**Camino:** que la estación commitee y empuje T2.28.3/T2.28.6 → fusionar esta rama sobre eso (los 13 archivos chocan en
+texto) → correr las baterías → recién entonces `t2_10_desplegar.py` con `--comprobar-web`, primero UIO (I-8).
+Pendientes de personas: avisar a Isabel del cambio de cifras; ¿el remitente del correo de la OT
+(«INDUSTEC · Órdenes de trabajo») es contrato?; ¿el % a tiempo del preventivo debe contar las «atrasadas por marcar»?
+
 ## 1s. T2.28 · Lo que se midió para planificar las observaciones de INDUSTEC (2026-09-22/23, solo lectura)
 
 **No se construyó nada: es la medición que sostiene el plan.** La especificación,
