@@ -912,35 +912,46 @@ en navegador — necesitan el sitio de pruebas; el render de los verificadores u
 **dos consultas SQL nuevas** (`JSON_EXTRACT` sobre `ot_capturadas` y el vencido calculado en SQL) no se han corrido
 contra MariaDB. `prueba_offline.mjs` ya fallaba antes de este trabajo.
 
-### Despliegue: fusionado sobre lo vivo, listo, a la espera de autorización de Andrés
+### Despliegue a darkviolet: HECHO el 2026-09-26 (solo código, por decisión de Andrés)
 
-Comparado por hash el 2026-09-26 (solo lectura), el servidor tenía **T2.28.3** (correo del local editable) y
-**T2.28.6** (ficha del equipo, «sin placa», `sw.js` v20) que la estación desplegó y **no ha empujado**:
-`origin/master` sigue en `bdaaf92`. Desplegar la rama tal cual los habría pisado, así que se hizo lo que sigue
-(decisión de Andrés, 26-sep: «fusionar sobre lo vivo»):
+El servidor tenía **T2.28.3** (correo del local editable) y **T2.28.6** (ficha del equipo, `sw.js` v20) que la
+estación desplegó y **no ha empujado** (`origin/master` sigue en `bdaaf92`). Desplegar la rama tal cual los habría
+pisado, así que, con «fusionar sobre lo vivo» de Andrés:
 
-1. `pc/estado-vivo-darkviolet-2026-09-26` (`d35dfbc`): **copia de 16 archivos bajados del servidor**, cada uno
-   verificado por sha256 contra el disco remoto (15 de `publico/` + `sql/014_ficha_equipo.sql`). Es una
-   **reconstrucción, no autoría de la estación**: cuando la estación empuje su versión, esta copia se descarta.
-2. `pc/vocabulario-sobre-vivo-2026-09-26` (`00e3977`): la fusión. De los 13 archivos que ambos lados tocaban, git
-   fusionó 11 solo; los 2 choques (`catalogos.php`, `sw.js`) eran triviales. `sw.js` pasa a **v21**. Además, cinco
-   textos nuevos de la estación que llamaban «orden» al documento del técnico ahora dicen «OT INDUSTEC».
-   Sobre la fusión: `php -l` 0 errores, `node --check`, `prueba_48h` 125·0, continuidad 42·0, destinatarios 22·0,
-   despacho 20·0, casos_prueba 7·0, vocabulario 154·0, panel_zona 70·0, claves 748·0, contratos 57·0, gráficos 62·0,
-   barra OK, validación 37/37, **lista negra 0**, compuerta de cobertura **APRUEBA**.
+1. `pc/estado-vivo-darkviolet-2026-09-26` (`d35dfbc`): **copia de 16 archivos bajados del servidor** (15 de
+   `publico/` + `sql/014_ficha_equipo.sql`), cada uno verificado por sha256. Es una **reconstrucción, no autoría de
+   la estación**: cuando la estación empuje su versión, esta copia se descarta (el contenido es idéntico byte a byte
+   en esos archivos, así que la fusión posterior no debería chocar).
+2. `pc/vocabulario-sobre-vivo-2026-09-26`: la fusión. De los 13 archivos que ambos lados tocaban, git fusionó 11
+   solo; los 2 choques (`catalogos.php`, `sw.js`) eran triviales. `sw.js` pasa a **v21**. Cinco textos nuevos de la
+   estación que llamaban «orden» al documento del técnico ahora dicen «OT INDUSTEC».
 
-**Qué cambiaría en darkviolet** (calculado por contenido, ignorando CRLF/LF): de los 73 archivos de `--todo`,
-**44 cambian y 3 son nuevos** (`vocabulario.json`, `vocabulario_publico.json`, `nucleo/Vocabulario.php`); 26 ya son
-iguales. Conviene subir **solo esos 47 por nombre**, no `--todo`: así los otros 26 conservan su fin de línea. No
-toca `correos_sembrar_cli.php`, `verificar_esquema.php` ni `sql/014` (no están en `--todo` y no cambian).
-**Falta, en este orden:** autorización de Andrés → `t2_10_desplegar.py` con los 47 nombres y `--comprobar-web`,
-**primero UIO** (I-8) → baterías de servidor (`verificar_cifras.py`, `verificar_http.py`, `verificar_bandeja.py`,
-`verificar_reportes.py`, `verificar_emision.py`…) → revisión en pantalla como administración, jefe de zona y técnico
-→ purgar el CDN si `--comprobar-web` avisa. Riesgo a vigilar: las dos consultas SQL nuevas (`JSON_EXTRACT` sobre
-`ot_capturadas` y el vencido en SQL) solo se han probado contra una base falsa.
-Pendientes de personas: avisar a Isabel del cambio de cifras (el TOTAL ya no incluye las atendidas); ¿el remitente
-del correo de la OT («INDUSTEC · Órdenes de trabajo») es contrato?; ¿el % a tiempo del preventivo debe contar las
-«atrasadas por marcar»?
+**Desplegado: 47 archivos por nombre** (44 cambian + `vocabulario.json`, `vocabulario_publico.json`,
+`nucleo/Vocabulario.php`; no `--todo`, para que los otros 26 conserven su fin de línea). Los 3 nuevos primero.
+
+```
+t2_10_desplegar.py: 47 de 47 archivos en el sitio de pruebas · «la web entrega exactamente lo que se subió»
+php -l con el PHP DEL SERVIDOR (8.2.33): 33 archivos PHP, 0 errores de sintaxis
+verificar_esquema.php: TODO OK (incluye equipos_ficha de T2.28.6)
+web: vocabulario_publico.json 200 · vocabulario.json 403 · catalogos/locales.json 403 · nucleo/config.php 403
+     el JSON público servido: 104 conceptos, 0 menciones de «Isabel», rutas, contratos ni lista negra
+error_log de la web tras el despliegue: 0 errores (las 4 líneas del día son de mis corridas de CLI, ya corregido)
+tarjeta_cli.php contra la base REAL (nuevo, solo lectura, solo agregados) — ADMIN, JEFE_ZONA:UIO, JEFE_ZONA:CNLJ:
+     20 comprobaciones · 0 fallos cada uno, 0,03 s. Incluye las dos consultas SQL nuevas que hasta ahora solo se
+     habían probado con una base falsa. TOTAL 125 = conteo directo por estado (105 asignadas + 1 a espera de
+     repuesto + 19 nuevas). UIO 52 (19 + 33) · LARB 24 (24 + 0) · CNLJ 49 (32 + 17) · deshabilitados 13 · operativos 61.
+     El jefe de zona ve solo su zona, con las mismas cifras que administración.
+```
+
+**Cómo se revierte:** subir de `pc/estado-vivo-darkviolet-2026-09-26` los mismos 47 archivos (es una copia exacta de
+lo que corría) y borrar los 3 nuevos. **NO se corrió, a propósito:** las baterías `verificar_*.py` (crean cuentas y
+casos de prueba y dejan filas en la bitácora inalterable) ni `capturar_pantallas.mjs`; y **nadie ha visto todavía las
+pantallas con una sesión iniciada**: hace falta que Andrés (o Isabel) entre a `/ot/` como administración, como jefe
+de zona y como técnico. Un celular con la app instalada recibirá el `sw.js` v21 en su próxima apertura.
+Pendientes de personas: avisar a Isabel del cambio de cifras (el TOTAL ya no incluye las atendidas por cerrar en
+SAP, que van al pie); ¿el remitente del correo de la OT («INDUSTEC · Órdenes de trabajo») es contrato?; ¿el % a
+tiempo del preventivo debe contar las «atrasadas por marcar»? Trampas que costaron tiempo: comparar con el servidor
+ignorando CRLF/LF (local CRLF, servidor LF), y `lstrip("./")` se come el punto de `.htaccess`.
 
 ## 1s. T2.28 · Lo que se midió para planificar las observaciones de INDUSTEC (2026-09-22/23, solo lectura)
 
@@ -2754,7 +2765,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| **Vocabulario SAP en todo el sistema** (pedido de la administradora, fuera del plan): el panel «Por zona» con ÓRDENES ABIERTAS · A ESPERA DE INFORME TÉCNICO · EQUIPOS DESHABILITADOS · TOTAL, y **los mismos términos para todos los roles** (oficina, jefe de zona, técnico, PDF/correo/Excel a KFC, hojas del piloto) | Conversación desde el PC de Andrés — rama `pc/vocabulario-sap-2026-09-24` | 2026-09-24 | **Textos visibles** de casi todo `app/publico/` (`panel.php`, `casos.php`, `asignacion.php`, `mis.php`, `app.js`, `pendientes.php`, `reportes.php`…), `nucleo/Ui.php`, `ui.js`, `sw.js` (sube de versión), un `vocabulario.json` nuevo y los `t2_27_*.py`. **No toca la base ni el árbol canónico.** Si la estación sigue T2.28.3+ sobre el formulario del técnico, `casos.php` o `bitacora.php`: fusionar esta rama antes, o avisar — los cambios son de texto y pequeños por archivo |
+| ~~Vocabulario SAP en todo el sistema~~ (pedido de la administradora, fuera del plan) | ✅ **Terminada y desplegada en darkviolet el 2026-09-26** — ramas `pc/vocabulario-sap-2026-09-24` y `pc/vocabulario-sobre-vivo-2026-09-26` | 2026-09-24 | Solo texto visible, `vocabulario.json` y la tarjeta «Por zona»; no tocó la base ni el árbol canónico. Falta que la **estación empuje T2.28.3/T2.28.6** y fusione estas ramas en `master`, y que alguien vea las pantallas con sesión. Detalle, cifras y cómo se revierte en **§1t** |
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
 | ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó, se detuvo a propósito una vez (error nº 44) y se relanzó. ✅ **T2.28.2, el módulo de correos, construido, desplegado y verificado el 2026-09-24** (013 aplicada, `TODO OK`; `correos.php`; `Destinatarios::resolver()`; el tope y el cupo por hora del despachador — `§1s-undecies`). **Pendiente, de aprobación:** `correos_sembrar_cli.php --ejecutar` (el simulacro ya da 3/3 contra el maestro). De T2.28.3 ya está lo que cubrió el arreglo urgente; sigue T2.28.6 en el carril. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b puntos 7 y 8 |
 | ~~T2.28.16a/16b · Cronograma de preventivos contra el Excel de hoy~~ | ✅ **Terminada el 2026-09-23** | — | `t2_7_cronograma_preventivo.py` (16a) y `t2_28_cronograma.py --comparar` (16b), solo lectura. 15/15 pruebas unitarias; 351/352 sin regresión contra el snapshot del 8-sep (1 corrección a propósito, documentada); informe 52 REAGENDAR (37 + 15 que destapa 16a) y 1 CONFLICTO con CUMPLIDO (mismo caso, K121EC ingreso 3 — a D7). Detalle en **§1s-quinquies**. No tocó 16c/16d (puerta D7) |
