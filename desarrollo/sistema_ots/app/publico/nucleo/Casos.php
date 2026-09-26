@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/Auth.php';
+require_once __DIR__ . '/Vocabulario.php';   // los textos que devuelve (bitácora, enlaces de continuidad)
 
 /**
  * Casos — de dónde salen los casos, y quién puede ver cuáles.
@@ -354,12 +355,15 @@ final class Casos
             // Mismo nombre de acción que la reconciliación, para que la bitácora
             // y minar.php cuenten las dos fuentes juntas; la fuente lo distingue.
             Auth::bitacora($concluida ? 'ATENDIDO_AUTO' : 'ASIGNADO_AUTO', 'caso', $aviso,
-                           'orden ' . $idIndustec . ($concluida ? ' concluida' : ' sin concluir'),
+                           // Con las palabras del diccionario: «concluida» era la OT INDUSTEC
+                           // de cierre y «sin concluir» la de evaluación (OT_CIERRE, OT_EVALUACION).
+                           ($concluida ? Vocabulario::t('OT_CIERRE') : Vocabulario::t('OT_EVALUACION')) . ' ' . $idIndustec,
                            $estadoAntes, $estadoDesp,
-                           ['ot' => $idIndustec, 'fuente' => 'orden emitida por la app', 'tecnico' => $tecnicoId]);
+                           ['ot' => $idIndustec, 'fuente' => 'OT INDUSTEC emitida desde la app', 'tecnico' => $tecnicoId]);
         } elseif ($concluida && $estadoAntes === 'ESPERA_REPUESTO') {
             Auth::bitacora('OT_CIERRE_CON_PENDIENTE', 'caso', $aviso,
-                           'orden ' . $idIndustec . ' concluida con el caso esperando repuesto',
+                           Vocabulario::t('OT_CIERRE') . ' ' . $idIndustec . ' con la orden '
+                           . Vocabulario::t('ESPERA_REPUESTO'),
                            $estadoAntes, $estadoAntes, ['ot' => $idIndustec]);
         }
         unset($nuevo);
@@ -1426,20 +1430,20 @@ final class Casos
         $aviso  = trim($aviso);
         $origen = trim($origen);
         if ($aviso === '' || $origen === '') {
-            return 'Falta el caso o el trabajo anterior.';
+            return 'Falta la orden o el trabajo anterior.';
         }
         if ($aviso === $origen) {
-            return 'Un caso no puede continuarse a sí mismo.';
+            return 'Una orden no puede continuarse a sí misma.';
         }
         if (trim((string) ($gestion[$aviso]['continua_de'] ?? '')) !== '') {
-            return 'Este caso ya está enlazado al trabajo ' . $gestion[$aviso]['continua_de'] . '.';
+            return 'Esta orden ya continúa el trabajo del aviso ' . $gestion[$aviso]['continua_de'] . '.';
         }
         if (self::raiz($origen, $gestion) === $aviso) {
             // El origen ya cuelga de este caso: enlazarlos al revés cerraría el
             // círculo y los dos quedarían esperándose. Se corta aquí y se dice
             // cuál es el orden bueno, que es lo único que puede arreglarlo.
-            return 'Ese caso ya figura como continuación de este. Enlázalos al revés: '
-                 . 'el enlace va del caso nuevo al trabajo que empezó primero.';
+            return 'Esa orden ya figura como continuación de esta. Enlázalas al revés: '
+                 . 'el enlace va de la orden nueva al trabajo que empezó primero.';
         }
         return null;
     }
@@ -1497,9 +1501,9 @@ final class Casos
                     continua_por  = ?,
                     continua_en   = NOW(),
                     continua_nota = ?,
-                    /* Con una orden que ya cubre el trabajo, el caso queda
-                       ATENDIDO y con ella como cierre. Sin orden, el estado no
-                       se toca: el caso sigue siendo trabajo abierto. */
+                    /* Con una OT INDUSTEC que ya cubre el trabajo, la orden
+                       queda ATENDIDO y con ella como cierre. Sin OT, el estado
+                       no se toca: la orden sigue en el total de las que faltan. */
                     ot_cierre     = IF(? <> '', COALESCE(ot_cierre, ?), ot_cierre),
                     atendido_en   = IF(? <> '', COALESCE(atendido_en, NOW()), atendido_en),
                     estado        = CASE
@@ -1514,24 +1518,27 @@ final class Casos
         $desp = Db::uno('SELECT estado, continua_de FROM casos_gestion WHERE aviso = ?', [$aviso]);
         if (trim((string) ($desp['continua_de'] ?? '')) !== $raiz) {
             // Otro lo enlazó entre medio: no se pisa lo que ya decidió alguien.
-            return [false, 'Alguien enlazó este caso mientras tanto. Recarga la pantalla.'];
+            return [false, 'Alguien enlazó esta orden mientras tanto. Recarga la pantalla.'];
         }
         $despues = (string) ($desp['estado'] ?? $antes);
 
         Auth::bitacora('CASO_CONTINUA', 'caso', $aviso,
                        'continúa el trabajo del aviso ' . $raiz
                        . ($origen !== $raiz ? ' (elegido: ' . $origen . ')' : '')
-                       . ($ot !== '' ? ', cubierto por la orden ' . $ot : ', que todavía no tiene orden'),
+                       . ($ot !== '' ? ', cubierto por la OT INDUSTEC ' . $ot : ', que todavía no tiene OT INDUSTEC'),
                        $antes, $despues,
                        ['continua_de' => $raiz, 'elegido' => $origen, 'ot' => $ot !== '' ? $ot : null,
                         'nota' => $nota]);
 
         if ($ot !== '') {
-            return [true, 'Listo: este caso queda cerrado con la orden ' . $ot
+            // Queda ATENDIDO, no cerrada: falta que la administración la cierre
+            // en SAP («queda cerrado» era el error que corrigió el diccionario).
+            return [true, 'Listo: esta orden queda ' . Vocabulario::t('ATENDIDA') . ', con la OT INDUSTEC ' . $ot
                         . ', la del trabajo que empezaste en el aviso ' . $raiz . '. No hace falta emitir otra.'];
         }
-        return [true, 'Enlazado con el aviso ' . $raiz . '. Ese trabajo todavía no tiene orden emitida: '
-                    . 'la que emitas ahora cierra los dos casos.'];
+        return [true, 'Esta orden ' . Vocabulario::t('CONTINUIDAD') . ' del aviso ' . $raiz
+                    . '. Ese trabajo todavía no tiene OT INDUSTEC emitida: '
+                    . 'la ' . Vocabulario::t('OT_CIERRE') . ' que emitas ahora atiende las dos órdenes.'];
     }
 
     /**
@@ -1548,7 +1555,7 @@ final class Casos
         $aviso = trim($aviso);
         $g = Db::uno('SELECT estado, continua_de, continua_ot, ot_cierre FROM casos_gestion WHERE aviso = ?', [$aviso]);
         if ($g === null || trim((string) ($g['continua_de'] ?? '')) === '') {
-            return [false, 'Ese caso no está enlazado a ningún trabajo anterior.'];
+            return [false, 'Esa orden no continúa ningún trabajo anterior.'];
         }
         $heredada = trim((string) ($g['continua_ot'] ?? ''));
         $antes = (string) ($g['estado'] ?? '');
@@ -1569,6 +1576,7 @@ final class Casos
                        . ($motivo !== '' ? ': ' . $motivo : ''),
                        $antes, (string) ($desp['estado'] ?? $antes),
                        ['continua_de' => $g['continua_de'], 'ot' => $heredada !== '' ? $heredada : null]);
-        return [true, 'Enlace deshecho: el caso vuelve a estar abierto.'];
+        return [true, 'Enlace deshecho: la orden vuelve a contar en el '
+                    . Vocabulario::t('TOTAL_ABIERTAS') . '.'];
     }
 }

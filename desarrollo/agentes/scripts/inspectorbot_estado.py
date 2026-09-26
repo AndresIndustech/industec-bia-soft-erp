@@ -38,7 +38,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import BASE, RAIZ, RESPALDOS, SALIDAS  # noqa: E402
+from comun import BASE, RAIZ, RESPALDOS, SALIDAS, termino  # noqa: E402
 
 # --- Dónde vive cada señal ----------------------------------------------------
 SCRIPTS = BASE / "scripts"
@@ -725,7 +725,7 @@ def calcular_alertas(e: dict) -> list[dict]:
             add(GRAVE, "El robot lleva callado demasiado",
                 f"La última línea del registro es {hace_cuanto(robot['ultima_senal'])}, "
                 f"{porque}.",
-                "Está vivo pero trabado. Reinícialo.")
+                "Está vivo pero atascado. Reinícialo.")
 
     if noc["nunca_corrio"]:
         add(GRAVE, "El saneamiento nocturno no ha corrido nunca",
@@ -799,7 +799,7 @@ def calcular_alertas(e: dict) -> list[dict]:
         add(MEDIO, f"{reg['errores']} errores en el registro en 24 h", "", "")
 
     if e["buzon"].get("error"):
-        add(MEDIO, "No se puede leer el catálogo de casos",
+        add(MEDIO, f"No se puede leer el catálogo de {termino('ORDEN', 2)}",
             f"casos_sap.json {e['buzon']['error']}", "")
     else:
         if e["buzon"]["tmp_huerfano"]:
@@ -808,17 +808,20 @@ def calcular_alertas(e: dict) -> list[dict]:
         if e["buzon"]["con_alerta"]:
             reglas = ", ".join(f"{k.replace('_', ' ').lower()} {v}"
                                for k, v in e["buzon"]["por_regla"].items())
-            add(LEVE, f"{e['buzon']['con_alerta']} casos con alerta para la administración",
+            n = e["buzon"]["con_alerta"]
+            add(LEVE, f"{n} {termino('ORDEN', n)} {termino('OTRO_TRABAJO_POR_DECIDIR')} (alerta de alcance)",
                 reglas or "",
                 "El catálogo avisa que las alertas marcan, no deciden: "
-                "el veredicto es de la administración.")
+                "la administración las resuelve.")
         if e["buzon"]["sin_local"]:
             avisos = ", ".join(str(x.get("aviso"))
                                for x in e["buzon"]["revisar_sin_local"][:4])
-            add(LEVE, f"{e['buzon']['sin_local']} casos sin local resuelto",
-                f"Avisos {avisos}" if avisos else "", "")
+            n = e["buzon"]["sin_local"]
+            add(LEVE, f"{n} {termino('ORDEN', n)} {termino('SIN_ZONA')}: el local no calza con el maestro",
+                f"Avisos SAP {avisos}" if avisos else "", "")
         if e["buzon"]["zona_discrepante"]:
-            add(LEVE, f"{e['buzon']['zona_discrepante']} casos con zona discrepante", "", "")
+            n = e["buzon"]["zona_discrepante"]
+            add(LEVE, f"{n} {termino('ORDEN', n)} con zona discrepante", "", "")
 
     at = e["atenciones"]
     if at.get("error"):
@@ -826,10 +829,10 @@ def calcular_alertas(e: dict) -> list[dict]:
             f"atenciones.json {at['error']}", "")
     else:
         if at["no_parseados"]:
-            add(MEDIO, f"{at['no_parseados']} informes no se pudieron leer",
+            add(MEDIO, f"{at['no_parseados']} {termino('OT_INDUSTEC')} no se pudieron leer",
                 "Alguien tiene que abrirlos a mano.", "")
         if at["sin_tecnico"]:
-            add(LEVE, f"{at['sin_tecnico']} informes sin técnico identificado", "", "")
+            add(LEVE, f"{at['sin_tecnico']} {termino('OT_INDUSTEC')} sin técnico identificado", "", "")
 
     if e["disco"]["libre_gb"] is not None and e["disco"]["libre_gb"] < 20:
         add(GRAVE, f"Quedan {e['disco']['libre_gb']:.0f} GB libres en D:",
@@ -890,9 +893,9 @@ def main() -> int:
         print("  Robot     CAÍDO")
     print(f"  Señal     {hace_cuanto(r['ultima_senal'])}"
           f"  ({r['registro'].name if r['registro'] else 'sin registro'})")
-    print(f"  Buzón     {fmt(e['buzon'].get('casos'))} casos vigentes"
-          f"  ·  atendidos {fmt(e['atenciones'].get('con_atencion'))}"
-          f"  ·  sin atender {fmt(e['atenciones'].get('sin_atencion'))}")
+    print(f"  Buzón     {fmt(e['buzon'].get('casos'))} {termino('ORDEN', 2)}"
+          f"  ·  con {termino('OT_INDUSTEC')} {fmt(e['atenciones'].get('con_atencion'))}"
+          f"  ·  {termino('ESPERA_INFORME', 2)} {fmt(e['atenciones'].get('sin_atencion'))}")
     print(f"  Espejo    {fmt(esp['total'])} PDF  ·  último {hace_cuanto(esp['ultimo_espejo'])}")
     print(f"\n  {len(e['alertas'])} alertas:")
     for x in e["alertas"]:

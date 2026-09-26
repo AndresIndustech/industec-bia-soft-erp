@@ -157,7 +157,7 @@
   function migaPan() {
     miga = document.createElement('nav');
     miga.className = 'pasos';
-    miga.setAttribute('aria-label', 'Pasos de la orden');
+    miga.setAttribute('aria-label', 'Pasos de la OT INDUSTEC');
     pasos.forEach(function (p, i) {
       var d = document.createElement('div');
       d.className = 'p';

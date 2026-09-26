@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Casos.php';
 require_once __DIR__ . '/nucleo/Ui.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // los rótulos de las cifras y de las listas
 
 /**
  * asignacion.php — Repartir el trabajo, mirando la carga de cada uno.
@@ -98,9 +99,12 @@ function iniciales(string $nombre): string
          . (count($p) > 1 ? mb_substr($p[count($p) - 1], 0, 1, 'UTF-8') : ''), 'UTF-8');
 }
 
-// --- Lo que falta repartir: la ÚNICA definición (ASG-12), la misma que usan
-//     casos.php y panel.php. Incluye los NUEVO con informe abierto de usuario
-//     desconocido, marcados `informe_sin_usuario` (cabecera de la ola 2). ----
+// --- Lo que falta repartir (ASG-12). Incluye los NUEVO con informe abierto de
+//     usuario desconocido, marcados `informe_sin_usuario` (cabecera de la ola 2).
+//     OJO (verificación de la ola 2 del vocabulario, 26-sep-2026): desde la
+//     tarjeta por zona, el panel y el buzón cuentan «sin técnico» (NUEVO o
+//     EN_REVISION sin asignado_a), y esto cuenta todo EN_REVISION. Unificarlo es
+//     lógica pendiente de Andrés; mientras, los rótulos de aquí dicen lo que cuentan. ----
 $sinAsignarTodo = Casos::sinAsignar($mios, $gestion, $aten);
 
 // --- Todo agrupado por zona --------------------------------------------
@@ -143,9 +147,9 @@ Ui::cabecera($u, 'asignacion.php',
   <div class="titulo entra">
     <h1>Asignación</h1>
     <p class="sub">
-      Cómo está repartido el trabajo y qué falta por repartir, zona por zona.
-      Es la otra mitad del buzón: allí se mira caso por caso, aquí a quién le
-      cabe uno más.
+      Cómo está repartido el trabajo y qué órdenes siguen sin asignar, zona
+      por zona. Es la otra mitad del buzón: allí se mira orden por orden, aquí
+      a quién le cabe una más.
     </p>
   </div>
 
@@ -158,7 +162,7 @@ Ui::cabecera($u, 'asignacion.php',
       Ver:
       <a href="asignacion.php" class="<?= $fz === '' ? 'chip' : '' ?>">Las tres zonas</a>
       <?php foreach ($ZONAS_VALIDAS as $zv): ?>
-        · <a href="asignacion.php?zona=<?= $zv ?>" class="<?= $fz === $zv ? 'chip' : '' ?>"><?= e($zv) ?></a>
+        · <a href="asignacion.php?zona=<?= $zv ?>" class="<?= $fz === $zv ? 'chip' : '' ?>"><?= e(Ui::zonaCorta($zv)) ?></a>
       <?php endforeach; ?>
       <?php if (!empty($porZonaSin[''])): ?>
         · <a href="asignacion.php?zona=SIN" class="<?= $fz === 'SIN' ? 'chip' : '' ?>">Sin zona</a>
@@ -174,23 +178,29 @@ Ui::cabecera($u, 'asignacion.php',
   <div class="tiles">
     <div class="tile <?= $totalSinAsignar ? 'ambar' : 'verde' ?>">
       <div class="n"><?= $totalSinAsignar ?></div>
-      <div class="t">Por repartir</div>
-      <div class="pie"><?= $zonaAlc === null && $fz === '' ? 'en las tres zonas' : 'sin asignar y sin informe' ?></div>
+      <div class="t"><?= e(Vocabulario::titulo('SIN_ASIGNAR')) ?></div>
+      <?php /* Casos::sinAsignar() cuenta NUEVO y EN_REVISION (esta con o sin técnico) de
+               TODAS las zonas, OTRA y «sin zona» incluidas: el pie dice eso, no «tres». Que
+               la cifra no calce con el «sin asignar» del panel (que cuenta solo lo que no
+               tiene técnico) es una diferencia de lógica pendiente de Andrés. */ ?>
+      <div class="pie"><?= $zonaAlc === null && $fz === '' ? 'en todas las zonas' : 'sin técnico o ' . e(Vocabulario::t('EN_REVISION')) ?></div>
     </div>
     <div class="tile <?= $totalLibres ? 'verde' : '' ?>">
       <div class="n"><?= $totalLibres ?></div>
-      <div class="t">Sin nada abierto</div>
+      <div class="t">Sin órdenes asignadas</div>
       <div class="pie">de <?= count($carga) ?> en el equipo</div>
     </div>
     <div class="tile <?= $totalCargados ? 'ambar' : '' ?>">
       <div class="n"><?= $totalCargados ?></div>
       <div class="t">Con 8 o más</div>
-      <div class="pie">piénsalo antes de darle otro</div>
+      <div class="pie">piénsalo antes de darle otra</div>
     </div>
     <div class="tile azul">
       <div class="n"><?= $totalEnManos ?></div>
-      <div class="t">En manos del equipo</div>
-      <div class="pie">asignados y todavía abiertos</div>
+      <?php /* Suma ASIGNADO + ESPERA_REPUESTO (Casos::ABIERTOS_TECNICO): el título lo
+               dice entero, porque «Asignadas» a secas es solo ASIGNADO en el buzón. */ ?>
+      <div class="t"><?= e(Vocabulario::titulo('ASIGNADA') . ' y ' . Vocabulario::t('ESPERA_REPUESTO')) ?></div>
+      <div class="pie">de todo el equipo</div>
     </div>
   </div>
   <?php endif; ?>
@@ -218,33 +228,35 @@ Ui::cabecera($u, 'asignacion.php',
       <div class="tiles">
         <div class="tile <?= $zs ? 'ambar' : 'verde' ?>">
           <div class="n"><?= count($zs) ?></div>
-          <div class="t">Por repartir</div>
-          <div class="pie">sin asignar y sin informe</div>
+          <div class="t"><?= e(Vocabulario::titulo('SIN_ASIGNAR')) ?></div>
+          <div class="pie">sin técnico o <?= e(Vocabulario::t('EN_REVISION')) ?></div>
         </div>
         <div class="tile <?= $zLibres ? 'verde' : '' ?>">
           <div class="n"><?= $zLibres ?></div>
-          <div class="t">Sin nada abierto</div>
+          <div class="t">Sin órdenes asignadas</div>
           <div class="pie">de <?= count($zc) ?> en el equipo</div>
         </div>
         <div class="tile <?= $zCargados ? 'ambar' : '' ?>">
           <div class="n"><?= $zCargados ?></div>
           <div class="t">Con 8 o más</div>
-          <div class="pie">piénsalo antes de darle otro</div>
+          <div class="pie">piénsalo antes de darle otra</div>
         </div>
         <div class="tile azul">
           <div class="n"><?= $zEnManos ?></div>
-          <div class="t">En manos del equipo</div>
-          <div class="pie">asignados y todavía abiertos</div>
+          <div class="t"><?= e(Vocabulario::titulo('ASIGNADA') . ' y ' . Vocabulario::t('ESPERA_REPUESTO')) ?></div>
+          <div class="pie">de los técnicos de la zona</div>
         </div>
       </div>
 
-      <h3 id="sin-asignar-<?= e($idZona) ?>" style="margin:14px 0 6px">Por repartir (<?= count($zs) ?>)</h3>
+      <h3 id="sin-asignar-<?= e($idZona) ?>" style="margin:14px 0 6px"><?= e(Vocabulario::titulo('SIN_ASIGNAR')) ?> (<?= count($zs) ?>)</h3>
       <p class="sub" style="margin:0 0 10px">
-        Casos sin asignar y sin informe<?= $z === '' ? ', sin una zona resuelta contra el maestro de locales' : ' de ' . e($z) ?>.
-        Los que llevaban más de una semana sin que nadie los tocara ya se
-        cerraron por falta de atención y están en el
-        <a href="casos.php?est=CERRADO_SIN_ATENCION">buzón</a>, esperando que
-        administración los regularice: no se reparten desde aquí.
+        <?php /* Sin «a espera de informe técnico»: Casos::sinAsignar() también trae las
+                 órdenes en revisión que ya tienen técnico y OT INDUSTEC (llevan su marca). */ ?>
+        Órdenes <?= e(Vocabulario::t('SIN_ASIGNAR')) ?> o <?= e(Vocabulario::t('EN_REVISION')) ?><?= $z === '' ? ', sin una zona resuelta contra el maestro de locales' : ', de ' . e(Ui::nombreZona($z)) ?>.
+        Las que llevaban más de una semana sin ninguna OT INDUSTEC ya están
+        <?= e(Vocabulario::t('CERRADA_SIN_ATENCION', 2)) ?>, en el
+        <a href="casos.php?est=CERRADO_SIN_ATENCION">buzón</a>, a espera de que la
+        administración las regularice ante KFC: no se asignan desde aquí.
       </p>
 
       <?php /* `data-th` en cada celda: en celular (≤640 px) la tabla pasa a
@@ -252,12 +264,12 @@ Ui::cabecera($u, 'asignacion.php',
       <div class="tabla-wrap">
         <table class="repartir">
           <thead><tr>
-            <th>Aviso</th><th>Local</th><th>Qué pide</th><th>Prioridad</th>
-            <th>Creado</th><th>Asignar a</th>
+            <th><?= e(Vocabulario::titulo('AVISO_SAP')) ?></th><th>Local</th><th>Qué pide</th><th>Prioridad</th>
+            <th>Llegó</th><th>Asignar a</th>
           </tr></thead>
           <tbody>
           <?php if (!$zs): ?>
-            <tr><td colspan="6" class="vacio">No queda nada por repartir<?= $z !== '' ? ' en ' . e($z) : '' ?>.</td></tr>
+            <tr><td colspan="6" class="vacio">No queda ninguna orden <?= e(Vocabulario::t('SIN_ASIGNAR')) ?><?= $z !== '' ? ' en ' . e(Ui::nombreZona($z)) : '' ?>.</td></tr>
           <?php endif; ?>
           <?php foreach ($zs as $s): ?>
             <?php
@@ -266,14 +278,14 @@ Ui::cabecera($u, 'asignacion.php',
             $otros   = $z !== '' ? array_diff_key($carga, $propios) : $carga;
             ?>
             <tr>
-              <td data-th="Aviso">
+              <td data-th="<?= e(Vocabulario::titulo('AVISO_SAP')) ?>">
                 <span class="mono"><?= e($c['aviso'] ?? '—') ?></span>
                 <?php if ($s['estado'] === 'EN_REVISION'): ?>
-                  <span class="chip">en revisión</span>
+                  <span class="chip"><?= e(Vocabulario::t('EN_REVISION')) ?></span>
                   <span class="desc"><?= e((string) $s['revision']) ?></span>
                 <?php endif; ?>
                 <?php if (!empty($s['informe_sin_usuario'])): ?>
-                  <span class="chip" title="Hay una orden de cierre, pero la firma no cruzó con nadie del padrón">informe sin técnico reconocido</span>
+                  <span class="chip" title="Hay una OT INDUSTEC de cierre, pero la firma no cruzó con nadie del padrón"><?= e(Vocabulario::t('OT_CIERRE')) ?> con firma no reconocida</span>
                 <?php endif; ?>
               </td>
               <td data-th="Local">
@@ -291,7 +303,7 @@ Ui::cabecera($u, 'asignacion.php',
                 <?php endif; ?>
               </td>
               <td data-th="Prioridad"><?= Ui::prioridad($c['prioridad'] ?? null) ?></td>
-              <td data-th="Creado">
+              <td data-th="Llegó">
                 <span class="mono sin-cortar"><?= e($c['fecha_creacion'] ?? '—') ?></span>
                 <?php /* La antiguedad al lado de la fecha: a los 7 dias sin
                          informe el caso se cierra solo por falta de atencion, y
@@ -315,7 +327,7 @@ Ui::cabecera($u, 'asignacion.php',
                       <optgroup label="Otras zonas (confirmar)">
                         <?php foreach ($otros as $x): ?>
                           <option value="<?= (int) $x['t']['usuario_id'] ?>" data-zona="<?= e((string) $x['t']['zona']) ?>">
-                            <?= e($x['t']['nombre']) ?> · <?= e((string) $x['t']['zona']) ?> (<?= $x['abiertos'] ?>)
+                            <?= e($x['t']['nombre']) ?> · <?= e(Ui::zonaCorta((string) $x['t']['zona'])) ?> (<?= $x['abiertos'] ?>)
                           </option>
                         <?php endforeach; ?>
                       </optgroup>
@@ -336,10 +348,12 @@ Ui::cabecera($u, 'asignacion.php',
       <h3 style="margin:20px 0 10px">El equipo (<?= count($zc) ?>)</h3>
       <?php if ($zc): ?>
       <p class="sub" style="margin:0 0 10px">
-        «Abiertos» es lo que tiene entre manos, contando lo que espera repuesto.
-        «Atendidos» son las órdenes que ya emitió, contando las que el sistema
-        le reconoció por el informe. La barra compara contra el más cargado de
-        <?= e($z ?: 'esta lista') ?><?= $zTope > 1 ? ', que lleva ' . $zTope : '' ?>.
+        «Asignadas» es lo que tiene entre manos, contando las órdenes
+        <?= e(Vocabulario::t('ESPERA_REPUESTO')) ?>. «OT de cierre» son las
+        órdenes a las que ya les emitió su OT INDUSTEC de cierre (atendidas, por
+        cerrar en SAP, o ya cerradas en SAP), contando las que el sistema le
+        reconoció por la firma. La barra compara contra el más cargado de
+        <?= e($z !== '' ? Ui::nombreZona($z) : 'esta lista') ?><?= $zTope > 1 ? ', que lleva ' . $zTope : '' ?>.
       </p>
       <div class="equipo escalona">
         <?php foreach (array_values($zc) as $i => $c): ?>
@@ -362,19 +376,23 @@ Ui::cabecera($u, 'asignacion.php',
               </div>
               <div class="pie">
                 <div class="cifras">
-                  <div class="cifra"><b><?= $c['abiertos'] ?></b><span><?= $c['abiertos'] === 1 ? 'abierto' : 'abiertos' ?></span></div>
+                  <?php /* Las palabras del diccionario: «abiertos» y «atendidos»
+                           nombraban aquí otras cosas que en la tarjeta por zona.
+                           La tercera cifra cuenta ATENDIDO + RESUELTO, así que no
+                           es «atendidas» (solo ATENDIDO): es su OT de cierre. */ ?>
+                  <div class="cifra"><b><?= $c['abiertos'] ?></b><span><?= e(Vocabulario::t('ASIGNADA', $c['abiertos'])) ?></span></div>
                   <?php if ($c['espera'] > 0): ?>
-                    <div class="cifra espera"><b><?= $c['espera'] ?></b><span>en espera</span></div>
+                    <div class="cifra espera"><b><?= $c['espera'] ?></b><span><?= e(Vocabulario::t('ESPERA_REPUESTO', $c['espera'])) ?></span></div>
                   <?php endif; ?>
-                  <div class="cifra"><b><?= $c['atendidos'] ?></b><span><?= $c['atendidos'] === 1 ? 'atendido' : 'atendidos' ?></span></div>
+                  <div class="cifra"><b><?= $c['atendidos'] ?></b><span>OT de cierre</span></div>
                 </div>
                 <?php /* La palabra, no solo el color: regla 1 de `estilo.css`. */ ?>
                 <?php if ($cargadoP): ?><span class="chip">cargado</span>
                 <?php elseif ($libreP): ?><span class="chip">libre</span><?php endif; ?>
               </div>
               <?php if ($c['viejos'] > 0): ?>
-                <span class="chip chip-viejo" title="Asignados hace 3 días o más, todavía sin informe">
-                  <?= $c['viejos'] ?> sin informe hace 3+ días
+                <span class="chip chip-viejo" title="<?= e(Vocabulario::ayuda('ASIGNADA_3D')) ?>">
+                  <?= $c['viejos'] ?> <?= e(mb_strtolower(Vocabulario::titulo('ASIGNADA_3D'), 'UTF-8')) ?>
                 </span>
               <?php endif; ?>
             </div>

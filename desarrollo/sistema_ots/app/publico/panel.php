@@ -122,7 +122,7 @@ foreach ($casos as $c) {
     // ABIERTAS: una atendida o cerrada ya no está comprometida para nada.
     if (in_array($estado, Casos::ABIERTAS_INDUSTEC, true) && ($c['fecha_estimada'] ?? '') === $hoy) { $n['hoy']++; }
     if (($c['estado_alerta'] ?? '') === 'CON_ALERTA') {
-        // La que de verdad urge: fuera del área, por decidir, y ya lleva una
+        // La que de verdad urge: fuera del área, por resolver, y ya lleva una
         // semana así (ASG-17): se le puede escapar tanto a la reconciliación
         // como a quien mira el panel.
         // Autorizada —o no— como «otro trabajo» (011) ya tiene decisión.
@@ -253,7 +253,7 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
       $k = $novPendientes;
       $tareas[] = ['ojo', $k, $V('NOVEDAD', $k) . ' ' . $V('NOVEDAD_REPORTADA', $k) . ' o ' . $V('NOVEDAD_EN_ESTUDIO', $k)
                               . ', ' . $V('NOVEDAD_POR_DECIDIR', $k),
-          'Lo que los técnicos vieron y no era su orden: correctivos que vienen, y cosas de otras áreas (eléctrico, ventilación, desagüe) que hacen fallar los equipos. Hay que decidir cuáles se le piden a Grupo KFC como aviso SAP nuevo.',
+          'Lo que los técnicos vieron y no era su orden: correctivos que vienen, y cosas de otras áreas (eléctrico, ventilación, desagüe) que hacen fallar los equipos. Hay que resolver cuáles se le piden a Grupo KFC como aviso SAP nuevo.',
           'novedades_visita.php', 'Revisar'];
   }
   // Fuera del área y sin decidir (011, «otros trabajos»). Antes contaba
@@ -331,7 +331,7 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
   <h2 style="margin-top:4px">Lo que te toca ahora</h2>
   <?php if (!$tareas): ?>
     <?= Ui::aviso('ok',
-        '<b>No tienes nada esperando por ti.</b>'
+        '<b>No tienes nada por hacer ahora.</b>'
       . '<p>Ni órdenes sin asignar, ni solicitudes por validar, ni atendidas por '
       . 'cerrar en SAP' . ($zonaAlc ? ' en la ' . $e($tituloZona($zonaAlc)) : '') . '. '
       . 'Lo que hay en curso lo están moviendo otros.</p>') ?>
@@ -632,7 +632,7 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
       <div class="t"><?= $e(Vocabulario::titulo('ORDENES_NUEVAS_7D')) ?></div></div>
     <div class="tile"><div class="n" data-n="<?= $n['hoy'] ?>">0</div>
       <div class="t"><?= $e(Vocabulario::titulo('FECHA_SAP_HOY')) ?></div>
-      <div class="pie">Fecha estimada de SAP hoy, en órdenes abiertas</div></div>
+      <div class="pie">Fecha estimada de SAP hoy, en el <?= $e(Vocabulario::t('TOTAL_ABIERTAS')) ?></div></div>
     <?php /* Sale de la misma función que la tarjeta: son las «de ellas, a
              espera de repuesto» de la fila ÓRDENES ABIERTAS, sumadas. */ ?>
     <a class="tile <?= $tz['espera_repuesto'] ? 'vence' : '' ?>" href="casos.php?est=ESPERA_REPUESTO&amp;grupo=total"><div class="n" data-n="<?= (int) $tz['espera_repuesto'] ?>">0</div>
@@ -739,8 +739,8 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
       Último barrido del correo: <b><?= $e(substr($gen, 0, 10)) ?></b><?php
         if ($d > 0) { echo ' · hace ' . $d . ' día' . ($d === 1 ? '' : 's'); } ?>.
       El correo avisa cuando Grupo KFC <b>crea</b> o <b>elimina</b> una orden, pero
-      <b>no cuando la cierra</b>: una orden puede figurar aquí como abierta y
-      estar cerrada en SAP. Lo que manda es el estado del export de SAP.
+      <b>no cuando la cierra</b>: una orden puede figurar aquí en el
+      <?= $e(Vocabulario::t('TOTAL_ABIERTAS')) ?> y estar cerrada en SAP. Lo que manda es el estado del export de SAP.
     </p>
   <?php endif; ?>
 </div>

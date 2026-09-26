@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-24.3",
+  "version": "2026-09-24.6",
   "fecha": "2026-09-24",
   "descripcion": "Diccionario único de B.IA Soft ERP: un concepto, un término, para todos los roles y todas las superficies (pantallas, app del técnico, PDF, Excel, PPT, correos, tablero de gerencia y hojas del piloto). Lo leen nucleo/Vocabulario.php, UI.T() de ui.js y termino() de agentes/scripts/comun.py. La especificación está en desarrollo/sistema_ots/VOCABULARIO.md.",
   "reglas": {
@@ -29,7 +29,7 @@
       "termino": "orden", "plural": "órdenes", "titulo": "Órdenes",
       "ayuda": "El trabajo que pide Grupo KFC, identificado por su aviso SAP; es lo que se cuenta en todos los tableros.",
       "roles": ["ADM", "JZ", "TEC", "KFC", "GER"],
-      "reemplaza": ["caso (el trabajo que pide KFC)", "casos", "Buzón de casos", "Casos por zona", "N casos en tu alcance", "casos vigentes", "lo abierto por KFC"],
+      "reemplaza": ["caso (el trabajo que pide KFC)", "casos", "Buzón de casos", "Casos por zona", "N casos en tu alcance", "casos vigentes", "lo abierto por KFC", "Pendientes del STATUS del martes (filas del plan de Isabel, en el tablero de gerencia)"],
       "notas": "Decisión D-C del 24-sep-2026. El número de la orden es el aviso SAP (AVISO_SAP); el documento que emite el técnico es la OT INDUSTEC (OT_INDUSTEC)."
     },
     "AVISO_SAP": {
@@ -38,6 +38,13 @@
       "roles": ["ADM", "JZ", "TEC", "KFC", "GER"],
       "reemplaza": ["# OT (columna del aviso en los reportes de B.IA)"],
       "notas": "«aviso» queda reservado para esto. La notificación interna del técnico pasa a NOTIFICACION. En el correo y el PDF de la OT siguen «ORDEN SAP:» e «ID-ORDEN-GRUPOKFC:» (contrato)."
+    },
+    "NUM_ORDEN_SAP": {
+      "termino": "n.º de orden SAP", "plural": "n.º de orden SAP", "titulo": "N.º de orden SAP",
+      "ayuda": "El número de la orden de trabajo que SAP crea para el aviso (el del correo «Se ha creado la orden de trabajo …»); acompaña al aviso SAP, que es el que identifica la orden.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "reemplaza": ["Orden SAP (columna del buzón con el número de la orden de trabajo de SAP)", "orden (número de la orden de trabajo de SAP en la ficha del técnico)"],
+      "notas": "Campo orden_trabajo del catálogo. No es el aviso SAP ni la OT INDUSTEC. El «ORDEN SAP:» del correo y del PDF de la OT es el AVISO (contrato), no este número: por eso la columna del buzón ya no dice «Orden SAP». Se usa igual en la ficha de mis.php, en la fila y en la tabla de casos.php (corrección de la verificación de la ola 2, 26-sep-2026)."
     },
     "OT_INDUSTEC": {
       "termino": "OT INDUSTEC", "plural": "OT INDUSTEC", "titulo": "OT INDUSTEC", "corto": "OT",
@@ -68,11 +75,47 @@
     },
     "ENVIO_OT": {
       "termino": "envío de la OT INDUSTEC", "plural": "envíos de OT INDUSTEC", "titulo": "Envío de la OT",
-      "ayuda": "Lo que pasó con el PDF y el correo de una OT INDUSTEC: en cola, enviada, no enviada o rechazada.",
+      "ayuda": "El camino de una OT INDUSTEC desde el celular del técnico hasta el PDF y el correo: en cola, detenida en el celular, recibida en la oficina, emitida o rechazada al enviar.",
       "roles": ["ADM", "JZ", "TEC"],
-      "conserva": ["en cola", "emitida"],
-      "reemplaza": ["Orden rechazada", "orden en cola", "enviaste una orden (chip)", "orden en proceso", "N órdenes guardadas, esperando señal"],
-      "notas": "«en cola» y «emitida» son los pasos del envío que ya ve el técnico. «orden en proceso» (equipos.php) y «N órdenes guardadas, esperando señal» (cola.js) pasan a «OT INDUSTEC en cola»."
+      "reemplaza": ["enviaste una orden (chip)"],
+      "notas": "Concepto que agrupa los cinco pasos del envío (ENVIO_EN_COLA, ENVIO_DETENIDA, ENVIO_RECIBIDA, ENVIO_EMITIDA, ENVIO_RECHAZADA), cada uno con su término: son los rótulos de la cola de cola.js, de «Órdenes que enviaste desde la app» (mis.php) y del resultado del formulario (app.js). «enviaste una orden» (chip de mis.php) pasa a «enviaste una OT INDUSTEC». Los valores de ot_capturadas.estado y de la cola no cambian: solo el texto."
+    },
+    "ENVIO_EN_COLA": {
+      "termino": "en cola", "plural": "en cola", "titulo": "En cola",
+      "ayuda": "La OT INDUSTEC está guardada en el celular y sale sola en cuanto hay señal; no hace falta hacer nada.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "conserva": ["enviando"],
+      "reemplaza": ["en espera (cola de envío de la OT INDUSTEC)", "orden en cola", "N órdenes guardadas, esperando señal", "Enviando N órdenes…"],
+      "notas": "Con señal la etiqueta de la fila dice «enviando» (la misma OT en cola, saliendo en ese momento); sin señal decía «en espera», que pasa a «en cola» porque «en espera» a secas era de ESPERA_REPUESTO. Los títulos de cola.js pasan a «Enviando N OT INDUSTEC…» y «N OT INDUSTEC en cola, salen con señal»."
+    },
+    "ENVIO_DETENIDA": {
+      "termino": "detenida en el celular", "plural": "detenidas en el celular", "titulo": "Detenida en el celular",
+      "ayuda": "La OT INDUSTEC sigue guardada en el celular pero no puede salir sola: falta volver a entrar, la llenó otro usuario o esa cuenta no tiene permiso para enviarla.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "conserva": ["falta entrar", "de otro usuario", "sin permiso"],
+      "reemplaza": ["N órdenes esperando que vuelvas a entrar"],
+      "notas": "Las tres etiquetas de la fila (FALTA_ENTRAR, AJENA y SIN_PERMISO de cola.js) se quedan: son el motivo, y cada una dice qué hacer. El título de la cola pasa a «N OT INDUSTEC detenidas: vuelve a entrar»."
+    },
+    "ENVIO_RECIBIDA": {
+      "termino": "recibida en la oficina", "plural": "recibidas en la oficina", "titulo": "Recibida en la oficina",
+      "ayuda": "El servidor ya tiene la OT INDUSTEC y está sacando su PDF y su correo; el técnico no tiene que hacer nada más.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "reemplaza": ["Orden recibida.", "orden en proceso"],
+      "notas": "Valor RECIBIDA de ot_capturadas.estado. Si la emisión se queda a medias (NUMERADA o FALLIDA) ya es OT_NO_EMITIDA. En app.js el resultado pasa a «OT INDUSTEC recibida en la oficina.». «orden en proceso» (equipos.php, equipo propuesto cuya OT todavía no tiene número) pasa aquí y no a «en cola»: la fila de equipos_propuestos la inserta envio.php en el servidor, así que la OT ya salió del celular."
+    },
+    "ENVIO_EMITIDA": {
+      "termino": "emitida", "plural": "emitidas", "titulo": "Emitida",
+      "ayuda": "La OT INDUSTEC ya tiene su número OT-NNNN y salieron su PDF y su correo a Grupo KFC.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "reemplaza": ["procesada", "Orden emitida."],
+      "notas": "Valores EMITIDA, ENVIADA y PROCESADA de ot_capturadas.estado. «procesada» (mis.php, capturas del técnico) pasa a «emitida»; en app.js el resultado pasa a «OT INDUSTEC emitida.»."
+    },
+    "ENVIO_RECHAZADA": {
+      "termino": "rechazada al enviar", "plural": "rechazadas al enviar", "titulo": "Rechazada al enviar",
+      "ayuda": "El servidor revisó la OT INDUSTEC que mandó el celular y no la aceptó por un dato que falta o no cuadra; se lee el motivo, se corrige y se reenvía.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "reemplaza": ["rechazada (envío de la OT INDUSTEC)", "Orden rechazada"],
+      "notas": "Valor RECHAZADA de ot_capturadas.estado y de la cola de cola.js. «rechazada» a secas queda para el documento de Aprendizaje (fuera_de_alcance): por eso el envío dice «rechazada al enviar»."
     },
     "INFORME_DETALLADO": {
       "termino": "informe técnico detallado", "plural": "informes técnicos detallados", "titulo": "Informe técnico detallado",
@@ -128,7 +171,7 @@
       "termino": "a espera de repuesto", "plural": "a espera de repuesto", "titulo": "A espera de repuesto",
       "ayuda": "El técnico ya fue o diagnosticó, y el trabajo depende de un repuesto, un taller, una garantía o una baja.",
       "roles": ["ADM", "JZ", "TEC", "KFC", "GER"],
-      "reemplaza": ["espera repuesto", "Esperando (pestaña del técnico)", "Esperando un equipo", "en espera", "esperando repuesto", "No pude concluir", "sin concluir", "PENDIENTES (hoja del tablero de gerencia)"],
+      "reemplaza": ["espera repuesto", "Esperando (pestaña del técnico)", "Esperando un equipo", "en espera (orden que espera repuesto)", "esperando repuesto", "No pude concluir", "sin concluir", "PENDIENTES (hoja del tablero de gerencia)"],
       "sinonimos_prosa": ["pendiente de repuesto", "pendientes por repuestos"],
       "notas": "Estado ESPERA_REPUESTO. En la tarjeta cuenta SIEMPRE en ÓRDENES ABIERTAS aunque no tenga OT INDUSTEC (D-A): hubo visita o diagnóstico."
     },
@@ -143,8 +186,8 @@
       "termino": "cerrada en SAP", "plural": "cerradas en SAP", "titulo": "Cerradas en SAP",
       "ayuda": "La administración confirmó que la orden ya está cerrada en SAP; es el único cierre que cuenta KFC.",
       "roles": ["ADM", "JZ", "TEC", "KFC", "GER"],
-      "reemplaza": ["resuelto (orden)", "cerrado por las dos partes", "confirmado como cerrado en SAP", "Ya lo cerré en SAP", "Nos compete y está resuelto", "cerrado en SAP", "cerrado sap", "Cierre SAP", "cierre SAP sin estar atendido", "% cerrado"],
-      "notas": "Estado RESUELTO. El botón pasa a «Ya la cerré en SAP»."
+      "reemplaza": ["resuelto (orden)", "cerrado por las dos partes", "confirmado como cerrado en SAP", "Ya lo cerré en SAP", "Nos compete y está resuelto", "cerrado en SAP", "cerrado sap", "Cierre SAP", "cierre SAP sin estar atendido", "% cerrado", "confirmado en SAP"],
+      "notas": "Estado RESUELTO. El botón pasa a «Ya la cerré en SAP». «confirmado en SAP» es el detalle de la bitácora al confirmar (casos.php:293): pasa a «cerrada en SAP»."
     },
     "NO_COMPETE": {
       "termino": "no nos compete", "plural": "no nos competen", "titulo": "No nos compete",
@@ -189,8 +232,8 @@
       "ayuda": "Orden que ya tiene OT INDUSTEC de evaluación emitida (hubo visita) y le falta la de cierre; incluye siempre las que están a espera de repuesto.",
       "roles": ["ADM", "JZ", "TEC", "KFC", "GER"],
       "conserva": ["órdenes abiertas (correo del martes)"],
-      "reemplaza": ["con la orden abierta", "Con la orden abierta", "en curso (ficha del técnico)", "con visita pero sin orden de cierre", "con visita sin cierre", "atendido, en curso", "Atendidos, en curso"],
-      "notas": "D-A del 24-sep-2026. «abierta» a secas es SOLO esto; el universo completo se dice siempre «total de órdenes abiertas»."
+      "reemplaza": ["con la orden abierta", "Con la orden abierta", "en curso (ficha del técnico)", "con visita pero sin orden de cierre", "con visita sin cierre", "atendido, en curso", "Atendidos, en curso", "AGREGADAS (hoja del STATUS generado)"],
+      "notas": "D-A del 24-sep-2026. «abierta» a secas es SOLO esto; el universo completo se dice siempre «total de órdenes abiertas». La hoja AGREGADAS del STATUS que genera la estación (t2_27_status_semanal.py) trae las correctivas nuevas de la semana con OT INDUSTEC de evaluación, repuesto pedido y sin cierre: son abiertas, y la hoja pasa a «ABIERTAS NUEVAS» (junto a «OTRAS ABIERTAS»). No es hoja de la plantilla de Isabel."
     },
     "ESPERA_INFORME": {
       "termino": "a espera de informe técnico", "plural": "a espera de informe técnico", "titulo": "ÓRDENES A ESPERA DE INFORME TÉCNICO",
@@ -204,7 +247,7 @@
       "termino": "total de órdenes abiertas", "plural": "total de órdenes abiertas", "titulo": "TOTAL DE ÓRDENES ABIERTAS",
       "ayuda": "Todas las órdenes que INDUSTEC aún no termina (ÓRDENES ABIERTAS + ÓRDENES A ESPERA DE INFORME TÉCNICO); es la vista del buzón de B.IA, no la cifra de SAP.",
       "roles": ["ADM", "JZ", "TEC", "KFC", "GER"],
-      "reemplaza": ["Siguen abiertos", "Casos abiertos", "Abiertos ahora", "Abiertos", "Antigüedad de lo abierto", "el caso vuelve a estar abierto", "Pendientes del STATUS del martes", "Vivos en 90 días"],
+      "reemplaza": ["Siguen abiertos", "Casos abiertos", "Abiertos ahora", "Abiertos", "Antigüedad de lo abierto", "el caso vuelve a estar abierto", "Vivos en 90 días"],
       "sinonimos_prosa": ["órdenes pendientes", "continúan en gestión", "permanecen en gestión"],
       "notas": "D-B del 24-sep-2026. Estados NUEVO, ASIGNADO, EN_REVISION y ESPERA_REPUESTO; nunca ATENDIDO."
     },
@@ -216,7 +259,9 @@
     "FUERA_CATALOGO": {
       "termino": "con más de 90 días (fuera del catálogo)", "plural": "con más de 90 días (fuera del catálogo)", "titulo": "Con más de 90 días",
       "ayuda": "Orden que salió de la ventana de 90 días del buzón pero sigue abierta en B.IA; puede incluir órdenes que KFC eliminó, porque el servidor todavía no recibe esa lista.",
-      "roles": ["ADM", "JZ"]
+      "roles": ["ADM", "JZ"],
+      "reservado": true,
+      "notas": "RESERVADO desde la ola 1: la tarjeta cuenta solo el catálogo de 90 días del buzón (el mismo que lista el enlace), sin Casos::fueraDeCatalogo(), así que esta sublínea valdría 0 siempre y no se pinta. Vuelve cuando el servidor reciba la lista de avisos que KFC eliminó (VOCABULARIO.md §12)."
     },
     "ORDENES_NUEVAS_7D": {
       "termino": "orden nueva en 7 días", "plural": "órdenes nuevas en 7 días", "titulo": "Órdenes nuevas en 7 días",
@@ -233,7 +278,7 @@
 
     "EQUIPO_DESHABILITADO": {
       "termino": "equipo deshabilitado", "plural": "equipos deshabilitados", "titulo": "EQUIPOS DESHABILITADOS",
-      "ayuda": "Equipo cuyo último estado registrado es Deshabilitado; en los conteos se cuenta una vez por orden, como lo cuenta Isabel.",
+      "ayuda": "Equipo cuyo último estado registrado es Deshabilitado; en los conteos se cuenta una vez por orden, como en el reporte semanal de la administración.",
       "roles": ["ADM", "JZ", "TEC", "KFC", "GER"],
       "conserva": ["deshabilitado", "Equipos deshabilitados"],
       "reemplaza": ["fuera de servicio", "Equipo fuera de servicio", "parado", "equipos parados", "trabado", "el equipo quedó trabado", "equipo trabado", "deshabilitadas N"],
@@ -454,8 +499,8 @@
       "termino": "notificación", "plural": "notificaciones", "titulo": "Notificaciones",
       "ayuda": "Mensaje interno de B.IA para ti: te asignaron una orden, te respondieron, validaron tu solicitud.",
       "roles": ["ADM", "JZ", "TEC"],
-      "reemplaza": ["Avisos (pestaña del técnico)", "Tienes N avisos nuevos", "aviso interno"],
-      "notas": "Libera «aviso» para el aviso SAP. La clase PHP Avisos y la tabla no se renombran."
+      "reemplaza": ["Avisos (pestaña del técnico)", "Tienes N avisos nuevos", "aviso interno", "nuevo (chip de la notificación sin leer)"],
+      "notas": "Libera «aviso» para el aviso SAP. La clase PHP Avisos y la tabla no se renombran. El chip «nuevo» de una notificación que todavía no se abre (mis.php:885) pasa a «sin leer»: «nuevo» en masculino es el código crudo NUEVO de la orden (SIN_ASIGNAR)."
     },
     "CONTINUIDAD": {
       "termino": "continúa la orden", "plural": "continúan la orden", "titulo": "Continúa la orden",
@@ -472,18 +517,20 @@
       "conserva": ["otro trabajo", "Otros trabajos", "Autorizados", "No autorizados"]
     },
     "OTRO_TRABAJO_POR_DECIDIR": {
-      "termino": "fuera del área, por decidir", "plural": "fuera del área, por decidir", "titulo": "Fuera del área, por decidir",
+      "termino": "fuera del área, por resolver", "plural": "fuera del área, por resolver", "titulo": "Fuera del área, por resolver",
       "ayuda": "Orden que parece no ser de INDUSTEC (alerta de alcance) y espera que la administración la resuelva.",
       "roles": ["ADM", "JZ", "TEC"],
       "conserva": ["fuera del área"],
-      "reemplaza": ["con alerta de alcance", "con alerta (alerta de alcance)", "por confirmar (alerta de alcance)"],
-      "notas": "Estados CON_ALERTA y POR_CONFIRMAR de estado_alerta (Casos::esAlerta los trata igual). El filtro del buzón pasa a «Fuera del área, por decidir»; SIN_ALERTA está en fuera_de_alcance."
+      "reemplaza": ["con alerta de alcance", "con alerta (alerta de alcance)", "por confirmar (alerta de alcance)", "fuera del área, por decidir"],
+      "notas": "Estados CON_ALERTA y POR_CONFIRMAR de estado_alerta (Casos::esAlerta los trata igual). El filtro del buzón pasa a «Fuera del área, por resolver»; SIN_ALERTA está en fuera_de_alcance. Decía «por decidir» hasta la versión .5, pero «decidir» es solo de KFC y esto lo resuelve la administración (la clave y el código de filtro por_decidir no cambian)."
     },
     "EQUIPO_PROPUESTO": {
-      "termino": "equipo nuevo por confirmar", "plural": "equipos nuevos por confirmar", "titulo": "Equipos nuevos por confirmar",
+      "termino": "equipo nuevo por confirmar", "plural": "equipos nuevos por confirmar", "titulo": "Equipos nuevos por confirmar", "corto": "por confirmar",
       "ayuda": "Equipo que un técnico registró porque no estaba en el maestro; la administración lo confirma.",
       "roles": ["ADM", "JZ", "TEC"],
-      "conserva": ["por confirmar", "Equipo nuevo", "como equipo nuevo"]
+      "conserva": ["por confirmar", "Equipo nuevo", "como equipo nuevo"],
+      "reemplaza": ["propuesto (equipo nuevo, en la lista del formulario)", "Propuestos por otros técnicos (pendientes de aprobar)", "Propuestos por los técnicos"],
+      "notas": "Estado PROPUESTO de equipos_propuestos (la clave no cambia). En el formulario del técnico (app.js:831/837) el grupo pasa a «Equipos nuevos por confirmar (los registró otro técnico)» y cada opción termina en « · por confirmar»; en equipos.php el pie de la tarjeta «Por confirmar» pasa a «Equipos nuevos que registraron los técnicos». El flujo del formulario no cambia (I-8): elegir uno de estos sigue sin disparar la regla EQUIPO_NUEVO_PROPUESTO. Aprobado, rechazado y ya existente están en fuera_de_alcance."
     },
     "DOCUMENTO_POR_APROBAR": {
       "termino": "por aprobar", "plural": "por aprobar", "titulo": "Por aprobar",
@@ -507,37 +554,50 @@
       "termino": "en estudio", "plural": "en estudio", "titulo": "En estudio",
       "ayuda": "Alguien la está mirando.",
       "roles": ["ADM", "JZ", "TEC", "KFC"],
-      "reemplaza": ["en revisión (novedad)"]
+      "reemplaza": ["en revisión (novedad)", "La estoy revisando"],
+      "notas": "La opción «La estoy revisando» del formulario de la novedad (novedades_visita.php:315) pasa a «En estudio»; su descripción de debajo se queda."
     },
     "NOVEDAD_CON_AVISO": {
       "termino": "con aviso SAP", "plural": "con aviso SAP", "titulo": "Con aviso SAP",
       "ayuda": "Se le pidió el aviso a Grupo KFC y ya tiene número.",
       "roles": ["ADM", "JZ", "TEC", "KFC"],
       "conserva": ["con aviso SAP"],
-      "reemplaza": ["derivada", "Con aviso en SAP", "Novedades con aviso en SAP"]
+      "reemplaza": ["derivada", "Con aviso en SAP", "Novedades con aviso en SAP", "Se le pidió el aviso a KFC"],
+      "notas": "La opción «Se le pidió el aviso a KFC» del formulario de la novedad pasa a «Con aviso SAP»; su descripción de debajo se queda."
     },
     "NOVEDAD_ASUMIDA": {
       "termino": "la asume INDUSTEC", "plural": "las asume INDUSTEC", "titulo": "La asume INDUSTEC",
       "ayuda": "Entra en la planificación de INDUSTEC sin aviso nuevo.",
-      "roles": ["ADM", "JZ", "TEC", "KFC"], "conserva": ["la asume INDUSTEC"], "reemplaza": ["Lo asume INDUSTEC"]
+      "roles": ["ADM", "JZ", "TEC", "KFC"], "conserva": ["la asume INDUSTEC"], "reemplaza": ["Lo asume INDUSTEC"],
+      "notas": "La opción «Lo asume INDUSTEC» del formulario de la novedad pasa a «La asume INDUSTEC»."
     },
     "NOVEDAD_DESCARTADA": {
       "termino": "descartada", "plural": "descartadas", "titulo": "Descartadas",
       "ayuda": "Se revisó y no procedía, con su motivo.",
-      "roles": ["ADM", "JZ", "TEC", "KFC"], "conserva": ["descartada"]
+      "roles": ["ADM", "JZ", "TEC", "KFC"], "conserva": ["descartada"],
+      "reemplaza": ["No procede"],
+      "notas": "La opción «No procede» del formulario de la novedad (novedades_visita.php:325) pasa a «Descartada»; el motivo sigue siendo obligatorio."
     },
     "NOVEDAD_RESUELTA": {
       "termino": "resuelta", "plural": "resueltas", "titulo": "Resueltas",
-      "ayuda": "La novedad ya se atendió.",
+      "ayuda": "Lo que se pidió o se asumió por la novedad ya quedó hecho, con una nota de qué se hizo.",
       "roles": ["ADM", "JZ", "TEC", "KFC"], "conserva": ["resuelta"],
-      "notas": "«resuelta» queda SOLO para la novedad."
+      "reemplaza": ["Ya se atendió"],
+      "notas": "«resuelta» queda SOLO para la novedad. La opción «Ya se atendió» del formulario (novedades_visita.php:320) pasa a «Resuelta»: «atendida» es solo la orden (ATENDIDA)."
     },
     "NOVEDAD_POR_DECIDIR": {
-      "termino": "por decidir", "plural": "por decidir", "titulo": "Por decidir",
+      "termino": "por resolver", "plural": "por resolver", "titulo": "Por resolver",
       "ayuda": "Novedad reportada o en estudio que todavía no tiene destino.",
       "roles": ["ADM", "JZ", "TEC", "KFC"],
-      "conserva": ["Por decidir"],
-      "reemplaza": ["sin decidir", "esperando decisión"]
+      "reemplaza": ["sin decidir", "esperando decisión", "por decidir"],
+      "notas": "Decía «por decidir» hasta la versión .5; «decidir» es solo de KFC. La novedad la resuelven el jefe de zona o la administración con el botón «Resolver», que ya decía ese verbo. La clave no cambia."
+    },
+    "NOVEDAD_OTRA_AREA": {
+      "termino": "de otra área", "plural": "de otras áreas", "titulo": "De otras áreas", "corto": "otra área",
+      "ayuda": "Novedad cuyo arreglo no le toca a INDUSTEC sino a otra área de Grupo KFC (eléctrico, ventilación, desagüe, obra civil); se registra para explicar por qué un local repite averías.",
+      "roles": ["ADM", "JZ", "TEC", "KFC"],
+      "reemplaza": ["No es de INDUSTEC (filtro de novedades)", "No son de INDUSTEC", "De otras áreas sin decidir"],
+      "notas": "Categoría, no estado: toda novedad de un tipo distinto de EQUIPO_CORRECTIVO (grupo «ajenas» de Novedades::listar y contador «ajenas» de Novedades::contadores, que cuenta solo las por resolver). El filtro y la tarjeta de novedades_visita.php pasan a «De otras áreas»; el indicador del Excel (reporte_exportar.php:205) a «De otras áreas, por resolver»; el chip de la fila ya decía «otra área». No se dice «no es de INDUSTEC»: se confunde con NO_COMPETE, que es la orden."
     },
 
     "ESTATUS_SAP": {
@@ -550,7 +610,9 @@
     "ND_SIN_PROVEEDOR": {
       "termino": "orden N/D (sin proveedor)", "plural": "órdenes N/D (sin proveedor)", "titulo": "Órdenes N/D",
       "ayuda": "Orden correctiva de KFC que todavía no tiene ningún proveedor en SAP (hoja #O_ND).",
-      "roles": ["ADM", "KFC", "GER"]
+      "roles": ["ADM", "KFC", "GER"],
+      "reemplaza": ["ND de INDUSTEC (consola de la respuesta del miércoles)"],
+      "notas": "Las que KFC marca con PROVEEDOR = INDUSTEC van en la hoja «ND INDUSTEC» que la respuesta del miércoles le agrega al libro de KFC: ese nombre es contrato (lo nombra la semilla 020 y lo recibe KFC). En la consola de t2_27_respuesta_kfc.py «ND de INDUSTEC: N» pasa a «órdenes N/D de INDUSTEC: N»."
     },
 
     "ATRASADO": {
@@ -633,15 +695,15 @@
       "reemplaza": ["Pendiente KFC"]
     },
     "LE_TOCA_KFC_REPUESTO": {
-      "termino": "le toca a KFC: repuesto en SAP", "plural": "le toca a KFC: repuesto en SAP", "titulo": "Responsable: KFC (repuesto en SAP)",
-      "ayuda": "La orden espera el repuesto que ya se pidió a KFC en SAP (bodega o importación).",
+      "termino": "repuesto en seguimiento", "plural": "repuesto en seguimiento", "titulo": "Repuesto en seguimiento",
+      "ayuda": "La orden espera un repuesto, un taller o una baja y ninguna de sus solicitudes está a espera de respuesta de KFC: sigue su trámite hasta que el equipo vuelva a operar.",
       "roles": ["ADM", "JZ", "KFC"],
-      "reemplaza": ["Pendiente repuestos SAP"],
-      "notas": "Confirmar con Isabel si el verde y el naranja del semáforo estaban invertidos: el diccionario solo cambia el texto, no el color."
+      "reemplaza": ["Pendiente repuestos SAP", "Responsable: KFC (repuesto en SAP)", "le toca a KFC: repuesto en SAP"],
+      "notas": "Verde del semáforo = ESPERA_REPUESTO sin ninguna solicitud en REGISTRADO_SAP/ESPERA_KFC (Reportes::calcular). Eso incluye solicitudes por validar, por registrar en SAP, en taller de INDUSTEC, ya despachadas o sin solicitud: casi todo le toca a INDUSTEC. Por eso el rótulo NO nombra a un responsable (en la versión .5 decía «Responsable: KFC (repuesto en SAP)» y le atribuía a KFC trabajo de INDUSTEC en el Excel, el PDF y el PPT que recibe KFC). Si el verde debe partirse (despachado → KFC; por validar o registrar → INDUSTEC) es un cambio de lógica que decide Andrés con Isabel. La clave no cambia."
     },
     "EMERGENTE": {
       "termino": "emergente (más de 7 días)", "plural": "emergentes (más de 7 días)", "titulo": "Emergente",
-      "ayuda": "La orden lleva más de 7 días sin moverse y hay que atenderla ya.",
+      "ayuda": "La orden llegó hace más de 7 días y INDUSTEC todavía no la termina, o es de prioridad alta y sigue sin asignar: hay que atenderla ya.",
       "roles": ["ADM", "JZ", "KFC"],
       "reemplaza": ["Emergente / vencido"]
     },
@@ -813,7 +875,7 @@
         "sublineas": [
           { "clave": "SIN_ASIGNAR", "rotulo": "sin asignar" },
           { "clave": "ASIGNADA_3D", "rotulo": "asignadas hace 3+ días" },
-          { "clave": "OTRO_TRABAJO_POR_DECIDIR", "rotulo": "fuera del área, por decidir", "solo_si_mayor_que_cero": true },
+          { "clave": "OTRO_TRABAJO_POR_DECIDIR", "rotulo": "fuera del área, por resolver", "solo_si_mayor_que_cero": true },
           { "clave": "OT_NO_EMITIDA", "rotulo": "con OT INDUSTEC no emitida", "solo_si_mayor_que_cero": true }
         ]
       },
@@ -828,9 +890,7 @@
       },
       {
         "clave": "TOTAL_ABIERTAS", "rotulo": "TOTAL DE ÓRDENES ABIERTAS",
-        "sublineas": [
-          { "clave": "FUERA_CATALOGO", "rotulo": "de ellas, con más de 90 días (fuera del catálogo)", "solo_si_mayor_que_cero": true }
-        ],
+        "sublineas": [],
         "separador_arriba": true
       }
     ],
@@ -849,7 +909,7 @@
   },
 
   "reservadas": {
-    "orden": "El trabajo que pide Grupo KFC, identificado por su aviso SAP. Nunca el documento de INDUSTEC ni el número de SAP.",
+    "orden": "El trabajo que pide Grupo KFC, identificado por su aviso SAP. Nunca el documento de INDUSTEC ni un número de SAP: el número de la orden de trabajo de SAP es el «n.º de orden SAP» (NUM_ORDEN_SAP).",
     "aviso": "Solo el número de aviso de SAP («aviso SAP 10349497»). La notificación interna es «notificación».",
     "OT INDUSTEC": "El documento que emite el técnico (de evaluación o de cierre). «OT» a secas solo como abreviatura de OT INDUSTEC.",
     "informe técnico": "En «a espera de informe técnico»: la OT INDUSTEC de la visita. El documento aparte para baja, garantía o material es el «informe técnico detallado». Nunca es un estado de la orden por sí solo.",
@@ -864,8 +924,8 @@
     "deshabilitado": "Estado del EQUIPO. Puede calificar a la orden: «orden con equipo deshabilitado». Nunca parado, trabado ni fuera de servicio.",
     "operativo": "Estado del EQUIPO que funciona. Nunca «sigue operando» ni «trabado».",
     "validar": "El paso del jefe de zona sobre la solicitud.",
-    "decidir / decisión de KFC": "Lo que decide Grupo KFC sobre una solicitud registrada en SAP.",
-    "resolver": "Lo que hace la administración con una orden en revisión. Como verbo de botón no nombra ningún concepto (el botón de una novedad también dice «Resolver»).",
+    "decidir / decisión de KFC": "Lo que decide Grupo KFC sobre una solicitud registrada en SAP. Lo que resuelven la administración o el jefe de zona (fuera del área, novedad) es «por resolver», nunca «por decidir».",
+    "resolver": "Lo que hace la administración con una orden en revisión o fuera del área («fuera del área, por resolver»), y lo que hacen el jefe de zona o la administración con una novedad («por resolver»). Como verbo de botón no nombra ningún concepto (el botón de una novedad también dice «Resolver»).",
     "cierre": "La OT INDUSTEC de cierre. El cierre de SAP es «cerrada en SAP»; el fin de una solicitud es «terminada»; el ingreso preventivo se «marca como ejecutado».",
     "novedad": "Solo lo que el técnico ve en el local (NOVEDAD). Lo que pasa con un ingreso preventivo es un «movimiento del ingreso».",
     "veredicto": "SE RETIRA de todo texto visible: el jefe valida, KFC decide, la administración resuelve.",
@@ -924,10 +984,56 @@
     { "archivo": "sistema_ots/app/publico/cronograma.js", "texto": "'En curso'", "motivo": "Preventivo: «Pendiente · en ejecución» (PREV_EN_EJECUCION)." },
     { "archivo": "sistema_ots/app/publico/cronograma.js", "texto": "'Planificado'", "motivo": "Preventivo: «Pendiente» (PREV_PENDIENTE)." },
     { "archivo": "sistema_ots/app/publico/cronograma.js", "texto": "'Sin agendar'", "motivo": "Preventivo: «Pendiente · sin agendar» (PREV_SIN_AGENDAR)." },
-    { "archivo": "sistema_ots/app/publico/catalogos.php", "texto": "POR ASIGNAR", "motivo": "catalogos.php:95 lo ponía fijo aunque la orden tuviera técnico: el texto sale del estado." }
+    { "archivo": "sistema_ots/app/publico/catalogos.php", "texto": "POR ASIGNAR", "motivo": "catalogos.php:95 lo ponía fijo aunque la orden tuviera técnico: el texto sale del estado." },
+    { "archivo": "sistema_ots/app/publico/cola.js", "texto": "'rechazada'", "motivo": "Etiqueta de la cola de envío: pasa a «rechazada al enviar» (ENVIO_RECHAZADA). «rechazada» a secas es el documento de Aprendizaje." },
+    { "archivo": "sistema_ots/app/publico/cola.js", "texto": "Enviando 1 orden…", "motivo": "Título de la cola: «Enviando 1 OT INDUSTEC…» (ENVIO_EN_COLA); lo que manda el técnico es la OT INDUSTEC, no la orden." },
+    { "archivo": "sistema_ots/app/publico/cola.js", "texto": "' órdenes…'", "motivo": "Título de la cola: «Enviando N OT INDUSTEC…» (ENVIO_EN_COLA)." },
+    { "archivo": "sistema_ots/app/publico/cola.js", "texto": "esperando que vuelvas a entrar", "motivo": "Título de la cola: «N OT INDUSTEC detenidas: vuelve a entrar» (ENVIO_DETENIDA)." },
+    { "archivo": "sistema_ots/app/publico/mis.php", "texto": "'rechazada'", "motivo": "Captura del técnico: pasa a «rechazada al enviar» (ENVIO_RECHAZADA)." },
+    { "archivo": "sistema_ots/app/publico/mis.php", "texto": "'procesada'", "motivo": "Captura del técnico: pasa a «emitida» (ENVIO_EMITIDA)." },
+    { "archivo": "sistema_ots/app/publico/mis.php", "texto": ">nuevo<", "motivo": "Chip de la notificación sin abrir: pasa a «sin leer» (NOTIFICACION). «nuevo» es el código crudo de la orden sin asignar." },
+    { "archivo": "sistema_ots/app/publico/app.js", "texto": "'Orden recibida.'", "motivo": "Resultado del envío: «OT INDUSTEC recibida en la oficina.» (ENVIO_RECIBIDA)." },
+    { "archivo": "sistema_ots/app/publico/app.js", "texto": "'Orden emitida.'", "motivo": "Resultado del envío: «OT INDUSTEC emitida.» (ENVIO_EMITIDA)." },
+    { "archivo": "sistema_ots/app/publico/app.js", "texto": "Propuestos por otros técnicos", "motivo": "Grupo de la lista de equipos: «Equipos nuevos por confirmar (los registró otro técnico)» (EQUIPO_PROPUESTO). Solo cambia el rótulo (I-8)." },
+    { "archivo": "sistema_ots/app/publico/app.js", "texto": "' · propuesto'", "motivo": "Opción de la lista de equipos: « · por confirmar» (EQUIPO_PROPUESTO)." },
+    { "archivo": "sistema_ots/app/publico/equipos.php", "texto": "Propuestos por los técnicos", "motivo": "Pie de la tarjeta «Por confirmar»: «Equipos nuevos que registraron los técnicos» (EQUIPO_PROPUESTO)." },
+    { "archivo": "sistema_ots/app/publico/novedades_visita.php", "texto": "La estoy revisando", "motivo": "Opción del formulario de la novedad: «En estudio» (NOVEDAD_EN_ESTUDIO)." },
+    { "archivo": "sistema_ots/app/publico/novedades_visita.php", "texto": "Ya se atendió", "motivo": "Opción del formulario de la novedad: «Resuelta» (NOVEDAD_RESUELTA); «atendida» es solo la orden." },
+    { "archivo": "sistema_ots/app/publico/novedades_visita.php", "texto": "No procede", "motivo": "Opción del formulario de la novedad: «Descartada» (NOVEDAD_DESCARTADA)." },
+    { "archivo": "sistema_ots/app/publico/novedades_visita.php", "texto": "Se le pidió el aviso a KFC", "motivo": "Opción del formulario de la novedad: «Con aviso SAP» (NOVEDAD_CON_AVISO)." },
+    { "archivo": "sistema_ots/app/publico/novedades_visita.php", "texto": "Lo asume INDUSTEC", "motivo": "Opción del formulario de la novedad: «La asume INDUSTEC» (NOVEDAD_ASUMIDA)." },
+    { "archivo": "sistema_ots/app/publico/novedades_visita.php", "texto": "No es de INDUSTEC", "motivo": "Filtro de novedades: «De otras áreas» (NOVEDAD_OTRA_AREA); «no es de INDUSTEC» se confunde con «no nos compete» de la orden." },
+    { "archivo": "sistema_ots/app/publico/novedades_visita.php", "texto": "No son de INDUSTEC", "motivo": "Tarjeta de novedades: «De otras áreas» (NOVEDAD_OTRA_AREA)." },
+    { "archivo": "sistema_ots/app/publico/casos.php", "texto": "'confirmado en SAP'", "motivo": "Detalle de la bitácora al confirmar el cierre: «cerrada en SAP» (CERRADA_SAP)." },
+    { "archivo": "agentes/scripts/t2_27_status_semanal.py", "texto": "AGREGADAS", "motivo": "Hoja del STATUS que genera la estación (no es de la plantilla de Isabel): pasa a «ABIERTAS NUEVAS» (ABIERTA), junto a «OTRAS ABIERTAS»." },
+    { "archivo": "agentes/scripts/t2_27_respuesta_kfc.py", "texto": "ND de INDUSTEC", "motivo": "Consola de la respuesta del miércoles: «órdenes N/D de INDUSTEC» (ND_SIN_PROVEEDOR). La hoja «ND INDUSTEC» es contrato y no cambia." },
+    { "archivo": "sistema_ots/app/publico/pendientes.php", "texto": "Notificación interna", "motivo": "Botón y diálogo de la oficina (tipo AVISO_INTERNO): la nota queda en el hilo y NO llega a la pestaña «Notificaciones» del técnico. Pasa a «Recordatorio de la oficina»; «notificación» es solo NOTIFICACION." },
+    { "archivo": "sistema_ots/app/publico/app.js", "texto": "aviso(s) para revisar", "motivo": "Advertencias de validación del formulario: «Hay N advertencias para revisar». «aviso» es solo el aviso SAP." },
+    { "archivo": "sistema_ots/app/publico/equipos.php", "texto": "OT INDUSTEC en cola", "motivo": "La OT del equipo propuesto ya está en el servidor (envio.php inserta equipos_propuestos): «OT INDUSTEC recibida en la oficina, todavía sin número» (ENVIO_RECIBIDA), no «en cola»." }
   ],
 
-  "lista_negra_excepciones": [],
+  "lista_negra_excepciones": [
+    { "archivo": "agentes/scripts/t1_6e_altas_maestro.py", "texto": "atendido", "maximo": 1, "motivo": "COMMENT SQL del ENUM zona en el ALTER TABLE de la migración de la Fase 1 («OTRA = local atendido fuera de las tres zonas»), ya aplicado a la base: es esquema, no pantalla. «atendido» concuerda con «local», no con la orden." },
+    { "archivo": "sistema_ots/app/publico/casos.php", "texto": "veredicto", "maximo": 17, "motivo": "Solo identificadores: el permiso 'casos.veredicto' (tabla permisos), el valor de acción 'veredicto' (POST accion, data-accion, clave ACC.veredicto) y el campo 'veredicto' del diálogo. Lo visible dice «Resolver» / «Resolución» (RESOLUCION_ADMIN). verificar_http.py busca data-accion=\"veredicto\"." },
+    { "archivo": "sistema_ots/app/publico/cronograma.js", "texto": "vencido", "maximo": 13, "motivo": "Código de estado_hoy del preventivo que manda el servidor (Reportes::estadoPreventivo), llave de ETIQUETA/CODIGOS, clase CSS .et.vencido/.b-vencido y data-f de los filtros. Lo visible sale de UI.T(UI.T.deEstado('vencido','preventivo')) = ATRASADO." },
+    { "archivo": "sistema_ots/app/publico/mis.php", "texto": "abiertos", "maximo": 2, "motivo": "Clave del filtro Pendientes::lista(['grupo' => 'abiertos']): el grupo de solicitudes en trámite (Pendientes::ABIERTOS). No se muestra." },
+    { "archivo": "sistema_ots/app/publico/nucleo/Casos.php", "texto": "veredicto", "maximo": 3, "motivo": "Claves de Casos::TRANSICIONES ('veredicto:NO_COMPETE', 'veredicto:RESUELTO') y su armado en puedeTransitar(): código." },
+    { "archivo": "sistema_ots/app/publico/nucleo/Casos.php", "texto": "vencido", "maximo": 1, "motivo": "Alias SQL «AS vencido» de informesPorAviso() (plazo de 48 h para la tarjeta por zona); se lee como $p['vencido'] y nunca se muestra." },
+    { "archivo": "sistema_ots/app/publico/nucleo/Casos.php", "texto": "asignado", "maximo": 1, "motivo": "Valor de datos 'fuente' => 'asignado' de Casos::quienAtendio(), que compara verificar_continuidad.py; casos.php lo traduce al mostrarlo («la asignación»)." },
+    { "archivo": "sistema_ots/app/publico/nucleo/Pendientes.php", "texto": "abiertos", "maximo": 2, "motivo": "Grupo por defecto de Pendientes::lista() y alias SQL «AS abiertos», llave de contadores() que leen pendientes.php y el panel." },
+    { "archivo": "sistema_ots/app/publico/nucleo/Pendientes.php", "texto": "parado", "maximo": 1, "motivo": "Alias SQL «AS parado» de Pendientes::sinAviso(), que pendientes.php lee como $s['parado']." },
+    { "archivo": "sistema_ots/app/publico/nucleo/Pendientes.php", "texto": "parados", "maximo": 1, "motivo": "Alias SQL «AS parados», llave del array de Pendientes::contadores()." },
+    { "archivo": "sistema_ots/app/publico/nucleo/Pendientes.php", "texto": "vencidos", "maximo": 2, "motivo": "Alias SQL «AS vencidos», llave de contadores() y de cumplimiento48(), que usan pendientes.php, el panel y la tarjeta por zona." },
+    { "archivo": "sistema_ots/app/publico/nucleo/Reportes.php", "texto": "vencido", "maximo": 1, "motivo": "Reportes::estadoPreventivo() devuelve 'vencido' como código de estado_hoy, que cronograma.php/cronograma.js comparan; lo visible es ATRASADO." },
+    { "archivo": "sistema_ots/app/publico/pendientes.php", "texto": "abiertos", "maximo": 1, "motivo": "Código del grupo por defecto (?g=abiertos) que lee Pendientes::lista(); el rótulo visible es Vocabulario::titulo('SOLICITUD_EN_TRAMITE')." },
+    { "archivo": "sistema_ots/app/publico/pendientes.php", "texto": "resuelto", "maximo": 1, "motivo": "Sufijo de la clase CSS est-resuelto que devuelve $claseEstado (clases est-* = contrato); lo visible es Pendientes::etiquetaEstado()." },
+    { "archivo": "sistema_ots/app/publico/pendientes.php", "texto": "asignado", "maximo": 2, "motivo": "Sufijo de la clase CSS est-asignado que devuelve $claseEstado (clases est-* = contrato); lo visible es Pendientes::etiquetaEstado()." },
+    { "archivo": "sistema_ots/app/publico/pendientes.php", "texto": "vencidos", "maximo": 1, "motivo": "Código de grupo del enlace $enlaceG('vencidos') (?g=vencidos, también desde la tarjeta por zona); el rótulo visible es Vocabulario::titulo('VENCIDO_48H')." },
+    { "archivo": "sistema_ots/app/publico/pendientes.php", "texto": "cerrados", "maximo": 1, "motivo": "Código de grupo del enlace $enlaceG('cerrados') (?g=cerrados); el rótulo visible es «Terminadas y canceladas», armado con el diccionario." },
+    { "archivo": "sistema_ots/app/publico/regularizar_masivo_cli.php", "texto": "cerrado", "maximo": 1, "motivo": "Dato histórico: el literal que el UPDATE grabó en casos_gestion.veredicto_motivo («cerrado en SAP (regularización masiva 2026-09-21)») cuando el script se corrió el 21-sep-2026. Se deja como se grabó para que una búsqueda por el texto encuentre esas filas; la consola sí usa el diccionario." },
+    { "archivo": "sistema_ots/app/publico/regularizar_masivo_cli.php", "texto": "regularizado", "maximo": 1, "motivo": "Dato histórico: el literal que el UPDATE grabó en casos_gestion.nota («regularizado (regularización masiva 2026-09-21)») el 21-sep-2026. No es pantalla." },
+    { "archivo": "sistema_ots/app/publico/t2_24_2_cerrar_masivo_cli.php", "texto": "Cumplido", "maximo": 2, "motivo": "Dato histórico: los dos títulos («Cumplido a tiempo / tarde (cierre masivo)») que el script grabó en cronograma_novedades el 21-sep-2026. Se dejan como se grabaron; la consola sí habla de «marcar como ejecutado»." }
+  ],
 
   "contratos_externos": [
     {
@@ -936,9 +1042,9 @@
       "por_que": "D-C (24-sep-2026). Es el documento que recibe KFC y lo leen por texto t1_7_extractor_pdf.py y t1_6_muestra_verificacion.py. Los PDF ya emitidos no se regeneran."
     },
     {
-      "textos": ["ORDEN DE TRABAJO INDUSTEC - OT-NNNN-LOCAL-AVISO-ZONA", "OT-NNNN", "ORDEN SAP", "sin aviso", "Estado de OT: Abierta", "Estado de OT: Cerrada", "Estado de Equipo: Operativo", "Estado de Equipo: Deshabilitado"],
+      "textos": ["ORDEN DE TRABAJO INDUSTEC - OT-NNNN-LOCAL-AVISO-ZONA", "OT-NNNN", "ORDEN SAP", "sin aviso", "Estado de OT: Abierta", "Estado de OT: Cerrada", "Estado de Equipo: Operativo", "Estado de Equipo: Deshabilitado", "Se ha generado una nueva OT", "Zona:", "Local:", "Tipo de Trabajo:"],
       "donde": "Asunto y cuerpo del correo de la OT (nucleo/Emision.php).",
-      "por_que": "D-C. t2_11_informes_ot.py lee «ORDEN SAP:» (con su valor «sin aviso» cuando la OT nace sin aviso), «Estado de OT:» y «Estado de Equipo:»; el número OT-NNNN va impreso y en los planes de Isabel."
+      "por_que": "D-C. t2_11_informes_ot.py lee «ORDEN SAP:» (con su valor «sin aviso» cuando la OT nace sin aviso), «Estado de OT:» y «Estado de Equipo:», y también «nueva OT:», «Zona:», «Local:» y «Tipo de Trabajo:» campo por campo (campo(t, 'Zona')…). El valor de «Zona:» es el CÓDIGO (CNLJ), no el rótulo ZONA CUENCA-LOJA. El número OT-NNNN va impreso y en los planes de Isabel."
     },
     {
       "textos": ["Abierta", "Cerrada", "Operativo", "Deshabilitado", "botón Abierta", "Atendido a tiempo"],
@@ -961,9 +1067,9 @@
       "por_que": "Es el sistema de KFC; se leen tal cual (regex «REPORTE.*SEMANA.*CORRECTIVO», con la errata incluida)."
     },
     {
-      "textos": ["ESTATUS IND", "RESUMEN IND", "INFORME TECNICO", "PENDIENTE OK OP´S", "PENDIENTE OK OPS", "IMPORTACION", "DESPACHO BOD dd/mm", "DESPACHO PF dd/mm", "GESTION BODEGA", "GESTION PROVEEDORES", "GESTION <persona>", "SIN CORREO", "COTIZACION PENDIENTE"],
+      "textos": ["ESTATUS IND", "RESUMEN IND", "ND INDUSTEC", "INFORME TECNICO", "PENDIENTE OK OP´S", "PENDIENTE OK OPS", "IMPORTACION", "DESPACHO BOD dd/mm", "DESPACHO PF dd/mm", "GESTION BODEGA", "GESTION PROVEEDORES", "GESTION <persona>", "SIN CORREO", "COTIZACION PENDIENTE"],
       "donde": "Hoja de Isabel de los miércoles (RESUMEN / RESUMEN IND, columna ESTATUS IND) y t2_27_respuesta_kfc.py.",
-      "por_que": "Registro propio de Isabel hacia KFC. En pantallas de B.IA los mismos hechos se nombran con los conceptos del diccionario."
+      "por_que": "Registro propio de Isabel hacia KFC. En pantallas de B.IA los mismos hechos se nombran con los conceptos del diccionario. «ND INDUSTEC» es la hoja que la respuesta le agrega al libro de KFC junto a RESUMEN y RESUMEN IND: la nombra la semilla 020 (tarea del miércoles) y es la que KFC recibe."
     },
     {
       "textos": ["SIR - Se ha creado la orden de trabajo", "SIR - Se ha eliminado la orden de trabajo"],
@@ -991,12 +1097,12 @@
     { "textos": ["se concluye en una visita"], "motivo": "Indicador (KPI de primera visita) del reporte a KFC, no un estado. Se revisa cuando se toque el reporte." },
     { "textos": ["Equipo — necesita correctivo", "Un equipo que va a fallar"], "motivo": "Tipo (área) de la novedad (Novedades::TIPOS), no estado. guia.js:344 duplica los tipos: se unifica en la fase de novedades." },
     { "textos": ["aprobada", "rechazada", "retirada"], "motivo": "Estados del documento de Aprendizaje distintos de «por aprobar» (DOCUMENTO_POR_APROBAR). No chocan con la orden." },
-    { "textos": ["aprobado", "rechazado", "ya existía", "decidido"], "motivo": "Estados del equipo propuesto distintos de «por confirmar» (EQUIPO_PROPUESTO); «decidido» es la columna Decisión cuando ya se aprobó, rechazó o marcó como existente. No chocan con la orden." },
+    { "textos": ["aprobado", "rechazado", "ya existía", "ya existente", "Marcado como ya existente", "decidido"], "motivo": "Estados del equipo propuesto distintos de «por confirmar» (EQUIPO_PROPUESTO): APROBADO, RECHAZADO y FUSIONADO («ya existía», «Marcado como ya existente» es el mensaje de equipos.php:51 al fusionarlo); «decidido» es la columna Decisión cuando ya se aprobó, rechazó o marcó como existente. Van en masculino porque acompañan a «equipo». No chocan con la orden." },
     { "textos": ["sin alerta"], "motivo": "Valor SIN_ALERTA del filtro de alerta de alcance (casos.php:580): es la negación del filtro, no un estado de la orden. Las otras dos opciones van a OTRO_TRABAJO_POR_DECIDIR." },
-    { "textos": ["sin kit", "kit solicitado", "kit confirmado", "kit entregado", "kit disponible"], "motivo": "Estado del kit del preventivo, no de la orden ni del ingreso." },
+    { "textos": ["sin kit", "kit solicitado", "kit confirmado", "kit entregado", "kit disponible", "kit listo"], "motivo": "Estado del kit del preventivo (logística del material del ingreso), no de la orden ni del ingreso: no entra en ninguna cifra. «kit listo» es el distintivo de cronograma.js:347 que junta confirmado, entregado y disponible (kitOk), igual que «sin kit» junta SIN_KIT y PENDIENTE." },
     { "textos": ["0–7 días", "8–15", "16–30", "más de 30"], "motivo": "Tramos de antigüedad: cifras, no estados." },
     { "textos": ["En qué estado están"], "motivo": "Título neutro del gráfico de estados; las barras salen del diccionario." },
-    { "textos": ["mensajes de Validacion.php y reglas.js"], "motivo": "Mensajes de validación del formulario; se unifican en un bloque propio en otra tarea." },
-    { "textos": ["no está en el listado del buzón", "no figura entre tus casos"], "motivo": "Mensajes de validación de un aviso tecleado; se reescriben con ORDEN/AVISO_SAP cuando se toque la búsqueda." }
+    { "textos": ["mensajes de Validacion.php y reglas.js"], "motivo": "Mensajes de validación del formulario; se unifican en un bloque propio en otra tarea. En la ola 2 (24-sep-2026) solo cambiaron los 5 que llamaban «orden» al documento del técnico (hoy «OT INDUSTEC»), iguales en Validacion.php, reglas.js y agentes/scripts/t2_5_validacion.py; el fixture compara solo códigos de regla." },
+    { "textos": ["no está en el listado del buzón", "no figura entre tus casos"], "motivo": "Mensajes de validación de un aviso tecleado; se reescriben con ORDEN/AVISO_SAP cuando se toque la búsqueda. En la ola 2, el anexo de envio.php ya dice «esa orden no figura entre las tuyas»." }
   ]
 }

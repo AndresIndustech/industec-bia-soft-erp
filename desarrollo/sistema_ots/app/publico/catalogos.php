@@ -34,6 +34,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Auth.php';
 require_once __DIR__ . '/nucleo/Casos.php';
 require_once __DIR__ . '/nucleo/Catalogo.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';
 $u = Auth::exigir('ots.crear', true);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -77,8 +78,11 @@ $diagCat = Catalogo::diagnosticos();
  * KFC", no "casos pendientes segun SAP". El cierre sigue rigiendose por
  * estatus_general del export.
  */
-/* La forma que espera el formulario, desde una fila del catálogo del buzón. */
-$forma = static fn(array $c): array => [
+/* La forma que espera el formulario, desde una fila del catálogo del buzón.
+   El `estatus` sale del estado de la orden en la gestión, con el diccionario:
+   hasta el 24-sep-2026 era «POR ASIGNAR» fijo, y el jefe de zona lo leía así
+   aunque la orden ya tuviera técnico o estuviera atendida. */
+$forma = static fn(array $c, array $gest = []): array => [
     'aviso'               => $c['aviso'],
     'fecha_notificacion'  => $c['fecha_creacion'] ?? $c['recibido'] ?? null,
     'fecha_estimada'      => $c['fecha_estimada'] ?? null,
@@ -92,7 +96,11 @@ $forma = static fn(array $c): array => [
     'centro_coste_sap'    => $c['centro_coste_sap'] ?? null,
     'equipo_sap'          => null,   // el correo no trae el numero de equipo
     'equipo_denominacion' => $c['activo_fijo'] ?? null,
-    'estatus'             => 'POR ASIGNAR',
+    'estatus'             => Casos::etiquetaEstado($gest[$c['aviso']]['estado'] ?? null),
+    // El estado de la BASE (VOCABULARIO.md §10.2): app.js lo nombra con UI.T, así el
+    // catálogo que el celular guardó sin señal toma el término del diccionario que
+    // tenga cargado. `estatus` (el texto armado aquí) queda para una app vieja en caché.
+    'estatus_clave'       => (string) ($gest[$c['aviso']]['estado'] ?? 'NUEVO'),
     'orden_trabajo'       => $c['orden_trabajo'] ?? null,
 ];
 
@@ -108,32 +116,31 @@ if ($u['rol'] === 'TECNICO') {
     $sinCat = count(array_filter($mios, static fn($c) => !empty($c['sin_catalogo'])));
     $avisos = [
         'datos' => array_map(static function (array $c) use ($forma, $gest): array {
-            $f = $forma($c) + ['sin_catalogo' => !empty($c['sin_catalogo'])];
-            $f['estatus'] = Casos::etiquetaEstado($gest[$c['aviso']]['estado'] ?? null);
-            return $f;
+            return $forma($c, $gest) + ['sin_catalogo' => !empty($c['sin_catalogo'])];
         }, $mios),
         'cobertura' => [
-            'fuente'      => 'tus casos abiertos, en la base',
+            'fuente'      => 'tus órdenes (' . Vocabulario::t('ASIGNADA', 2) . ' y ' . Vocabulario::t('ESPERA_REPUESTO') . '), en la base',
             'generado'    => date('c'),
             'hasta'       => null,
             'advertencia' => $sinCat === 0 ? null : ($sinCat === 1
-                ? 'Uno de ellos no está en el listado del buzón: de ese solo se conoce el número de aviso.'
-                : "$sinCat de ellos no están en el listado del buzón: de esos solo se conoce el número de aviso."),
+                ? 'Una de ellas no está en el listado del buzón: de esa solo se conoce el aviso SAP.'
+                : "$sinCat de ellas no están en el listado del buzón: de esas solo se conoce el aviso SAP."),
         ],
     ];
 } elseif (is_file("$base/casos_sap.json")) {
     $j = json_decode((string) file_get_contents("$base/casos_sap.json"), true);
     // Con sesión no alcanzaba: cualquier técnico recibía los 909 casos de las 3 zonas.
-    $j['datos'] = Casos::enAlcance($j['datos'] ?? [], Casos::gestion());
+    $gestB = Casos::gestion();
+    $j['datos'] = Casos::enAlcance($j['datos'] ?? [], $gestB);
     $avisos = [
-        'datos' => array_map($forma, $j['datos'] ?? []),
+        'datos' => array_map(static fn(array $c): array => $forma($c, $gestB), $j['datos'] ?? []),
         'cobertura' => [
-            'fuente'      => 'buzon de INDUSTEC, en vivo',
+            'fuente'      => 'buzón de INDUSTEC, en vivo',
             'generado'    => $j['generado'] ?? null,
             'hasta'       => null,
-            'advertencia' => 'El correo avisa cuando KFC crea o elimina un caso; '
-                           . 'no avisa cuando lo cierra. Esta lista es lo abierto por KFC, '
-                           . 'no el pendiente según SAP.',
+            'advertencia' => 'El correo avisa cuando KFC crea o elimina una orden; '
+                           . 'no avisa cuando la cierra. Esta lista son las órdenes que KFC '
+                           . 'mandó por correo, no las abiertas en SAP.',
         ],
     ];
 } elseif (is_file("$base/avisos_abiertos.json")) {

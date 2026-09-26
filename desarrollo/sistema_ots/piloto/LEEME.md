@@ -6,14 +6,21 @@ Lo que INDUSTEC necesita para empezar las pruebas del sistema nuevo con la zona 
 |---|---|---|
 | [`ANTES_DE_EMPEZAR.md`](ANTES_DE_EMPEZAR.md) | Andrés | Los diez pasos del día anterior, cada uno con su comprobación |
 | [`CUENTAS.md`](CUENTAS.md) | Andrés y la administración | Dónde se entra, cómo se entregan las claves, reglas de la sesión. **Sin ninguna clave** |
-| [`HOJA_TECNICO.md`](HOJA_TECNICO.md) | Los cinco técnicos de UIO | La app en el celular: bandeja, formulario, repuestos, archivo |
-| [`HOJA_JEFE_ZONA.md`](HOJA_JEFE_ZONA.md) | El jefe de zona de UIO | Repartir, validar repuestos, cronograma, reportes de su zona |
-| [`HOJA_ADMINISTRACION.md`](HOJA_ADMINISTRACION.md) | La administradora y la dirección | Las tres zonas, veredictos, SAP y KFC, reportes exportables, usuarios, bitácora |
+| [`HOJA_TECNICO.md`](HOJA_TECNICO.md) | Los cinco técnicos de UIO | La app en el celular: Mis órdenes, el formulario de la OT INDUSTEC, repuestos, archivo |
+| [`HOJA_JEFE_ZONA.md`](HOJA_JEFE_ZONA.md) | El jefe de zona de UIO | Asignar órdenes, validar solicitudes de repuesto, la tarjeta de su zona, cronograma, reportes |
+| [`HOJA_ADMINISTRACION.md`](HOJA_ADMINISTRACION.md) | La administradora y la dirección | Las tres zonas y la tarjeta «Por zona», resolver órdenes, SAP y KFC, reportes exportables, usuarios, bitácora |
 | [`QUE_PROBAR.md`](QUE_PROBAR.md) | Todos | Guion de cinco días, por rol, con el resultado esperado de cada prueba |
 | [`COMO_REPORTAR_FALLOS.md`](COMO_REPORTAR_FALLOS.md) | Todos | El canal, los datos que hay que mandar y qué no es un fallo |
 | `capturas/` | — | Las pantallas reales del sitio de pruebas que usan las hojas |
 
+## Los términos
+
+Desde el 24 de septiembre de 2026 el sistema usa un **vocabulario único**: los mismos términos para todos los roles, en pantalla, PDF, Excel, PowerPoint y correos. **Orden** es el trabajo que pide KFC (con su aviso SAP) y **OT INDUSTEC** es el documento que emite el técnico, de evaluación o de cierre. Las hojas ya usan esos términos. La fuente es `app/publico/vocabulario.json` y su explicación, [`../VOCABULARIO.md`](../VOCABULARIO.md).
+
 ## De dónde salen las capturas
+
+**Las capturas actuales son del 13 de septiembre de 2026 y muestran rótulos anteriores al vocabulario único** (la barra y las pestañas del técnico, la tarjeta por zona, los estados). No se pueden regenerar sin el sitio de pruebas; mientras tanto, cuando una captura y el texto de una hoja no coinciden, **manda el texto**. Hay que volver a tomarlas antes de entregar el paquete.
+
 
 Se toman contra el sitio de pruebas con las cuentas de prueba y **sin nombres del personal**:
 

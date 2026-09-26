@@ -209,7 +209,7 @@ def main() -> int:
     try:
         wb.save(destino)
     except PermissionError:
-        sys.exit(f"ABORTADO: {destino.name} esta abierto en Excel. Cierralo y repite.")
+        sys.exit(f"ABORTADO: {destino.name} esta en uso en Excel. Cierralo y repite.")
 
     a_decidir = sum(1 for f in filas if f["veredicto"].startswith("UNA SOLA"))
     print(f"Avisos con algun informe enviado dos veces  : {una_visita}"

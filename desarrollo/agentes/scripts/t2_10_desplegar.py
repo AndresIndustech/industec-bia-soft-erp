@@ -104,6 +104,13 @@ ARCHIVOS = [
     # T2.28.2: a quién va cada correo de una orden (Emision::encolar() y
     # Emision::html() ya lo requieren) y la clasificación pura del despachador.
     "nucleo/Destinatarios.php", "nucleo/Despacho.php",
+    # El diccionario único (vocabulario SAP, ola 1, 2026-09-24): lo leen
+    # nucleo/Vocabulario.php y termino() de la estación. Sin él, Vocabulario::t()
+    # lanza y la pantalla no se dibuja (I-7): van siempre juntos con Ui.php y
+    # ui.js. No se sirve por HTTP (.htaccess niega los .json): UI.T de ui.js y
+    # sw.js piden vocabulario_publico.json, la copia recortada sin notas internas
+    # que escribe app/herramientas/generar_vocabulario.php (2026-09-26).
+    "vocabulario.json", "vocabulario_publico.json", "nucleo/Vocabulario.php",
 
     # --- La app del técnico. `cola.js` es lo que evita perder una orden
     #     llenada sin señal: si falta, el botón de enviar no guarda nada. -----

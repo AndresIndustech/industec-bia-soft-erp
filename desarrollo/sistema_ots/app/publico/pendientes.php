@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Pendientes.php';
 require_once __DIR__ . '/nucleo/Ui.php';
-require_once __DIR__ . '/nucleo/Vocabulario.php';   // el rótulo de la zona del filtro ?zona=
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // los rótulos de filtros, tarjetas y estados, y la zona de ?zona=
 
 /**
  * pendientes.php — Los repuestos y equipos que quedaron sin concluir, y su reloj.
@@ -23,9 +23,12 @@ require_once __DIR__ . '/nucleo/Vocabulario.php';   // el rótulo de la zona del
  *      otro proveedor, o da de baja el equipo. Cada decisión deja su camino
  *      corto hasta RESUELTO; «otro proveedor» resuelve en el acto.
  *
- * La palabra «veredicto» se reserva para lo que decide Grupo KFC. Lo del jefe
- * es «validar»; lo de la administración, «registrar». Mezclarlas era lo que
- * hacía que la pantalla vieja hablara de una compra propia que no existe.
+ * Lo del jefe es «validar»; lo de la administración, «registrar»; lo de Grupo
+ * KFC, «decidir». Mezclarlas era lo que hacía que la pantalla vieja hablara de
+ * una compra propia que no existe. Desde el vocabulario único (24-sep-2026)
+ * «veredicto» ya no sale en pantalla —solo queda en nombres de columnas y
+ * acciones, que no cambian— y el registro se llama «solicitud», no
+ * «pendiente»: «pendiente» a secas es el estado del preventivo.
  *
  * ============================================================================
  * EL ORDEN NO ES UNA PREFERENCIA
@@ -197,24 +200,35 @@ $partesDe = static function (array $p): array {
 
 $errFlash = Ui::errorFlash();
 
+/* Los rótulos salen del diccionario único (vocabulario.json): el mismo filtro
+   se lee igual en el panel, en el correo y en el Excel. Los códigos de grupo
+   (?g=vencidos, ?g=abiertos…) no cambian: van en enlaces guardados y en el
+   panel. «Compromisos atrasados» y «Terminadas y canceladas» se arman con
+   palabras del diccionario porque juntan dos conceptos. */
+$rotCompromisos = 'Compromisos ' . Vocabulario::t('ATRASADO', 2);
+$rotCerradas    = Vocabulario::titulo('SOLICITUD_TERMINADA') . ' y '
+                . mb_strtolower(Vocabulario::titulo('SOLICITUD_CANCELADA'), 'UTF-8');
+$mayus = static fn(string $s): string =>
+    mb_strtoupper(mb_substr($s, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($s, 1, null, 'UTF-8');
+
 $FILTROS = [];
 if ($puedeValidar) {
-    $FILTROS['por_validar'] = ['Por validar', $cont['por_validar'], 'ambar'];
+    $FILTROS['por_validar'] = [Vocabulario::titulo('POR_VALIDAR'), $cont['por_validar'], 'ambar'];
 }
 if ($puedeRegistrar) {
-    $FILTROS['por_registrar'] = ['Por registrar en SAP', $cont['por_registrar'], 'ambar'];
+    $FILTROS['por_registrar'] = [Vocabulario::titulo('POR_REGISTRAR_SAP'), $cont['por_registrar'], 'ambar'];
 }
 if (!$esTecnico) {
-    $FILTROS['vencidos']            = ['Fuera de plazo',       $cont['vencidos'],            'roja'];
-    $FILTROS['esperando_kfc']       = ['Esperando a KFC',      $cont['esperando_kfc'],       ''];
-    $FILTROS['prometidos_vencidos'] = ['Compromisos vencidos', $cont['prometidos_vencidos'], 'roja'];
+    $FILTROS['vencidos']            = [Vocabulario::titulo('VENCIDO_48H'),      $cont['vencidos'],            'roja'];
+    $FILTROS['esperando_kfc']       = [Vocabulario::titulo('PENDIENTE_OK_OPS'), $cont['esperando_kfc'],       ''];
+    $FILTROS['prometidos_vencidos'] = [$rotCompromisos,                         $cont['prometidos_vencidos'], 'roja'];
 }
-$FILTROS['abiertos'] = ['Todos los vivos', $cont['abiertos'], ''];
-$FILTROS['cerrados'] = ['Ya resueltos',    null,              ''];
+$FILTROS['abiertos'] = [Vocabulario::titulo('SOLICITUD_EN_TRAMITE'), $cont['abiertos'], ''];
+$FILTROS['cerrados'] = [$rotCerradas,                                null,              ''];
 
 Ui::cabecera($u, 'pendientes.php',
     ['repuestos' => $cont['vencidos'] > 0 ? ['n' => $cont['vencidos'], 'tono' => 'urge'] : null],
-    ['titulo' => 'Repuestos y equipos']);
+    ['titulo' => Vocabulario::titulo('MODULO_REPUESTOS')]);
 
 $csrf = Auth::csrfToken();
 $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlencode($q) : '');
@@ -222,18 +236,20 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
 
 <div class="wrap ancho">
   <div class="titulo entra">
-    <h1>Repuestos y equipos sin concluir</h1>
+    <h1><?= $e(Vocabulario::titulo('MODULO_REPUESTOS')) ?></h1>
     <p class="sub">
       <?php if ($esTecnico): ?>
-        Los equipos que dejaste trabados y en qué va cada solicitud: si el jefe
-        ya la validó, si administración la registró en SAP y qué decidió Grupo
-        KFC. Desde aquí insistes, y todo lo que escribas queda con su fecha.
+        Tus solicitudes de los equipos que no quedaron operativos y en qué va
+        cada una: si el jefe de zona ya la validó, si la administración la
+        registró en SAP y qué decidió Grupo KFC. Desde aquí insistes, y todo lo
+        que escribas queda con su fecha.
       <?php else: ?>
-        El técnico pide el repuesto con su diagnóstico, el <b>jefe de zona lo
-        valida</b>, la <b>administración lo registra en SAP</b> y el caso queda
-        abierto hasta que <b>Grupo KFC</b> envíe la pieza o decida qué se hace con
-        el equipo. Si el equipo quedó <b>deshabilitado</b>, hay <b>48 horas</b>
-        para validarlo: el plazo mide la decisión, no la reparación.
+        El técnico pide el repuesto con su diagnóstico, el <b>jefe de zona
+        valida la solicitud</b>, la <b>administración la registra en SAP</b> y
+        la solicitud sigue en trámite hasta que <b>Grupo KFC</b> envíe la pieza o
+        decida qué se hace con el equipo. Si el equipo quedó <b>deshabilitado</b>,
+        hay <b>48 horas</b> para validarla: el plazo mide la validación, no la
+        reparación.
       <?php endif; ?>
     </p>
   </div>
@@ -244,7 +260,7 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
     <?= Ui::aviso('info',
         '<b>Este módulo todavía no está instalado en la base.</b>'
       . '<p>La migración <span class="mono">007_pendientes_y_captura.sql</span> está escrita '
-      . 'y sin aplicar: crea las tablas y cambia el estado del caso, y eso requiere '
+      . 'y sin aplicar: crea las tablas y cambia el estado de la orden, y eso requiere '
       . 'aprobación. Hasta entonces la pantalla existe pero no tiene qué mostrar, y '
       . 'no va a simular datos.</p>') ?>
   <?php else: ?>
@@ -255,56 +271,58 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
       <div class="tiles tiles-enlace">
         <a class="tile <?= $c48['vencidos'] ? 'alerta' : '' ?>" href="<?= $enlaceG('vencidos') ?>">
           <div class="n" data-n="<?= $c48['vencidos'] ?>">0</div>
-          <div class="t">Fuera de plazo</div>
-          <div class="pie">Parados, sin validar, más de 48 h</div>
+          <div class="t" title="<?= $e(Vocabulario::ayuda('VENCIDO_48H')) ?>"><?= $e(Vocabulario::titulo('VENCIDO_48H')) ?></div>
+          <div class="pie">Equipo deshabilitado, más de 48 h sin validar</div>
         </a>
         <?php if ($puedeValidar): ?>
         <a class="tile <?= $cont['por_validar'] ? 'vence' : '' ?>" href="<?= $enlaceG('por_validar') ?>">
           <div class="n" data-n="<?= $cont['por_validar'] ?>">0</div>
-          <div class="t">Por validar</div>
+          <div class="t" title="<?= $e(Vocabulario::ayuda('POR_VALIDAR')) ?>"><?= $e(Vocabulario::titulo('POR_VALIDAR')) ?></div>
           <div class="pie">Le toca al jefe de zona</div>
         </a>
         <?php endif; ?>
         <?php if ($puedeRegistrar): ?>
         <a class="tile <?= $cont['por_registrar'] ? 'vence' : '' ?>" href="<?= $enlaceG('por_registrar') ?>">
           <div class="n" data-n="<?= $cont['por_registrar'] ?>">0</div>
-          <div class="t">Por registrar en SAP</div>
-          <div class="pie">Ya validados; falta el requerimiento</div>
+          <div class="t" title="<?= $e(Vocabulario::ayuda('POR_REGISTRAR_SAP')) ?>"><?= $e(Vocabulario::titulo('POR_REGISTRAR_SAP')) ?></div>
+          <div class="pie">Ya validadas; falta el requerimiento</div>
         </a>
         <?php endif; ?>
         <a class="tile azul" href="<?= $enlaceG('esperando_kfc') ?>">
           <div class="n" data-n="<?= $cont['esperando_kfc'] ?>">0</div>
-          <div class="t">Esperando a KFC</div>
-          <div class="pie">Registrados en SAP, sin decisión</div>
+          <div class="t" title="<?= $e(Vocabulario::ayuda('PENDIENTE_OK_OPS')) ?>"><?= $e(Vocabulario::titulo('PENDIENTE_OK_OPS')) ?></div>
+          <div class="pie">Registradas en SAP; falta el OK de Operaciones de KFC</div>
         </a>
         <a class="tile <?= $cont['prometidos_vencidos'] ? 'alerta' : '' ?>" href="<?= $enlaceG('prometidos_vencidos') ?>">
           <div class="n" data-n="<?= $cont['prometidos_vencidos'] ?>">0</div>
-          <div class="t">Compromisos vencidos</div>
+          <div class="t"><?= $e($rotCompromisos) ?></div>
           <div class="pie">Pasó la fecha comprometida</div>
         </a>
         <a class="tile atend" href="<?= $enlaceG('cerrados') ?>">
           <div class="n" data-n="<?= $cont['cerrados_semana'] ?>">0</div>
-          <div class="t">Cerrados esta semana</div>
+          <div class="t"><?= $e($rotCerradas) ?></div>
+          <div class="pie">En los últimos 7 días</div>
         </a>
       </div>
     <?php endif; ?>
 
     <?php if ($sinAviso): ?>
-      <?php /* P-07: un equipo trabado reportado en una orden SIN aviso no
-               arranca reloj ni entra a ninguna cola. Aquí se le asigna el
-               aviso y recién ahí se abre el pendiente de verdad. */ ?>
+      <?php /* P-07: una solicitud que llegó en una OT INDUSTEC SIN aviso SAP
+               no arranca reloj ni entra a ninguna cola. Aquí se le pone el
+               aviso y recién ahí se abre la solicitud de verdad. El id
+               «por-regularizar» se queda: es un ancla que enlaza el panel. */ ?>
       <section class="card regularizar" id="por-regularizar">
-        <h2>Por regularizar (<?= count($sinAviso) ?>)</h2>
+        <h2><?= $e(Vocabulario::titulo('SIN_AVISO_SAP')) ?> (<?= count($sinAviso) ?>)</h2>
         <p class="sub" style="margin:0 0 10px">
-          Equipos trabados que llegaron en una orden <b>sin aviso de SAP</b>: no
-          tienen reloj ni cola hasta que alguien les ponga el aviso que les
-          corresponde. Al asignarlo se abre la solicitud como si el técnico la
+          Solicitudes que llegaron en una <b><?= $e(Vocabulario::t('SIN_AVISO_SAP')) ?></b>:
+          no tienen reloj ni cola hasta que alguien les ponga el aviso que les
+          corresponde. Al ponerlo se abre la solicitud como si el técnico la
           hubiera enviado con él.
         </p>
         <div class="tabla-wrap">
           <table class="repartir">
             <thead><tr>
-              <th>Local</th><th>Equipo</th><th>Qué encontró</th><th>Reportó</th><th>Aviso</th>
+              <th>Local</th><th>Equipo</th><th>Qué encontró</th><th>Reportó</th><th><?= $e(Vocabulario::titulo('AVISO_SAP')) ?></th>
             </tr></thead>
             <tbody>
             <?php foreach ($sinAviso as $s): ?>
@@ -324,7 +342,7 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
                   <?= $e($s['reporto']) ?>
                   <span class="desc mono"><?= $e(substr((string) $s['capturada_en'], 0, 16)) ?></span>
                 </td>
-                <td data-th="Aviso">
+                <td data-th="<?= $e(Vocabulario::titulo('AVISO_SAP')) ?>">
                   <?php if ($puedeGestionar): ?>
                     <form method="post" class="asignar">
                       <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
@@ -335,7 +353,7 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
                       <button class="btn primary sm" type="submit">Asignar y abrir</button>
                     </form>
                   <?php else: ?>
-                    <span class="sub">Lo regulariza administración.</span>
+                    <span class="sub">El aviso SAP lo pone la administración.</span>
                   <?php endif; ?>
                 </td>
               </tr>
@@ -370,13 +388,14 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
     <?php if (!$lista): ?>
       <?php
       $vacio = [
-        'vencidos'            => ['Ningún equipo fuera de plazo', 'Todos los que están parados se validaron dentro de las 48 horas. Es exactamente lo que se busca.'],
-        'por_validar'         => ['Nada por validar', 'Todas las solicitudes de tu zona ya tienen la vía fijada por el jefe.'],
-        'por_registrar'       => ['Nada por registrar en SAP', 'Todo lo validado ya tiene su requerimiento registrado.'],
-        'esperando_kfc'       => ['Nada esperando a Grupo KFC', 'Ningún requerimiento registrado está sin respuesta del cliente.'],
-        'prometidos_vencidos' => ['Ningún compromiso vencido', 'Todas las fechas comprometidas siguen vigentes.'],
-        'abiertos'            => ['No hay equipos trabados', 'Todas las intervenciones concluyeron en la visita, que es la premisa del servicio.'],
-        'cerrados'            => ['Todavía no hay pendientes resueltos', 'Aquí aparecen los que ya volvieron a operar o cuya baja quedó ejecutada.'],
+        'vencidos'            => ['Ninguna solicitud ' . Vocabulario::t('VENCIDO_48H'), 'Todas las de equipos deshabilitados se validaron dentro de las 48 horas. Es exactamente lo que se busca.'],
+        'por_validar'         => ['Nada ' . Vocabulario::t('POR_VALIDAR'), 'Todas las solicitudes de tu zona ya tienen la vía validada por el jefe de zona.'],
+        'por_registrar'       => ['Nada por registrar en SAP', 'Todas las solicitudes validadas ya tienen su requerimiento registrado.'],
+        'esperando_kfc'       => ['Ninguna solicitud ' . Vocabulario::t('PENDIENTE_OK_OPS'), 'Ningún requerimiento registrado está sin respuesta del cliente.'],
+        'prometidos_vencidos' => ['Ningún compromiso ' . Vocabulario::t('ATRASADO'), 'Todas las fechas comprometidas siguen vigentes.'],
+        'abiertos'            => ['Ninguna ' . Vocabulario::t('SOLICITUD_EN_TRAMITE'), 'Todas las intervenciones concluyeron en la visita, que es la premisa del servicio.'],
+        'cerrados'            => ['Todavía no hay solicitudes ' . Vocabulario::t('SOLICITUD_TERMINADA', 2) . ' ni canceladas',
+                                  'Aquí aparecen las de equipos que volvieron a operar, las de bajas ejecutadas y las que no procedían.'],
       ][$grupo] ?? ['Sin resultados', 'Prueba con otro filtro o sin texto de búsqueda.'];
       ?>
       <div class="vacio card">
@@ -387,9 +406,9 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
     <?php else: ?>
 
       <p class="sub" style="margin:0 0 10px">
-        <b><?= count($lista) ?></b> <?= count($lista) === 1 ? 'pendiente' : 'pendientes' ?>.
-        Primero lo que está parado sin validar, y dentro de cada grupo lo más
-        viejo arriba: es lo que lleva más tiempo esperando.
+        <b><?= count($lista) ?></b> <?= $e(Vocabulario::t('SOLICITUD', count($lista))) ?>.
+        Primero las de equipos deshabilitados sin validar, y dentro de cada
+        grupo lo más viejo arriba: es lo que lleva más tiempo a la espera.
       </p>
 
       <?php foreach ($lista as $i => $p): ?>
@@ -407,7 +426,11 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
         $nuevaCadena = in_array($estado, ['SOLICITADO', 'VALIDADO_JEFE', 'REGISTRADO_SAP', 'ESPERA_KFC'], true)
                     || $kfc !== 'PENDIENTE' || !empty($p['validado_en']);
         ?>
-        <article class="rep <?= $vencido ? 'vencido' : ($p['deshabilitado'] ? 'deshabilitado' : '') ?><?= $p['abierto'] ? '' : ' atendido' ?>"
+        <?php /* «atendido» es la clase CSS de la tarjeta ya terminada (estilo.css),
+                 no un texto: las clases se juntan en un solo echo dentro de
+                 class="…" para que se lean como nombres de clase, no como prosa. */ ?>
+        <article class="rep <?= implode(' ', array_filter([$vencido ? 'vencido' : ($p['deshabilitado'] ? 'deshabilitado' : ''),
+                                                          $p['abierto'] ? '' : 'atendido'])) ?>"
                  id="p<?= $id ?>" style="--i:<?= $i ?>">
           <div class="cab">
             <div style="min-width:0;flex:1">
@@ -445,12 +468,14 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
             <?php /* Los cuatro pasos de la cadena, con el que va. Se lee de un
                      vistazo dónde está atorado sin descifrar el estado. */ ?>
             <?php
+            // Los pasos hablan de la solicitud (femenino) y el último es el
+            // estado RESUELTO con su nombre del diccionario: «terminada».
             $pasos = [
-              ['Solicitado',      true],
-              ['Validado',        !empty($p['validado_en']) || !empty($p['veredicto_en'])],
+              ['Solicitada',      true],
+              ['Validada',        !empty($p['validado_en']) || !empty($p['veredicto_en'])],
               ['En SAP',          !empty($p['registrado_sap_en'])],
               ['KFC decidió',     $kfc !== 'PENDIENTE'],
-              ['Resuelto',        !$p['abierto'] && $estado === 'RESUELTO'],
+              [$mayus(Vocabulario::t('SOLICITUD_TERMINADA')), !$p['abierto'] && $estado === 'RESUELTO'],
             ];
             $actual = null;
             foreach ($pasos as $k => [$_, $hecho]) { if (!$hecho) { $actual = $k; break; } }
@@ -501,7 +526,8 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
                   <?php if ($kfc === 'PENDIENTE' && $p['abierto'] && ($p['dias_esperando_kfc'] ?? null) !== null): ?>
                     <?php $d = (int) $p['dias_esperando_kfc']; ?>
                     · <span class="<?= $d >= 7 ? 'edad edad-viejo' : 'edad edad-3' ?>">
-                      <?= $d === 0 ? 'registrado hoy' : ($d === 1 ? '1 día esperando a KFC' : $d . ' días esperando a KFC') ?>
+                      <?= $e($mayus(Vocabulario::t('PENDIENTE_OK_OPS'))) ?>
+                      <?= $d === 0 ? 'desde hoy' : ($d === 1 ? 'desde hace 1 día' : 'desde hace ' . $d . ' días') ?>
                     </span>
                   <?php endif; ?>
                 </p>
@@ -522,7 +548,7 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
                 <p>
                   Comprometido para <b><?= $e($p['prometido_para']) ?></b>
                   <?php if (($p['dias_vencido_prom'] ?? null) !== null && $p['abierto']): ?>
-                    · <span class="edad edad-viejo">vencido hace <?= (int) $p['dias_vencido_prom'] ?> día<?= (int) $p['dias_vencido_prom'] === 1 ? '' : 's' ?></span>
+                    · <span class="edad edad-viejo"><?= $e(Vocabulario::t('ATRASADO')) ?> <?= (int) $p['dias_vencido_prom'] ?> día<?= (int) $p['dias_vencido_prom'] === 1 ? '' : 's' ?></span>
                   <?php endif; ?>
                 </p>
               <?php elseif ($p['abierto'] && $kfc !== 'PENDIENTE' && $kfc !== 'OTRO_PROVEEDOR'): ?>
@@ -545,7 +571,10 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
                   <span class="cuando" data-hace="<?= $e($nt['creado_en']) ?>"><?= $e(substr((string) $nt['creado_en'], 0, 16)) ?></span>
                   <div class="txt">
                     <?php if ($nt['urgente']): ?><b>Urgente — </b><?php endif; ?>
-                    <?php if ($nt['tipo'] === 'AVISO_INTERNO'): ?><i>(aviso interno)</i> <?php endif; ?>
+                    <?php /* AVISO_INTERNO es la nota de la oficina: queda en el hilo y NO llega a la
+                             pestaña «Notificaciones» del técnico (Avisos solo convierte
+                             RESPUESTA, VEREDICTO y CAMBIO_ESTADO), así que no se llama así. */ ?>
+                    <?php if ($nt['tipo'] === 'AVISO_INTERNO'): ?><i>(recordatorio de la oficina)</i> <?php endif; ?>
                     <?= $e($nt['texto']) ?>
                   </div>
                 </div>
@@ -555,7 +584,7 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
 
           <?php if ((int) $p['insistencias'] >= 2 && $p['abierto']): ?>
             <p class="sub" style="color:var(--danger);margin-top:8px">
-              El técnico ya insistió <b><?= (int) $p['insistencias'] ?> veces</b> por este pendiente.
+              El técnico ya insistió <b><?= (int) $p['insistencias'] ?> veces</b> por esta solicitud.
             </p>
           <?php endif; ?>
 
@@ -596,7 +625,7 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
 
               <?php if ($puedeInsistir): ?>
                 <button class="btn sm ghost" type="button" onclick="insistir(<?= $id ?>)">
-                  <?= $esTecnico ? 'Insistir' : 'Aviso interno' ?>
+                  <?= $esTecnico ? 'Insistir por esta solicitud' : 'Recordatorio de la oficina' ?>
                 </button>
               <?php endif; ?>
 
@@ -605,7 +634,10 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
               <?php endif; ?>
             </div>
           <?php elseif (!empty($p['nota_cierre'])): ?>
-            <p class="sub" style="margin-top:9px">Cierre: <?= $e($p['nota_cierre']) ?></p>
+            <?php /* La nota con que terminó (o se canceló) la solicitud: se
+                     rotula con su estado, no con «cierre», que sola es la OT
+                     INDUSTEC de cierre. */ ?>
+            <p class="sub" style="margin-top:9px"><?= $e($mayus(Pendientes::etiquetaEstado($estado))) ?>: <?= $e($p['nota_cierre']) ?></p>
           <?php endif; ?>
         </article>
       <?php endforeach; ?>
@@ -629,9 +661,9 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
     <p class="sub" style="margin:0 0 4px" id="v-equipo"></p>
     <p class="sub" style="margin:0 0 14px">
       Confirmas que el diagnóstico y el repuesto que pide el técnico son
-      correctos, y por cuál vía va. Es la decisión que el plazo de 48 horas
-      mide; queda registrada con tu nombre y la hora, y con ella la
-      administración lo registra en SAP.
+      correctos, y por cuál vía va. Es la validación que mide el plazo de 48
+      horas; queda registrada con tu nombre y la hora, y con ella la
+      administración registra la solicitud en SAP.
     </p>
 
     <div class="opciones" style="margin-bottom:14px">
@@ -665,7 +697,8 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
     <h2>Registrar en SAP</h2>
     <p class="sub" style="margin:0 0 12px">
       El número del requerimiento es obligatorio: es lo que después se le
-      reclama a Grupo KFC. Desde aquí el pendiente queda esperando su respuesta.
+      reclama a Grupo KFC. Desde aquí la solicitud queda
+      <?= $e(Vocabulario::t('PENDIENTE_OK_OPS')) ?>: se espera la aprobación de Operaciones de KFC.
     </p>
     <div style="margin-bottom:12px">
       <label for="s-req">Número del requerimiento en SAP</label>
@@ -690,8 +723,9 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
     <h2>¿Qué decidió Grupo KFC?</h2>
     <p class="sub" style="margin:0 0 14px">
       Lo que el cliente respondió al requerimiento. Cada decisión deja su
-      propio camino corto hasta resolver; «otro proveedor» cierra el pendiente
-      en el acto, porque el seguimiento deja de ser de INDUSTEC.
+      propio camino corto hasta que la solicitud quede terminada; «a otro
+      proveedor» la termina en el acto, porque el seguimiento deja de ser de
+      INDUSTEC.
     </p>
     <div class="opciones" style="margin-bottom:14px">
       <?php foreach (['REPUESTO_ENVIADO' => 'Envía el repuesto: falta que llegue al local y se instale.',
@@ -731,7 +765,7 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
     <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
     <input type="hidden" name="accion" value="mover">
     <input type="hidden" name="pendiente_id" id="m-id">
-    <h2>Avanzar el pendiente</h2>
+    <h2>Avanzar la solicitud</h2>
     <p class="sub" style="margin:0 0 12px">
       Solo se ofrecen los pasos del camino que ya se decidió. Retroceder o
       saltar un paso exige la nota.
@@ -845,18 +879,18 @@ function mover(id, camino, actual) {
 }
 
 function responder(id) { texto(id, 'responder', 'Responder en el hilo',
-  'Lo que escribas lo ve el técnico en su bandeja, con tu nombre y la fecha. Sirve para pedir un dato antes de validar.', 'Enviar', false); }
+  'Lo que escribas lo ve el técnico en el hilo de su solicitud, con tu nombre y la fecha. Sirve para pedir un dato antes de validar.', 'Enviar', false); }
 
 function insistir(id) { texto(id, 'insistir',
-  <?= json_encode($esTecnico ? 'Insistir por este pendiente' : 'Aviso interno', JSON_UNESCAPED_UNICODE) ?>,
+  <?= json_encode($esTecnico ? 'Insistir por esta solicitud' : 'Recordatorio de la oficina', JSON_UNESCAPED_UNICODE) ?>,
   <?= json_encode($esTecnico
       ? 'Queda registrado con la fecha. Es lo que permite demostrar después que se avisó a tiempo.'
       : 'Un recordatorio de la oficina. No cuenta como insistencia del técnico ante Grupo KFC.', JSON_UNESCAPED_UNICODE) ?>,
   'Enviar', true); }
 
 function cancelar(id) {
-  texto(id, 'mover', 'Cancelar el pendiente',
-        'No procedía o se resolvió de otra forma. El motivo es obligatorio y lo lee el técnico.', 'Cancelar el pendiente', false);
+  texto(id, 'mover', 'Cancelar la solicitud',
+        'No procedía o se resolvió de otra forma. El motivo es obligatorio y lo lee el técnico.', 'Cancelar la solicitud', false);
   var est = document.getElementById('t-estado');
   est.value = 'CANCELADO'; est.disabled = false;
 }

@@ -46,6 +46,7 @@ from tkinter import font as tkfont
 sys.path.insert(0, str(Path(__file__).parent))
 import inspectorbot_estado as est  # noqa: E402
 from inspectorbot_estado import GRAVE, LEVE, MEDIO, fmt, hace_cuanto  # noqa: E402
+from comun import corto, termino  # noqa: E402
 
 ICONO = est.BASE / "recursos" / "InspectorBot.ico"
 
@@ -376,13 +377,19 @@ class InspectorBot(tk.Tk):
     def _kpis(self, c, W, y, e) -> int:
         b, at, esp = e["buzon"], e["atenciones"], e["espejo"]
         h = 84
+        # Las mismas palabras que la tarjeta «Por zona» de B.IA (vocabulario.json): con OT
+        # de cierre (atendidas), abiertas (con OT y sin la de cierre) y a espera de informe
+        # técnico (ninguna OT todavía). Las claves de atenciones.json no cambian.
+        ot = termino("OT_INDUSTEC")
+        espera = termino("ESPERA_INFORME", 2)
         tarjetas = [
-            ("Casos vigentes", fmt(b.get("casos")),
+            (termino("ORDEN", 2), fmt(b.get("casos")),
              f"de KFC, ventana 90 días", ACENTO),
-            ("Ya atendidos", fmt(at.get("con_atencion")),
-             f"{fmt(at.get('cerradas'))} cerrados · {fmt(at.get('en_curso'))} en curso", OK),
-            ("Sin atender", fmt(at.get("sin_atencion")), "esperan visita", WARN),
-            ("Informes espejados", fmt(esp["total"]),
+            (f"Con {ot}", fmt(at.get("con_atencion")),
+             f"{fmt(at.get('cerradas'))} con {corto('OT_INDUSTEC')} de cierre · "
+             f"{fmt(at.get('en_curso'))} {termino('ABIERTA', 2)}", OK),
+            (espera, fmt(at.get("sin_atencion")), "esperan visita", WARN),
+            (f"{ot} espejadas", fmt(esp["total"]),
              f"el más nuevo {hace_cuanto(esp['pdf_mas_nuevo'])}", TINTA),
         ]
         aw = (W - 2 * M - 3 * 12) / 4

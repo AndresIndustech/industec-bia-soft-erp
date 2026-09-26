@@ -222,7 +222,7 @@ def main():
     print(f"colisiones:             {len(colisiones)}")
     print(f"anotados para revisar:  {len(conflictos)}"
           "   (se archivaron; ver el Excel de t2_23_informes_repetidos.py)")
-    print(f"no resueltos:           {len(no_resueltos)}")
+    print(f"sin identificar:        {len(no_resueltos)}")
 
     if conflictos:
         print("\nARCHIVADOS CON AVISO (misma orden posible bajo otro correlativo, revisar):")

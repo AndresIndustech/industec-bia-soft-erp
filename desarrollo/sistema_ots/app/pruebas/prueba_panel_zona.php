@@ -74,7 +74,7 @@ $orden('90000061', 'UIO', ['estado' => 'RESUELTO']);                            
 // --- LARB ------------------------------------------------------------------
 $orden('90000021', 'LARB', ['estado' => 'NUEVO']);                                             // captura emitida: un equipo Operativo y otro sin estado
 $orden('90000022', 'LARB', ['estado' => 'ASIGNADO', 'asignado_a' => 8, 'asignado_en' => '2026-09-24']); // mismo día: Operativo (correo) y Deshabilitado (app)
-$orden('90000023', 'LARB', ['estado' => 'NUEVO'], '2026-09-10', 'CON_ALERTA');                  // fuera del área, por decidir
+$orden('90000023', 'LARB', ['estado' => 'NUEVO'], '2026-09-10', 'CON_ALERTA');                  // fuera del área, por resolver
 $orden('90000062', 'LARB', ['estado' => 'NO_COMPETE']);                                        // fuera
 // --- CNLJ, OTRA y sin zona -------------------------------------------------
 $orden('90000031', 'CNLJ', ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 9, 'asignado_en' => '2026-09-10']);
@@ -161,7 +161,7 @@ afirmar('estadoEquipo(90000021): un equipo sin estado → sin dato', Casos::esta
 
 echo "\n=== LARB y CUENCA-LOJA ===\n";
 afirmar('LARB: abiertas / a espera / total', [$L['abiertas'], $L['espera_informe'], $L['total']], [2, 1, 3]);
-afirmar('LARB: fuera del área, por decidir (sublínea de la fila 2)', $L['otro_por_decidir'], 1);
+afirmar('LARB: fuera del área, por resolver (sublínea de la fila 2)', $L['otro_por_decidir'], 1);
 afirmar('LARB: deshabilitados / operativos / sin dato', [$L['deshabilitados'], $L['operativos'], $L['sin_dato']], [1, 0, 2]);
 afirmar('CNLJ: ESPERA_REPUESTO con OT → abierta; total 1', [$C['abiertas'], $C['abiertas_espera_repuesto'], $C['total']], [1, 1, 1]);
 

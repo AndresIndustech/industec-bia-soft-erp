@@ -46,12 +46,27 @@ from pptx.util import Emu, Inches, Pt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import t2_27_fuentes as F  # noqa: E402
+from comun import de_estado, termino, titulo  # noqa: E402
 
 AZUL = RGBColor(0x17, 0x36, 0x5D)
 AZUL2 = RGBColor(0x2F, 0x75, 0xB5)
 GRIS = RGBColor(0x59, 0x59, 0x59)
 ROJO = RGBColor(0xC0, 0x00, 0x00)
-NOMBRE_ZONA = {"UIO": "ZONA QUITO", "LARB": "ZONA LARB", "CNLJ": "ZONA CUENCA LOJA"}
+
+
+def nombre_zona(z: str) -> str:
+    """El rótulo de la zona del diccionario único: ZONA UIO, ZONA LARB, ZONA CUENCA-LOJA.
+
+    Antes esta presentación decía «ZONA QUITO» y «ZONA CUENCA LOJA», y la tarjeta de B.IA,
+    el STATUS y los correos decían otra cosa: KFC veía tres nombres para la misma zona."""
+    return titulo(de_estado(z, "zona"))
+
+
+def cap(s: str) -> str:
+    """Primera letra en mayúscula sin tocar el resto («OT INDUSTEC» sigue igual)."""
+    return s[:1].upper() + s[1:]
+
+
 MES_ES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"]
 
 # Familias de equipo para contar como las cuenta la administración («FREIDORAS», «HORNOS»...).
@@ -223,7 +238,10 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
     vacia = prs.slide_layouts[6]
     periodo = " – ".join(etiqueta_mes(m) for m in (meses[0], meses[-1])) if len(meses) > 1 else etiqueta_mes(meses[0])
     periodo += f" {meses[-1][:4]}"
-    fuente = ("Fuente: archivo canónico de órdenes de INDUSTEC (órdenes activas por fecha de atención); "
+    # «OT INDUSTEC» es el documento que emite el técnico; «orden» es el trabajo que pide KFC
+    # (vocabulario.json). Esta presentación cuenta OT emitidas, así que las nombra como tales.
+    ot = termino("OT_INDUSTEC")
+    fuente = (f"Fuente: archivo canónico de {ot} ({ot} activas, por fecha de atención); "
               "la cadena sale del maestro de locales. Generado por el agente.")
     cifras = {}
 
@@ -237,7 +255,7 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
     c.text = "RESUMEN DE GESTIÓN INDUSTEC"
     c.paragraphs[0].font.size, c.paragraphs[0].font.bold, c.paragraphs[0].font.color.rgb = Pt(40), True, RGBColor(255, 255, 255)
     p = c.add_paragraph()
-    p.text = (" · ".join(NOMBRE_ZONA[z] for z in zonas)) + f"  |  {periodo}"
+    p.text = (" · ".join(nombre_zona(z) for z in zonas)) + f"  |  {periodo}"
     p.font.size, p.font.color.rgb = Pt(20), RGBColor(0xDD, 0xE6, 0xF0)
 
     filas = d["filas"]
@@ -245,14 +263,14 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
 
     # Resumen por zona
     s = prs.slides.add_slide(vacia)
-    _titulo(s, "RESUMEN DE OTS POR ZONA", f"Órdenes de trabajo emitidas por mes · {periodo}")
+    _titulo(s, "RESUMEN DE OTS POR ZONA", f"{ot} emitidas por mes · {periodo}")
     tabla = [["ZONA"] + [etiqueta_mes(m) for m in meses] + ["TOTAL"]]
     for z in zonas:
         v = [por_zona_mes[(z, m)] for m in meses]
-        tabla.append([NOMBRE_ZONA[z]] + v + [sum(v)])
+        tabla.append([nombre_zona(z)] + v + [sum(v)])
     tabla.append(["TOTAL"] + [sum(por_zona_mes[(z, m)] for z in zonas) for m in meses] + [sum(por_zona_mes[(z, m)] for z in zonas for m in meses)])
     _tabla(s, tabla, Inches(0.5), Inches(1.5), Inches(5.6), Inches(0.4) * len(tabla))
-    _grafico(s, XL_CHART_TYPE.COLUMN_CLUSTERED, [NOMBRE_ZONA[z] for z in zonas],
+    _grafico(s, XL_CHART_TYPE.COLUMN_CLUSTERED, [nombre_zona(z) for z in zonas],
              {etiqueta_mes(m): [por_zona_mes[(z, m)] for z in zonas] for m in meses},
              Inches(6.4), Inches(1.4), Inches(6.5), Inches(5.3), "OTS POR ZONA")
     _pie(s, fuente)
@@ -265,7 +283,7 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
         fondo.fill.solid()
         fondo.fill.fore_color.rgb = AZUL2
         fondo.line.fill.background()
-        fondo.text_frame.text = NOMBRE_ZONA[z]
+        fondo.text_frame.text = nombre_zona(z)
         fondo.text_frame.paragraphs[0].font.size = Pt(36)
         fondo.text_frame.paragraphs[0].font.bold = True
 
@@ -273,7 +291,7 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
         cad = collections.Counter((r["cadena"] or "SIN CADENA EN EL MAESTRO", r["mes"]) for r in fz)
         cadenas = sorted({k for k, _ in cad}, key=lambda k: -sum(cad[(k, m)] for m in meses))
         s = prs.slides.add_slide(vacia)
-        _titulo(s, "RESUMEN DE OTS POR FRANQUICIA", f"{NOMBRE_ZONA[z]} · {periodo}")
+        _titulo(s, "RESUMEN DE OTS POR FRANQUICIA", f"{nombre_zona(z)} · {periodo}")
         t = [["FRANQUICIA"] + [etiqueta_mes(m) for m in meses] + ["TOTAL"]]
         for k in cadenas:
             v = [cad[(k, m)] for m in meses]
@@ -289,7 +307,7 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
         nombres = {r["local_codigo"]: r["local_nombre"] or "" for r in fz}
         top = sorted({k for k, _ in loc}, key=lambda k: -sum(loc[(k, m)] for m in meses))[:15]
         s = prs.slides.add_slide(vacia)
-        _titulo(s, "RESUMEN DE OTS POR LOCAL", f"{NOMBRE_ZONA[z]} · los 15 locales con más órdenes · {periodo}")
+        _titulo(s, "RESUMEN DE OTS POR LOCAL", f"{nombre_zona(z)} · los 15 locales con más {ot} · {periodo}")
         t = [["LOCAL", "NOMBRE"] + [etiqueta_mes(m) for m in meses] + ["TOTAL"]]
         for k in top:
             v = [loc[(k, m)] for m in meses]
@@ -303,7 +321,7 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
         top_eq = [k for k, _ in eq.most_common(10)]
         eq_mes = collections.Counter((familia(r["equipo"]), r["mes"]) for r in fz if r["modulo"] == "CORRECTIVO")
         s = prs.slides.add_slide(vacia)
-        _titulo(s, "RESUMEN DE OTS POR EQUIPOS", f"{NOMBRE_ZONA[z]} · correctivos, los 10 tipos de equipo con más órdenes · {periodo}")
+        _titulo(s, "RESUMEN DE OTS POR EQUIPOS", f"{nombre_zona(z)} · correctivos, los 10 tipos de equipo con más {ot} · {periodo}")
         t = [["EQUIPO"] + [etiqueta_mes(m) for m in meses] + ["TOTAL"]]
         for k in top_eq:
             v = [eq_mes[(k, m)] for m in meses]
@@ -315,18 +333,19 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
 
         # Indicadores de servicio (nuevo)
         s = prs.slides.add_slide(vacia)
-        _titulo(s, "INDICADORES DE SERVICIO", f"{NOMBRE_ZONA[z]} · de la notificación del aviso en SAP a la primera visita de INDUSTEC")
-        t = [["MES", "CORRECTIVOS", "PREVENTIVOS", "AVISOS CON VISITA", "MEDIANA (DÍAS)", "VISITA ≤ 1 DÍA", "VISITA ≤ 2 DÍAS"]]
+        _titulo(s, "INDICADORES DE SERVICIO", f"{nombre_zona(z)} · del aviso SAP a la primera visita de INDUSTEC")
+        no_disp = "no disponible"   # I-7: un mes sin fuente no es un cero
+        t = [["MES", "CORRECTIVOS", "PREVENTIVOS", f"{termino('ORDEN', 2).upper()} CON VISITA", "MEDIANA (DÍAS)", "VISITA ≤ 1 DÍA", "VISITA ≤ 2 DÍAS"]]
         for m in meses:
             dias = d["tiempos"].get((z, m), [])
             corr = sum(1 for r in fz if r["mes"] == m and r["modulo"] == "CORRECTIVO")
             prev = sum(1 for r in fz if r["mes"] == m and r["modulo"] == "PREVENTIVO")
             t.append([etiqueta_mes(m), corr, prev, len(dias),
-                      f"{statistics.median(dias):g}".replace(".", ",") if dias else "sin dato",
-                      f"{sum(1 for x in dias if x <= 1) / len(dias) * 100:.0f} %" if dias else "sin dato",
-                      f"{sum(1 for x in dias if x <= 2) / len(dias) * 100:.0f} %" if dias else "sin dato"])
+                      f"{statistics.median(dias):g}".replace(".", ",") if dias else no_disp,
+                      f"{sum(1 for x in dias if x <= 1) / len(dias) * 100:.0f} %" if dias else no_disp,
+                      f"{sum(1 for x in dias if x <= 2) / len(dias) * 100:.0f} %" if dias else no_disp])
         _tabla(s, t, Inches(0.5), Inches(1.6), Inches(12.3), Inches(0.45) * len(t), tam=12)
-        _pie(s, f"Tiempos: {d['fuente_t']}. Días calendario. Un mes «sin dato» es un mes fuera de la cobertura de esa fuente, no un cero.")
+        _pie(s, f"Tiempos: {d['fuente_t']}. Días calendario. Un mes «{no_disp}» es un mes fuera de la cobertura de esa fuente, no un cero.")
 
         # Conclusiones y recomendaciones
         tot_cad = collections.Counter(r["cadena"] or "SIN CADENA" for r in fz)
@@ -336,19 +355,19 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
         cambio = ""
         if len(mv) >= 2 and mv[-2]:
             dif = (mv[-1] - mv[-2]) / mv[-2] * 100
-            cambio = (f"Las órdenes de {etiqueta_mes(meses[-1]).lower()} {'subieron' if dif > 0 else 'bajaron'} "
+            cambio = (f"Las {ot} de {etiqueta_mes(meses[-1]).lower()} {'subieron' if dif > 0 else 'bajaron'} "
                       f"{abs(dif):.0f} % frente a {etiqueta_mes(meses[-2]).lower()} ({mv[-2]} → {mv[-1]}).")
         s = prs.slides.add_slide(vacia)
-        _titulo(s, "CONCLUSIONES", NOMBRE_ZONA[z])
+        _titulo(s, "CONCLUSIONES", nombre_zona(z))
         lineas = [(f"Las franquicias con mayor cantidad de incidencias en la zona son {', '.join(top3[:-1])} y {top3[-1]}." if len(top3) > 1
-                   else f"La franquicia con mayor cantidad de incidencias en la zona es {top3[0]}." if top3 else "Sin órdenes en el periodo.", False)]
+                   else f"La franquicia con mayor cantidad de incidencias en la zona es {top3[0]}." if top3 else f"Sin {ot} en el periodo.", False)]
         if cambio:
             lineas.append((cambio, False))
         # La plantilla de 2025 decía que el sistema «se alinea con los tiempos esperados por KFC».
         # El generador no afirma eso: pone el dato medido y que lo juzgue quien lee.
         todos = [x for m in meses for x in d["tiempos"].get((z, m), [])]
         if todos:
-            lineas.append((f"De {len(todos)} avisos correctivos con visita en el periodo, el "
+            lineas.append((f"De {len(todos)} {termino('ORDEN', len(todos))} correctivas con visita en el periodo, el "
                            f"{sum(1 for x in todos if x <= 1) / len(todos) * 100:.0f} % recibió la primera visita el mismo día "
                            f"o al día siguiente de la notificación (mediana: {statistics.median(todos):g} días).", False))
         if eq3:
@@ -357,7 +376,7 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
                 lineas.append((f"[COMPLETAR ANTES DE PRESENTAR — jefe técnico de zona] Causa técnica principal de las incidencias en {e}.", True))
         _vinetas(s, lineas)
         s = prs.slides.add_slide(vacia)
-        _titulo(s, "RECOMENDACIONES", NOMBRE_ZONA[z])
+        _titulo(s, "RECOMENDACIONES", nombre_zona(z))
         _vinetas(s, [
             (f"Para las franquicias con mayor número de incidencias ({', '.join(top3)}): mantener un análisis mensual de recurrencia "
              "de fallas por tienda para priorizar recursos y acciones correctivas específicas en cada una.", False),
@@ -371,7 +390,7 @@ def construir(meses: list[str], zonas: list[str], d: dict, destino: Path) -> dic
         # Lista de locales
         loc_z = [l for l in d["locales"] if l["zona"] == z]
         s = prs.slides.add_slide(vacia)
-        _titulo(s, f"LISTA DE LOCALES {NOMBRE_ZONA[z].replace('ZONA ', '')}", f"TOTAL LOCALES: {len(loc_z)} · maestro de locales")
+        _titulo(s, f"LISTA DE LOCALES {nombre_zona(z).replace('ZONA ', '')}", f"TOTAL LOCALES: {len(loc_z)} · maestro de locales")
         porc = collections.defaultdict(list)
         for l in loc_z:
             porc[l["cadena"]].append(f"{l['local_codigo']}  {(l['nombre'] or '')[:30]}")
@@ -406,10 +425,10 @@ def main():
     meses = meses_entre(a.desde, a.hasta)
     zonas = [a.zona] if a.zona else ["UIO", "LARB", "CNLJ"]
     d = datos(meses, zonas, Path(a.sap) if a.sap else None)
-    nombre = f"RESUMEN GESTION INDUSTEC {'GENERAL' if not a.zona else NOMBRE_ZONA[a.zona]} {meses[0]} a {meses[-1]} (generado agente).pptx"
+    nombre = f"RESUMEN GESTION INDUSTEC {'GENERAL' if not a.zona else nombre_zona(a.zona)} {meses[0]} a {meses[-1]} (generado agente).pptx"
     destino = F.SALIDAS / "PRESENTACIONES" / nombre
     cifras = construir(meses, zonas, d, destino)
-    print(f"Presentación: {destino}\n  {cifras['diapositivas']} diapositivas · órdenes por zona y mes: {cifras['por_zona']}")
+    print(f"Presentación: {destino}\n  {cifras['diapositivas']} diapositivas · OT INDUSTEC por zona y mes: {cifras['por_zona']}")
     for z in zonas:
         print(f"  {z}: {cifras[z]}")
 

@@ -231,9 +231,9 @@ Ui::cabecera($u, 'automatizacion.php', ['correos' => $correosPendientes], ['titu
     </section>
   <?php endforeach; ?>
 
-  <h2 id="correos">Correos de las órdenes</h2>
+  <h2 id="correos">Correos de las OT INDUSTEC</h2>
   <?= Ui::aviso($correosPendientes > 0 ? 'ambar' : 'neutro',
-      '<b>Quién recibe cada orden emitida</b> -el buzón del jefe de zona, las copias internas y las del cliente, '
+      '<b>Quién recibe cada OT INDUSTEC emitida</b> -el buzón del jefe de zona, las copias internas y las del cliente, '
       . 'el jefe de operaciones de cada local- se configura en <a href="correos.php"><b>Correos</b></a>, con vista '
       . 'previa de a quién llega.'
       . ($correosPendientes > 0

@@ -74,6 +74,11 @@ foreach (Casos::atenciones() as $a => $x) {
 }
 $ref += ['concluidos' => $conc, 'una' => $una, 'en_curso' => $curso];
 $r = Reportes::calcular(null, null);
+// El rótulo del estado de vista REGULARIZADO, del diccionario: la prueba no
+// escribe la palabra (era «regularizado»; desde el 24-sep-2026, «regularizada»).
+$ref['ETQ_REG'] = Ui::etiquetaEstado('REGULARIZADO');
+$ref['ETQ_CSA'] = Ui::etiquetaEstado('CERRADO_SIN_ATENCION');   // antes «sin atender»
+$ref['CASOS_ABIERTOS'] = count($r['casos_abiertos']);
 echo json_encode(['ref' => $ref, 'por_estado' => $r['por_estado'], 'estados' => $r['estados'], 'salud' => $r['salud'],
                   'rend' => array_map(fn($t) => [$t['nombre'], $t['cerrados'], $t['una_visita'], $t['pct_una_visita']], $r['rendimiento'])],
                  JSON_UNESCAPED_UNICODE);
@@ -107,14 +112,20 @@ print("salud:", json.dumps(s, ensure_ascii=False))
 ok("reportes: regularizados aparte, con su cifra", pe.get("REGULARIZADO", 0) == ref["REG"], pe.get("REGULARIZADO", 0))
 ok("reportes: «sin atender» = solo los sin regularizar", pe.get("CERRADO_SIN_ATENCION", 0) == ref["CSA_SIN"], pe.get("CERRADO_SIN_ATENCION", 0))
 ok("reportes: la suma de estados = casos del periodo", sum(pe.values()) == ref["N"], f"{sum(pe.values())} / {ref['N']}")
-col = next((x["c"] for x in d["estados"] if x["e"] == "regularizado"), None)
-ok("reportes: el color de «regularizado» no es el rojo", col is not None and col != "#e34948", col)
+col = next((x["c"] for x in d["estados"] if x["e"] == ref["ETQ_REG"]), None)
+ok(f"reportes: el color de «{ref['ETQ_REG']}» no es el rojo", col is not None and col != "#e34948", col)
 ok("reportes: concluidos = casos con orden Cerrada", s["concluidos"] == ref["concluidos"], s["concluidos"])
 ok("reportes: en una visita = mismo día", s["concluye_una"] == ref["una"], s["concluye_una"])
 ok("reportes: con la orden abierta, aparte", s["en_curso"] == ref["en_curso"], s["en_curso"])
 esperado = round(ref["una"] * 100 / ref["concluidos"]) if ref["concluidos"] else None
 ok("reportes: % en una visita = referencia", s["pct_concluye"] == esperado, s["pct_concluye"])
-ok("reportes: abiertos = SQL", s["abiertos"] == ref["ABIERTOS"], s["abiertos"])
+# Desde el 24-sep-2026 el reporte cuenta el TOTAL DE ÓRDENES ABIERTAS de la tarjeta
+# (sin ATENDIDO, una vez por cadena), no «siguen abiertos»: la misma referencia
+# independiente que el cuadro del panel.
+ok("reportes: TOTAL DE ÓRDENES ABIERTAS = SQL (sin ATENDIDO, una por cadena)", s["abiertos"] == ref["TOTAL_ABIERTAS"], s["abiertos"])
+ok("reportes: la hoja del total tiene tantas filas como el total", ref["CASOS_ABIERTOS"] == ref["TOTAL_ABIERTAS"], [ref["CASOS_ABIERTOS"], ref["TOTAL_ABIERTAS"]])
+ok("reportes: ABIERTAS + A ESPERA = TOTAL (o no disponible)",
+   s.get("abiertas") is None or s["abiertas"] + s["espera_informe"] == s["abiertos"], [s.get("abiertas"), s.get("espera_informe"), s["abiertos"]])
 ok("rendimiento: nadie con % sin casos cerrados", not [t for t in d["rend"] if t[3] is not None and t[1] == 0], "")
 
 h = pagina("panel.php", "[]")
@@ -144,9 +155,13 @@ ok("panel: Σ tarjetas (con OTRA) + sin zona = cuadro TOTAL",
    [sum(v or 0 for v in tot_zona.values()), sin_zona, cuadro])
 m = re.search(r"data-titulo=\"En qué estado están\".*?data-datos='([^']*)'", h, re.S)
 barras = {b["e"]: b for b in json.loads(html.unescape(m.group(1)))} if m else {}
-reg = barras.get("regularizado")
-ok("panel: barra «regularizado» con la cifra y en gris", bool(reg) and reg["v"] == ref["REG"] and reg["c"] != "#e34948", reg)
-ok("panel: sin barra roja «sin atender» cuando no falta regularizar", ref["CSA_SIN"] > 0 or "sin atender" not in barras, barras.get("sin atender", "no está"))
+# Las barras se rotulan con Ui::etiquetaEstado() desde el diccionario (24-sep-2026):
+# la prueba busca el rótulo vigente por su clave y no escribe la palabra. Con el
+# literal viejo («regularizado», «sin atender») la primera fallaba siempre y la
+# segunda pasaba siempre, sin medir nada.
+reg = barras.get(ref["ETQ_REG"])
+ok(f"panel: barra «{ref['ETQ_REG']}» con la cifra y en gris", bool(reg) and reg["v"] == ref["REG"] and reg["c"] != "#e34948", reg)
+ok(f"panel: sin barra roja «{ref['ETQ_CSA']}» cuando no falta regularizar", ref["CSA_SIN"] > 0 or ref["ETQ_CSA"] not in barras, barras.get(ref["ETQ_CSA"], "no está"))
 # La tarea (no el pie de la tarjeta, que siempre dice su cifra, aunque sea 0).
 tarea_sr = re.search(r'<span class="num"[^>]*>\d+</span>\s*cerradas? sin atención, sin regularizar ante KFC', h)
 ok("panel: la tarea «sin regularizar» aparece solo si hay", (ref["CSA_SIN"] > 0) == bool(tarea_sr))

@@ -174,10 +174,10 @@ def main():
                     codigo_canonico = codigo_bloque
 
             if origen_match and origen_match != "EXACTO":
-                print(f"NIVEL 2: {codigo} ({zona}) -> canonico {codigo_canonico} resuelto por {origen_match} -> {cadena_cruda!r}")
+                print(f"NIVEL 2: {codigo} ({zona}) -> canonico {codigo_canonico} identificado por {origen_match} -> {cadena_cruda!r}")
 
             if cadena_cruda is None:
-                print(f"CUARENTENA: {codigo} ({zona}) sin bloque de cadena asignado")
+                print(f"CUARENTENA: {codigo} ({zona}) sin bloque de cadena reconocido")
                 cadena = "SIN_CLASIFICAR"
             else:
                 cadena = CADENA_CANONICA.get(cadena_cruda.strip())

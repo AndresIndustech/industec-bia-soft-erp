@@ -201,7 +201,7 @@ def main():
 
     cur.close()
 
-    print(f"Hallazgos brutos (antes de excluir los ya resueltos por la administracion): {len(hallazgos)}")
+    print(f"Hallazgos brutos (antes de excluir los que la administracion ya descarto o corrigio): {len(hallazgos)}")
 
     # 9. Documento archivado que no llego a la base (completitud).
     # Un PDF que esta en el arbol canonico pero sin fila en 'ots' es invisible para
@@ -229,8 +229,8 @@ def main():
     # Filtrar los que la administracion ya marco DESCARTADA/CORREGIDA (I-4)
     nuevos = [h for h in hallazgos if (h[0], h[3]) not in previos]
     ya_resueltos = len(hallazgos) - len(nuevos)
-    print(f"Excluidos por veredicto previo de la administracion: {ya_resueltos}")
-    print(f"Hallazgos nuevos/abiertos a reportar: {len(nuevos)}")
+    print(f"Excluidos porque la administracion ya los descarto o corrigio: {ya_resueltos}")
+    print(f"Hallazgos nuevos o sin revisar a reportar: {len(nuevos)}")
 
     cur = cnx.cursor()
     for id_industec, zona, tecnico, regla, evidencia in nuevos:

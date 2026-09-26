@@ -144,7 +144,7 @@ def main():
     filas = list(csv.DictReader(RESOLUCION.read_text(encoding="utf-8").splitlines()))
     resueltos = [f for f in filas if f["local_resuelto"]]
     pendientes = [f for f in filas if not f["local_resuelto"]]
-    print(f"Casos resueltos a promover: {len(resueltos)} | sin resolver: {len(pendientes)}")
+    print(f"Con local identificado, a promover: {len(resueltos)} | sin identificar: {len(pendientes)}")
 
     cnx = conectar()
     cur = cnx.cursor(dictionary=True)

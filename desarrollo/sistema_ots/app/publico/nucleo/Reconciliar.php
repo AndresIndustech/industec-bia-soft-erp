@@ -58,7 +58,7 @@ final class Reconciliar
                                    estado_antes, estado_despues, exito, detalle, datos, ip)
              VALUES (NULL, 'sistema', ?, 'caso', ?, ?, ?, 1, ?, ?, 'estacion')",
             [$accion, $aviso, $antes, $despues,
-             'automatico',
+             'automático',
              json_encode($datos, JSON_UNESCAPED_UNICODE)]
         );
     }
@@ -154,7 +154,7 @@ final class Reconciliar
                 self::anotar($cerrada ? 'ATENDIDO_AUTO' : 'ASIGNADO_AUTO', (string) $aviso,
                              $estadoAntes, $nuevo,
                              ['ot' => $ot, 'tecnicos' => $a['usuarios'] ?? [],
-                              'fuente' => 'informe de OT del buzon']);
+                              'fuente' => 'OT INDUSTEC del buzón']);
             }
             if ($cerrada) { $atendidos++; }
         }
@@ -216,7 +216,7 @@ final class Reconciliar
             );
             self::anotar('CERRADO_SIN_ATENCION', $c['aviso'], 'NUEVO', 'CERRADO_SIN_ATENCION',
                          ['creado' => $c['creado'], 'local' => $c['local'],
-                          'dias' => $dias, 'motivo' => 'sin informe de atencion']);
+                          'dias' => $dias, 'motivo' => 'sin ninguna OT INDUSTEC']);
         }
         return ['candidatos' => count($candidatos), 'cerrados' => count($candidatos),
                 'corte' => $corte];

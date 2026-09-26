@@ -38,6 +38,11 @@ declare(strict_types=1);
  *
  * El 24-sep-2026, al crearse, DEBE dar hallazgos: las pantallas se migran en
  * la ola 2. Cuando llegue a cero, se quita --informe de donde se llame.
+ * Llegó a cero al cerrar la ola 2 (integración, 26-sep-2026, vocabulario .5):
+ * desde entonces se corre SIN --informe y un hallazgo nuevo es una regresión.
+ * Lo que quedaba eran códigos (permisos, alias SQL, clases CSS, códigos de
+ * grupo o de estado que se comparan), declarados en `lista_negra_excepciones`
+ * con su `maximo` (ver más abajo).
  */
 
 require_once __DIR__ . '/../publico/nucleo/Vocabulario.php';
@@ -386,10 +391,23 @@ foreach ($textos as $archivo => $filas) {
     }
 }
 
-// Excepciones que el diccionario declare a mano: {"archivo": …, "texto": …}.
-$hallazgos = array_values(array_filter($hallazgos, function ($h) use ($excepciones) {
+// Excepciones que el diccionario declare a mano: {"archivo", "texto", "maximo", "motivo"}.
+// Van por archivo + palabra, no por línea (las líneas se mueven con cada
+// cambio). Para que una excepción no tape un texto visible que alguien agregue
+// después en el mismo archivo, `maximo` fija cuántas apariciones de código
+// cubre: si aparecen más, se informan TODAS las de ese par y se dice por qué,
+// y quien la agregó decide si es código (sube el máximo) o texto (lo migra).
+$excedidas = [];
+$porPar = [];
+foreach ($hallazgos as $h) { $porPar[$h[0] . "\0" . $h[2]] = ($porPar[$h[0] . "\0" . $h[2]] ?? 0) + 1; }
+$hallazgos = array_values(array_filter($hallazgos, function ($h) use ($excepciones, $porPar, &$excedidas) {
     foreach ($excepciones as $e) {
-        if (($e['archivo'] ?? null) === $h[0] && ($e['texto'] ?? null) === $h[2]) { return false; }
+        if (($e['archivo'] ?? null) !== $h[0] || ($e['texto'] ?? null) !== $h[2]) { continue; }
+        $max = $e['maximo'] ?? null;
+        $hay = $porPar[$h[0] . "\0" . $h[2]];
+        if ($max === null || $hay <= (int) $max) { return false; }
+        $excedidas["{$h[0]} «{$h[2]}»"] = "$hay apariciones y la excepción cubre $max";
+        return true;
     }
     return true;
 }));
@@ -403,6 +421,7 @@ arsort($porArchivo);
 echo "\n=== Conteo por archivo ===\n";
 foreach ($porArchivo as $a => $n) { printf("%6d  %s\n", $n, $a); }
 foreach ($errPy as $e) { echo "  NO SE PUDO LEER: $e\n"; }
+foreach ($excedidas as $par => $por) { echo "  EXCEPCIÓN EXCEDIDA: $par — $por\n"; }
 
 printf("\n%d archivos revisados (%d de publico/, %d .py) · vocabulario %s · %d términos en la lista negra\n",
        count($textos), count($archivos), count($pys) - count($errPy), Vocabulario::version(), count($negra));

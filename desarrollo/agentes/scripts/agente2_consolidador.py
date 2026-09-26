@@ -148,8 +148,8 @@ def main():
     ots_rows = cur.fetchall()
     cur.close()
     cnx.close()
-    print(f"Filtro: notificado/atendido en {mes_ini} a {mes_fin}, o backlog sin cierre. "
-          f"Avisos: {len(avisos)}  Ordenes: {len(ots_rows)}")
+    print(f"Filtro: avisos SAP notificados y OT INDUSTEC de {mes_ini} a {mes_fin}, mas las OT de "
+          f"ordenes abiertas o en tratamiento en SAP. Avisos SAP: {len(avisos)}  OT INDUSTEC: {len(ots_rows)}")
 
     for o in ots_rows:
         o["_equipos"] = equipos_por_ot.get(o["id_industec"], [])

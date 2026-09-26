@@ -131,9 +131,11 @@ def validar(orden, cat, contexto="CAPTURA"):
 
     # --- LOCAL. La regla que sola elimina las 158 grafias. -----------------
     local = orden.get("local")
+    # Vocabulario unico (24-sep-2026): lo que se valida es la «OT INDUSTEC»;
+    # «orden» es el trabajo de KFC. Los mismos textos que Validacion.php y reglas.js.
     if not local:
         h.append(Hallazgo("local", "LOCAL_REQUERIDO", BLOQUEA,
-                          "sin local no se puede archivar, cruzar ni facturar la orden"))
+                          "sin local no se puede archivar, cruzar ni facturar la OT INDUSTEC"))
     elif local not in cat["locales"]:
         h.append(Hallazgo("local", "LOCAL_FUERA_DE_CATALOGO", BLOQUEA,
                           f"'{local}' no esta en el maestro de {len(cat['locales'])} locales"))
@@ -154,7 +156,7 @@ def validar(orden, cat, contexto="CAPTURA"):
             # el aviso no existia todavia (regla del cliente, 2026-09-04). Pero
             # tiene que ser una decision declarada, no un campo que quedo vacio.
             h.append(Hallazgo("aviso", "AVISO_VACIO_SIN_DECLARAR", BLOQUEA,
-                              "marca 'esta orden nace sin aviso' o escribe el aviso"))
+                              "marca 'Sin aviso SAP' o escribe el aviso"))
     elif not re.fullmatch(r"\d{8}", str(aviso)):
         h.append(Hallazgo("aviso", "AVISO_MAL_FORMADO", BLOQUEA,
                           f"'{aviso}' no son 8 digitos"))
@@ -181,7 +183,7 @@ def validar(orden, cat, contexto="CAPTURA"):
     equipos = orden.get("equipos") or []
     if not equipos:
         h.append(Hallazgo("equipos", "SIN_EQUIPO", BLOQUEA,
-                          "toda orden interviene al menos un equipo"))
+                          "toda OT INDUSTEC interviene al menos un equipo"))
     catalogo_local = {e["tipo"] for e in cat["equipos"].get(local or "", [])}
     activos_local = {e["equipo_sap"] for e in cat["equipos"].get(local or "", [])}
     for i, eq in enumerate(equipos, start=1):
@@ -273,10 +275,10 @@ def validar(orden, cat, contexto="CAPTURA"):
     # --- FIRMA Y EVIDENCIA. ----------------------------------------------
     if not orden.get("firma_presente"):
         h.append(Hallazgo("firma", "SIN_FIRMA", BLOQUEA,
-                          "la orden la firma el administrador del local"))
+                          "la OT INDUSTEC la firma el administrador del local"))
     if not orden.get("fotos_cantidad"):
         h.append(Hallazgo("fotos", "SIN_FOTOS", ADVIERTE,
-                          "sin fotos la orden no tiene evidencia de lo hecho"))
+                          "sin fotos la OT INDUSTEC no tiene evidencia de lo hecho"))
 
     # --- TECNICO. --------------------------------------------------------
     tec = (orden.get("tecnico") or "").strip()

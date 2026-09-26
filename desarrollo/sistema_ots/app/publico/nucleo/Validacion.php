@@ -176,8 +176,10 @@ final class Validacion
         // --- LOCAL. La regla que sola elimina las 158 grafias. ---------------
         $local = $o['local'] ?? null;
         if ($local === null || $local === '') {
+            // Vocabulario único (24-sep-2026): lo que se valida es la «OT
+            // INDUSTEC»; «orden» es el trabajo de KFC. Los mismos textos que reglas.js.
             $add('local', 'LOCAL_REQUERIDO',
-                 'sin local no se puede archivar, cruzar ni facturar la orden');
+                 'sin local no se puede archivar, cruzar ni facturar la OT INDUSTEC');
             $local = null;
         } elseif (!isset($this->cat['locales'][$local])) {
             $add('local', 'LOCAL_FUERA_DE_CATALOGO',
@@ -200,7 +202,7 @@ final class Validacion
                 // 2026-09-04). Pero tiene que ser una decision declarada, no un
                 // campo que quedo vacio.
                 $add('aviso', 'AVISO_VACIO_SIN_DECLARAR',
-                     "marca 'esta orden nace sin aviso' o escribe el aviso");
+                     "marca 'Sin aviso SAP' o escribe el aviso");
             }
         } elseif (!preg_match('/^\d{8}$/', (string) $aviso)) {
             $add('aviso', 'AVISO_MAL_FORMADO', "'$aviso' no son 8 digitos");
@@ -227,7 +229,7 @@ final class Validacion
         // --- EQUIPOS. Bloque repetible, minimo 1, en los dos tipos. ----------
         $equipos = $o['equipos'] ?? [];
         if (!$equipos) {
-            $add('equipos', 'SIN_EQUIPO', 'toda orden interviene al menos un equipo');
+            $add('equipos', 'SIN_EQUIPO', 'toda OT INDUSTEC interviene al menos un equipo');
         }
         $delLocal   = $local !== null ? ($this->cat['equipos'][$local] ?? []) : [];
         $activos    = [];
@@ -327,10 +329,10 @@ final class Validacion
 
         // --- FIRMA Y EVIDENCIA. ----------------------------------------------
         if (empty($o['firma_presente'])) {
-            $add('firma', 'SIN_FIRMA', 'la orden la firma el administrador del local');
+            $add('firma', 'SIN_FIRMA', 'la OT INDUSTEC la firma el administrador del local');
         }
         if (empty($o['fotos_cantidad'])) {
-            $add('fotos', 'SIN_FOTOS', 'sin fotos la orden no tiene evidencia de lo hecho');
+            $add('fotos', 'SIN_FOTOS', 'sin fotos la OT INDUSTEC no tiene evidencia de lo hecho');
         }
 
         // --- TECNICOS. --------------------------------------------------------

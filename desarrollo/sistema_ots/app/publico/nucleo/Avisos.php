@@ -74,7 +74,7 @@ final class Avisos
         foreach (Db::todos("SELECT aviso, asignado_en FROM casos_gestion
                              WHERE asignado_a = ? AND tecnico_auto = 0 AND asignado_en > ?",
                            [$usuarioId, $desde]) as $r) {
-            $ev[] = ['tipo' => 'ASIGNADO', 'titulo' => 'Te asignaron un caso', 'aviso' => (string) $r['aviso'],
+            $ev[] = ['tipo' => 'ASIGNADO', 'titulo' => 'Te asignaron una orden', 'aviso' => (string) $r['aviso'],
                      'texto' => '', 'cuando' => (string) $r['asignado_en']];
         }
 
@@ -94,7 +94,7 @@ final class Avisos
                                        AND a.accion = 'ASIGNAR' AND a.exito = 1 AND a.id < e.id
                                      ORDER BY a.id DESC LIMIT 1) = ?",
                            [$desde, $usuarioId, $usuarioId]) as $r) {
-            $ev[] = ['tipo' => 'QUITADO', 'titulo' => 'Te quitaron un caso', 'aviso' => (string) $r['aviso'],
+            $ev[] = ['tipo' => 'QUITADO', 'titulo' => 'Te quitaron una orden', 'aviso' => (string) $r['aviso'],
                      'texto' => $r['accion'] === 'DERIVAR' ? 'Se derivó a otra zona.' : 'Se le asignó a otra persona.',
                      'cuando' => (string) $r['cuando']];
         }
@@ -103,9 +103,13 @@ final class Avisos
             // Le respondieron o decidieron sobre un equipo suyo: uno que dejó
             // trabado él, o el de un caso que tiene asignado. Lo que escribe él
             // mismo no se le avisa.
+            // «equipo trabado» y «decidieron» eran nombres viejos: lo que avanza
+            // es la SOLICITUD del equipo deshabilitado (diccionario, 24-sep-2026).
+            // VEREDICTO es el tipo de nota de antes de la 009; se nombra sin
+            // poner el verbo de un actor (el jefe valida, KFC decide).
             $TIT = ['RESPUESTA'     => 'Te respondieron',
-                    'VEREDICTO'     => 'Decidieron qué se hace con un equipo',
-                    'CAMBIO_ESTADO' => 'Avanzó un equipo trabado'];
+                    'VEREDICTO'     => 'Hubo una decisión sobre una ' . Vocabulario::t('SOLICITUD'),
+                    'CAMBIO_ESTADO' => 'Avanzó una ' . Vocabulario::t('SOLICITUD')];
             foreach (Db::todos("SELECT n.tipo, n.texto, n.creado_en, p.aviso, u.nombre,
                                        COALESCE(NULLIF(p.equipo_desc, ''), p.activo_fijo) AS equipo
                                   FROM pendiente_notas n
@@ -147,7 +151,7 @@ final class Avisos
                   WHERE s.tecnico_id = ? AND s.pedido_en > ?",
                 [$usuarioId, $desde]
             ) as $r) {
-                $ev[] = ['tipo' => 'SEGUIMIENTO', 'titulo' => 'Te pidieron seguimiento de un caso',
+                $ev[] = ['tipo' => 'SEGUIMIENTO', 'titulo' => 'Te pidieron seguimiento de una orden',
                          'aviso' => (string) $r['aviso'],
                          'texto' => $r['nombre'] . ': ' . mb_substr((string) $r['texto'], 0, 200),
                          'cuando' => (string) $r['pedido_en']];

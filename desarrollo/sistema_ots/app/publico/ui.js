@@ -157,24 +157,32 @@
      POR QUE HAY UN RESPALDO EMBEBIDO: UI.T tiene que contestar ya, al pintar,
      y el celular abre la app sin señal. El respaldo es el JSON recortado a lo
      que la pantalla usa; lo escribe app/herramientas/generar_vocabulario.php y
-     prueba_vocabulario.php falla si se desvía. Cuando llega vocabulario.json
-     (sw.js lo deja precargado) reemplaza al respaldo tal cual: tienen la misma
-     forma.
+     prueba_vocabulario.php falla si se desvía. Cuando llega
+     vocabulario_publico.json (la misma forma, escrita por el mismo generador;
+     sw.js la deja precargada) reemplaza al respaldo tal cual. El
+     vocabulario.json completo no se pide: trae notas internas y .htaccess no
+     lo sirve.
 
      Una clave que no existe LANZA un error con la clave y la versión (I-7):
      devolver la clave cruda es como aparecía ASIGNADO en mayúsculas delante
      del cliente. */
   // <vocabulario:RESPALDO> Generado desde vocabulario.json por app/herramientas/generar_vocabulario.php. No se edita a mano.
   var RESPALDO = {
-    "version": "2026-09-24.3",
+    "version": "2026-09-24.6",
     "conceptos": {
       "ORDEN": {"termino":"orden","plural":"órdenes","titulo":"Órdenes","ayuda":"El trabajo que pide Grupo KFC, identificado por su aviso SAP; es lo que se cuenta en todos los tableros."},
       "AVISO_SAP": {"termino":"aviso SAP","plural":"avisos SAP","titulo":"Aviso SAP","ayuda":"El número que SAP le da a la orden de KFC (10… u 0000…); solo identifica la orden, no es un estado."},
+      "NUM_ORDEN_SAP": {"termino":"n.º de orden SAP","plural":"n.º de orden SAP","titulo":"N.º de orden SAP","ayuda":"El número de la orden de trabajo que SAP crea para el aviso (el del correo «Se ha creado la orden de trabajo …»); acompaña al aviso SAP, que es el que identifica la orden."},
       "OT_INDUSTEC": {"termino":"OT INDUSTEC","plural":"OT INDUSTEC","titulo":"OT INDUSTEC","corto":"OT","ayuda":"El documento que emite el técnico por una orden, de evaluación o de cierre, con número OT-NNNN; es el que llega a KFC en PDF y por correo."},
       "OT_EVALUACION": {"termino":"OT INDUSTEC de evaluación","plural":"OT INDUSTEC de evaluación","titulo":"OT INDUSTEC de evaluación","ayuda":"OT INDUSTEC emitida con «Estado de OT: Abierta»: hubo visita y falta el cierre."},
       "OT_CIERRE": {"termino":"OT INDUSTEC de cierre","plural":"OT INDUSTEC de cierre","titulo":"OT INDUSTEC de cierre","ayuda":"OT INDUSTEC emitida con «Estado de OT: Cerrada»: INDUSTEC dio el trabajo por terminado."},
       "OT_NO_EMITIDA": {"termino":"OT INDUSTEC no emitida","plural":"OT INDUSTEC no emitidas","titulo":"OT INDUSTEC no emitida","ayuda":"Se numeró o se capturó, pero no salió el PDF ni el correo (NUMERADA o FALLIDA): no cuenta como OT emitida."},
-      "ENVIO_OT": {"termino":"envío de la OT INDUSTEC","plural":"envíos de OT INDUSTEC","titulo":"Envío de la OT","ayuda":"Lo que pasó con el PDF y el correo de una OT INDUSTEC: en cola, enviada, no enviada o rechazada."},
+      "ENVIO_OT": {"termino":"envío de la OT INDUSTEC","plural":"envíos de OT INDUSTEC","titulo":"Envío de la OT","ayuda":"El camino de una OT INDUSTEC desde el celular del técnico hasta el PDF y el correo: en cola, detenida en el celular, recibida en la oficina, emitida o rechazada al enviar."},
+      "ENVIO_EN_COLA": {"termino":"en cola","plural":"en cola","titulo":"En cola","ayuda":"La OT INDUSTEC está guardada en el celular y sale sola en cuanto hay señal; no hace falta hacer nada."},
+      "ENVIO_DETENIDA": {"termino":"detenida en el celular","plural":"detenidas en el celular","titulo":"Detenida en el celular","ayuda":"La OT INDUSTEC sigue guardada en el celular pero no puede salir sola: falta volver a entrar, la llenó otro usuario o esa cuenta no tiene permiso para enviarla."},
+      "ENVIO_RECIBIDA": {"termino":"recibida en la oficina","plural":"recibidas en la oficina","titulo":"Recibida en la oficina","ayuda":"El servidor ya tiene la OT INDUSTEC y está sacando su PDF y su correo; el técnico no tiene que hacer nada más."},
+      "ENVIO_EMITIDA": {"termino":"emitida","plural":"emitidas","titulo":"Emitida","ayuda":"La OT INDUSTEC ya tiene su número OT-NNNN y salieron su PDF y su correo a Grupo KFC."},
+      "ENVIO_RECHAZADA": {"termino":"rechazada al enviar","plural":"rechazadas al enviar","titulo":"Rechazada al enviar","ayuda":"El servidor revisó la OT INDUSTEC que mandó el celular y no la aceptó por un dato que falta o no cuadra; se lee el motivo, se corrige y se reenvía."},
       "INFORME_DETALLADO": {"termino":"informe técnico detallado","plural":"informes técnicos detallados","titulo":"Informe técnico detallado","ayuda":"Documento aparte que se adjunta en el hilo de la OT INDUSTEC para una baja, una garantía o una solicitud de material."},
       "SIN_AVISO_SAP": {"termino":"OT INDUSTEC sin aviso SAP","plural":"OT INDUSTEC sin aviso SAP","titulo":"Sin aviso SAP","ayuda":"OT INDUSTEC emitida para un trabajo que todavía no tiene aviso en SAP; hay que pedirle el aviso a KFC."},
       "SIN_ASIGNAR": {"termino":"sin asignar","plural":"sin asignar","titulo":"Sin asignar","ayuda":"Orden que llegó del correo de SAP y todavía no tiene técnico."},
@@ -197,7 +205,7 @@
       "FUERA_CATALOGO": {"termino":"con más de 90 días (fuera del catálogo)","plural":"con más de 90 días (fuera del catálogo)","titulo":"Con más de 90 días","ayuda":"Orden que salió de la ventana de 90 días del buzón pero sigue abierta en B.IA; puede incluir órdenes que KFC eliminó, porque el servidor todavía no recibe esa lista."},
       "ORDENES_NUEVAS_7D": {"termino":"orden nueva en 7 días","plural":"órdenes nuevas en 7 días","titulo":"Órdenes nuevas en 7 días","ayuda":"Órdenes que llegaron del correo de SAP en los últimos 7 días, en cualquier estado."},
       "FECHA_SAP_HOY": {"termino":"con fecha SAP hoy","plural":"con fecha SAP hoy","titulo":"Con fecha SAP hoy","ayuda":"Órdenes cuya fecha comprometida en SAP es hoy."},
-      "EQUIPO_DESHABILITADO": {"termino":"equipo deshabilitado","plural":"equipos deshabilitados","titulo":"EQUIPOS DESHABILITADOS","ayuda":"Equipo cuyo último estado registrado es Deshabilitado; en los conteos se cuenta una vez por orden, como lo cuenta Isabel."},
+      "EQUIPO_DESHABILITADO": {"termino":"equipo deshabilitado","plural":"equipos deshabilitados","titulo":"EQUIPOS DESHABILITADOS","ayuda":"Equipo cuyo último estado registrado es Deshabilitado; en los conteos se cuenta una vez por orden, como en el reporte semanal de la administración."},
       "EQUIPO_OPERATIVO": {"termino":"equipo operativo","plural":"equipos operativos","titulo":"Operativos","ayuda":"Equipo cuyo último estado registrado es Operativo."},
       "SIN_DATO_EQUIPO": {"termino":"sin dato del equipo","plural":"sin dato del equipo","titulo":"Sin dato del equipo","ayuda":"Ninguna OT INDUSTEC ni solicitud dice todavía cómo quedó el equipo; no se toma como operativo."},
       "SOLICITUD": {"termino":"solicitud","plural":"solicitudes","titulo":"Solicitud","ayuda":"Registro que abre el técnico cuando el equipo no quedó operativo: pide repuesto, taller, garantía o baja con su diagnóstico, y corre el plazo de 48 h."},
@@ -233,8 +241,8 @@
       "NOTIFICACION": {"termino":"notificación","plural":"notificaciones","titulo":"Notificaciones","ayuda":"Mensaje interno de B.IA para ti: te asignaron una orden, te respondieron, validaron tu solicitud."},
       "CONTINUIDAD": {"termino":"continúa la orden","plural":"continúan la orden","titulo":"Continúa la orden","ayuda":"Orden nueva que es el mismo trabajo de una anterior; se enlaza y se cuenta una sola vez."},
       "OTRO_TRABAJO": {"termino":"otro trabajo","plural":"otros trabajos","titulo":"Otros trabajos","ayuda":"Trabajo fuera del contrato de correctivos que la administración marcó como extra, autorizado o no."},
-      "OTRO_TRABAJO_POR_DECIDIR": {"termino":"fuera del área, por decidir","plural":"fuera del área, por decidir","titulo":"Fuera del área, por decidir","ayuda":"Orden que parece no ser de INDUSTEC (alerta de alcance) y espera que la administración la resuelva."},
-      "EQUIPO_PROPUESTO": {"termino":"equipo nuevo por confirmar","plural":"equipos nuevos por confirmar","titulo":"Equipos nuevos por confirmar","ayuda":"Equipo que un técnico registró porque no estaba en el maestro; la administración lo confirma."},
+      "OTRO_TRABAJO_POR_DECIDIR": {"termino":"fuera del área, por resolver","plural":"fuera del área, por resolver","titulo":"Fuera del área, por resolver","ayuda":"Orden que parece no ser de INDUSTEC (alerta de alcance) y espera que la administración la resuelva."},
+      "EQUIPO_PROPUESTO": {"termino":"equipo nuevo por confirmar","plural":"equipos nuevos por confirmar","titulo":"Equipos nuevos por confirmar","corto":"por confirmar","ayuda":"Equipo que un técnico registró porque no estaba en el maestro; la administración lo confirma."},
       "DOCUMENTO_POR_APROBAR": {"termino":"por aprobar","plural":"por aprobar","titulo":"Por aprobar","ayuda":"Documento de Aprendizaje que espera la aprobación de la administración."},
       "NOVEDAD": {"termino":"novedad","plural":"novedades","titulo":"Novedades","ayuda":"Algo que el técnico vio en el local y que puede hacer fallar equipos (instalación, agua, gas, obra civil…); no es una orden."},
       "NOVEDAD_REPORTADA": {"termino":"reportada","plural":"reportadas","titulo":"Reportadas","ayuda":"El técnico la registró y nadie la ha revisado."},
@@ -242,8 +250,9 @@
       "NOVEDAD_CON_AVISO": {"termino":"con aviso SAP","plural":"con aviso SAP","titulo":"Con aviso SAP","ayuda":"Se le pidió el aviso a Grupo KFC y ya tiene número."},
       "NOVEDAD_ASUMIDA": {"termino":"la asume INDUSTEC","plural":"las asume INDUSTEC","titulo":"La asume INDUSTEC","ayuda":"Entra en la planificación de INDUSTEC sin aviso nuevo."},
       "NOVEDAD_DESCARTADA": {"termino":"descartada","plural":"descartadas","titulo":"Descartadas","ayuda":"Se revisó y no procedía, con su motivo."},
-      "NOVEDAD_RESUELTA": {"termino":"resuelta","plural":"resueltas","titulo":"Resueltas","ayuda":"La novedad ya se atendió."},
-      "NOVEDAD_POR_DECIDIR": {"termino":"por decidir","plural":"por decidir","titulo":"Por decidir","ayuda":"Novedad reportada o en estudio que todavía no tiene destino."},
+      "NOVEDAD_RESUELTA": {"termino":"resuelta","plural":"resueltas","titulo":"Resueltas","ayuda":"Lo que se pidió o se asumió por la novedad ya quedó hecho, con una nota de qué se hizo."},
+      "NOVEDAD_POR_DECIDIR": {"termino":"por resolver","plural":"por resolver","titulo":"Por resolver","ayuda":"Novedad reportada o en estudio que todavía no tiene destino."},
+      "NOVEDAD_OTRA_AREA": {"termino":"de otra área","plural":"de otras áreas","titulo":"De otras áreas","corto":"otra área","ayuda":"Novedad cuyo arreglo no le toca a INDUSTEC sino a otra área de Grupo KFC (eléctrico, ventilación, desagüe, obra civil); se registra para explicar por qué un local repite averías."},
       "ESTATUS_SAP": {"termino":"estatus SAP","plural":"estatus SAP","titulo":"Estatus SAP","ayuda":"Lo que dice SAP de la orden (ABIERTO, TRATAMIENTO o CERRADO en el libro de KFC); el servidor de B.IA no lo conoce, solo la estación con el export del lunes."},
       "ND_SIN_PROVEEDOR": {"termino":"orden N/D (sin proveedor)","plural":"órdenes N/D (sin proveedor)","titulo":"Órdenes N/D","ayuda":"Orden correctiva de KFC que todavía no tiene ningún proveedor en SAP (hoja #O_ND)."},
       "ATRASADO": {"termino":"atrasado","plural":"atrasados","titulo":"Atrasado","ayuda":"Pasó la fecha comprometida (del ingreso preventivo, del compromiso de fecha o la fecha comprometida en SAP) sin que se ejecutara."},
@@ -258,8 +267,8 @@
       "PREV_MOVIMIENTO": {"termino":"movimiento del ingreso","plural":"movimientos del ingreso","titulo":"Movimientos del ingreso","ayuda":"Lo que pasó con un ingreso preventivo (agenda, reagenda, kit, marca de ejecutado o nota), con su fecha y quién lo hizo; no es una novedad del local."},
       "LE_TOCA_INDUSTEC": {"termino":"le toca a INDUSTEC","plural":"le toca a INDUSTEC","titulo":"Responsable: INDUSTEC","ayuda":"La orden espera algo de INDUSTEC: asignarla, visitarla o emitir su OT INDUSTEC."},
       "LE_TOCA_KFC": {"termino":"le toca a KFC","plural":"le toca a KFC","titulo":"Responsable: KFC","ayuda":"La orden espera una respuesta de KFC (administrador u Operaciones)."},
-      "LE_TOCA_KFC_REPUESTO": {"termino":"le toca a KFC: repuesto en SAP","plural":"le toca a KFC: repuesto en SAP","titulo":"Responsable: KFC (repuesto en SAP)","ayuda":"La orden espera el repuesto que ya se pidió a KFC en SAP (bodega o importación)."},
-      "EMERGENTE": {"termino":"emergente (más de 7 días)","plural":"emergentes (más de 7 días)","titulo":"Emergente","ayuda":"La orden lleva más de 7 días sin moverse y hay que atenderla ya."},
+      "LE_TOCA_KFC_REPUESTO": {"termino":"repuesto en seguimiento","plural":"repuesto en seguimiento","titulo":"Repuesto en seguimiento","ayuda":"La orden espera un repuesto, un taller o una baja y ninguna de sus solicitudes está a espera de respuesta de KFC: sigue su trámite hasta que el equipo vuelva a operar."},
+      "EMERGENTE": {"termino":"emergente (más de 7 días)","plural":"emergentes (más de 7 días)","titulo":"Emergente","ayuda":"La orden llegó hace más de 7 días y INDUSTEC todavía no la termina, o es de prioridad alta y sigue sin asignar: hay que atenderla ya."},
       "ZONA_UIO": {"termino":"zona UIO","plural":"zona UIO","titulo":"ZONA UIO","corto":"UIO","ayuda":"Quito y sus alrededores."},
       "ZONA_LARB": {"termino":"zona LARB","plural":"zona LARB","titulo":"ZONA LARB","corto":"LARB","ayuda":"Latacunga, Ambato y Riobamba."},
       "ZONA_CNLJ": {"termino":"zona Cuenca-Loja","plural":"zona Cuenca-Loja","titulo":"ZONA CUENCA-LOJA","corto":"CUENCA-LOJA","ayuda":"Cuenca y Loja."},
@@ -336,7 +345,7 @@
      Solo se acepta si trae lo que UI.T lee: un JSON a medias dejaría claves
      sin texto, y eso es peor que el respaldo completo. */
   if (typeof global.fetch === 'function') {
-    global.fetch('vocabulario.json', { credentials: 'same-origin' })
+    global.fetch('vocabulario_publico.json', { credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (d && d.version && d.conceptos && d.estados_caso) { VOC = d; }
@@ -348,12 +357,16 @@
      La misma que mis.php pinta en el servidor, para las pantallas estáticas
      —cronograma.html— que no pueden llamar a PHP (T2.13.4). Es una función
      pura para poder probarla sin navegador, y prueba_barra_tecnico.mjs la
-     compara con la de mis.php: si cambia una y no la otra, falla. */
+     compara con la de mis.php: si cambia una y no la otra, falla.
+     Los rótulos de las listas salen del diccionario, como en mis.php: «Mis
+     órdenes» (antes «Bandeja»), «Historial» y el corto de «Repuestos y
+     equipos». La primera columna es el identificador de la pantalla activa
+     y no cambia. */
   UI.BARRA_TECNICO = [
-    ['bandeja',     'mis.php',             '▤', 'Bandeja'],
-    ['historial',   'mis.php?t=atendidas', '✓', 'Historial'],
+    ['bandeja',     'mis.php',             '▤', UI.T.titulo('MIS_ORDENES')],
+    ['historial',   'mis.php?t=atendidas', '✓', UI.T.titulo('HISTORIAL')],
     ['emitir',      'index.html',          '✎', 'Emitir'],
-    ['repuestos',   'pendientes.php',      '◷', 'Repuestos'],
+    ['repuestos',   'pendientes.php',      '◷', UI.T.corto('MODULO_REPUESTOS')],
     ['preventivos', 'cronograma.html',     '▦', 'Preventivos']
   ];
   UI.barraTecnico = function (activa) {
@@ -390,15 +403,17 @@
           if (base === null) { base = d.version; return; }     // primera lectura
           if (d.version === base || d.version === visto) { caja.hidden = true; return; }
           if (typeof d.avisos === 'number') {
-            // Al técnico no le cuenta el buzón sino SUS avisos (T2.13.5), y «Ver»
-            // lo lleva a ellos en vez de recargar la pantalla en la que está.
+            // Al técnico no le cuenta el buzón sino SUS notificaciones (T2.13.5),
+            // y «Ver» lo lleva a ellas en vez de recargar la pantalla en la que
+            // está. `d.avisos` es el nombre del campo de novedades.php, no un
+            // texto: «aviso» a secas es solo el aviso SAP.
             if (d.avisos === 0) { caja.hidden = true; return; }
-            txt.textContent = d.avisos === 1 ? 'Tienes 1 aviso nuevo' : 'Tienes ' + d.avisos + ' avisos nuevos';
+            txt.textContent = 'Tienes ' + d.avisos + ' ' + UI.T('NOTIFICACION', d.avisos) + ' sin leer';
           } else {
             var n = (typeof d.total === 'number') ? d.total : null;
             txt.textContent = n === null
               ? 'El buzón se actualizó'
-              : 'El buzón se actualizó — ahora hay ' + n + (n === 1 ? ' caso' : ' casos');
+              : 'El buzón se actualizó — ahora hay ' + n + ' ' + UI.T('ORDEN', n);
           }
           caja.dataset.ir = d.ir || '';
           caja.dataset.version = d.version;

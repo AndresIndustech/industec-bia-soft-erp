@@ -223,12 +223,26 @@ if (is_array($respaldo)) {
     afirmar('y es exactamente lo que proyecta el generador', $respaldo === vocRespaldoJs());
 }
 $sw = (string) file_get_contents("$PUB/sw.js");
-afirmar('sw.js precarga vocabulario.json',
-        (bool) preg_match("/const PRECARGA = \\[[^\\]]*'vocabulario\\.json'/s", $sw));
+// Desde el 26-sep-2026 lo que se sirve sin sesión es la copia RECORTADA
+// (vocabulario_publico.json): el JSON completo trae notas internas —nombres de
+// personas, rutas de la estación, contratos, excepciones— y no sale del disco.
+afirmar('sw.js precarga vocabulario_publico.json',
+        (bool) preg_match("/const PRECARGA = \\[[^\\]]*'vocabulario_publico\\.json'/s", $sw));
+afirmar('sw.js ya no precarga el vocabulario.json completo',
+        !preg_match("/const PRECARGA = \\[[^\\]]*'vocabulario\\.json'/s", $sw));
+$ui = (string) file_get_contents("$PUB/ui.js");
+afirmar('ui.js pide vocabulario_publico.json y no el completo',
+        str_contains($ui, "fetch('vocabulario_publico.json'") && !str_contains($ui, "fetch('vocabulario.json'"));
 $ht = (string) file_get_contents("$PUB/.htaccess");
-afirmar('.htaccess deja pasar vocabulario.json (los demás .json siguen cerrados)',
-        (bool) preg_match('/<Files "vocabulario\.json">\s*<IfModule mod_authz_core\.c>\s*Require all granted/s', $ht)
+afirmar('.htaccess deja pasar vocabulario_publico.json (los demás .json siguen cerrados)',
+        (bool) preg_match('/<Files "vocabulario_publico\.json">\s*<IfModule mod_authz_core\.c>\s*Require all granted/s', $ht)
         && (bool) preg_match('/<FilesMatch "\\\\\.\(json\|/', $ht));
+afirmar('.htaccess ya no abre el vocabulario.json completo', !str_contains($ht, '<Files "vocabulario.json">'));
+$pubJson = json_decode((string) file_get_contents("$PUB/vocabulario_publico.json"), true);
+afirmar('la copia pública es exactamente lo que proyecta el generador', $pubJson === vocRespaldoJs());
+$pubTexto = (string) file_get_contents("$PUB/vocabulario_publico.json");
+afirmar('la copia pública no trae notas, reemplazos, contratos ni excepciones',
+        !preg_match('/"(notas|reemplaza|conserva|roles|contratos_externos|lista_negra\w*|reservadas|fuera_de_alcance)"/', $pubTexto));
 
 /* --- 5b. Las tres puertas contestan lo mismo -------------------------------
    Se arma, en cada lenguaje, la misma tabla: por concepto [t(1), t(2), t(0),

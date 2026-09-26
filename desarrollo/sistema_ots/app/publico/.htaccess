@@ -44,13 +44,18 @@
     </IfModule>
 </Files>
 
-# EXCEPCION: vocabulario.json también es público a propósito (2026-09-24).
+# EXCEPCION: vocabulario_publico.json es público a propósito (2026-09-26).
 # Son las palabras con que el sistema nombra cada estado; lo pide ui.js
-# (UI.T) y el trabajador de servicio lo precarga para el modo sin señal. No
-# lleva ningún dato: ni casos, ni locales, ni personas. Los catálogos siguen
+# (UI.T) y el trabajador de servicio lo precarga para el modo sin señal. Es la
+# copia RECORTADA que escribe herramientas/generar_vocabulario.php: término,
+# plural, título, forma corta, ayuda y los mapas de estado. El vocabulario.json
+# completo NO se sirve (lo niega la regla de los .json de arriba): trae notas
+# internas con nombres de personas, rutas de scripts de la estación, los
+# contratos y las excepciones de la lista negra, y solo lo leen
+# nucleo/Vocabulario.php y comun.py desde el disco. Los catálogos siguen
 # cerrados: esta excepción nombra un solo archivo de la raíz, y
 # catalogos/.htaccess niega todo lo suyo por su cuenta.
-<Files "vocabulario.json">
+<Files "vocabulario_publico.json">
     <IfModule mod_authz_core.c>
         Require all granted
     </IfModule>

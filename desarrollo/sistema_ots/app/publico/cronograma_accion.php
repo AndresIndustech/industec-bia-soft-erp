@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Auth.php';
 require_once __DIR__ . '/nucleo/Catalogo.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // los mensajes dicen «ejecutado» y «movimiento del ingreso», como la pantalla
 
 /**
  * cronograma_accion.php — El cronograma de preventivos que escribe (D15, T2.14.5).
@@ -116,7 +117,9 @@ if ($accion === 'reagendar') {
         // Regla 2: sin motivo no se mueve. Es lo que se le explica a KFC.
         responder(400, ['ok' => false, 'error' => 'El motivo es obligatorio: es lo que se le reporta a Grupo KFC.']);
     }
-    if ($i['estado'] === 'CUMPLIDO') { responder(409, ['ok' => false, 'error' => 'Ese ingreso ya está cumplido: no se reagenda.']); }
+    if ($i['estado'] === 'CUMPLIDO') {
+        responder(409, ['ok' => false, 'error' => 'Ese ingreso ya está ' . Vocabulario::t('PREV_EJECUTADO') . ': no se reagenda.']);
+    }
     $antes = $i['plan_vigente_inicio'];
     // La primera fecha de un ingreso sin plan también fija el plan original:
     // a partir de ahí, lo acordado no se toca.
@@ -133,7 +136,8 @@ if ($accion === 'reagendar') {
                    $i['local_codigo'] . ' ingreso ' . $i['numero'] . ': ' . ($antes ?? 'sin fecha') . ' → ' . $ini . ' — ' . $motivo,
                    $antes, $ini, ['local' => $i['local_codigo'], 'motivo' => $motivo, 'fin' => $fin,
                                   'plan_original' => $i['plan_original_inicio']]);
-    responder(200, ['ok' => true, 'mensaje' => 'Reagendado ' . $i['local_codigo'] . ' al ' . $ini . '. La novedad queda para el reporte a KFC.']);
+    responder(200, ['ok' => true, 'mensaje' => 'Reagendado ' . $i['local_codigo'] . ' al ' . $ini . '. El '
+                                              . Vocabulario::t('PREV_MOVIMIENTO') . ' queda para el reporte a KFC.']);
 }
 
 if ($accion === 'cerrar') {
@@ -153,11 +157,18 @@ if ($accion === 'cerrar') {
                    WHERE ingreso_id = ?',
                  [$rIni, $rFin, $ots ? json_encode($ots, JSON_UNESCAPED_UNICODE) : null, $uid, (int) $i['ingreso_id']]);
     $aTiempo = $i['plan_original_fin'] === null || $rFin <= $i['plan_original_fin'];
-    novedad((int) $i['ingreso_id'], 'CIERRE', $aTiempo ? 'Cumplido a tiempo' : 'Cumplido tarde', $nota, $i['plan_original_fin'], $rFin, $uid);
+    /* El motivo se guarda como texto en cronograma_novedades y se lee tal cual
+       en el panel del ingreso (nadie lo compara): desde el vocabulario único
+       dice «Ejecutado», no «Cumplido». Las filas viejas se quedan como están.
+       El estado de la base (CUMPLIDO) no cambia. */
+    $ejecutado = ucfirst(Vocabulario::t('PREV_EJECUTADO'));
+    novedad((int) $i['ingreso_id'], 'CIERRE', $ejecutado . ($aTiempo ? ' a tiempo' : ' tarde'), $nota, $i['plan_original_fin'], $rFin, $uid);
     Auth::bitacora('CRONOGRAMA_CIERRE', 'cronograma', (string) $i['ingreso_id'],
-                   $i['local_codigo'] . ' ingreso ' . $i['numero'] . ' cumplido el ' . $rFin . ($aTiempo ? ' (a tiempo)' : ' (tarde)'),
+                   $i['local_codigo'] . ' ingreso ' . $i['numero'] . ' ' . Vocabulario::t('PREV_EJECUTADO') . ' el ' . $rFin
+                   . ($aTiempo ? ' (a tiempo)' : ' (tarde)'),
                    $i['estado'], 'CUMPLIDO', ['local' => $i['local_codigo'], 'ot' => $ot ?: null, 'a_tiempo' => $aTiempo]);
-    responder(200, ['ok' => true, 'mensaje' => 'Ingreso cumplido' . ($aTiempo ? ' a tiempo.' : ', fuera del plan original: queda dicho para KFC.')]);
+    responder(200, ['ok' => true, 'mensaje' => 'Ingreso marcado como ' . Vocabulario::t('PREV_EJECUTADO')
+                                              . ($aTiempo ? ' a tiempo.' : ', fuera del plan original: queda dicho para KFC.')]);
 }
 
 if ($accion === 'agendar') {
@@ -206,14 +217,16 @@ if ($accion === 'agendar') {
 if ($accion === 'nota') {
     $i = ingreso((int) ($in['ingreso_id'] ?? 0), $za);
     if (!$i) { denegado('nota', (string) ($in['ingreso_id'] ?? ''), 'fuera de alcance'); }
-    if ($nota === '') { responder(400, ['ok' => false, 'error' => 'Escribe la novedad.']); }
+    if ($nota === '') { responder(400, ['ok' => false, 'error' => 'Escribe qué pasó con el ingreso.']); }
     $tipo = trim((string) ($in['tipo'] ?? 'Otro'));
     novedad((int) $i['ingreso_id'], 'NOTA', $tipo, $nota, null, null, $uid);
     Db::ejecutar('UPDATE ingresos_preventivos SET actualizado_por = ?, actualizado_en = NOW() WHERE ingreso_id = ?', [$uid, (int) $i['ingreso_id']]);
     Auth::bitacora('CRONOGRAMA_NOTA', 'cronograma', (string) $i['ingreso_id'],
                    $i['local_codigo'] . ' ingreso ' . $i['numero'] . ': ' . $tipo . ' — ' . mb_substr($nota, 0, 100),
                    null, null, ['local' => $i['local_codigo'], 'tipo' => $tipo]);
-    responder(200, ['ok' => true, 'mensaje' => 'Novedad registrada.']);
+    // «Novedad registrada.» decía lo mismo que la novedad del local: este es
+    // un movimiento del ingreso preventivo (PREV_MOVIMIENTO).
+    responder(200, ['ok' => true, 'mensaje' => ucfirst(Vocabulario::t('PREV_MOVIMIENTO')) . ' registrado.']);
 }
 
 responder(400, ['ok' => false, 'error' => 'Acción no reconocida.']);

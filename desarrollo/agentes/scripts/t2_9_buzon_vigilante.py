@@ -206,7 +206,9 @@ def procesar_informes(dias: int) -> bool:
     for linea in (r.stdout or "").splitlines():
         # Los avisos de error del informe también: filtrados, un empuje fallido
         # quedaba sin rastro en el log del vigilante.
-        if linea.strip().startswith(("casos pendientes con atencion", "empujado",
+        # «ordenes con OT INDUSTEC» es la linea de resumen de t2_11 (antes «casos pendientes
+        # con atencion», vocabulario unico del 24-sep-2026): si cambia alla, se cambia aqui.
+        if linea.strip().startswith(("ordenes con OT INDUSTEC", "empujado",
                                      "ERROR", "AVISO", "SIN tecnico")):
             log(f"   {linea.strip()}")
     return True
@@ -304,7 +306,9 @@ def barrer_y_empujar(env: dict, dias: int) -> bool:
         return False
 
     for linea in (r.stdout or "").splitlines():
-        if linea.startswith(("casos vigentes", "ordenes eliminadas")):
+        # Las dos lineas de resumen de t2_6 (antes «casos vigentes», vocabulario unico del
+        # 24-sep-2026): si cambian alla, se cambian aqui.
+        if linea.startswith(("ordenes en el buzon", "ordenes eliminadas")):
             log(f"   {linea.strip()}")
 
     if not SALIDA.is_file():

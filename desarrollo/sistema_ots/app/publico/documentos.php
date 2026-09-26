@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Ui.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // «por aprobar»: el documento no está «en revisión»
 
 /**
  * documentos.php — Aprendizaje: manuales, guías y comunicados, con aprobación.
@@ -48,6 +49,11 @@ const TIPOS_ARCHIVO = [
 ];
 $TIPOS = ['MANUAL' => 'Manual', 'GUIA' => 'Guía', 'COMUNICADO' => 'Comunicado'];
 $ZONAS = ['UIO', 'LARB', 'CNLJ', 'OTRA'];
+/* El estado de cada versión como se lee. Antes salía el código en minúsculas
+   («en revision»), con la palabra de la orden; los otros tres son del propio
+   Aprendizaje y no chocan con nada (fuera_de_alcance del diccionario). */
+$ETIQ_VERSION = ['EN_REVISION' => Vocabulario::t('DOCUMENTO_POR_APROBAR'), 'APROBADA' => 'aprobada',
+                 'RECHAZADA' => 'rechazada', 'RETIRADA' => 'retirada'];
 
 $puedeSubir    = Ui::puedeModulo('documentos.subir',    ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA'], $u);
 $puedeProponer = Ui::puedeModulo('documentos.proponer', ['TECNICO'], $u);
@@ -165,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         terminarDoc($aprobarYa
             ? 'Publicado: «' . $doc['titulo'] . '» versión ' . $version . '.'
-            : 'Subido: «' . $doc['titulo'] . '» versión ' . $version . ' queda en revisión hasta que administración la apruebe.',
+            : 'Subido: «' . $doc['titulo'] . '» versión ' . $version . ' queda ' . Vocabulario::t('DOCUMENTO_POR_APROBAR') . ' hasta que administración la apruebe.',
             null, '#d' . $docId);
 
     } elseif ($accion === 'aprobar' || $accion === 'rechazar' || $accion === 'retirar') {
@@ -298,9 +304,9 @@ Ui::cabecera($u, 'documentos.php',
       Manuales de equipos, guías de cómo se hace el trabajo y comunicados de la
       empresa, para todas las zonas. Lo que ves está aprobado por administración;
       <?php if ($puedeProponer): ?>
-        si tienes un manual o una guía que sirva a los demás, propónlo y queda en revisión.
+        si tienes un manual o una guía que sirva a los demás, propónlo y queda <?= $e(Vocabulario::t('DOCUMENTO_POR_APROBAR')) ?>.
       <?php elseif ($puedeSubir): ?>
-        lo que subas queda en revisión hasta que administración lo apruebe.
+        lo que subas queda <?= $e(Vocabulario::t('DOCUMENTO_POR_APROBAR')) ?> hasta que administración lo apruebe.
       <?php else: ?>
         cada versión queda con quién la subió, quién la aprobó y cuándo.
       <?php endif; ?>
@@ -364,7 +370,7 @@ Ui::cabecera($u, 'documentos.php',
           <?php foreach ($misPropuestas as $v): ?>
             <li>
               <b><?= $e($v['titulo']) ?></b> v<?= (int) $v['version'] ?> ·
-              <span class="est est-<?= $v['estado'] === 'EN_REVISION' ? 'en_revision' : 'no_compete' ?>"><?= $v['estado'] === 'EN_REVISION' ? 'en revisión' : 'rechazada' ?></span>
+              <span class="est est-<?= $v['estado'] === 'EN_REVISION' ? 'en_revision' : 'no_compete' ?>"><?= $v['estado'] === 'EN_REVISION' ? $e(Vocabulario::t('DOCUMENTO_POR_APROBAR')) : 'rechazada' ?></span>
               <?php if ($v['estado'] === 'RECHAZADA' && !empty($v['nota_revision'])): ?>
                 <span class="desc"><?= $e($v['reviso']) ?>: <?= $e($v['nota_revision']) ?></span>
               <?php endif; ?>
@@ -391,7 +397,7 @@ Ui::cabecera($u, 'documentos.php',
         <select name="zona" style="height:36px;font-size:13.5px;width:auto;min-width:120px">
           <option value="">Toda zona</option>
           <?php foreach ($ZONAS as $z): ?>
-            <option value="<?= $z ?>" <?= $fZona === $z ? 'selected' : '' ?>><?= $z ?></option>
+            <option value="<?= $z ?>" <?= $fZona === $z ? 'selected' : '' ?>><?= $e(Ui::zonaCorta($z)) ?></option>
           <?php endforeach; ?>
         </select>
         <input type="search" name="q" value="<?= $e($fq) ?>" placeholder="título…" style="height:36px;width:auto;min-width:150px;font-size:13.5px">
@@ -477,7 +483,7 @@ Ui::cabecera($u, 'documentos.php',
                   <?php foreach ($versionesDe[$id] ?? [] as $v): ?>
                     <li>
                       <span class="mono">v<?= (int) $v['version'] ?></span>
-                      <span class="est est-<?= ['APROBADA' => 'resuelto', 'EN_REVISION' => 'en_revision', 'RECHAZADA' => 'no_compete', 'RETIRADA' => 'cerrado_sin_atencion'][$v['estado']] ?? 'nuevo' ?>"><?= $e(strtolower(str_replace('_', ' ', (string) $v['estado']))) ?></span>
+                      <span class="est est-<?= ['APROBADA' => 'resuelto', 'EN_REVISION' => 'en_revision', 'RECHAZADA' => 'no_compete', 'RETIRADA' => 'cerrado_sin_atencion'][$v['estado']] ?? 'nuevo' ?>"><?= $e($ETIQ_VERSION[$v['estado']] ?? strtolower(str_replace('_', ' ', (string) $v['estado']))) ?></span>
                       <?= $e($v['nombre_archivo']) ?> · <?= $e($kb((int) $v['bytes'])) ?> · subió <?= $e($v['subio']) ?> el <?= $e(substr((string) $v['subida_en'], 0, 10)) ?>
                       <?php if ($v['reviso']): ?> · <?= $v['estado'] === 'APROBADA' ? 'aprobó' : 'revisó' ?> <?= $e($v['reviso']) ?><?php endif; ?>
                       <?php if (!empty($v['nota_revision'])): ?><span class="desc"><?= $e($v['nota_revision']) ?></span><?php endif; ?>
@@ -505,7 +511,7 @@ Ui::cabecera($u, 'documentos.php',
     <h2 id="s-titulo-dlg"><?= $puedeSubir ? 'Subir un documento' : 'Proponer un documento' ?></h2>
     <p class="sub" style="margin:0 0 12px" id="s-ayuda">
       PDF, imagen, Word, Excel o video de hasta 25 MB. Queda con tu nombre y la
-      fecha<?= $puedeAprobar ? '' : ', en revisión hasta que administración lo apruebe' ?>.
+      fecha<?= $puedeAprobar ? '' : ', ' . $e(Vocabulario::t('DOCUMENTO_POR_APROBAR')) . ' hasta que administración lo apruebe' ?>.
     </p>
     <div class="grid g2">
       <div>
@@ -529,7 +535,7 @@ Ui::cabecera($u, 'documentos.php',
         <label for="s-zona">Zona</label>
         <select id="s-zona" name="zona">
           <option value="">Todas</option>
-          <?php foreach ($ZONAS as $z): ?><option value="<?= $z ?>"><?= $z ?></option><?php endforeach; ?>
+          <?php foreach ($ZONAS as $z): ?><option value="<?= $z ?>"><?= $e(Ui::zonaCorta($z)) ?></option><?php endforeach; ?>
         </select>
       </div>
     </div>

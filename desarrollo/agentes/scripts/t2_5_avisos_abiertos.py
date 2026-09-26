@@ -129,8 +129,8 @@ def construir(cnx):
             "avisos_en_catalogo": cob["total"],
             "advertencia": (
                 "El catalogo SAP es un export, no un feed en vivo. "
-                f"'Abierto' significa abierto al corte del {iso(cob['hasta'])}, "
-                "no abierto hoy. La fuente en vivo (buzon Titan por IMAP) "
+                f"'Abierta en SAP' significa abierta en SAP al corte del {iso(cob['hasta'])}, "
+                "no hoy. La fuente en vivo (buzon Titan por IMAP) "
                 "todavia esta bloqueada por credenciales."
             ),
         },
@@ -156,7 +156,7 @@ def main():
         cnx.close()
 
     n = len(salida["datos"])
-    print(f"avisos abiertos      : {n}")
+    print(f"abiertas en SAP      : {n}")
     for z in sorted(por_zona):
         print(f"  {z:<16}: {por_zona[z]}")
     print(f"cobertura del export : {salida['cobertura']['desde']} a {salida['cobertura']['hasta']}")

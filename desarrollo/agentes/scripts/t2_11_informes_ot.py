@@ -460,7 +460,7 @@ def main():
         n = num_aviso(c.get("aviso"))
         if n:
             pend_por_num.setdefault(n, c["aviso"])
-    print(f"casos pendientes segun el buzon: {len(pendientes)}")
+    print(f"ordenes en el buzon            : {len(pendientes)}")
 
     padron = cargar_padron()
     print(f"padron de tecnicos             : {len(padron)} personas")
@@ -595,9 +595,9 @@ def main():
         "fuente": f"buzon de servicio al cliente, informes de {EMISOR}",
         "ventana_dias": args.dias,
         "que_significa": (
-            "Que exista una OT significa que INDUSTEC atendio el caso, NO que KFC "
-            "lo haya cerrado en SAP. El correo no avisa los cierres de SAP. El "
-            "estado frente al cliente sigue siendo el del export de SAP."
+            "Que exista una OT INDUSTEC significa que INDUSTEC visito la orden, NO "
+            "que la orden este cerrada en SAP. El correo no avisa los cierres de SAP. "
+            "El estado frente al cliente sigue siendo el del export de SAP."
         ),
         "resumen": {
             "casos_pendientes": len(pendientes),
@@ -619,9 +619,13 @@ def main():
     destino.write_text(json.dumps(salida, ensure_ascii=False, indent=1), encoding="utf-8")
 
     print()
-    print(f"casos pendientes con atencion : {len(atenciones)} de {len(pendientes)}")
-    print(f"  ya cerradas por INDUSTEC    : {cerradas}")
-    print(f"  atendidas, en curso         : {len(atenciones) - cerradas}")
+    # Las cifras con las palabras de la tarjeta «Por zona» (vocabulario.json): con OT de
+    # cierre (atendidas) y abiertas (con OT y sin la de cierre). Se escriben sin tildes
+    # porque t2_9_buzon_vigilante.py lee esta salida por su comienzo («ordenes con OT
+    # INDUSTEC») a traves de una tuberia: si se cambia aqui, se cambia alla.
+    print(f"ordenes con OT INDUSTEC        : {len(atenciones)} de {len(pendientes)}")
+    print(f"  con OT INDUSTEC de cierre    : {cerradas}")
+    print(f"  abiertas (sin OT de cierre)  : {len(atenciones) - cerradas}")
     print(f"  con tecnico identificado    : {tecnicos_ok}")
     if fallos:
         print(f"  SIN tecnico identificado    : {fallos}  (se reportan vacios, no se inventan)")

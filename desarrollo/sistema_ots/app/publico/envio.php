@@ -88,7 +88,7 @@ Auth::exigirCsrf();
 
 $crudo = file_get_contents('php://input') ?: '';
 if (strlen($crudo) > 12 * 1024 * 1024) {
-    responder(413, ['ok' => false, 'motivo' => 'la orden pesa demasiado; reduce las fotos']);
+    responder(413, ['ok' => false, 'motivo' => 'la OT INDUSTEC pesa demasiado; reduce las fotos']);
 }
 $j = json_decode($crudo, true);
 if (!is_array($j)) {
@@ -103,9 +103,14 @@ if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
     responder(400, ['ok' => false, 'motivo' => 'falta el identificador del envío']);
 }
 
+/* Los textos que vuelven al celular (motivo, anexos, que_sigue) usan las
+   palabras del diccionario único: lo que llega aquí es la «OT INDUSTEC»; la
+   «orden» es el trabajo que pide KFC, identificado por su aviso SAP. La
+   variable `$orden` y la clave `orden` del JSON no cambian: son contrato con
+   cola.js y con la carga guardada. */
 $orden = $j['orden'] ?? null;
 if (!is_array($orden)) {
-    responder(400, ['ok' => false, 'motivo' => 'el envío no trae la orden']);
+    responder(400, ['ok' => false, 'motivo' => 'el envío no trae la OT INDUSTEC']);
 }
 
 /* -------------------------------------------------------------------------
@@ -117,10 +122,10 @@ if (!is_array($orden)) {
    ------------------------------------------------------------------------- */
 $captor = (int) ($j['usuario_captura'] ?? 0);
 if ($captor !== 0 && $captor !== (int) $u['usuario_id']) {
-    Auth::bitacora('ENVIO_AJENO', 'ot', $uuid, 'la orden la llenó otro usuario',
+    Auth::bitacora('ENVIO_AJENO', 'ot', $uuid, 'la OT INDUSTEC la llenó otro usuario',
                    null, null, ['usuario_captura' => $captor], false);
     responder(409, ['ok' => false, 'ajena' => true,
-                    'motivo' => 'esta orden la llenó otro usuario en este celular; tiene que entrar él para enviarla']);
+                    'motivo' => 'esta OT INDUSTEC la llenó otro usuario en este celular; tiene que entrar él para enviarla']);
 }
 try {
     // `emitida_en` y `carga` se leen ya aquí, ANTES de tocar nada: es contra lo
@@ -236,7 +241,7 @@ $concluida = !array_key_exists('concluida', $orden) || (bool) $orden['concluida'
 $pen = $orden['pendiente'] ?? null;
 if ($concluida && is_array($pen) && trim((string) ($pen['diagnostico'] ?? '')) !== '') {
     responder(400, ['ok' => false,
-                    'motivo' => 'la orden llegó "concluida" pero trae un equipo pendiente; revisa "¿Quedó concluido el trabajo?"']);
+                    'motivo' => 'la OT INDUSTEC llegó "concluida" pero trae una solicitud por un equipo que no quedó operativo; revisa "¿Quedó concluido el trabajo?"']);
 }
 
 // Trabajo con otro proveedor (H-18, D10): ya lo validó Validacion::validar()
@@ -320,14 +325,14 @@ try {
         }
         if ($cargaDistinta) {
             Auth::bitacora('REINTENTO_TRAS_EMISION', 'ot', $uuid,
-                           'el celular reenvió el mismo envío con datos distintos después de que la orden ya se había emitido; la carga NO se sobrescribió',
+                           'el celular reenvió el mismo envío con datos distintos después de que la OT INDUSTEC ya se había emitido; la carga NO se sobrescribió',
                            null, null, ['emitida_en' => $previa['emitida_en']], true);
-            $anexos[] = 'Esta orden ya se había emitido: la corrección no reemplaza el PDF ya enviado. Avisa a la administración si hace falta uno nuevo.';
+            $anexos[] = 'Esta OT INDUSTEC ya se había emitido: la corrección no reemplaza el PDF ya enviado. Avisa a la administración si hace falta uno nuevo.';
         }
     }
 
     if (!$nueva) {
-        $anexos[] = 'Esta orden ya se había recibido: no se registró dos veces.';
+        $anexos[] = 'Esta OT INDUSTEC ya se había recibido: no se registró dos veces.';
     } else {
         if (is_array($pen) && trim((string) ($pen['diagnostico'] ?? '')) !== '') {
             if ($aviso === '') {
@@ -335,9 +340,9 @@ try {
                    `Pendientes` se apoya en el aviso para resolver el alcance.
                    Queda dentro de la carga JSON —no se pierde— y se dice en el
                    recibo: es tarea de la administración regularizarlo primero. */
-                $anexos[] = 'El equipo trabado quedó anotado en la orden, pero esta orden no tiene '
-                          . 'aviso de SAP, así que todavía no puede entrar al control de 48 horas. '
-                          . 'La administración tiene que regularizarla primero.';
+                $anexos[] = 'La solicitud por el equipo quedó anotada en la OT INDUSTEC, pero esta OT INDUSTEC '
+                          . 'no tiene aviso SAP, así que todavía no puede entrar al control de 48 horas. '
+                          . 'La administración tiene que pedirle el aviso a KFC primero.';
                 Auth::bitacora('PENDIENTE_SIN_AVISO', 'ot', $uuid,
                                mb_substr((string) $pen['diagnostico'], 0, 150),
                                null, null, ['pendiente' => $pen], true);
@@ -357,8 +362,8 @@ try {
                     'diagnostico_codigo' => $pen['diagnostico_codigo'] ?? null,
                     'partes'             => is_array($pen['partes'] ?? null) ? $pen['partes'] : [],
                 ]);
-                $anexos[] = $ok ? $msg : ('No se pudo registrar el equipo trabado: ' . $msg
-                                        . ' Quedó anotado dentro de la orden.');
+                $anexos[] = $ok ? $msg : ('No se pudo registrar la solicitud por el equipo: ' . $msg
+                                        . ' Quedó anotada dentro de la OT INDUSTEC.');
             }
         }
 
@@ -375,7 +380,7 @@ try {
                         && !str_ends_with($correoEscrito, '@industec.me');
         if ($correoEscrito !== '' && !$correoValido) {
             $anexos[] = 'El correo del local que escribiste («' . mb_substr($correoEscrito, 0, 80)
-                      . '») no parece un correo válido del local: la orden sale al correo del maestro.';
+                      . '») no parece un correo válido del local: la OT INDUSTEC sale al correo del maestro.';
         }
         if ($adminNombre !== '' && $localCod !== '') {
             try {
@@ -493,14 +498,14 @@ try {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }
     error_log('envio.php: ' . $ex->getMessage());
     responder(503, ['ok' => false,
-                    'motivo' => 'el sistema todavía no pudo guardar la orden; la tuya queda guardada en el celular y se envía sola']);
+                    'motivo' => 'el sistema todavía no pudo guardar la OT INDUSTEC; la tuya queda guardada en el celular y se envía sola']);
 }
 
 if (in_array('AVISO_FUERA_DE_ALCANCE', $observaciones, true)) {
-    $anexos[] = 'La orden quedó registrada con una observación: ese caso no figura entre tus casos vigentes.';
+    $anexos[] = 'La OT INDUSTEC quedó registrada con una observación: esa orden no figura entre las tuyas.';
 }
 if (in_array('LOCAL_DISTINTO_AL_DEL_CASO', $observaciones, true)) {
-    $anexos[] = 'La orden quedó registrada con una observación: el local no coincide con el del caso.';
+    $anexos[] = 'La OT INDUSTEC quedó registrada con una observación: el local no coincide con el de la orden.';
 }
 
 Auth::bitacora('ENVIO_RECIBIDO', 'ot', $uuid,
@@ -568,8 +573,10 @@ if ($em['error'] === null && $aviso !== '' && !empty($em['id_industec'])) {
         }
     }
     if (count($cadena) > 1) {
-        $anexos[] = 'Esta orden cierra también ' . (count($cadena) - 1) . ' caso'
-                  . (count($cadena) === 2 ? '' : 's') . ' anterior'
+        /* «atiende», no «cierra»: la orden enlazada queda atendida, por cerrar
+           en SAP (VOCABULARIO.md, CONTINUIDAD). */
+        $anexos[] = 'Esta OT INDUSTEC atiende también ' . (count($cadena) - 1) . ' '
+                  . (count($cadena) === 2 ? 'orden' : 'órdenes') . ' anterior'
                   . (count($cadena) === 2 ? '' : 'es') . ' del mismo trabajo: '
                   . implode(', ', array_slice($cadena, 1)) . '.';
     }
@@ -617,14 +624,14 @@ responder(200, [
         'id_industec' => $em['id_industec'],
         'correo'      => $em['correo'],
         'que_sigue'   => $em['pdf']
-            ? 'Orden ' . $em['id_industec'] . ' emitida: el PDF está en tu historial. '
+            ? $em['id_industec'] . ' emitida: el PDF está en tu historial. '
               . ($prueba ? 'Es el sistema en pruebas: el correo no se envió a nadie.'
                          : 'El correo al local sale de la cola.')
             : ($em['id_industec']
-                ? 'La orden quedó guardada con el número ' . $em['id_industec']
+                ? 'La OT INDUSTEC quedó guardada con el número ' . $em['id_industec']
                   . '. El PDF no se pudo generar todavía: se reintenta desde el servidor cada 10 minutos.'
-                : 'La orden quedó guardada. Todavía no se le pudo asignar número: se reintenta desde el servidor cada 10 minutos.'),
-        // Qué pasó con el equipo trabado, las novedades y las observaciones.
+                : 'La OT INDUSTEC quedó guardada. Todavía no se le pudo asignar número: se reintenta desde el servidor cada 10 minutos.'),
+        // Qué pasó con la solicitud del equipo, las novedades y las observaciones.
         // Va aparte de la orden porque son hechos distintos con destinos distintos.
         'anexos'     => $anexos,
     ],

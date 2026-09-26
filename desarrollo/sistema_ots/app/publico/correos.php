@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 /**
- * correos.php — A quién va cada correo de una orden: el buzón del jefe de
+ * correos.php — A quién va el correo de cada OT INDUSTEC: el buzón del jefe de
  * zona, las copias internas y las del cliente (por zona, generales o por
  * local), y el correo que un técnico propuso para un local, para aprobar o
  * rechazar (T2.28.2, obs. 2 y 8 de la revisión con INDUSTEC; D-C, D-G, S-1).
@@ -27,6 +27,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Ui.php';
 require_once __DIR__ . '/nucleo/Catalogo.php';
 require_once __DIR__ . '/nucleo/Destinatarios.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // CNLJ se lee «CUENCA-LOJA» en los botones de zona
 
 $u = Auth::exigir();
 if (!Ui::puedeModulo('correos.configurar', ['SUPERADMIN', 'ADMIN'], $u)) {
@@ -336,16 +337,16 @@ Ui::cabecera($u, 'correos.php', ['correos' => $contPendientes], ['titulo' => 'Co
 ?>
 <div class="wrap ancho">
   <div class="titulo entra">
-    <h1>Correos de las órdenes</h1>
+    <h1>Correos de las OT INDUSTEC</h1>
     <p class="sub">
-      A quién va cada orden que se emite: el buzón institucional del jefe de zona (siempre en copia), las demás
+      A quién va cada OT INDUSTEC que se emite: el buzón institucional del jefe de zona (siempre en copia), las demás
       copias internas de INDUSTEC, las copias al cliente (Grupo KFC) y el jefe de operaciones de cada local. Nada se
       borra aquí: se desactiva. Cada cambio queda en la <a href="bitacora.php?entidad=correo_destinatario">bitácora</a>.
     </p>
   </div>
 
   <?= Ui::aviso('ambar', '<b>En el sitio de pruebas los correos no salen.</b> Lo que configures aquí decide a quién '
-      . 'IRÍAN en producción; en este sitio toda orden queda RETENIDA (no se conecta a ningún SMTP).') ?>
+      . 'IRÍAN en producción; en este sitio el correo de toda OT INDUSTEC queda RETENIDO (no se conecta a ningún SMTP).') ?>
 
   <?php if ($okFlash): ?><?= Ui::aviso('ok', $e((string) $okFlash), true) ?><?php endif; ?>
   <?php if ($errFlash): ?><?= Ui::aviso('err', $e($errFlash), true) ?><?php endif; ?>
@@ -355,7 +356,7 @@ Ui::cabecera($u, 'correos.php', ['correos' => $contPendientes], ['titulo' => 'Co
       <div class="t">Por zona</div><div class="pie">Buzón institucional, copias internas y al cliente</div>
     </a>
     <a class="tile <?= $tab === 'generales' ? 'azul' : '' ?>" href="correos.php?tab=generales">
-      <div class="t">Generales</div><div class="pie">Van en toda orden, de cualquier zona</div>
+      <div class="t">Generales</div><div class="pie">Van en toda OT INDUSTEC, de cualquier zona</div>
     </a>
     <a class="tile <?= $tab === 'locales' ? 'azul' : '' ?>" href="correos.php?tab=locales">
       <div class="t">Por local</div><div class="pie">Jefe de operaciones de KFC y otras copias</div>
@@ -368,14 +369,14 @@ Ui::cabecera($u, 'correos.php', ['correos' => $contPendientes], ['titulo' => 'Co
       <div class="t">Propuestos por técnicos</div><div class="pie">Correos de local por aprobar</div>
     </a>
     <a class="tile <?= $tab === 'vista' ? 'azul' : '' ?>" href="correos.php?tab=vista">
-      <div class="t">Vista previa</div><div class="pie">A quién le llega una orden de un local</div>
+      <div class="t">Vista previa</div><div class="pie">A quién le llega una OT INDUSTEC de un local</div>
     </a>
   </div>
 
   <?php if ($tab === 'zona'): ?>
     <div class="filtros" style="margin:14px 0">
       <?php foreach (ZONAS as $z): ?>
-        <a class="btn <?= $z === $zonaSel ? 'primary' : '' ?>" href="correos.php?tab=zona&zona=<?= $e($z) ?>"><?= $e($z) ?></a>
+        <a class="btn <?= $z === $zonaSel ? 'primary' : '' ?>" href="correos.php?tab=zona&zona=<?= $e($z) ?>"><?= $e(Vocabulario::corto(Vocabulario::deEstado($z, 'zona'))) ?></a>
       <?php endforeach; ?>
     </div>
 
@@ -445,7 +446,7 @@ Ui::cabecera($u, 'correos.php', ['correos' => $contPendientes], ['titulo' => 'Co
     <?= formAlta($e, $_SERVER['QUERY_STRING'] ?? '', 'REPORTE', 'CLIENTE', 'GENERAL', null, null, 'OTRO') ?>
 
   <?php elseif ($tab === 'propuestos'): ?>
-    <p class="sub" style="margin:0 0 10px">El correo que un técnico escribió para el local, si es distinto del maestro. Aprobarlo lo vuelve el correo por defecto de ese local (hasta entonces, la orden que lo escribió ya salió a ese correo: aprobar no reenvía nada, solo fija el valor para las siguientes).</p>
+    <p class="sub" style="margin:0 0 10px">El correo que un técnico escribió para el local, si es distinto del maestro. Aprobarlo lo vuelve el correo por defecto de ese local (hasta entonces, la OT INDUSTEC que lo escribió ya salió a ese correo: aprobar no reenvía nada, solo fija el valor para las siguientes).</p>
     <div class="tabla-wrap">
       <table class="tarjetas">
         <thead><tr><th>Local</th><th>Correo propuesto</th><th>Antes</th><th>Veces</th><th>Quién / cuándo</th><th>Decisión</th></tr></thead>
@@ -517,8 +518,8 @@ Ui::cabecera($u, 'correos.php', ['correos' => $contPendientes], ['titulo' => 'Co
       $dest = Destinatarios::resolver('ORDEN', (string) ($localFila['zona'] ?? ''), $localSel,
                                       (string) ($localFila['cadena'] ?? null), null);
     ?>
-      <h2><?= $e($localSel) ?> · <?= $e($nombreLocal[$localSel]) ?> · zona <?= $e((string) ($localFila['zona'] ?? '—')) ?></h2>
-      <p>Una orden de este local, sin que el técnico escriba un correo distinto, se envía a:</p>
+      <h2><?= $e($localSel) ?> · <?= $e($nombreLocal[$localSel]) ?> · <?= $e(($localFila['zona'] ?? '') !== '' ? Ui::nombreZona((string) $localFila['zona']) : Vocabulario::t('SIN_ZONA')) ?></h2>
+      <p>Una OT INDUSTEC de este local, sin que el técnico escriba un correo distinto, se envía a:</p>
       <p><b>Para:</b> <?= $dest['para'] ? implode(', ', array_map($e, $dest['para'])) : '<span class="sub">nadie (sin destinatarios)</span>' ?></p>
       <p><b>Copia:</b> <?= $dest['cc'] ? implode(', ', array_map($e, $dest['cc'])) : '<span class="sub">nadie</span>' ?></p>
       <p><b>Jefe de operaciones (KFC) que imprime el PDF:</b> <?= $e(Destinatarios::jefeOperaciones($localSel, (string) ($localFila['cadena'] ?? '')) ?? 'sin configurar') ?></p>

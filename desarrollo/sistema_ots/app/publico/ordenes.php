@@ -66,16 +66,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     Auth::exigirCsrf();
     $accion = (string) ($_POST['accion'] ?? '');
     $ot = strtoupper(trim((string) ($_POST['ot'] ?? '')));
-    if ($ot === '' || !otValida($ot)) { json(400, ['ok' => false, 'error' => 'Identificador de orden no válido.']); }
+    if ($ot === '' || !otValida($ot)) { json(400, ['ok' => false, 'error' => 'Número de OT INDUSTEC no válido.']); }
     $fila = $hayIndice ? Db::uno('SELECT * FROM ot_archivo WHERE id_industec = ?', [$ot]) : null;
 
     if ($accion === 'compartir') {
         if (!Ui::puedeModulo('ots.compartir', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO'], $u)) {
             Auth::bitacora('DENEGADO', 'ot', $ot, 'compartir sin permiso', null, null, [], false);
-            json(403, ['ok' => false, 'error' => 'No tienes permiso para compartir órdenes.']);
+            json(403, ['ok' => false, 'error' => 'No tienes permiso para compartir OT INDUSTEC.']);
         }
         if (!Emision::existePdf($ot)) {
-            json(404, ['ok' => false, 'error' => 'El PDF de esa orden no está en el servidor: no hay qué compartir.']);
+            json(404, ['ok' => false, 'error' => 'El PDF de esa OT INDUSTEC no está en el servidor: no hay qué compartir.']);
         }
         $cfg = Db::config();
         $secreto = (string) ($cfg['enlace_secreto'] ?? $cfg['sync_secreto'] ?? '');
@@ -90,9 +90,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($accion === 'pedir_copia') {
-        if ($fila === null) { json(404, ['ok' => false, 'error' => 'Esa orden no está en el índice.']); }
+        if ($fila === null) { json(404, ['ok' => false, 'error' => 'Esa OT INDUSTEC no está en el índice.']); }
         if ((int) $fila['en_servidor'] === 1 || Emision::existePdf($ot)) {
-            json(409, ['ok' => false, 'error' => 'Esa orden ya está en el servidor: ábrela directamente.']);
+            json(409, ['ok' => false, 'error' => 'Esa OT INDUSTEC ya está en el servidor: ábrela directamente.']);
         }
         $n = Db::ejecutar(
             'INSERT INTO ot_archivo_solicitudes (id_industec, usuario_id) VALUES (?, ?)
@@ -196,14 +196,14 @@ $enlace = static function (array $cambios = []) use ($fq, $fZona, $fLocal, $fDes
     return 'ordenes.php' . ($p ? '?' . http_build_query($p) : '');
 };
 
-Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de órdenes']);
+Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de OT INDUSTEC']);
 ?>
 <div class="wrap ancho">
 
   <div class="titulo entra">
-    <h1>Archivo de órdenes</h1>
+    <h1>Archivo de OT INDUSTEC</h1>
     <p class="sub">
-      Las órdenes de trabajo de las tres zonas, en solo lectura: se consultan,
+      Las OT INDUSTEC de las tres zonas, en solo lectura: se consultan,
       se abren, se descargan y se comparten, y cada uno de esos gestos queda en
       la bitácora con tu nombre. Nada se borra ni se edita desde aquí.
     </p>
@@ -223,7 +223,7 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de órdenes']);
     <div class="tiles tiles-enlace">
       <a class="tile azul" href="ordenes.php">
         <div class="n" data-n="<?= $totalIndice ?>">0</div>
-        <div class="t">Órdenes en el archivo</div>
+        <div class="t">OT INDUSTEC en el archivo</div>
         <div class="pie"><?= $enServidor ?> con el PDF en el servidor</div>
       </a>
       <?php foreach ($ZONAS as $z): ?>
@@ -253,7 +253,7 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de órdenes']);
       <div class="campo" style="flex:1;min-width:200px">
         <label for="f-q">Buscar</label>
         <input type="search" id="f-q" name="q" value="<?= e($fq) ?>"
-               placeholder="orden, aviso, local o técnico"
+               placeholder="OT INDUSTEC, aviso SAP, local o técnico"
                data-busca="#tabla-archivo" data-busca-cuenta="#cuenta-archivo">
       </div>
       <div class="campo">
@@ -261,7 +261,7 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de órdenes']);
         <select id="f-zona" name="zona">
           <option value="">Las tres</option>
           <?php foreach ($ZONAS as $z): ?>
-            <option value="<?= $z ?>" <?= $fZona === $z ? 'selected' : '' ?>><?= $z ?></option>
+            <option value="<?= $z ?>" <?= $fZona === $z ? 'selected' : '' ?>><?= e(Ui::zonaCorta($z)) ?></option>
           <?php endforeach; ?>
         </select>
       </div>
@@ -314,15 +314,15 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de órdenes']);
 
     <p class="sub" style="margin:0 0 8px">
       <b id="cuenta-archivo" data-plantilla="{n}"><?= count($filas) ?></b> de <b><?= $total ?></b>
-      <?= $total === 1 ? 'orden' : 'órdenes' ?><?= $paginas > 1 ? ' · página ' . $pagina . ' de ' . $paginas : '' ?>.
+      OT INDUSTEC<?= $paginas > 1 ? ' · página ' . $pagina . ' de ' . $paginas : '' ?>.
       La más reciente arriba.
     </p>
 
     <div class="tabla-wrap">
       <table id="tabla-archivo" class="tarjetas">
         <thead><tr>
-          <th>Orden</th><th>Fecha</th><th>Local</th><th>Zona</th><th>Aviso</th>
-          <th>Técnico</th><th>Origen</th><th>Informe</th>
+          <th>OT INDUSTEC</th><th>Fecha</th><th>Local</th><th>Zona</th><th>Aviso SAP</th>
+          <th>Técnico</th><th>Origen</th><th>Acciones</th>
         </tr></thead>
         <tbody>
         <?php if (!$filas): ?>
@@ -335,7 +335,7 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de órdenes']);
           ?>
           <tr data-b="<?= Ui::claveFila([$ot, (string) $f['aviso'], (string) $f['local_codigo'],
                                          (string) $f['local_nombre'], (string) $f['tecnico']]) ?>">
-            <td data-th="Orden">
+            <td data-th="OT INDUSTEC">
               <span class="mono"><?= e($ot) ?></span>
               <?php if (!empty($f['modulo'])): ?>
                 <span class="desc"><?= e(strtolower((string) $f['modulo'])) ?><?= !empty($f['dia']) ? ' · día ' . (int) $f['dia'] : '' ?></span>
@@ -347,10 +347,10 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de órdenes']);
               <span class="desc"><?= e((string) $f['local_nombre']) ?></span>
             </td>
             <td data-th="Zona"><?= Ui::zona((string) $f['zona']) ?></td>
-            <td data-th="Aviso" class="mono"><?= e((string) ($f['aviso'] ?: '—')) ?></td>
+            <td data-th="Aviso SAP" class="mono"><?= e((string) ($f['aviso'] ?: '—')) ?></td>
             <td data-th="Técnico"><?= e((string) ($f['tecnico'] ?: '—')) ?></td>
             <td data-th="Origen"><span class="chip"><?= e($ORIGEN[$f['origen']] ?? strtolower((string) $f['origen'])) ?></span></td>
-            <td data-th="Informe">
+            <td data-th="Acciones">
               <?php if ($aqui): ?>
                 <div class="acc">
                   <a class="btn primary sm" href="pdf.php?ot=<?= rawurlencode($ot) ?>" target="_blank" rel="noopener">Ver</a>
@@ -389,7 +389,7 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de órdenes']);
 </div>
 
 <dialog id="dlg">
-  <h2 style="margin:0 0 4px;font-size:17px">Compartir el informe</h2>
+  <h2 style="margin:0 0 4px;font-size:17px">Compartir la OT INDUSTEC</h2>
   <p class="sub" style="margin:0 0 10px">
     Enlace de <b id="dlg-ot" class="mono"></b>. <b>Caduca <span id="dlg-caduca"></span></b> y deja
     registrado quién lo abrió y que lo compartiste tú. Va con la firma del
@@ -430,11 +430,11 @@ function compartir(b) {
     document.getElementById('dlg-caduca').textContent = 'el ' + j.caduca + ' (' + j.horas + ' horas)';
     document.getElementById('dlg-url').textContent = url;
     document.getElementById('dlg-copiado').hidden = true;
-    var texto = 'Informe de la orden ' + ot + ' de INDUSTEC: ' + url
+    var texto = 'OT INDUSTEC ' + ot + ': ' + url
               + ' (el enlace caduca en ' + j.horas + ' horas)';
     document.getElementById('dlg-wa').href = 'https://wa.me/?text=' + encodeURIComponent(texto);
     document.getElementById('dlg-mail').href =
-        'mailto:?subject=' + encodeURIComponent('Informe de la orden ' + ot)
+        'mailto:?subject=' + encodeURIComponent('OT INDUSTEC ' + ot)
       + '&body=' + encodeURIComponent(texto);
     document.getElementById('dlg').showModal();
   }).catch(function () { b.disabled = false; UI.toast('Sin conexión con el servidor.', 'err'); });

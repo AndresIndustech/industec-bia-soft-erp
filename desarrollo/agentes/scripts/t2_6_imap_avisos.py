@@ -466,9 +466,9 @@ def main():
         "correos_leidos": len(mensajes),
         "alcance_version": ver_alcance,
         "las_alertas_no_deciden": (
-            "Estas alertas solo marcan casos sospechosos para que la administradora "
-            "los encuentre rapido. El veredicto sobre cada caso es suyo: el sistema "
-            "no cierra, no rechaza y no da ningun caso por ajeno."
+            "Estas alertas solo marcan ordenes sospechosas para que la administradora "
+            "las encuentre rapido. Cada orden la resuelve ella: el sistema no cierra, "
+            "no rechaza y no da ninguna orden por ajena."
         ),
         "resumen": {
             "casos_vigentes": len(datos),
@@ -502,7 +502,7 @@ def main():
     if datos:
         ok = sum(1 for c in datos if c["local"])
         if ok / len(datos) < 0.95:
-            print(f"\nABORTA: solo {ok}/{len(datos)} casos resuelven local (<95%). "
+            print(f"\nABORTA: solo {ok}/{len(datos)} ordenes resuelven local (<95%). "
                   "No se toca el catalogo anterior.", file=sys.stderr)
             sys.exit(1)
 
@@ -525,12 +525,14 @@ def main():
                 raise
             time.sleep(0.5)
 
-    print(f"\ncasos vigentes       : {len(datos)}")
+    # Sin tildes: t2_9_buzon_vigilante.py lee estas dos lineas por su comienzo a traves de
+    # una tuberia. Si cambian aqui, se cambian alla.
+    print(f"\nordenes en el buzon  : {len(datos)}")
     print(f"ordenes eliminadas   : {len(eliminadas)} (excluidas)")
     for z in sorted(por_zona):
         print(f"  {z:<14}: {por_zona[z]}")
     print("prioridad            :", ", ".join(f"{k}={v}" for k, v in sorted(por_prio.items())))
-    print("\nALERTAS para la administradora (no son veredictos):")
+    print("\nALERTAS para la administradora (marcan, no deciden: las resuelve ella):")
     for e in ("CON_ALERTA", "POR_CONFIRMAR", "SIN_ALERTA"):
         print(f"  {e:<16}: {por_alerta.get(e, 0)}")
     for r, n in sorted(por_regla.items(), key=lambda x: -x[1]):

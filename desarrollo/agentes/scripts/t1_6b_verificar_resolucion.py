@@ -69,7 +69,7 @@ def main():
     resueltos = [r for r in res if r["local_resuelto"]]
     no_resueltos = [r for r in res if not r["local_resuelto"]]
     print(f"   casos en el informe: {len(res)}  (esperado {len(man)})")
-    print(f"   resueltos: {len(resueltos)} | sin resolver: {len(no_resueltos)} | "
+    print(f"   identificados: {len(resueltos)} | sin identificar: {len(no_resueltos)} | "
           f"suma: {len(resueltos) + len(no_resueltos)}")
     if len(res) != len(man):
         fallos.append(f"el informe tiene {len(res)} casos y la cuarentena {len(man)}")
@@ -125,7 +125,7 @@ def main():
     print(f"   coinciden: {len(iguales)} | difieren: {len(distintos)}")
     for r in distintos[:15]:
         print(f"      {r['nombre_original'][:46]:46s} nombre={previo[r['nombre_original']]:8s} "
-              f"-> resuelto={r['local_resuelto']:8s} via={r['via_resolucion'][:26]}")
+              f"-> identificado={r['local_resuelto']:8s} via={r['via_resolucion'][:26]}")
 
     # ---- 4. muestra verificada contra el texto crudo del PDF ----
     print("\n4. MUESTRA CONTRA EL TEXTO CRUDO DEL PDF")

@@ -37,6 +37,12 @@ import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Los estados se nombran con el diccionario unico (vocabulario.json): «abierta en SAP» es lo
+# que dice el export; «asignada», «OT INDUSTEC de cierre», lo que dice B.IA. Los valores del
+# export y de la base (ABIERTO, ASIGNADO...) se comparan tal cual.
+from comun import de_estado, termino, vocabulario  # noqa: E402
+
 BASE = Path(r"D:\INDUSTECH IA\desarrollo\agentes")
 ENV_PATH = BASE / "config" / ".env"
 CATALOGOS = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS\catalogos")
@@ -297,7 +303,7 @@ def main():
     print("=" * 74)
     print(f"COTEJO DE {ruta.name} AL {hoy}")
     print("=" * 74)
-    print(f"catalogo del buzon usado: foto del {generado} ({len(buzon)} casos vivos)")
+    print(f"catalogo del buzon usado: foto del {generado} ({len(buzon)} {termino('ORDEN', len(buzon))})")
     print(f"base local avisos_sap   : cobertura {cobertura['fmin']} .. {cobertura['fmax']}")
     print(f"\nordenes abiertas en SAP : {len(filas)}")
     print(f"  capturadas por el buzon : {en_buzon}")
@@ -310,8 +316,8 @@ def main():
               " — fuera de cobertura, no es error")
 
     con_ot = [f for f in filas if f["historico"]]
-    print(f"\ncon OT en el archivo historico y SAP abierto: {len(con_ot)}"
-          " — el trabajo se hizo, falta el cierre en SAP")
+    print(f"\ncon OT INDUSTEC en el archivo historico y abierta en SAP: {len(con_ot)}"
+          " — el trabajo se hizo, falta cerrarla en SAP")
 
     print("\npor zona:")
     for z, n in collections.Counter(f["zona"] or "(sin resolver)" for f in filas).most_common():
@@ -324,7 +330,7 @@ def main():
     for c, n in clases.most_common():
         print(f"  {c:<22} {n}")
     if len(clases) == 1:
-        print("  AVISO: el export trae una sola clase de trabajo. Muy probablemente")
+        print("  ATENCION: el export trae una sola clase de trabajo. Muy probablemente")
         print("  esta filtrado: este cotejo NO dice nada de las demas clases.")
 
     # El dato compartido debe coincidir, o hay que mirarlo una por una
@@ -377,9 +383,10 @@ def escribir_excel(filas: list, origen: Path, generado: str):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "ABIERTAS EN SAP"
-    enc = ["AVISO", "FECHA AVISO", "DIAS", "LOCAL", "NOMBRE DEL LOCAL", "ZONA", "CADENA",
-           "EQUIPO", "ORDEN SAP", "LO TENIAMOS?", "OT YA EMITIDA", "ESTADO EN EL SISTEMA",
+    enc = ["AVISO SAP", "FECHA AVISO", "DIAS", "LOCAL", "NOMBRE DEL LOCAL", "ZONA", "CADENA",
+           "EQUIPO", "ORDEN SAP", "LO TENIAMOS?", "OT INDUSTEC YA EMITIDA", "ESTADO EN EL SISTEMA",
            "TECNICO ASIGNADO", "QUE HAY QUE HACER"]
+    estados_caso = vocabulario()["estados_caso"]
     ws.append(enc)
     for i, _ in enumerate(enc, 1):
         c = ws.cell(row=1, column=i)
@@ -394,23 +401,28 @@ def escribir_excel(filas: list, origen: Path, generado: str):
         # El orden importa: lo que ya se atendio no se manda a asignar, y lo que
         # nadie esta viendo va primero que cualquier tramite.
         if f["ot_cierre"]:
-            accion = "Confirmar el cierre en SAP: el trabajo ya se hizo"
+            accion = f"Cerrar en SAP: ya tiene {termino('OT_CIERRE')} ({termino('ATENDIDA')})"
             relleno = verde
         elif f["historico"]:
-            accion = "Verificar: hay OT emitida y SAP sigue abierto"
+            accion = f"Verificar: hay {termino('OT_INDUSTEC')} emitida y la orden sigue abierta en SAP"
             relleno = amarillo if f["en_buzon"] == "NO" else verde
         elif f["estado_gestion"] == "ASIGNADO":
-            accion = "En curso, con tecnico asignado"
+            accion = f"{termino('ASIGNADA').capitalize()}: ya tiene tecnico"
             relleno = verde
         elif f["en_buzon"] == "NO":
-            accion = "REVISAR: no entro por el buzon, nadie lo esta viendo"
+            accion = "REVISAR: no entro por el buzon, nadie la esta viendo"
             relleno = rojo
         else:
             accion = "Asignar tecnico"
             relleno = verde
         ws.append([f["aviso"], str(f["fecha"] or ""), f["dias"], f["local"], f["local_nombre"],
                    f["zona"], f["cadena"], f["equipo"], f["orden_sap"], f["en_buzon"],
-                   f["historico"], f["estado_gestion"] or "sin gestion", f["tecnico"], accion])
+                   # El estado de la base (ASIGNADO...) se muestra con su termino del diccionario;
+                   # uno que el diccionario no trae se deja tal cual (es un dato, no se adivina).
+                   f["historico"],
+                   (termino(de_estado(f["estado_gestion"])) if f["estado_gestion"] in estados_caso
+                    else f["estado_gestion"] or "sin gestion"),
+                   f["tecnico"], accion])
         for col in range(1, len(enc) + 1):
             ws.cell(row=ws.max_row, column=col).fill = relleno
 
@@ -441,7 +453,7 @@ def escribir_excel(filas: list, origen: Path, generado: str):
     try:
         wb.save(destino)
     except PermissionError:
-        sys.exit(f"ABORTADO: {destino.name} esta abierto en Excel. Cierralo y repite.")
+        sys.exit(f"ABORTADO: {destino.name} esta en uso en Excel. Cierralo y repite.")
     print(f"\nEscrito: {destino}")
 
 

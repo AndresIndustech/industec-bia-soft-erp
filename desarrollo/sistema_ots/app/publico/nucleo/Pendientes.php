@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/Casos.php';
 require_once __DIR__ . '/Ui.php';
 require_once __DIR__ . '/Catalogo.php';
+require_once __DIR__ . '/Vocabulario.php';   // los mensajes nombran los estados con el diccionario único
 
 /**
  * Pendientes.php — El equipo que quedó sin concluir, y su reloj de 48 horas.
@@ -221,12 +222,16 @@ final class Pendientes
     {
         return self::ESTADOS[strtoupper((string) $e)][1] ?? '';
     }
+    /** Sin vía todavía (SIN_VEREDICTO) es que el jefe de zona no la validó:
+     *  se dice «por validar», con la palabra del diccionario, igual que el
+     *  estado SOLICITADO que la acompaña. */
     public static function etiquetaVia(?string $v): string
     {
-        return self::VIAS[strtoupper((string) $v)][0] ?? 'sin validar';
+        return self::VIAS[strtoupper((string) $v)][0] ?? Vocabulario::t('POR_VALIDAR');
     }
-    /** El «veredicto», reservado para lo que decide Grupo KFC (P-20): no se
-     *  confunde con lo que valida el jefe de zona. */
+    /** Lo que decide Grupo KFC (P-20): no se confunde con lo que valida el
+     *  jefe de zona. En pantalla es la «decisión de KFC»; «veredicto» quedó
+     *  solo en los nombres de columnas y constantes, que no cambian. */
     public static function etiquetaVeredictoKfc(?string $v): string
     {
         return self::VEREDICTOS_KFC[strtoupper((string) $v)] ?? self::VEREDICTOS_KFC['PENDIENTE'];
@@ -314,6 +319,12 @@ final class Pendientes
             for ($i = 0; $i < 7; $i++) { $par[] = $like; }
         }
 
+        /* El orden ES la prioridad de trabajo, no una preferencia: primero el
+           equipo deshabilitado sin validar (el plazo de 48 h corriendo),
+           después el resto de los deshabilitados, y dentro de cada grupo lo
+           más viejo arriba, que es lo que lleva más tiempo esperando. (El
+           comentario vivía dentro del SQL; se sacó aquí para que la prueba de
+           la lista negra no lo lea como texto de pantalla.) */
         $filas = Db::todos(
             "SELECT p.*, a.nombre AS abrio, a.usuario AS abrio_usuario,
                     v.nombre AS decidio, rs.nombre AS registro_sap, vk.nombre AS decidio_kfc,
@@ -325,10 +336,6 @@ final class Pendientes
           LEFT JOIN usuarios vk ON vk.usuario_id = p.veredicto_kfc_por
           LEFT JOIN usuarios g  ON g.usuario_id = p.gestionado_por
               WHERE $donde
-              /* El orden ES la prioridad de trabajo, no una preferencia:
-                 primero lo que está parado sin validar (el reloj corriendo),
-                 después el resto de lo parado, y dentro de cada grupo lo más
-                 viejo arriba, que es lo que lleva más tiempo esperando. */
               ORDER BY (p.deshabilitado = 1 AND p.via = 'SIN_VEREDICTO') DESC,
                        p.deshabilitado DESC, p.abierto_en ASC",
             $par
@@ -357,7 +364,7 @@ final class Pendientes
             $h = ($p['min_veredicto'] ?? null) !== null ? (int) $p['min_veredicto'] / 60 : null;
             return $h === null ? null : [
                 'clase'   => $h <= 48 ? 'edad edad-hoy' : 'edad edad-viejo',
-                'texto'   => $h <= 48 ? 'validado en ' . round($h) . ' h'
+                'texto'   => $h <= 48 ? 'validada en ' . round($h) . ' h'
                                       : 'se validó a las ' . round($h) . ' h',
                 'vencido' => $h > 48, 'horas' => $h, 'cerrado' => true,
             ];
@@ -461,20 +468,20 @@ final class Pendientes
     public static function abrir(array $d): array
     {
         if (!self::disponible()) {
-            return [false, 'El módulo de pendientes todavía no está instalado en la base.', null];
+            return [false, 'El módulo de ' . Vocabulario::t('MODULO_REPUESTOS') . ' todavía no está instalado en la base.', null];
         }
         // El permiso se comprueba aquí y no solo escondiendo el botón: mis.php y
         // envio.php llegaban hasta este punto sin mirarlo.
         if (!Auth::puede('repuestos.pedir')) {
             Auth::bitacora('DENEGADO', 'pendiente', (string) ($d['aviso'] ?? ''), 'abrir sin permiso',
                            null, null, [], false);
-            return [false, 'No tienes permiso para registrar equipos sin concluir.', null];
+            return [false, 'No tienes permiso para abrir solicitudes de repuesto o equipo.', null];
         }
         $u = Auth::actual();
         $aviso = trim((string) ($d['aviso'] ?? ''));
         $diag  = trim((string) ($d['diagnostico'] ?? ''));
 
-        if ($aviso === '') { return [false, 'El pendiente tiene que ir contra un caso.', null]; }
+        if ($aviso === '') { return [false, 'La solicitud tiene que ir contra una orden (su aviso SAP).', null]; }
         if ($diag === '') {
             // Es obligatorio a propósito. La premisa del servicio es que una
             // intervención concluye; dejar un equipo sin concluir exige decir
@@ -487,7 +494,7 @@ final class Pendientes
         if ($caso === null) {
             Auth::bitacora('DENEGADO', 'pendiente', $aviso, 'abrir fuera de alcance',
                            null, null, [], false);
-            return [false, 'Ese caso no existe o no está en tu alcance.', null];
+            return [false, 'Esa orden no existe o no está en tu alcance.', null];
         }
 
         $parado = !empty($d['deshabilitado']) ? 1 : 0;
@@ -593,14 +600,15 @@ final class Pendientes
         $id = (int) ($fila['pendiente_id'] ?? 0);
         if ($previo !== null && !$reabre) {
             self::anotar($id, 'DIAGNOSTICO',
-                         ($tardio ? 'Llegó después del cierre (se capturó antes): ' : '') . $diag, false);
+                         ($tardio ? 'Llegó cuando la solicitud ya no estaba en trámite (se capturó antes): ' : '')
+                         . $diag, false);
         }
         if ($tardio) {
             Auth::bitacora('PENDIENTE_REPORTE_TARDIO', 'pendiente', (string) $id,
                            mb_substr($diag, 0, 120), $previo['estado'], $previo['estado'],
                            ['aviso' => $aviso, 'equipo' => $activo]);
-            return [true, 'Ese equipo ya se había resuelto después de este reporte: quedó anotado '
-                        . 'en su historial, sin reabrirlo.', $id];
+            return [true, 'La solicitud de ese equipo quedó ' . self::etiquetaEstado($previo['estado'])
+                        . ' después de este reporte: quedó anotado en su historial, sin reabrirla.', $id];
         }
 
         // El caso pasa a ESPERA_REPUESTO. No es un limbo: dice que el técnico
@@ -622,15 +630,15 @@ final class Pendientes
         // nada, solo por abrir el pendiente por primera vez.
 
         Auth::bitacora('PENDIENTE_ABRE', 'pendiente', (string) $id,
-                       mb_substr($diag, 0, 120) . ($parado ? ' · EQUIPO PARADO' : ''),
+                       mb_substr($diag, 0, 120) . ($parado ? ' · EQUIPO DESHABILITADO' : ''),
                        null, 'SOLICITADO',
                        ['aviso' => $aviso, 'equipo' => $activo, 'parado' => $parado,
                         'zona' => $caso['zona'] ?? null]);
 
-        $inicio = $reabre ? 'Reabierto: el equipo volvió a quedar sin concluir. ' : 'Registrado. ';
+        $inicio = $reabre ? 'Solicitud reabierta: el equipo volvió a fallar. ' : 'Solicitud registrada. ';
         return [true, $inicio . ($parado
-            ? 'El equipo consta como deshabilitado: hay 48 horas para que el jefe de zona lo valide.'
-            : 'El equipo sigue operando, así que no corre el plazo de 48 horas.'), $id];
+            ? 'El equipo consta como deshabilitado: hay 48 horas para que el jefe de zona la valide.'
+            : 'El equipo quedó operativo, así que no corre el plazo de 48 horas.'), $id];
     }
 
     /**
@@ -654,13 +662,13 @@ final class Pendientes
             // fabricado contra otra zona tiene que quedar en la bitácora (T2.12.5).
             Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
                            null, null, [], false);
-            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+            return [false, 'Esa solicitud no existe o no está en tu alcance.'];
         }
         if (!isset(self::VIAS[$via])) { return [false, 'Esa no es una de las cuatro vías.']; }
         // SIN_VEREDICTO es el estado con que nacían antes de la 009: esas filas
         // siguen vivas en el sitio y se validan por aquí igual que SOLICITADO.
         if (!$p['abierto'] || !in_array($p['estado'], ['SOLICITADO', 'SIN_VEREDICTO'], true)) {
-            return [false, 'Ese pendiente ya fue validado, o está cerrado.'];
+            return [false, 'Esa solicitud ya fue validada, o ya no está en trámite.'];
         }
         // Dar de baja un activo del cliente es una decisión que se le explica a
         // Grupo KFC. Sin motivo escrito no se sostiene.
@@ -686,7 +694,7 @@ final class Pendientes
             // Carrera: alguien más lo validó entre el `uno()` de arriba y este
             // UPDATE. No se anota nada -- el UPDATE que afecta 0 filas no deja
             // rastro de una acción que no ocurrió («omitidos», auditoría T2.14).
-            return [false, 'Ese pendiente ya fue validado por otra persona.'];
+            return [false, 'Esa solicitud ya la validó otra persona.'];
         }
 
         // P-08: el jefe de zona es quien debería validar; si lo hace la
@@ -726,7 +734,7 @@ final class Pendientes
         if ($p === null) {
             Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
                            null, null, [], false);
-            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+            return [false, 'Esa solicitud no existe o no está en tu alcance.'];
         }
         $req = trim($requerimiento);
         if ($req === '') {
@@ -736,7 +744,7 @@ final class Pendientes
             return [false, 'El número del requerimiento en SAP es obligatorio.'];
         }
         if (!$p['abierto'] || $p['estado'] !== 'VALIDADO_JEFE') {
-            return [false, 'Ese pendiente todavía no está validado por el jefe, o ya se registró en SAP.'];
+            return [false, 'Esa solicitud todavía no está validada por el jefe de zona, o ya se registró en SAP.'];
         }
 
         $u = Auth::actual();
@@ -749,7 +757,7 @@ final class Pendientes
             [$req, (int) $u['usuario_id'], $id]
         );
         if ($filas === 0) {
-            return [false, 'Ese pendiente cambió de estado mientras tanto.'];
+            return [false, 'Esa solicitud cambió de estado mientras tanto.'];
         }
 
         self::anotar($id, 'REGISTRO_SAP',
@@ -759,8 +767,10 @@ final class Pendientes
                        'VALIDADO_JEFE', 'REGISTRADO_SAP',
                        ['requerimiento_sap' => $req, 'aviso' => $p['aviso']]);
 
-        return [true, 'Registrado en SAP con el requerimiento ' . $req . '. Queda esperando la '
-                    . 'respuesta de Grupo KFC.'];
+        // Desde aquí se espera el OK de Operaciones de KFC: se dice con el
+        // término de Isabel (PENDIENTE OK OP´S), el mismo de la pantalla.
+        return [true, 'Solicitud registrada en SAP con el requerimiento ' . $req . ': queda '
+                    . Vocabulario::t('PENDIENTE_OK_OPS') . '.'];
     }
 
     /**
@@ -785,10 +795,10 @@ final class Pendientes
         if ($p === null) {
             Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
                            null, null, [], false);
-            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+            return [false, 'Esa solicitud no existe o no está en tu alcance.'];
         }
         if (!$p['abierto'] || !in_array($p['estado'], ['REGISTRADO_SAP', 'ESPERA_KFC'], true)) {
-            return [false, 'Ese pendiente todavía no está registrado en SAP, o ya tiene decisión de Grupo KFC.'];
+            return [false, 'Esa solicitud todavía no está registrada en SAP, o ya tiene decisión de Grupo KFC.'];
         }
 
         $tercero = trim((string) $tercero);
@@ -826,7 +836,7 @@ final class Pendientes
                    (int) $u['usuario_id'], $id]
         );
         if ($filas === 0) {
-            return [false, 'Ese pendiente cambió de estado mientras tanto.'];
+            return [false, 'Esa solicitud cambió de estado mientras tanto.'];
         }
 
         self::anotar($id, 'VEREDICTO_KFC',
@@ -860,17 +870,19 @@ final class Pendientes
         if (!Auth::puede('repuestos.gestionar')) {
             Auth::bitacora('DENEGADO', 'pendiente', (string) $id, 'mover sin permiso',
                            null, $nuevo, [], false);
-            return [false, 'No tienes permiso para gestionar pendientes.'];
+            return [false, 'No tienes permiso para gestionar solicitudes.'];
         }
         $p = self::uno($id);
         if ($p === null) {
             Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
                            null, null, [], false);
-            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+            return [false, 'Esa solicitud no existe o no está en tu alcance.'];
         }
         if (!isset(self::ESTADOS[$nuevo])) { return [false, 'Estado no válido.']; }
-        if ($nuevo === $p['estado']) { return [false, 'El pendiente ya está en ese estado.']; }
-        if (!$p['abierto']) { return [false, 'El pendiente ya está cerrado.']; }
+        if ($nuevo === $p['estado']) { return [false, 'La solicitud ya está en ese estado.']; }
+        if (!$p['abierto']) {
+            return [false, 'La solicitud ya está ' . self::etiquetaEstado($p['estado']) . ': no se mueve.'];
+        }
 
         if ($nuevo === 'CANCELADO') {
             if (trim($nota) === '') { return [false, 'Para cancelar hace falta el motivo.']; }
@@ -884,11 +896,11 @@ final class Pendientes
                 // Fila anterior a la 009: sigue su camino de siempre.
                 $camino = self::PASOS[$via];
             } else {
-                return [false, 'Este pendiente se gestiona con «Validar», «Registrar en SAP» o '
+                return [false, 'Esta solicitud se gestiona con «Validar», «Registrar en SAP» o '
                              . '«KFC decidió», no con Avanzar.'];
             }
             if (!in_array($nuevo, $camino, true)) {
-                return [false, 'Ese paso no pertenece al camino de este pendiente.'];
+                return [false, 'Ese paso no pertenece al camino de esta solicitud.'];
             }
             $iAct = array_search($p['estado'], $camino, true);
             $iNue = array_search($nuevo, $camino, true);
@@ -921,7 +933,7 @@ final class Pendientes
         if ($filas === 0) {
             // Otra persona ya lo movió entre el `uno()` y este UPDATE: no se
             // anota nada de una transición que no ocurrió.
-            return [false, 'Ese pendiente cambió de estado mientras tanto: recarga la pantalla.'];
+            return [false, 'Esa solicitud cambió de estado mientras tanto: recarga la pantalla.'];
         }
 
         self::anotar($id, 'CAMBIO_ESTADO',
@@ -944,7 +956,7 @@ final class Pendientes
                        $p['estado'], $nuevo,
                        ['aviso' => $p['aviso'], 'via' => $p['via'], 'prometido' => $fecha]);
 
-        return [true, 'Pendiente: ' . self::etiquetaEstado($nuevo) . '.'];
+        return [true, 'Solicitud: ' . self::etiquetaEstado($nuevo) . '.'];
     }
 
     /** El caso vuelve a la corriente cuando ya no queda nada esperando en él.
@@ -1018,7 +1030,9 @@ final class Pendientes
             $donde .= ' AND activo_fijo = ?';
             $par[] = $activoFijo;
         }
-        $nota = 'Orden concluida ' . $idIndustec;
+        // Lo que llega es la OT INDUSTEC de cierre: se nombra así (no «orden
+        // concluida»), porque «orden» es el trabajo que pide KFC.
+        $nota = Vocabulario::titulo('OT_CIERRE') . ' ' . $idIndustec;
         $n = 0;
         $tocados = [];
         foreach (Db::todos("SELECT pendiente_id, aviso, estado FROM pendientes WHERE $donde", $par) as $f) {
@@ -1057,7 +1071,7 @@ final class Pendientes
         }
         foreach (Db::todos("SELECT pendiente_id, aviso, estado FROM pendientes WHERE $otrosDonde", $otrosPar) as $o) {
             $pid = (int) $o['pendiente_id'];
-            $txt = $nota . ' recibida con este pendiente aún en ' . self::etiquetaEstado($o['estado']) . '.';
+            $txt = $nota . ' recibida con esta solicitud aún en ' . self::etiquetaEstado($o['estado']) . '.';
             self::anotar($pid, 'AVISO_INTERNO', $txt, false, null, null, $usuarioId);
             Auth::bitacora('PENDIENTE_ORDEN_CONCLUIDA_SIN_CERRAR', 'pendiente', (string) $pid, $txt,
                            $o['estado'], $o['estado'],
@@ -1110,25 +1124,25 @@ final class Pendientes
     {
         if (!Auth::puede('repuestos.gestionar')) {
             Auth::bitacora('DENEGADO', 'ot', $envioUuid, 'regularizar sin permiso', null, null, [], false);
-            return [false, 'No tienes permiso para regularizar equipos trabados sin aviso.', null];
+            return [false, 'No tienes permiso para ponerle el aviso SAP a una ' . Vocabulario::t('SIN_AVISO_SAP') . '.', null];
         }
         $aviso = trim($aviso);
-        if ($aviso === '') { return [false, 'Hace falta el aviso al que corresponde.', null]; }
+        if ($aviso === '') { return [false, 'Hace falta el aviso SAP al que corresponde.', null]; }
 
         $cap = Db::uno('SELECT * FROM ot_capturadas WHERE envio_uuid = ? AND aviso IS NULL', [$envioUuid]);
         if ($cap === null) {
-            return [false, 'Esa orden no existe o ya tiene aviso asignado.', null];
+            return [false, 'Esa OT INDUSTEC no existe o ya tiene su aviso SAP.', null];
         }
         $carga = json_decode((string) $cap['carga'], true) ?: [];
         $pen = $carga['pendiente'] ?? null;
         if (!is_array($pen) || trim((string) ($pen['diagnostico'] ?? '')) === '') {
-            return [false, 'Esa orden no tiene un equipo trabado que regularizar.', null];
+            return [false, 'Esa OT INDUSTEC no trae ninguna solicitud de repuesto o equipo.', null];
         }
 
         $filas = Db::ejecutar('UPDATE ot_capturadas SET aviso = ? WHERE envio_uuid = ? AND aviso IS NULL',
                               [mb_substr($aviso, 0, 20), $envioUuid]);
         if ($filas === 0) {
-            return [false, 'Ya se regularizó desde otra pantalla.', null];
+            return [false, 'Ya se le puso el aviso SAP desde otra pantalla.', null];
         }
 
         [$ok, $msg, $id] = self::abrir([
@@ -1142,7 +1156,7 @@ final class Pendientes
             'diagnostico_codigo' => $pen['diagnostico_codigo'] ?? null,
             'partes'             => is_array($pen['partes'] ?? null) ? $pen['partes'] : [],
         ]);
-        Auth::bitacora('PENDIENTE_REGULARIZADO', 'ot', $envioUuid, 'aviso asignado: ' . $aviso,
+        Auth::bitacora('PENDIENTE_REGULARIZADO', 'ot', $envioUuid, 'aviso SAP puesto: ' . $aviso,
                        null, null, ['aviso' => $aviso, 'captura_id' => $cap['captura_id']]);
         return [$ok, $msg, $id];
     }
@@ -1171,9 +1185,9 @@ final class Pendientes
         if ($p === null) {
             Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
                            null, null, [], false);
-            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+            return [false, 'Esa solicitud no existe o no está en tu alcance.'];
         }
-        if (!$p['abierto']) { return [false, 'Ese pendiente ya está cerrado.']; }
+        if (!$p['abierto']) { return [false, 'Esa solicitud ya está ' . self::etiquetaEstado($p['estado']) . '.']; }
 
         $texto = trim($texto);
         if ($texto === '') { return [false, 'Escribe qué quieres decirle a la administración.']; }
@@ -1197,8 +1211,8 @@ final class Pendientes
                         'van' => (int) $p['insistencias'] + ($tipo === 'RECORDATORIO' ? 1 : 0)]);
 
         return [true, $tipo === 'RECORDATORIO'
-            ? 'Recordatorio enviado. Queda registrado con la fecha.'
-            : 'Aviso interno enviado. No cuenta como una insistencia del técnico.'];
+            ? 'Listo: quedó registrado que insististe por esta solicitud, con la fecha.'
+            : 'Recordatorio de la oficina enviado. No cuenta como una insistencia del técnico.'];
     }
 
     /** Responder en el hilo sin mover el estado. P-12: permiso propio, para
@@ -1215,15 +1229,15 @@ final class Pendientes
         if ($p === null) {
             Auth::bitacora('DENEGADO', 'pendiente', (string) $id, __FUNCTION__ . ' fuera de alcance o inexistente',
                            null, null, [], false);
-            return [false, 'Ese pendiente no existe o no está en tu alcance.'];
+            return [false, 'Esa solicitud no existe o no está en tu alcance.'];
         }
-        if (!$p['abierto']) { return [false, 'Ese pendiente ya está cerrado.']; }
+        if (!$p['abierto']) { return [false, 'Esa solicitud ya está ' . self::etiquetaEstado($p['estado']) . '.']; }
         if (trim($texto) === '') { return [false, 'Escribe la respuesta.']; }
 
         self::anotar($id, 'RESPUESTA', $texto, false);
         Auth::bitacora('PENDIENTE_RESPONDE', 'pendiente', (string) $id,
                        mb_substr($texto, 0, 120), $p['estado'], $p['estado']);
-        return [true, 'Respuesta enviada. El técnico la ve en su bandeja.'];
+        return [true, 'Respuesta enviada. El técnico la ve en el hilo de su solicitud.'];
     }
 
     private static function anotar(int $id, string $tipo, string $texto, bool $urgente,
@@ -1328,7 +1342,7 @@ final class Pendientes
         $pct = min(100, max(2, $h / 48 * 100));
         $cl = $h >= 48 ? 'mal' : ($h >= 36 ? 'ojo' : 'bien');
         return '<div class="barra48" role="img" aria-label="'
-             . ($h >= 48 ? 'Plazo de 48 horas vencido' : 'Van ' . round($h) . ' de 48 horas')
+             . ($h >= 48 ? 'Solicitud ' . Vocabulario::t('VENCIDO_48H') : 'Van ' . round($h) . ' de 48 horas')
              . '"><i class="' . $cl . '" style="width:' . round($pct) . '%"></i></div>';
     }
 }

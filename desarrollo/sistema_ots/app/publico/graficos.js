@@ -13,9 +13,14 @@
    COMO SE USA — todo declarativo, para que PHP solo tenga que soltar el JSON:
 
      <figure class="viz" data-viz="barras"
-             data-titulo="Casos por zona"
-             data-sub="De los 918 vigentes en la ventana de 90 días"
-             data-datos='[{"e":"UIO","v":258},{"e":"LARB":...}]'></figure>
+             data-titulo="Órdenes por zona"
+             data-sub="Las 918 de la ventana de 90 días"
+             data-datos='[{"e":"UIO","v":258,"c":"#7c3aed"},{"e":"CUENCA-LOJA","c":…}]'></figure>
+
+   Los rótulos (`e`, `data-titulo`, `data-sub`) llegan ya escritos desde PHP
+   con los términos de vocabulario.json: este archivo no nombra estados. Por
+   eso cada dato trae su color en `c` —«CUENCA-LOJA» no es una clave de ZONA—
+   y `color()` solo cae a buscar la clave cuando no viene.
 
    Formas disponibles y cuándo usar cada una:
 
@@ -50,7 +55,7 @@
                 '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
 
   /* Colores con significado propio. NO se reutilizan como «serie 4»: si el
-     rojo es «vencido» en un gráfico, no puede ser «Cuenca» en el de al lado. */
+     rojo es «vencida (48 h)» en un gráfico, no puede ser «Cuenca» en el de al lado. */
   var ZONA   = { UIO: '#7c3aed', LARB: '#0d9488', CNLJ: '#ea580c', OTRA: '#64748b' };
   var ESTADO = {
     NUEVO: '#94a3b8', ASIGNADO: '#2a78d6', EN_REVISION: '#eda100',

@@ -170,6 +170,24 @@ afirmar('decisión de KFC desconocida cae en «sin decisión»', Pendientes::eti
         Vocabulario::t(Vocabulario::deEstado('PENDIENTE', 'decision_kfc')));
 afirmar('SOLICITADO se explica sin decir «veredicto»', str_contains(Pendientes::ayudaEstado('SOLICITADO'), 'veredicto'), false);
 
+// Los textos que arma Pendientes para la solicitud hablan con el diccionario
+// único (24-sep-2026): sin vía todavía es «por validar», el plazo vencido es
+// «vencida (más de 48 h sin validar)» y la validación va en femenino, porque
+// lo validado es la solicitud. Se compara contra el diccionario, no contra un
+// literal, salvo para comprobar que no vuelve la forma retirada.
+echo "\n=== Textos de la solicitud (vocabulario único) ===\n";
+afirmar('sin vía todavía se lee «por validar»', Pendientes::etiquetaVia('SIN_VEREDICTO'), Vocabulario::t('POR_VALIDAR'));
+$r = Pendientes::reloj(array_merge($base, ['via' => 'REPUESTO', 'estado' => 'VALIDADO_JEFE', 'min_veredicto' => 10 * 60]));
+afirmar('validada a tiempo: el reloj lo dice en femenino',
+        str_starts_with((string) clave($r, 'texto'), 'validada en'), true);
+afirmar('  y no vuelve «validado»', (bool) preg_match('/\bvalidado\b/u', (string) clave($r, 'texto')), false);
+$vencida = array_merge($base, ['min_plazo' => 60 * 60]);
+$vencida['reloj'] = Pendientes::reloj($vencida);
+afirmar('barra de 48 h vencida: el aria-label usa el término del diccionario',
+        str_contains(Pendientes::barra48($vencida), Vocabulario::t('VENCIDO_48H')), true);
+afirmar('  y no dice «Plazo de 48 horas vencido»',
+        str_contains(Pendientes::barra48($vencida), 'horas vencido'), false);
+
 echo "\n=== Los ocho estados del caso (Ui::ESTADOS) ===\n";
 $enumCaso = ['NUEVO','ASIGNADO','EN_REVISION','RESUELTO','NO_COMPETE','ATENDIDO',
              'CERRADO_SIN_ATENCION','ESPERA_REPUESTO'];

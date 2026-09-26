@@ -133,7 +133,8 @@ include getcwd() . '/automatizacion.php';
 h = pantalla("ADMIN")
 ok("administración: la pantalla se dibuja sin errores de PHP", "Reportes programados" in h and not re.search(r"Fatal error|Warning:|Uncaught", h), len(h))
 ok("administración: las 5 tareas aparecen inactivas", h.count('class="estado-red sin" style="margin-left:8px">inactiva') == 5)
-ok("administración: está la sección de correos para T2.28.2", "Correos de las órdenes" in h)
+# Desde el vocabulario único (24-sep-2026) el documento que se envía es la «OT INDUSTEC», no «la orden».
+ok("administración: está la sección de correos para T2.28.2", "Correos de las OT INDUSTEC" in h)
 ok("administración: el menú muestra «Automatización»", 'href="automatizacion.php"' in h)
 for rol in ("JEFE_ZONA", "TECNICO"):
     h = pantalla(rol)

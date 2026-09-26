@@ -522,7 +522,7 @@ def escribir_excel(filas: list, bitacora_alias: list, no_en_excel: list,
 
     ws2 = wb.create_sheet("Codigos por alias")
     enc2 = ["hoja", "fila", "codigo (Excel)", "ubicacion (Excel)", "correo (Excel)",
-            "resuelto a", "regla", "local activo?"]
+            "corresponde a", "regla", "local activo?"]
     ws2.append(enc2)
     for i, _ in enumerate(enc2, 1):
         ws2.cell(row=1, column=i).font = Font(bold=True)
@@ -571,7 +571,7 @@ def escribir_excel(filas: list, bitacora_alias: list, no_en_excel: list,
     try:
         wb.save(DESTINO)
     except PermissionError:
-        sys.exit(f"ABORTADO: {DESTINO.name} esta abierto en Excel. Cierralo y repite (I-4).")
+        sys.exit(f"ABORTADO: {DESTINO.name} esta en uso en Excel. Cierralo y repite (I-4).")
     print(f"\nEscrito: {DESTINO}")
 
 

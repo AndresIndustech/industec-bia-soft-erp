@@ -68,7 +68,7 @@
     b.hidden = false;
     b.innerHTML = hayRed
       ? '<b>Listo.</b> ' + (extra || '')
-      : '<b>Sin conexión.</b> Puedes llenar la orden y enviarla: queda guardada en el ' +
+      : '<b>Sin conexión.</b> Puedes llenar la OT INDUSTEC y enviarla: queda guardada en el ' +
         'teléfono y sale sola cuando vuelvas a abrir la app con señal.' + (extra ? ' ' + extra : '');
   }
 
@@ -103,7 +103,7 @@
     if (gen) {
       var vieja = (Date.now() - new Date(gen).getTime()) > 2 * 60000;
       if (!navigator.onLine || vieja) {
-        pintarEstado(false, 'Esta bandeja se guardó ' + cuando(gen) + '; puede faltar algo de después.');
+        pintarEstado(false, 'Esta pantalla se guardó ' + cuando(gen) + '; puede faltar algo de después.');
         return;
       }
     }
@@ -204,7 +204,7 @@
     caja.className = 'nota-regular';
     caja.style.margin = '0 0 14px';
     caja.innerHTML =
-      '<b>Tienes una orden a medio llenar</b>, del ' + f.toLocaleDateString('es-EC') +
+      '<b>Tienes una OT INDUSTEC a medio llenar</b>, del ' + f.toLocaleDateString('es-EC') +
       ' a las ' + f.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }) + '. ' +
       'Las fotos y la firma no se guardan, hay que rehacerlas.' +
       '<div class="row" style="margin-top:10px">' +

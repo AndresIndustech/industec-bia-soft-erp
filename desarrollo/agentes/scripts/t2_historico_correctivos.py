@@ -70,6 +70,7 @@ from openpyxl.utils import get_column_letter
 
 sys.path.insert(0, str(Path(__file__).parent))
 from agente2_consolidador import COLS, conectar, id_industec_original, mayus
+from comun import termino
 from t2_seguimiento_admin import cargar_seguimiento
 
 ORIGEN = Path(r"D:\RESPALDOS\_ORIGEN_DRIVE\GESTION DE OTS INDUSTEC\2026\PLANES SEMANALES")
@@ -182,14 +183,20 @@ SEGUIMIENTO_EXPLICA_CIERRE = re.compile(
     r"|NO SE CONSIGUE EL REPUESTO|SE CIERRA POR|CERRADO POR")
 
 # Motivos posibles, del mas sostenido por evidencia al menos sostenido
+# Los motivos nombran el estado con el diccionario unico (vocabulario.json): la orden
+# que se dio por cerrada sin ninguna OT de cierre es «cerrada sin atención» (CERRADA_SIN_ATENCION),
+# la que cerro SAP es «cerrada en SAP» (CERRADA_SAP), y lo que dice SAP se lee «abierta en
+# SAP». Antes decian «cerrado por falta de atencion» en masculino, la huella de cuando se
+# hablaba de «caso». t2_historico_calidad.py lista estas filas buscando el texto: reconoce
+# el termino nuevo y tambien el viejo, que sigue en los planes ya generados.
 MOTIVO_VISITA_CIERRE = "visita de cierre registrada"
 MOTIVO_CIERRE_SAP = "cierre tecnico en SAP"
-MOTIVO_SAP_SIN_ORDEN = "cerrado en SAP sin orden de trabajo"
+MOTIVO_SAP_SIN_ORDEN = f"{termino('CERRADA_SAP')} sin orden de trabajo de SAP"
 MOTIVO_SIN_INTERVENCION = "no se requirio intervencion tecnica"
 MOTIVO_SEGUIMIENTO = "cierre explicado en el seguimiento de la administracion"
 MOTIVO_SIN_COBERTURA = "sin constancia de cierre: el catalogo SAP no cubre esa fecha"
-MOTIVO_SAP_LO_DA_ABIERTO = "falta de atencion (SAP lo reportaba abierto al corte)"
-MOTIVO_FALTA_ATENCION = "cerrado por falta de atencion"
+MOTIVO_SAP_LO_DA_ABIERTO = f"{termino('CERRADA_SIN_ATENCION')} (SAP la reportaba abierta al corte)"
+MOTIVO_FALTA_ATENCION = termino("CERRADA_SIN_ATENCION")
 
 # Rango real que cubre el catalogo de avisos; lo fija cargar_todo() al leer la
 # base. Sin declararlo, los 609 casos de 2025 que el catalogo no alcanza se
@@ -222,8 +229,8 @@ def motivo_cierre(aviso_row, ordenes, seguimiento_admin):
         # 729 avisos cerraron sin haber generado nunca orden SAP: es el cierre
         # administrativo, el caso que se resolvio o se descarto sin trabajo.
         if not aviso_row.get("orden_sap"):
-            return MOTIVO_SAP_SIN_ORDEN, "CIERRE INFERIDO: cerrado en SAP sin orden de trabajo"
-        return MOTIVO_CIERRE_SAP, "CIERRE INFERIDO: aviso cerrado en SAP, sin fecha de cierre tecnico"
+            return MOTIVO_SAP_SIN_ORDEN, f"CIERRE INFERIDO: {MOTIVO_SAP_SIN_ORDEN}"
+        return MOTIVO_CIERRE_SAP, f"CIERRE INFERIDO: orden {termino('CERRADA_SAP')}, sin fecha de cierre tecnico"
 
     texto = _sin_tildes(" ".join(str(o.get("actividades") or "") + " " + str(o.get("observaciones") or "")
                                 for o in ordenes))
@@ -237,7 +244,7 @@ def motivo_cierre(aviso_row, ordenes, seguimiento_admin):
     if aviso_row and aviso_row.get("estatus_general") in ("ABIERTO", "TRATAMIENTO"):
         corte = COBERTURA_SAP[1]
         return MOTIVO_SAP_LO_DA_ABIERTO, (
-            "CIERRE INFERIDO: cerrado por falta de atencion; SAP lo reportaba abierto"
+            f"CIERRE INFERIDO: {termino('CERRADA_SIN_ATENCION')}; SAP la reportaba abierta"
             + (f" al {corte:%d/%m/%Y}" if corte else ""))
 
     # Fuera de la ventana del catalogo no hay con que ver el cierre: decirlo es
@@ -249,7 +256,7 @@ def motivo_cierre(aviso_row, ordenes, seguimiento_admin):
             f"CIERRE INFERIDO: sin constancia de cierre; el catalogo SAP solo cubre "
             f"{inicio:%d/%m/%Y} a {fin:%d/%m/%Y}")
 
-    return MOTIVO_FALTA_ATENCION, "CIERRE INFERIDO: cerrado por falta de atencion"
+    return MOTIVO_FALTA_ATENCION, f"CIERRE INFERIDO: {MOTIVO_FALTA_ATENCION}"
 
 
 def resuelto_al(aviso_row, ordenes, corte):

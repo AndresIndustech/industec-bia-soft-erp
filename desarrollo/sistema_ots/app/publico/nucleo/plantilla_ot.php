@@ -9,7 +9,16 @@
  *     producción tenía uno, tecleado). Lo que el maestro no trae —marca, modelo,
  *     serie— sale solo si el técnico lo escribió: no se inventa;
  *   - la franja «DOCUMENTO DE PRUEBA» en el sitio de pruebas;
- *   - si faltan fotos que la orden anunciaba, lo dice en vez de callarlo (I-7).
+ *   - si faltan fotos que la OT anunciaba, lo dice en vez de callarlo (I-7).
+ *
+ * CONTRATO (VOCABULARIO.md §6, D-C del 24-sep-2026): el título «ORDEN DE
+ * TRABAJO», los rótulos de sección y de campo (ID-ORDEN-INDUSTEC,
+ * ID-ORDEN-GRUPOKFC, Técnico Asignado, ESTADO DE LA OT, «Sin aviso de SAP»,
+ * «Su requerimiento fue atendido a tiempo»…) y los valores Abierta/Cerrada y
+ * Operativo/Deshabilitado NO cambian: los lee KFC y los leen por texto
+ * t1_7_extractor_pdf.py y t1_6_muestra_verificacion.py. Con el vocabulario
+ * único cambian solo las frases que no son de ese formato: la franja de
+ * prueba y el aviso de fotos faltantes, que dicen «OT INDUSTEC».
  */
 if (!isset($d) || !is_array($d)) { return; }
 $e = static fn($s): string => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
@@ -50,7 +59,7 @@ $atiempo = strtoupper(str_replace('Í', 'I', mb_strtoupper(trim($d['atiempo'])))
 <body>
 
 <?php if ($d['prueba']): ?>
-  <div class="prueba">DOCUMENTO DE PRUEBA — generado por el sistema en pruebas. No es una orden de trabajo válida y no se envió a nadie.</div>
+  <div class="prueba">DOCUMENTO DE PRUEBA — generado por el sistema en pruebas. No es una OT INDUSTEC válida y no se envió a nadie.</div>
 <?php endif; ?>
 
 <div class="header">
@@ -121,10 +130,10 @@ $atiempo = strtoupper(str_replace('Í', 'I', mb_strtoupper(trim($d['atiempo'])))
 <div class="h2">EVIDENCIA FOTOGRÁFICA</div>
 <div class="box">
   <?php if (!$d['fotos']): ?>
-    <p>Sin fotos<?= $d['fotos_esperadas'] ? ': la orden anunciaba ' . (int) $d['fotos_esperadas'] . ' y no llegó ninguna' : '' ?></p>
+    <p>Sin fotos<?= $d['fotos_esperadas'] ? ': la OT INDUSTEC anunciaba ' . (int) $d['fotos_esperadas'] . ' y no llegó ninguna' : '' ?></p>
   <?php else: ?>
     <?php if ($d['fotos_esperadas'] > count($d['fotos'])): ?>
-      <p>Faltan <?= (int) $d['fotos_esperadas'] - count($d['fotos']) ?> de las <?= (int) $d['fotos_esperadas'] ?> fotos que anunciaba la orden.</p>
+      <p>Faltan <?= (int) $d['fotos_esperadas'] - count($d['fotos']) ?> de las <?= (int) $d['fotos_esperadas'] ?> fotos que anunciaba la OT INDUSTEC.</p>
     <?php endif; ?>
     <table class="photo-table"><tr>
       <?php foreach ($d['fotos'] as $i => $img): ?>

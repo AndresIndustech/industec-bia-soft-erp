@@ -314,7 +314,7 @@ def main():
     st, _, c = s["admin_prueba"].pedir(f"casos.php?est=ESPERA_REPUESTO")
     m = re.search(r'data-aviso="' + re.escape(str(caso_espera)) + r'".*?</tr>', c, re.S)
     fila_html = m.group(0) if m else ""
-    anotar("S2.ASG01", "en el buzón, ese caso no ofrece «Veredicto» y sí un enlace a Pendientes",
+    anotar("S2.ASG01", "en el buzón, esa orden no ofrece «Resolver» (data-accion=veredicto) y sí un enlace a Repuestos",
            bool(fila_html) and 'data-accion="veredicto"' not in fila_html and 'pendientes.php?q=' in fila_html,
            f"encontrada={bool(fila_html)}")
 

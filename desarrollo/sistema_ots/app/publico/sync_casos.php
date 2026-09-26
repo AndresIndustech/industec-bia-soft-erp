@@ -213,7 +213,8 @@ if ($tipo === 'atenciones') {
     try {
         require_once __DIR__ . '/nucleo/Reconciliar.php';
         $r = Reconciliar::atenciones($lista);
-        $extra = " atendidos={$r['atendidos']} sin_tecnico={$r['sin_tecnico']}";
+        // «atendidas»: las que quedaron ATENDIDO (con su OT INDUSTEC de cierre).
+        $extra = " atendidas={$r['atendidos']} sin_tecnico={$r['sin_tecnico']}";
     } catch (Throwable $e) {
         $extra = ' reconciliacion FALLO: ' . substr($e->getMessage(), 0, 90);
     }

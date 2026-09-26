@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/Catalogo.php';
 require_once __DIR__ . '/Emision.php';
+require_once __DIR__ . '/Vocabulario.php';   // el rótulo de la zona en el «de dónde sale» de la vista previa
 
 /**
  * Destinatarios.php — A quién va cada correo, en un solo lugar (T2.28.2,
@@ -67,7 +68,7 @@ final class Destinatarios
         $correoLocal = Emision::correoLocal(['correo_local' => $correoLocalOrden], $localFila);
         if ($correoLocal !== '') {
             $agregar($correoLocal, 'PARA', $correoLocalOrden !== null && strtolower(trim($correoLocalOrden)) === $correoLocal
-                ? 'correo del local (de la orden)' : 'correo del local (del maestro)');
+                ? 'correo del local (de la OT INDUSTEC)' : 'correo del local (del maestro)');
         }
 
         if ($filas === null || $filas === []) {
@@ -161,7 +162,7 @@ final class Destinatarios
     {
         $ambito = match ((string) $f['ambito']) {
             'GENERAL' => 'general',
-            'ZONA'    => 'zona ' . $f['zona'],
+            'ZONA'    => self::zonaTexto((string) $f['zona']),
             'LOCAL'   => 'local ' . $f['local_codigo'],
             default   => (string) $f['ambito'],
         };
@@ -172,5 +173,24 @@ final class Destinatarios
             default           => (string) ($f['nombre'] ?: strtolower((string) $f['destino'])),
         };
         return $etiqueta . ' · ' . $ambito;
+    }
+
+    /**
+     * «zona Cuenca-Loja», no «zona CNLJ»: la vista previa de correos.php la lee
+     * una persona (decisión del 24-sep-2026). Este texto solo se MUESTRA; el
+     * cálculo de a quién va el correo no lo usa. Por eso, si el diccionario no
+     * responde, se deja el código tal cual en vez de tumbar la emisión, que
+     * pasa por aquí al encolar.
+     */
+    private static function zonaTexto(string $zona): string
+    {
+        try {
+            $mapa = Vocabulario::mapas()['zona'] ?? [];
+            $k = strtoupper(trim($zona));
+            if ($k !== '' && isset($mapa[$k])) { return Vocabulario::t($mapa[$k]); }
+        } catch (Throwable $e) {
+            // sin vocabulario.json: el dato crudo, no un nombre inventado (I-7)
+        }
+        return 'zona ' . $zona;
     }
 }

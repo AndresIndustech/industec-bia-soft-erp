@@ -345,9 +345,9 @@ def main():
     print(f"{'Repetidos':<14}: {len(repetidos)}"
           "   (mismo contenido con otro correlativo: gana el ya archivado)")
     print(f"{'Colisiones':<14}: {len(colisiones)}")
-    print(f"{'No resueltos':<14}: {len(rechazados)}")
+    print(f"{'Sin clasificar':<14}: {len(rechazados)}")
     if rechazados:
-        print("\nMotivos de lo no resuelto:")
+        print("\nMotivos de lo que quedo sin clasificar:")
         for motivo, n in Counter(r["motivo"].split(":")[0] for r in rechazados).most_common():
             print(f"  {n:>5}  {motivo}")
     print(f"\nInforme: {inf}")

@@ -2,7 +2,8 @@
    cronograma.js — Preventivos: lo que toca, el mes y el cumplimiento del año.
 
    DESDE EL 2026-09-13 ESCRIBE (D15, T2.14.5). Confirmar el kit, reagendar,
-   registrar el cierre, agendar un local y anotar una novedad van a
+   marcar como ejecutado (la acción «cerrar» del servidor), agendar un local y
+   anotar un movimiento del ingreso (la acción «nota») van a
    `cronograma_accion.php` (POST JSON con X-Csrf) y quedan en la base con su
    bitácora. Mientras el cronograma no esté importado a la base (`fuente`
    distinta de «tabla»), la pantalla lo dice y solo deja agendar.
@@ -142,20 +143,38 @@
     return f ? dias(d(f), hoy) : 0;
   }
 
-  var ETIQUETA = {
-    vencido: 'Vencido', sincerrar: 'Sin cerrar', poriniciar: 'Arranca ya', encurso: 'En curso',
-    planificado: 'Planificado', sinagendar: 'Sin agendar', cumplido: 'Cumplido', cancelado: 'Cancelado',
-  };
-  var EXPLICA = {
-    vencido: 'La fecha pasó y no hay ninguna orden emitida.',
-    sincerrar: 'Hay órdenes emitidas, pero nadie registró el cierre del ingreso.',
-    poriniciar: 'Arranca dentro de 3 días o menos.',
-    encurso: 'Empezó y todavía está dentro de la fecha prevista.',
-    planificado: 'Tiene fecha y todavía no le toca.',
-    sinagendar: 'No tiene fecha. Hay que agendarlo.',
-    cumplido: 'Se registró el cierre con su fecha real.',
-    cancelado: 'Se dio de baja del cronograma del año.',
-  };
+  /* ---------- Las palabras de cada estado ---------------------------------
+     Salen del diccionario único (vocabulario.json, vía UI.T de ui.js), el
+     mismo que usan el reporte a KFC y la leyenda del jefe técnico:
+     EJECUTADO · PENDIENTE · ATRASADO. Los CÓDIGOS de la izquierda ('vencido',
+     'sincerrar'…) son los de `estado_hoy` que manda el servidor y los que se
+     comparan en todo este archivo y en cronograma.css: no cambian, solo el
+     texto. «cierre» ya no se usa aquí: sola es la OT INDUSTEC de cierre, y el
+     ingreso preventivo se «marca como ejecutado». */
+  var CODIGOS = ['vencido', 'sincerrar', 'poriniciar', 'encurso', 'planificado', 'sinagendar', 'cumplido', 'cancelado'];
+  function claveDe(codigo) { return UI.T.deEstado(codigo, 'preventivo'); }
+  function mayus(s) { s = String(s); return s.charAt(0).toUpperCase() + s.slice(1); }
+  /** El nombre de un estado para contar («3 atrasados»), en singular o plural. */
+  function nombre(codigo, n) { return UI.T(claveDe(codigo), n); }
+  var ETIQUETA = {};
+  var EXPLICA = {};
+  CODIGOS.forEach(function (c) {
+    ETIQUETA[c] = UI.T.titulo(claveDe(c));
+    EXPLICA[c] = UI.T.ayuda(claveDe(c));
+  });
+  /* Las zonas se rotulan como en el resto del sistema (CNLJ -> CUENCA-LOJA).
+     Un código que el diccionario no conoce se muestra tal cual: es el dato,
+     no un nombre inventado para taparlo (I-7). */
+  function nombreZona(z, largo) {
+    var k = String(z == null ? '' : z).trim().toUpperCase();
+    if (ZONAS.indexOf(k) === -1 && k !== 'OTRA') return String(z == null ? '' : z);
+    var clave = UI.T.deEstado(k, 'zona');
+    return largo ? UI.T.titulo(clave) : UI.T.corto(clave);
+  }
+  /* El tipo de cada movimiento del ingreso (cronograma_novedades.tipo), con
+     las palabras del diccionario (PREV_MOVIMIENTO): el de CIERRE es la marca
+     de ejecutado. */
+  var TIPO_MOVIMIENTO = { AGENDA: 'agenda', REAGENDA: 'reagenda', KIT: 'kit', CIERRE: 'marca de ejecutado', NOTA: 'nota' };
 
   function kitOk(i) { return i.kit === 'CONFIRMADO' || i.kit === 'ENTREGADO' || i.kit === 'DISPONIBLE'; }
   function kitTexto(i) {
@@ -248,12 +267,12 @@
   function pintarAlertas(g) {
     var cont = $('#alertas');
     var partes = [];
-    if (g.vencido.length) partes.push(chip('roja', g.vencido.length, plural(g.vencido.length, 'vencido', 'vencidos'), 'vencido'));
-    if (g.sincerrar.length) partes.push(chip('ambar', g.sincerrar.length, 'sin cerrar', 'sincerrar'));
+    if (g.vencido.length) partes.push(chip('roja', g.vencido.length, nombre('vencido', g.vencido.length), 'vencido'));
+    if (g.sincerrar.length) partes.push(chip('ambar', g.sincerrar.length, nombre('sincerrar', g.sincerrar.length), 'sincerrar'));
     if (!partes.length) { cont.hidden = true; cont.innerHTML = ''; return; }
     cont.hidden = false;
     cont.innerHTML = partes.join('') +
-      '<span class="aviso-fuente">Se apaga sola cuando se registra el cierre del ingreso</span>';
+      '<span class="aviso-fuente">Se apaga sola cuando el ingreso se marca como ejecutado</span>';
     $$('.alerta[data-f]', cont).forEach(function (b) {
       b.addEventListener('click', function () { filtrarPor(b.dataset.f); });
     });
@@ -267,26 +286,27 @@
   /* ---------- El titular: una frase con lo que hay que hacer -------------- */
   function pintarTitular(g) {
     var el = $('#titular');
-    var donde = zonaVista === 'ADMIN' ? 'las tres zonas' : zonaVista;
+    var donde = zonaVista === 'ADMIN' ? 'las tres zonas' : esc(nombreZona(zonaVista));
     var urgen = g.vencido.length + g.sincerrar.length;
     var frases = [];
-    if (g.vencido.length) frases.push('<b>' + g.vencido.length + '</b> ' + plural(g.vencido.length, 'vencido', 'vencidos'));
-    if (g.sincerrar.length) frases.push('<b>' + g.sincerrar.length + '</b> sin cerrar');
+    if (g.vencido.length) frases.push('<b>' + g.vencido.length + '</b> ' + esc(nombre('vencido', g.vencido.length)));
+    if (g.sincerrar.length) frases.push('<b>' + g.sincerrar.length + '</b> ' + esc(nombre('sincerrar', g.sincerrar.length)));
     var viene = g.arrancan.length
       ? 'Quedan <b>' + g.arrancan.length + '</b> por arrancar dentro de los próximos ' + HORIZONTE + ' días'
-        + (g.enmarcha.length ? ', y <b>' + g.enmarcha.length + '</b> ya en marcha' : '') + '.'
-      : (g.enmarcha.length ? 'Hay <b>' + g.enmarcha.length + '</b> en marcha y ninguno por arrancar en ' +
+        + (g.enmarcha.length ? ', y <b>' + g.enmarcha.length + '</b> ya en ejecución' : '') + '.'
+      : (g.enmarcha.length ? 'Hay <b>' + g.enmarcha.length + '</b> en ejecución y ninguno por arrancar en ' +
          HORIZONTE + ' días.' : 'No hay ninguno por arrancar en los próximos ' + HORIZONTE + ' días.');
     var t;
     if (urgen) {
       t = 'En ' + donde + ' hay ' + frases.join(' y ') + '. ' + viene;
       el.className = 'titular urge';
     } else {
-      t = 'Nada vencido ni sin cerrar en ' + donde + '. ' + viene;
+      // Los dos grupos son la base ATRASADO de la leyenda: basta una palabra.
+      t = 'Nada ' + esc(UI.T('ATRASADO')) + ' en ' + donde + '. ' + viene;
       el.className = 'titular calma';
     }
     if (g.sinagendar.length) {
-      t += ' Quedan <b>' + g.sinagendar.length + '</b> sin agendar.';
+      t += ' Quedan <b>' + g.sinagendar.length + '</b> ' + esc(nombre('sinagendar', g.sinagendar.length)) + '.';
     }
     el.innerHTML = t;
   }
@@ -296,13 +316,13 @@
     var v = visibles();
     var f = [
       ['todos', 'Todos', v.length, ''],
-      ['vencido', 'Vencidos', g.vencido.length, 'roja'],
-      ['sincerrar', 'Sin cerrar', g.sincerrar.length, 'ambar'],
-      ['poriniciar', 'Arrancan ya', v.filter(function (i) { return estado(i) === 'poriniciar'; }).length, 'ambar'],
-      ['sinkit', 'Sin kit, arrancan pronto', v.filter(kitUrge).length, 'ambar'],
-      ['sinagendar', 'Sin agendar', g.sinagendar.length, ''],
-      ['cumplido', 'Cumplidos', g.cumplido.length, ''],
-      ['reagendado', 'Reagendados', v.filter(movido).length, ''],
+      ['vencido', nombreFiltro('vencido'), g.vencido.length, 'roja'],
+      ['sincerrar', nombreFiltro('sincerrar'), g.sincerrar.length, 'ambar'],
+      ['poriniciar', nombreFiltro('poriniciar'), v.filter(function (i) { return estado(i) === 'poriniciar'; }).length, 'ambar'],
+      ['sinkit', nombreFiltro('sinkit'), v.filter(kitUrge).length, 'ambar'],
+      ['sinagendar', nombreFiltro('sinagendar'), g.sinagendar.length, ''],
+      ['cumplido', nombreFiltro('cumplido'), g.cumplido.length, ''],
+      ['reagendado', nombreFiltro('reagendado'), v.filter(movido).length, ''],
     ];
     /* Un filtro que siempre da cero no es información: es una casilla que hay
        que leer y descartar cada vez. Solo se dibujan los que tienen algo. */
@@ -437,32 +457,39 @@
       return;
     }
     var html = '';
-    html += bloque('vencido', 'roja', g.vencido.length, 'Vencidos',
-      'La fecha acordada pasó y no hay ninguna orden emitida. Lo más atrasado primero.',
+    html += bloque('vencido', 'roja', g.vencido.length, mayus(nombre('vencido', 2)),
+      'La fecha acordada pasó y no hay ninguna OT INDUSTEC emitida. Lo más atrasado primero.',
       g.vencido, true, { atraso: true, sinEstado: true });
-    html += bloque('sincerrar', 'ambar', g.sincerrar.length, 'Sin cerrar',
-      'Tienen órdenes emitidas, pero nadie registró el cierre. Hasta que se registre no cuentan como cumplidos frente a KFC.',
+    html += bloque('sincerrar', 'ambar', g.sincerrar.length, mayus(nombre('sincerrar', 2)),
+      'Tienen OT INDUSTEC emitidas y la fecha prevista ya pasó, pero nadie los marcó como ejecutados. ' +
+      'Hasta entonces no cuentan como ejecutados frente a KFC.',
       g.sincerrar, g.vencido.length === 0, { atraso: true, sinEstado: true });
     html += bloque('quincena', 'azul', g.quincena.length,
       g.enmarcha.length
-        ? 'En marcha y por arrancar (' + HORIZONTE + ' días)'
+        ? 'En ejecución y por arrancar (' + HORIZONTE + ' días)'
         : 'Por arrancar en los próximos ' + HORIZONTE + ' días',
       'Aquí es donde todavía se puede reclamar un kit o mover una fecha a tiempo.',
       g.quincena, true, {});
-    html += bloque('sinagendar', 'viol', g.sinagendar.length, 'Sin agendar',
+    html += bloque('sinagendar', 'viol', g.sinagendar.length, mayus(nombre('sinagendar', 2)),
       'Están en el acuerdo con KFC pero no tienen fecha. Agéndalos para que entren al cronograma.',
       g.sinagendar, false, { sinEstado: true });
     if (!html) {
-      html = '<p class="nada">No hay nada vencido, sin cerrar ni por arrancar. ' +
+      html = '<p class="nada">No hay nada ' + esc(UI.T('ATRASADO')) + ' ni por arrancar. ' +
              'Mira «El mes» para lo que viene después.</p>';
     }
     cont.innerHTML = html;
     enganchar(cont);
   }
+  /* El nombre de cada filtro, el mismo en el botón y en la cabecera de la
+     lista filtrada. Los de estado salen del diccionario, en plural; «sinkit»
+     junta la falta de kit (fuera del diccionario: logística del material)
+     con los pendientes que arrancan dentro del horizonte. */
   function nombreFiltro(f) {
-    return { todos: 'Todos los ingresos', vencido: 'Vencidos', sincerrar: 'Sin cerrar',
-             poriniciar: 'Arrancan en 3 días o menos', sinkit: 'Sin kit y arrancan pronto',
-             sinagendar: 'Sin agendar', cumplido: 'Cumplidos', reagendado: 'Reagendados' }[f] || f;
+    if (f === 'todos') return 'Todos los ingresos';
+    if (f === 'sinkit') return 'Sin kit · ' + UI.T('PREV_PENDIENTE', 2) + ' que arrancan en ' + HORIZONTE + ' días o menos';
+    if (f === 'reagendado') return UI.T.titulo('PREV_REAGENDADO');
+    if (CODIGOS.indexOf(f) !== -1) return mayus(nombre(f, 2));
+    return f;
   }
 
   /* ---------- Vista «El mes» ---------------------------------------------- */
@@ -492,9 +519,10 @@
     });
     delMes.sort(porFecha);
 
+    // Los dos cuentan en la base ATRASADO de la leyenda.
     var vencidosMes = delMes.filter(function (i) { return estado(i) === 'vencido' || estado(i) === 'sincerrar'; }).length;
     $('#mesResumen').textContent = delMes.length + ' ' + plural(delMes.length, 'ingreso', 'ingresos') +
-      (vencidosMes ? ' · ' + vencidosMes + ' con atraso' : '');
+      (vencidosMes ? ' · ' + vencidosMes + ' ' + UI.T('ATRASADO', vencidosMes) : '');
 
     var primero = new Date(y, m, 1);
     var arranque = (primero.getDay() + 6) % 7;          // lunes = 0
@@ -562,12 +590,14 @@
     if (c.cumplidos) {
       var pct = Math.round(c.aTiempo * 100 / c.cumplidos);
       cab = '<div class="grande">' + pct + ' %</div>' +
-            '<div>' + c.aTiempo + ' de ' + c.cumplidos + ' ingresos cerrados llegaron dentro de lo acordado.</div>';
+            '<div>' + c.aTiempo + ' de ' + c.cumplidos + ' ingresos ' + esc(nombre('cumplido', 2)) +
+            ' llegaron dentro de lo acordado.</div>';
     } else {
       cab = '<div class="grande">Sin cifra todavía</div>' +
-            '<div>No se ha registrado el cierre de ningún ingreso de ' + anio + ', así que no hay ' +
-            'porcentaje de cumplimiento que reportar. Lo que sí hay: <b>' + (c.sincerrar || 0) + '</b> ingresos ' +
-            'con órdenes emitidas esperando que alguien registre el cierre.</div>';
+            '<div>Ningún ingreso de ' + anio + ' está marcado como ' + esc(nombre('cumplido', 1)) + ', así que no hay ' +
+            'porcentaje de cumplimiento que reportar. Lo que sí hay: <b>' + (c.sincerrar || 0) + '</b> ' +
+            plural(c.sincerrar || 0, 'ingreso', 'ingresos') + ' ' + esc(nombre('sincerrar', c.sincerrar || 0)) +
+            ', con OT INDUSTEC emitidas.</div>';
     }
     var html = '<div class="cumpl">' + cab +
       '<p class="regla">Se mide así: un ingreso cuenta <b>a tiempo</b> si su fecha real de fin no pasa de la ' +
@@ -575,25 +605,28 @@
       'cumplimiento no se puede maquillar moviendo el cronograma.</p></div>';
 
     html += '<div class="tabla-wrap"><table><thead><tr>' +
-      '<th>Zona</th><th>Del año</th><th>Vencidos</th><th>Sin cerrar</th><th>Cumplidos</th><th>Sin agendar</th>' +
+      '<th>Zona</th><th>Del año</th>' +
+      ['vencido', 'sincerrar', 'cumplido', 'sinagendar'].map(function (e) {
+        return '<th>' + esc(mayus(nombre(e, 2))) + '</th>';
+      }).join('') +
       '</tr></thead><tbody>';
     var filas = zonaVista === 'ADMIN' ? ZONAS : [zonaVista];
     filas.forEach(function (z) {
       var cz = cuenta(v.filter(function (i) { return i.zona === z; }));
-      html += '<tr><td><span class="zona zona-' + z.toLowerCase() + '">' + z + '</span></td>' +
+      html += '<tr><td><span class="zona zona-' + z.toLowerCase() + '">' + esc(nombreZona(z)) + '</span></td>' +
         '<td>' + cz.total + '</td><td>' + (cz.vencido || 0) + '</td><td>' + (cz.sincerrar || 0) + '</td>' +
         '<td>' + cz.cumplidos + '</td><td>' + (cz.sinagendar || 0) + '</td></tr>';
     });
     var otras = v.filter(function (i) { return ZONAS.indexOf(i.zona) === -1; });
     if (otras.length) {
       var co = cuenta(otras);
-      html += '<tr><td><span class="zona zona-otra">Sin zona</span></td><td>' + otras.length +
+      html += '<tr><td><span class="zona zona-otra">' + esc(mayus(UI.T('SIN_ZONA'))) + '</span></td><td>' + otras.length +
         '</td><td>' + (co.vencido || 0) + '</td><td>' + (co.sincerrar || 0) + '</td>' +
         '<td>' + co.cumplidos + '</td><td>' + (co.sinagendar || 0) + '</td></tr>';
     }
     html += '</tbody></table></div>';
     if (otras.length) {
-      html += '<p class="sub" style="margin:6px 0 0">«Sin zona» son ' + otras.length + ' ' +
+      html += '<p class="sub" style="margin:6px 0 0">«' + esc(mayus(UI.T('SIN_ZONA'))) + '» son ' + otras.length + ' ' +
         plural(otras.length, 'ingreso de un local que no está', 'ingresos de locales que no están') +
         ' en las tres zonas contratadas. No se les asignó una zona por parecido: si el maestro no lo dice, ' +
         'no se inventa.</p>';
@@ -620,7 +653,7 @@
       var t = delMes.length || 1;
       var seg = ['cumplido', 'vencido', 'sincerrar', 'encurso', 'planificado'].map(function (e) {
         var n = e === 'cumplido' ? cm.cumplidos : (cm[e] || 0);
-        return n ? '<i class="b-' + e + '" style="width:' + (n * 100 / t) + '%" title="' + n + ' ' + ETIQUETA[e] + '"></i>' : '';
+        return n ? '<i class="b-' + e + '" style="width:' + (n * 100 / t) + '%" title="' + n + ' ' + esc(nombre(e, n)) + '"></i>' : '';
       }).join('');
       html += '<div class="mes-fila' + (m === hoy.getMonth() && anio === hoy.getFullYear() ? ' ahora' : '') + '">' +
         '<span class="mm">' + MESES[m] + '</span>' +
@@ -723,7 +756,7 @@
 
     var h = '<dl class="dl">' +
       '<dt>Local</dt><dd>' + esc(i.local_nombre || '—') + '</dd>' +
-      '<dt>Zona</dt><dd>' + esc(i.zona || '—') + (i.ciudad ? ' · ' + esc(i.ciudad) : '') + '</dd>' +
+      '<dt>Zona</dt><dd>' + esc(i.zona ? nombreZona(i.zona) : '—') + (i.ciudad ? ' · ' + esc(i.ciudad) : '') + '</dd>' +
       '<dt>Estado</dt><dd><span class="et ' + e + '">' + ETIQUETA[e] + '</span>' +
       (e === 'cumplido' && aTiempo(i) !== null ? ' <span class="sub">' + (aTiempo(i) ? 'a tiempo' : 'fuera del plan acordado') + '</span>' : '') +
       '<div class="sub" style="margin-top:3px">' + EXPLICA[e] + '</div></dd>' +
@@ -738,7 +771,7 @@
           (mov ? ' — movido' : '')
         : 'sin fecha') + '</dd>' +
       '<dt>Real</dt><dd>' + (i.real && i.real.inicio
-        ? larga(i.real.inicio) + ' a ' + larga(i.real.fin || i.real.inicio) + (i.real.cerrado ? '' : ' (sin cerrar)')
+        ? larga(i.real.inicio) + ' a ' + larga(i.real.fin || i.real.inicio) + (i.real.cerrado ? '' : ' (por marcar como ejecutado)')
         : 'todavía no empieza') + '</dd>' +
       '</dl>' +
       (i.anio_supuesto ? '<p class="sub">El año lo pone el sistema: el texto original («' +
@@ -746,7 +779,7 @@
       (PUEDE_EDITAR && e !== 'cumplido' ? '<div class="row" style="margin-top:8px">' +
         (i.plan_vigente ? '<button type="button" class="btn" data-acc="reagendar">Reagendar</button>'
                         : '<button type="button" class="btn primary" data-acc="agendar">Agendar</button>') +
-        (i.plan_vigente ? '<button type="button" class="btn secondary" data-acc="cerrar">Registrar el cierre</button>' : '') +
+        (i.plan_vigente ? '<button type="button" class="btn secondary" data-acc="cerrar">Marcar como ejecutado</button>' : '') +
         '</div>' : '') +
       '</div>';
 
@@ -756,48 +789,54 @@
       (i.kit_texto ? ' <span class="sub">(«' + esc(i.kit_texto) + '»)</span>' : '') + '</p>' +
       (!kitOk(i) && e !== 'cumplido'
         ? '<p class="sub" style="margin:0">Sin kit confirmado no debería agendarse el ingreso. ' +
-          'Si ya llegó, confírmalo; si no, reagenda y queda la novedad para reportarle a KFC.</p>'
+          'Si ya llegó, confírmalo; si no, reagenda y queda el movimiento del ingreso para reportarle a KFC.</p>'
         : '') +
       (PUEDE_EDITAR && e !== 'cumplido' ? '<div class="row" style="margin-top:8px">' +
         '<button type="button" class="btn secondary" data-acc="kit">Actualizar el kit</button></div>' : '') +
       '</div>';
 
     var ots = (i.real && i.real.ots) || [];
-    h += '<div class="bloque-p"><h3>Órdenes emitidas (' + ots.length + ')</h3>';
+    // Lo que emite el técnico por cada día es la OT INDUSTEC; «orden» es el trabajo que pide KFC.
+    h += '<div class="bloque-p"><h3>' + esc(UI.T.titulo('OT_INDUSTEC')) + ' emitidas (' + ots.length + ')</h3>';
     if (ots.length) {
       h += ots.map(function (o) {
         return '<div style="font-size:12px;font-family:ui-monospace,monospace;padding:3px 0">' +
                (o.dia ? 'D' + esc(o.dia) + ' · ' : '') + (o.fecha ? corta(o.fecha) + ' · ' : '') + esc(o.id) + '</div>';
       }).join('');
       if (e === 'sincerrar') {
-        h += '<p class="sub" style="margin:6px 0 0">Hay órdenes pero no hay cierre registrado. Mientras siga así, ' +
-             'este ingreso no cuenta como cumplido frente a KFC.</p>';
+        h += '<p class="sub" style="margin:6px 0 0">Hay OT INDUSTEC emitidas, pero nadie marcó el ingreso como ' +
+             'ejecutado. Mientras siga así, no cuenta como ejecutado frente a KFC.</p>';
       }
     } else {
-      h += '<p class="sub" style="margin:0">Ninguna todavía. Se emite una orden por cada día de intervención.</p>';
+      h += '<p class="sub" style="margin:0">Ninguna todavía. Se emite una OT INDUSTEC por cada día de intervención.</p>';
     }
-    /* La orden del ingreso se llena desde aquí, con el local, el tipo y el día
-       ya puestos (S1 los lee de la URL): un toque menos en el celular. */
+    /* La OT INDUSTEC del ingreso se llena desde aquí, con el local, el tipo y
+       el día ya puestos (S1 los lee de la URL): un toque menos en el celular. */
     if (i.plan_vigente && e !== 'cumplido') {
       var dur = (i.plan_vigente.dias_declarados && i.plan_vigente.dias_declarados.length) ||
                 Math.max(1, dias(d(i.plan_vigente.inicio), d(i.plan_vigente.fin || i.plan_vigente.inicio)) + 1);
       var enlaces = [];
       for (var k = 1; k <= Math.min(dur, 5); k++) {
-        enlaces.push('<a class="btn sm" href="index.html?tipo=PREVENTIVO&dia=' + k + '&local=' + encodeURIComponent(i.local) + '">Orden del día ' + k + '</a>');
+        enlaces.push('<a class="btn sm" href="index.html?tipo=PREVENTIVO&dia=' + k + '&local=' + encodeURIComponent(i.local) + '">' +
+                     esc(UI.T.titulo('OT_INDUSTEC')) + ' del día ' + k + '</a>');
       }
       h += '<div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">' + enlaces.join('') + '</div>';
     }
     h += '</div>';
 
-    h += '<div class="bloque-p"><h3>Novedades</h3>' +
+    /* Lo que pasó con el ingreso (agenda, reagenda, kit, marca de ejecutado,
+       nota): «movimientos del ingreso», no «novedades», que son lo que el
+       técnico ve en el local (PREV_MOVIMIENTO). */
+    h += '<div class="bloque-p"><h3>' + esc(UI.T.titulo('PREV_MOVIMIENTO')) + '</h3>' +
       (i.novedades && i.novedades.length
         ? i.novedades.map(function (n) {
-            return '<div class="nov">' + (n.tipo ? '<b>' + esc(n.tipo.toLowerCase()) + '</b> · ' : '') + esc(n.texto) +
+            var tipo = n.tipo ? (TIPO_MOVIMIENTO[String(n.tipo).toUpperCase()] || String(n.tipo).toLowerCase()) : '';
+            return '<div class="nov">' + (tipo ? '<b>' + esc(tipo) + '</b> · ' : '') + esc(n.texto) +
               (n.fecha_antes || n.fecha_despues ? ' <span class="sub">(' + esc(n.fecha_antes || 'sin fecha') + ' → ' + esc(n.fecha_despues || '') + ')</span>' : '') +
               '<div class="meta">' + esc(n.fecha) + ' · ' + esc(n.por) + '</div></div>';
           }).join('')
-        : '<p class="sub" style="margin:0 0 8px">Sin novedades registradas.</p>') +
-      (PUEDE_EDITAR ? '<button type="button" class="btn" data-acc="novedad">+ Registrar novedad</button>' : '') +
+        : '<p class="sub" style="margin:0 0 8px">Sin ' + esc(UI.T('PREV_MOVIMIENTO', 2)) + ' registrados.</p>') +
+      (PUEDE_EDITAR ? '<button type="button" class="btn" data-acc="novedad">+ Anotar un ' + esc(UI.T('PREV_MOVIMIENTO')) + '</button>' : '') +
       '<p class="sub" style="margin-top:8px">Esto es lo que se le reporta a Grupo KFC como ' +
       'motivo de demora frente al cronograma acordado.</p></div>';
 
@@ -890,13 +929,13 @@
       return;
     }
     if (acc === 'cerrar') {
-      abrirModal('Registrar el cierre — ' + i.local,
-        '<p style="font-size:13px">El ingreso queda <b>cumplido</b> con la fecha real. Si el fin real pasa de lo ' +
+      abrirModal('Marcar como ejecutado — ' + i.local,
+        '<p style="font-size:13px">El ingreso queda <b>' + esc(nombre('cumplido', 1)) + '</b> con la fecha real. Si el fin real pasa de lo ' +
         'acordado con KFC (' + (i.plan_original ? larga(i.plan_original.fin || i.plan_original.inicio) : 'sin fecha') + '), cuenta como tarde.</p>' +
         '<div class="grid g2"><div><label>Inicio real</label>' +
         '<input type="date" id="ciIni" value="' + ((i.real && i.real.inicio) || (i.plan_vigente && i.plan_vigente.inicio) || iso(hoy)) + '"></div>' +
         '<div><label>Fin real</label><input type="date" id="ciFin" value="' + iso(hoy) + '"></div></div>' +
-        '<label style="margin-top:8px">Orden de cierre (opcional)</label><input type="text" id="ciOt" placeholder="OT-…">' +
+        '<label style="margin-top:8px">' + esc(UI.T.titulo('OT_CIERRE')) + ' (opcional)</label><input type="text" id="ciOt" placeholder="OT-…">' +
         '<label style="margin-top:8px">Nota</label><textarea id="ciNota" placeholder="Qué quedó hecho, qué quedó pendiente"></textarea>',
         function () {
           if ($('#ciFin').value < $('#ciIni').value) { alert('El fin real no puede ser anterior al inicio.'); return false; }
@@ -906,10 +945,14 @@
       return;
     }
     if (acc === 'novedad') {
-      abrirModal('Registrar novedad — ' + i.local,
+      /* El tipo viaja como texto libre y se guarda tal cual en el motivo
+         (cronograma_accion.php no lo compara): cambiar «Equipo fuera de
+         servicio» por el término del diccionario solo cambia lo que se anota
+         desde ahora; lo ya guardado se sigue leyendo como se escribió. */
+      abrirModal('Anotar un ' + UI.T('PREV_MOVIMIENTO') + ' — ' + i.local,
         '<label>Tipo</label><select id="novTipo">' +
         '<option>Kit pendiente</option><option>Acceso negado</option>' +
-        '<option>Trabajo parcial</option><option>Equipo fuera de servicio</option>' +
+        '<option>Trabajo parcial</option><option>' + esc(mayus(UI.T('EQUIPO_DESHABILITADO'))) + '</option>' +
         '<option>Otro</option></select>' +
         '<label style="margin-top:8px">Detalle</label>' +
         '<textarea id="novTexto" placeholder="Qué pasó"></textarea>',
@@ -957,7 +1000,7 @@
       '<div class="grid g2" style="margin-top:8px">' +
       '<div><label>Inicio</label><input type="date" id="agIni" value="' + iso(hoy) + '"></div>' +
       '<div><label>Fin estimado</label><input type="date" id="agFin" value="' + iso(hoy) + '"></div></div>' +
-      '<p class="sub" style="margin-top:8px">El fin es <b>estimado</b>. La fecha real se registra al cerrar el ingreso.</p>' +
+      '<p class="sub" style="margin-top:8px">El fin es <b>estimado</b>. La fecha real se registra al marcar el ingreso como ejecutado.</p>' +
       '<label style="margin-top:8px;display:flex;align-items:center;gap:8px">' +
       '<input type="checkbox" id="agKit" style="width:auto;height:auto;-webkit-appearance:auto;appearance:auto"> ' +
       'Confirmo que el local ya tiene el kit de mantenimiento</label>',
@@ -998,7 +1041,7 @@
     var chipA = document.getElementById('barraAlcance');
     var chipR = document.getElementById('barraRol');
     if (nom) { nom.textContent = a.nombre || ''; }
-    if (chipA) { chipA.textContent = a.zona ? ('Zona ' + a.zona) : 'Las 3 zonas'; }
+    if (chipA) { chipA.textContent = a.zona ? nombreZona(a.zona, true) : 'Las 3 zonas'; }
     if (chipR) { chipR.textContent = a.rol_nombre || ''; chipR.hidden = !a.rol_nombre; }
     if (a.rol === 'TECNICO') { barraDelTecnico(); }
     var ag = document.getElementById('btnAgendar');
@@ -1009,14 +1052,15 @@
     var antes = sel.value;
     sel.innerHTML = '';
     if (a.zona) {
-      sel.innerHTML = '<option value="' + a.zona + '">Zona ' + a.zona + '</option>';
+      sel.innerHTML = '<option value="' + esc(a.zona) + '">' + esc(nombreZona(a.zona, true)) + '</option>';
       sel.disabled = true;
       zonaVista = a.zona;
     } else {
+      // El valor es el código de la base; el rótulo, el del diccionario (CNLJ -> CUENCA-LOJA).
       sel.innerHTML = '<option value="ADMIN">Las 3 zonas</option>' +
-                      '<option value="UIO">Solo UIO</option>' +
-                      '<option value="LARB">Solo LARB</option>' +
-                      '<option value="CNLJ">Solo CNLJ</option>';
+                      ZONAS.map(function (z) {
+                        return '<option value="' + z + '">Solo ' + esc(nombreZona(z)) + '</option>';
+                      }).join('');
       sel.disabled = false;
       zonaVista = antes && antes !== '' ? antes : 'ADMIN';
       sel.value = zonaVista;

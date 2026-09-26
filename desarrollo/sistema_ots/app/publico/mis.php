@@ -7,9 +7,12 @@ require_once __DIR__ . '/nucleo/Ui.php';
 // (más abajo, antes del `require_once` de más adelante), así que se carga
 // aquí arriba y sirve para las dos ramas de este archivo.
 require_once __DIR__ . '/nucleo/Emision.php';
+// Las palabras de la barra, de las pestañas y de los estados salen del
+// diccionario único (vocabulario.json): las mismas que ven la oficina y KFC.
+require_once __DIR__ . '/nucleo/Vocabulario.php';
 
 /**
- * mis.php — La aplicación del técnico. Bandeja, en el celular, y sin señal.
+ * mis.php — La aplicación del técnico. «Mis órdenes», en el celular, y sin señal.
  *
  * ============================================================================
  * POR QUE ES UNA BANDEJA DE CORREO Y NO UNA TABLA
@@ -38,12 +41,17 @@ require_once __DIR__ . '/nucleo/Emision.php';
  *
  * ============================================================================
  * LAS TRES PESTAÑAS SON EL CICLO DE VIDA DE SU TRABAJO
+ * (los rótulos salen del diccionario; las claves `t=` de la URL no cambian)
  *
- *   Pendientes  lo que tiene asignado y todavía no atendió. Es su día.
- *   Esperando   lo que fue a ver y quedó trabado por un equipo. Aquí es donde
- *               insiste — la acción que hoy es un mensaje de WhatsApp que se
- *               pierde y que nadie puede demostrar después.
- *   Atendidas   lo que ya cerró, para consultar y para mandar el informe.
+ *   Asignadas             (t=pendientes) lo que tiene asignado y todavía no
+ *                         atendió. Es su día.
+ *   A espera de repuesto  (t=esperando) lo que fue a ver y el equipo no quedó
+ *                         operativo. Aquí es donde insiste — la acción que hoy
+ *                         es un mensaje de WhatsApp que se pierde y que nadie
+ *                         puede demostrar después.
+ *   Historial             (t=atendidas) lo que ya salió de sus manos, para
+ *                         consultar y para mandar la OT INDUSTEC.
+ *   Notificaciones        (t=avisos, solo el técnico) lo que le pasó.
  *
  * ============================================================================
  * EL TECNICO YA NO ELIGE SU NOMBRE
@@ -161,10 +169,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (!$puedeContinuidad || $suyo === null) {
             Auth::bitacora('DENEGADO', 'caso', $avisoN,
-                           $suyo === null ? 'continuidad sobre un caso fuera de su alcance'
+                           $suyo === null ? 'continuidad sobre una orden fuera de su alcance'
                                           : 'continuidad sin permiso',
                            null, null, [], false);
-            $_SESSION['flash'] = ['error' => 'Ese caso no está entre los tuyos.'];
+            $_SESSION['flash'] = ['error' => 'Esa orden no está entre las tuyas.'];
         } elseif ($accion === 'descontinua') {
             try {
                 [$ok, $msg] = Casos::desenlazar($avisoN, (int) $u['usuario_id'],
@@ -201,8 +209,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                        se pierde por eso: se le dice que todavía no está puesto,
                        en vez de un error que no significa nada para él (I-7). */
                     error_log('mis.php: enlazar: ' . $ex->getMessage());
-                    [$ok, $msg] = [false, 'Este servidor todavía no tiene puesta la continuidad entre casos. '
-                                        . 'Avisa a la administración; tu caso queda como está.'];
+                    [$ok, $msg] = [false, 'Este servidor todavía no tiene puesta la continuidad entre órdenes. '
+                                        . 'Avisa a la administración; tu orden queda como está.'];
                 }
                 $_SESSION['flash'] = $ok ? ['ok' => $msg] : ['error' => $msg];
             }
@@ -243,7 +251,7 @@ if (isset($_GET['ver'])) {
         Auth::bitacora('DENEGADO', 'caso', $avisoVer, 'ver fuera de su alcance',
                        null, null, [], false);
         http_response_code(404);
-        $_SESSION['flash'] = ['error' => 'Ese caso no está entre los tuyos.'];
+        $_SESSION['flash'] = ['error' => 'Esa orden no está entre las tuyas.'];
         header('Location: mis.php');
         exit;
     }
@@ -284,7 +292,7 @@ if (isset($_GET['ver'])) {
         (H-13): sin `#otForm` no hay ningún `fetch` propio de esta pantalla que
         traiga esa fecha, así que la pone el propio PHP al generarla. */ ?>
 <meta name="generado" content="<?= date('c') ?>">
-<title><?= $e($caso['local'] ?? 'Caso') ?> · B.IA Soft ERP</title>
+<title><?= $e($caso['local'] ?? Vocabulario::titulo('ORDEN')) ?> · B.IA Soft ERP</title>
 <link rel="stylesheet" href="estilo.css">
 </head>
 <body class="con-nav-abajo">
@@ -293,9 +301,9 @@ if (isset($_GET['ver'])) {
 <header class="mov-cab">
   <div class="fila">
     <a class="btn sm" href="mis.php<?= $abierto ? '' : '?t=atendidas' ?>"
-       aria-label="<?= $abierto ? 'Volver a la bandeja' : 'Volver al historial' ?>">←</a>
+       aria-label="<?= $e('Volver a ' . ($abierto ? Vocabulario::titulo('MIS_ORDENES') : Vocabulario::t('HISTORIAL'))) ?>">←</a>
     <div style="flex:1;min-width:0">
-      <div class="hola"><?= $sinCat ? 'Aviso ' . $e($avisoVer) : $e($caso['local'] ?? '—') ?></div>
+      <div class="hola"><?= $sinCat ? $e(Vocabulario::titulo('AVISO_SAP') . ' ' . $avisoVer) : $e($caso['local'] ?? '—') ?></div>
       <div class="quien"><?= $sinCat ? 'sin dato en el catálogo'
                                      : $e($caso['local_nombre'] ?? $caso['restaurante_sap'] ?? '') ?></div>
     </div>
@@ -306,7 +314,9 @@ if (isset($_GET['ver'])) {
 <?php if ($errFlash): ?><div style="padding:12px 14px 0"><?= Ui::aviso('err', $e($errFlash), true) ?></div><?php endif; ?>
 
 <div class="mov-ficha">
-  <span class="aviso-n">Aviso <?= $e($avisoVer) ?><?= !empty($caso['orden_trabajo']) ? ' · orden ' . $e($caso['orden_trabajo']) : '' ?></span>
+  <?php /* El número de la orden de trabajo de SAP no es «orden» (el trabajo de KFC):
+           tiene su propio nombre en el diccionario, el mismo que en el buzón. */ ?>
+  <span class="aviso-n"><?= $e(Vocabulario::titulo('AVISO_SAP')) ?> <?= $e($avisoVer) ?><?= !empty($caso['orden_trabajo']) ? ' · ' . $e(Vocabulario::t('NUM_ORDEN_SAP') . ' ' . $caso['orden_trabajo']) : '' ?></span>
   <h1><?= $e($caso['caso'] ?? 'Sin descripción') ?></h1>
   <div class="chips">
     <?= Ui::prioridad($caso['prioridad'] ?? null) ?>
@@ -316,7 +326,7 @@ if (isset($_GET['ver'])) {
 
   <?php if ($sinCat): ?>
     <div style="margin-top:12px">
-      <?= Ui::aviso('info', '<b>Este caso no está en el listado del buzón.</b>'
+      <?= Ui::aviso('info', '<b>Esta orden no está en el listado del buzón.</b>'
         . '<p>Solo se conoce su número de aviso: el local, el equipo y el pedido no llegaron por '
         . 'correo o ya salieron de la ventana del buzón. Si te falta un dato, pregúntale a tu jefe de zona.</p>') ?>
     </div>
@@ -336,18 +346,22 @@ if (isset($_GET['ver'])) {
     <?php if (!empty($g['asignado_en'])): ?>
       <dt>Asignado</dt><dd class="mono"><?= $e(substr((string) $g['asignado_en'], 0, 16)) ?></dd>
     <?php endif; ?>
-    <dt>Comprometido</dt>
+    <?php /* «Fecha SAP», como la cifra «con fecha SAP hoy» de la oficina: es la
+             fecha comprometida en SAP. Una fecha que ya pasó es «atrasada»
+             (vencida es solo el plazo de 48 h), y la nota explica por qué eso,
+             solo, no es culpa del técnico. */ ?>
+    <dt>Fecha SAP</dt>
     <dd class="mono">
       <?= $e($caso['fecha_estimada'] ?? '—') ?>
       <?php if (!empty($caso['fecha_estimada']) && $caso['fecha_estimada'] < date('Y-m-d')): ?>
-        <span class="desc">SAP casi siempre compromete para el día siguiente; que esté
-          pasada no significa por sí solo que vayas atrasado.</span>
+        <span class="desc">SAP casi siempre compromete para el día siguiente; que la
+          fecha figure atrasada no significa por sí solo que vayas tarde.</span>
       <?php endif; ?>
     </dd>
   </dl>
 </div>
 
-<?php /* Lo que ya quedó trabado en este caso, con su reloj y su hilo. */ ?>
+<?php /* Las solicitudes de esta orden (el equipo que no quedó operativo), con su reloj y su hilo. */ ?>
 <?php foreach ($pendCaso as $p): ?>
   <div style="padding:14px 14px 0">
     <div class="rep <?= !empty($p['reloj']) && $p['reloj']['vencido'] ? 'vencido' : ($p['deshabilitado'] ? 'deshabilitado' : '') ?>">
@@ -392,7 +406,8 @@ if (isset($_GET['ver'])) {
           <input type="hidden" name="csrf" value="<?= $e(Auth::csrfToken()) ?>">
           <input type="hidden" name="accion" value="insistir">
           <input type="hidden" name="pendiente_id" value="<?= (int) $p['pendiente_id'] ?>">
-          <label for="ins<?= (int) $p['pendiente_id'] ?>">Recordarle a la administración</label>
+          <?php /* El mismo nombre que en «Repuestos» (pendientes.php): una acción, un nombre. */ ?>
+          <label for="ins<?= (int) $p['pendiente_id'] ?>">Insistir por esta solicitud</label>
           <textarea id="ins<?= (int) $p['pendiente_id'] ?>" name="texto" rows="2" required
             placeholder="p. ej. el administrador insiste en que envíen el repuesto urgente, el equipo sigue deshabilitado"></textarea>
           <label style="display:flex;align-items:center;gap:8px;margin:9px 0 0;font-size:13.5px;color:var(--ink)">
@@ -401,7 +416,7 @@ if (isset($_GET['ver'])) {
             Marcarlo como urgente
           </label>
           <button class="btn primary" type="submit" style="width:100%;margin-top:10px;padding:12px">
-            Enviar recordatorio
+            Enviar
           </button>
         </form>
       <?php endif; ?>
@@ -412,11 +427,14 @@ if (isset($_GET['ver'])) {
 <?php if ($a !== null && !empty($a['ots'])): ?>
   <div style="padding:14px 14px 0">
     <?php foreach ($a['ots'] as $o): ?>
+      <?php /* El número ya dice OT-NNNN; debajo, qué OT INDUSTEC es. La regla
+               es la de siempre (solo «Cerrada» es la de cierre); cambia el
+               nombre: «con cierre / en curso» pasan a los del diccionario. */ ?>
       <div class="rep atendido">
         <div class="cab">
-          <div><div class="que">Orden <?= $e($o['ot']) ?></div>
+          <div><div class="que"><?= $e($o['ot']) ?></div>
             <div class="meta"><?= $e(substr((string) $o['fecha'], 0, 10)) ?> ·
-              <?= ($o['estado_ot'] ?? '') === 'Cerrada' ? 'con cierre' : 'en curso' ?></div></div>
+              <?= $e(Vocabulario::t(($o['estado_ot'] ?? '') === 'Cerrada' ? 'OT_CIERRE' : 'OT_EVALUACION')) ?></div></div>
           <?php if (Auth::puede('ots.pdf') && Emision::existePdf((string) $o['ot'])): ?>
             <a class="btn sm" href="pdf.php?ot=<?= rawurlencode((string) $o['ot']) ?>"
                target="_blank" rel="noopener">Ver PDF</a>
@@ -429,14 +447,15 @@ if (isset($_GET['ver'])) {
   </div>
 <?php endif; ?>
 
-<?php /* La orden que cerró el caso, de la base (T2.13.3). Si ya salió arriba entre
-         las del informe no se repite; si no hay, se dice en vez de callarlo (I-7). */ ?>
+<?php /* La OT INDUSTEC de cierre de esta orden, de la base (T2.13.3). Si ya salió
+         arriba entre las del buzón no se repite; si no hay, se dice en vez de
+         callarlo (I-7). */ ?>
 <?php if (!$abierto && !in_array($g['ot_cierre'] ?? null, array_column($a['ots'] ?? [], 'ot'), true)): ?>
   <div style="padding:14px 14px 0">
     <?php if (!empty($g['ot_cierre'])): ?>
       <div class="rep atendido">
         <div class="cab">
-          <div><div class="que">Orden de cierre <?= $e($g['ot_cierre']) ?></div>
+          <div><div class="que"><?= $e(Vocabulario::titulo('OT_CIERRE')) ?> <?= $e($g['ot_cierre']) ?></div>
             <div class="meta"><?= $e(substr((string) ($g['atendido_en'] ?? ''), 0, 10)) ?> ·
               <?= $e(Casos::etiquetaEstado($est)) ?></div></div>
           <?php if (Auth::puede('ots.pdf') && Emision::existePdf((string) $g['ot_cierre'])): ?>
@@ -448,8 +467,9 @@ if (isset($_GET['ver'])) {
         </div>
       </div>
     <?php else: ?>
-      <?= Ui::aviso('info', '<b>No hay PDF de cierre registrado para este caso.</b>'
-        . '<p>Quedó como «' . $e(Casos::etiquetaEstado($est)) . '» sin una orden de cierre asociada.</p>') ?>
+      <?= Ui::aviso('info', '<b>No hay ' . $e(Vocabulario::t('OT_CIERRE')) . ' registrada para esta orden.</b>'
+        . '<p>Quedó como «' . $e(Casos::etiquetaEstado($est)) . '» sin una '
+        . $e(Vocabulario::t('OT_CIERRE')) . ' asociada.</p>') ?>
     <?php endif; ?>
   </div>
 <?php endif; ?>
@@ -472,10 +492,13 @@ if (isset($_GET['ver'])) {
     <div class="rep atendido">
       <div class="cab">
         <div style="min-width:0">
-          <div class="que">Continúa el trabajo del aviso <?= $e($continuaDe) ?></div>
+          <?php /* «Continúa la orden N» (CONTINUIDAD): el aviso SAP es el número de
+                   la orden anterior. Lo que la cubre es su OT INDUSTEC; antes
+                   decía «orden», que ahora es solo el trabajo que pide KFC. */ ?>
+          <div class="que"><?= $e(Vocabulario::titulo('CONTINUIDAD')) ?> <?= $e($continuaDe) ?></div>
           <div class="meta">
-            <?= $continuaOt !== '' ? 'cubierto por la orden ' . $e($continuaOt)
-                                   : 'ese trabajo todavía no tiene orden emitida' ?>
+            <?= $continuaOt !== '' ? 'cubierta por la ' . $e(Vocabulario::t('OT_INDUSTEC')) . ' ' . $e($continuaOt)
+                                   : 'esa orden todavía no tiene ' . $e(Vocabulario::t('OT_INDUSTEC')) . ' emitida' ?>
             <?php if (!empty($g['continua_en'])): ?>
               · <?= $e(substr((string) $g['continua_en'], 0, 16)) ?>
             <?php endif; ?>
@@ -504,19 +527,22 @@ if (isset($_GET['ver'])) {
   </div>
 <?php elseif ($candidatos): ?>
   <div style="padding:14px 14px 0">
+    <?php /* Enlazar no la cierra: la deja atendida, por cerrar en SAP, con la OT
+             INDUSTEC de la anterior (el «queda cerrado» de antes era falso). */ ?>
     <?= Ui::aviso('info', '<b>¿Esto continúa un trabajo que ya empezaste?</b>'
-      . '<p>Hay ' . count($candidatos) . ' caso' . (count($candidatos) === 1 ? '' : 's')
+      . '<p>Hay ' . count($candidatos) . ' ' . $e(Vocabulario::t('ORDEN', count($candidatos)))
       . ' anterior' . (count($candidatos) === 1 ? '' : 'es') . ' de este mismo equipo. Si es el mismo trabajo, '
-      . 'no hace falta emitir otra orden: enlázalo y este caso queda cerrado con la orden de aquel.</p>') ?>
+      . 'no hace falta emitir otra ' . $e(Vocabulario::t('OT_INDUSTEC')) . ': enlázala y esta orden queda '
+      . 'atendida con la ' . $e(Vocabulario::t('OT_INDUSTEC')) . ' de aquella.</p>') ?>
 
     <?php foreach ($candidatos as $k): ?>
       <div class="rep" style="margin-top:10px">
         <div class="cab">
           <div style="min-width:0">
-            <div class="que">Aviso <?= $e($k['aviso']) ?></div>
+            <div class="que"><?= $e(Vocabulario::titulo('AVISO_SAP')) ?> <?= $e($k['aviso']) ?></div>
             <div class="meta">
               <?= $e($k['fecha']) ?> · hace <?= (int) $k['dias'] ?> día<?= $k['dias'] === 1 ? '' : 's' ?>
-              · <?= $k['ot'] !== null ? 'orden ' . $e($k['ot']) : 'sin orden emitida' ?>
+              · <?= $k['ot'] !== null ? $e($k['ot']) : 'sin ' . $e(Vocabulario::t('OT_INDUSTEC')) ?>
             </div>
           </div>
         </div>
@@ -537,7 +563,7 @@ if (isset($_GET['ver'])) {
     <?php endforeach; ?>
 
     <p class="sub" style="margin:10px 0 0">
-      Si ninguno es, sigue abajo y emite la orden de este caso como siempre.
+      Si ninguna es, sigue abajo y emite la <?= $e(Vocabulario::t('OT_INDUSTEC')) ?> de esta orden como siempre.
     </p>
   </div>
 <?php endif; ?>
@@ -545,15 +571,19 @@ if (isset($_GET['ver'])) {
 <div class="mov-acciones">
   <?php if ($abierto): ?>
     <a class="btn primary" href="index.html?aviso=<?= rawurlencode($avisoVer) ?>">
-      Emitir la orden de este caso
+      Emitir <?= $e(Vocabulario::titulo('OT_INDUSTEC')) ?>
     </a>
   <?php else: ?>
-    <p class="sub" style="margin:0;text-align:center">Este caso ya está cerrado: queda aquí para consultarlo.</p>
+    <?php /* No se dice «cerrada»: en el historial hay atendidas (por cerrar en
+             SAP), cerradas en SAP y las que no nos competen. El chip de arriba
+             ya dice cuál de ellas es. */ ?>
+    <p class="sub" style="margin:0;text-align:center">Esta orden ya no está en tus manos: queda en tu
+      <?= $e(Vocabulario::t('HISTORIAL')) ?> para consultarla.</p>
   <?php endif; ?>
 
   <?php if ($abierto && Auth::puede('repuestos.pedir') && !$pendCaso): ?>
     <button class="btn ghost" type="button" onclick="document.getElementById('dlgTrabado').showModal()">
-      No pude concluir: el equipo quedó trabado
+      El equipo no quedó operativo: pedir repuesto
     </button>
   <?php endif; ?>
 
@@ -577,15 +607,16 @@ if (isset($_GET['ver'])) {
     <input type="hidden" name="aviso" value="<?= $e($avisoVer) ?>">
     <input type="hidden" name="activo_fijo" value="<?= $e($caso['activo_fijo'] ?? '') ?>">
 
-    <h2>El equipo quedó sin concluir</h2>
+    <?php /* «veredicto» se retiró: el jefe de zona valida, KFC decide. */ ?>
+    <h2>El equipo no quedó operativo</h2>
     <p class="sub" style="margin:0 0 14px">
-      La intervención debería cerrar el trabajo en la visita. Cuando no se puede,
-      hay que dejar por escrito qué encontraste: es lo que sostiene el veredicto
+      La intervención debería terminar el trabajo en la visita. Cuando no se puede,
+      hay que dejar por escrito qué encontraste: es lo que sostiene la validación
       de tu jefe de zona y la respuesta a Grupo KFC.
     </p>
 
     <div style="margin-bottom:12px">
-      <label for="td">Qué encontraste y por qué no se pudo cerrar</label>
+      <label for="td">Qué encontraste y por qué no se pudo terminar</label>
       <textarea id="td" name="diagnostico" rows="3" required
         placeholder="p. ej. la resistencia de la freidora 2 está abierta; se midió continuidad y no pasa"></textarea>
     </div>
@@ -601,19 +632,24 @@ if (isset($_GET['ver'])) {
       <label for="tp">Qué haría falta, si ya lo sabes</label>
       <input type="text" id="tp" name="parte"
              placeholder="resistencia de 5 kW — opcional">
+      <?php /* Las vías son las de hoy (modelo de la 009), con sus nombres del
+               diccionario; la frase vieja describía el modelo de antes, cuando
+               INDUSTEC compraba la pieza. */ ?>
       <span class="derivado">
-        Si no estás seguro, déjalo vacío. Tu jefe de zona decide la vía: comprar
-        el repuesto, mandarlo a reparación, reclamar garantía o darlo de baja.
+        Si no estás seguro, déjalo vacío. Tu jefe de zona valida la vía:
+        <?= $e(implode(', ', array_map(fn($k) => mb_strtolower(Vocabulario::titulo($k), 'UTF-8'),
+                                       ['VIA_REPUESTO', 'VIA_REPARACION', 'VIA_GARANTIA']))) ?>
+        o <?= $e(mb_strtolower(Vocabulario::titulo('VIA_BAJA'), 'UTF-8')) ?>.
       </span>
     </div>
 
     <label style="display:flex;align-items:flex-start;gap:9px;padding:11px;border:1px solid var(--danger-bd);
                   background:var(--danger-bg);border-radius:var(--r);font-size:13.5px;color:#7f1d1d">
       <input type="checkbox" name="deshabilitado" value="1" style="width:auto;height:auto;margin:2px 0 0">
-      <span><b>El equipo quedó fuera de servicio.</b>
+      <span><b>El equipo quedó deshabilitado.</b>
         Marca esto solo si el local no lo puede usar. Enciende el plazo de
-        <b>48 horas</b> para que se decida qué se hace, y aparece en rojo en el
-        tablero de tu jefe de zona.</span>
+        <b>48 horas</b> para que tu jefe de zona valide la vía, y aparece en rojo
+        en su tablero.</span>
     </label>
 
     <div class="row" style="margin-top:16px;gap:8px">
@@ -633,11 +669,11 @@ if (isset($_GET['ver'])) {
 
     <h2>Continúa un trabajo anterior</h2>
     <p class="sub" style="margin:0 0 14px">
-      Cuando el aviso anterior se cerró solo a las 48 horas y KFC abrió este
-      otro por el mismo equipo, el trabajo sigue siendo uno — lo hayas
-      atendido tú o un compañero, las asignaciones cambian con la urgencia.
-      Pon el número del aviso anterior y este caso queda cerrado con la orden
-      de aquel, sin emitir otra.
+      Cuando SAP cerró solo el aviso anterior a las 48 horas y KFC abrió este
+      otro por el mismo equipo, el trabajo sigue siendo uno — hayas ido tú
+      o un compañero, las asignaciones cambian con la urgencia.
+      Pon el número del aviso anterior y esta orden queda atendida con la
+      <?= $e(Vocabulario::t('OT_INDUSTEC')) ?> de aquella, sin emitir otra.
     </p>
 
     <div style="margin-bottom:12px">
@@ -646,18 +682,18 @@ if (isset($_GET['ver'])) {
              pattern="[0-9]{6,12}" placeholder="p. ej. 10342524">
       <span class="derivado">
         Son los 8 dígitos del aviso de SAP. Está en el correo de KFC y en la
-        orden de ese trabajo, la haya emitido quien la haya emitido. Si no lo
-        tienes a mano, pregúntale a tu jefe de zona.
+        <?= $e(Vocabulario::t('OT_INDUSTEC')) ?> de ese trabajo, la haya emitido quien la haya emitido.
+        Si no lo tienes a mano, pregúntale a tu jefe de zona.
       </span>
     </div>
 
     <div style="margin-bottom:12px">
       <label for="cNota">Por qué es el mismo trabajo</label>
       <textarea id="cNota" name="nota" rows="2" required
-        placeholder="p. ej. es el mismo horno: fui el 18-jul, quedó esperando la resistencia y hoy la instalé"></textarea>
+        placeholder="p. ej. es el mismo horno: fui el 18-jul, quedó a espera de la resistencia y hoy la instalé"></textarea>
       <span class="derivado">
         Es lo que ve tu jefe de zona, y lo que responde a Grupo KFC si pregunta
-        por qué este aviso no tiene una orden propia.
+        por qué esta orden no tiene una <?= $e(Vocabulario::t('OT_INDUSTEC')) ?> propia.
       </span>
     </div>
 
@@ -669,11 +705,13 @@ if (isset($_GET['ver'])) {
 </dialog>
 <?php endif; ?>
 
+<?php /* La misma barra que UI.BARRA_TECNICO (ui.js), con los mismos rótulos del
+         diccionario; prueba_barra_tecnico.mjs compara las dos. */ ?>
 <nav class="nav-abajo" aria-label="Principal">
-  <a href="mis.php" class="<?= $abierto ? 'on' : '' ?>"><span class="ic">▤</span>Bandeja</a>
-  <a href="mis.php?t=atendidas" class="<?= $abierto ? '' : 'on' ?>"><span class="ic">✓</span>Historial</a>
+  <a href="mis.php" class="<?= $abierto ? 'on' : '' ?>"><span class="ic">▤</span><?= $e(Vocabulario::titulo('MIS_ORDENES')) ?></a>
+  <a href="mis.php?t=atendidas" class="<?= $abierto ? '' : 'on' ?>"><span class="ic">✓</span><?= $e(Vocabulario::titulo('HISTORIAL')) ?></a>
   <a href="index.html"><span class="ic">✎</span>Emitir</a>
-  <a href="pendientes.php"><span class="ic">◷</span>Repuestos</a>
+  <a href="pendientes.php"><span class="ic">◷</span><?= $e(Vocabulario::corto('MODULO_REPUESTOS')) ?></a>
   <a href="cronograma.html"><span class="ic">▦</span>Preventivos</a>
 </nav>
 
@@ -762,8 +800,15 @@ $errFlash = Ui::errorFlash();
 $okFlash  = $_SESSION['flash']['ok'] ?? null;
 unset($_SESSION['flash']);
 
-$ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' => 'Atendidas']
-      + ($esTecnico ? ['avisos' => 'Avisos'] : []);
+/* Los rótulos de las pestañas son los del diccionario, iguales en la oficina:
+   «Asignadas» y «A espera de repuesto» son los estados de la orden; la tercera
+   se llama como el botón de la barra, «Historial» (un solo nombre por lista); y
+   «Notificaciones» deja «aviso» solo para el aviso SAP. Las claves (`t=`) no
+   cambian: son las de la URL y de novedades.php. */
+$ETIQ = ['pendientes' => Vocabulario::titulo('ASIGNADA'),
+         'esperando'  => Vocabulario::titulo('ESPERA_REPUESTO'),
+         'atendidas'  => Vocabulario::titulo('HISTORIAL')]
+      + ($esTecnico ? ['avisos' => Vocabulario::titulo('NOTIFICACION')] : []);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -772,7 +817,7 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b4f8f">
 <meta name="generado" content="<?= date('c') ?>">
-<title>Mis órdenes · B.IA Soft ERP</title>
+<title><?= $e(Vocabulario::titulo('MIS_ORDENES')) ?> · B.IA Soft ERP</title>
 <link rel="stylesheet" href="estilo.css">
 <link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
@@ -791,7 +836,10 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
     <div style="flex:1;min-width:0">
       <div class="hola">Hola, <?= $e(Ui::nombrePila($u['nombre'])) ?></div>
       <div class="quien">
-        Técnico<?= $u['zona'] ? ' · ' . $e((string) $u['zona']) : '' ?>
+        <?php /* La zona con su rótulo (CNLJ se lee «Zona Cuenca-Loja»), no el código. El
+                 rol, el mismo de las otras pantallas (Ui::ROL): desde la 021 el jefe de zona
+                 también atiende y abre esta pantalla, y no es «Técnico». */ ?>
+        <?= $e(Ui::ROL[$u['rol']] ?? 'Técnico') ?><?= $u['zona'] ? ' · ' . $e(Ui::nombreZona((string) $u['zona'])) : '' ?>
       </div>
     </div>
     <?php /* H-02: entrada al archivo histórico de TODAS las zonas. No va en
@@ -805,14 +853,14 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
     <a class="btn sm" href="salir.php">Salir</a>
   </div>
 
-  <nav class="mov-tabs" aria-label="Mis órdenes">
+  <nav class="mov-tabs" aria-label="<?= $e(Vocabulario::titulo('MIS_ORDENES')) ?>">
     <?php foreach ($ETIQ as $k => $et): ?>
       <?php
-      // En «Avisos» el globo cuenta solo lo nuevo: es lo que todavía no vio.
+      // En «Notificaciones» el globo cuenta solo lo que no ha leído.
       $cn = $k === 'avisos' ? $nuevos : count($grupos[$k]) + ($k === 'atendidas' ? count($capturas) : 0);
-      // El globo de «Esperando» se pone rojo si alguno de sus equipos pasó de
-      // las 48 h sin veredicto: es lo único de esta pantalla que corre contra
-      // reloj, y el técnico es quien puede empujarlo insistiendo.
+      // El globo de «A espera de repuesto» se pone rojo si alguno de sus
+      // equipos pasó de las 48 h sin validar: es lo único de esta pantalla que
+      // corre contra reloj, y el técnico es quien puede empujarlo insistiendo.
       $urge = false;
       if ($k === 'esperando') {
           foreach ($misPend as $p) {
@@ -845,9 +893,10 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
 <div id="cola" hidden></div>
 
 <?php if ($esTecnico): ?>
-  <?php /* La barra de avisos: novedades.php le cuenta al técnico SUS avisos nuevos y
-           ui.js la muestra sin recargarle la pantalla (T2.13.5). */ ?>
-  <div id="novedades" hidden><span class="vivo"></span><span id="nov-txt">Tienes avisos nuevos</span>
+  <?php /* La barra de notificaciones: novedades.php le cuenta al técnico SUS
+           notificaciones sin leer y ui.js la muestra sin recargarle la pantalla
+           (T2.13.5); ui.js reescribe este texto con la cifra. */ ?>
+  <div id="novedades" hidden><span class="vivo"></span><span id="nov-txt">Tienes <?= $e(Vocabulario::t('NOTIFICACION', 2)) ?> sin leer</span>
     <button class="btn primary" type="button" id="nov-ver">Ver</button>
     <button class="btn" type="button" id="nov-no" title="Se vuelve a avisar en el próximo cambio">Ahora no</button></div>
 <?php endif; ?>
@@ -855,23 +904,24 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
 <?php if (!$fuente): ?>
   <div style="padding:14px">
     <?= Ui::aviso('warn',
-        '<b>No se pudo leer el listado de casos.</b>'
+        '<b>No se pudo leer el listado de ' . $e(Vocabulario::t('ORDEN', 2)) . '.</b>'
       . '<p>Si estás sin señal, lo que ves es lo último que se guardó en el celular. '
-      . 'Puedes seguir llenando órdenes: se envían solas al reconectar.</p>') ?>
+      . 'Puedes seguir llenando ' . $e(Vocabulario::t('OT_INDUSTEC', 2)) . ': se envían solas al reconectar.</p>') ?>
   </div>
 <?php endif; ?>
 
 <main>
 <?php if ($tab === 'avisos'): ?>
-  <?php /* Los avisos (T2.13.5): lo de las dos últimas semanas, con lo nuevo desde su
-           visita anterior marcado. Sale de lo que el sistema ya registra. */ ?>
+  <?php /* Las notificaciones (T2.13.5): lo de las dos últimas semanas, con lo que
+           no ha leído desde su visita anterior marcado. Sale de lo que el sistema
+           ya registra (clase Avisos, que no se renombra). */ ?>
   <?php if (!$avisos): ?>
     <div class="vacio" style="padding:44px 24px">
       <span class="icono">✓</span>
-      <b style="display:block;font-size:15px;color:var(--ink);margin-bottom:6px">No tienes avisos</b>
+      <b style="display:block;font-size:15px;color:var(--ink);margin-bottom:6px">No tienes <?= $e(Vocabulario::t('NOTIFICACION', 2)) ?></b>
       <span style="display:block;max-width:44ch;margin:0 auto;line-height:1.55">Aquí te avisamos cuando te
-        asignen o te quiten un caso, cuando respondan sobre un equipo que quedó trabado y cuando resuelvan
-        una novedad que reportaste.</span>
+        asignen o te quiten una orden, cuando respondan sobre un equipo que no quedó operativo y cuando
+        resuelvan una novedad que reportaste.</span>
     </div>
   <?php else: ?>
     <div style="padding:14px">
@@ -882,12 +932,14 @@ $ETIQ = ['pendientes' => 'Pendientes', 'esperando' => 'Esperando', 'atendidas' =
              style="margin-bottom:10px<?= $nuevo ? ';border-left:4px solid var(--accent)' : '' ?>">
           <div class="cab">
             <div style="min-width:0">
-              <div class="que"><?= $e($av['titulo']) ?><?= $nuevo ? ' <span class="chip">nuevo</span>' : '' ?></div>
-              <div class="meta"><?= $av['aviso'] !== null ? 'Aviso ' . $e($av['aviso']) . ' · ' : '' ?><span
+              <?php /* «sin leer», no «nuevo»: en masculino, «nuevo» es el código
+                       crudo de la orden sin asignar. */ ?>
+              <div class="que"><?= $e($av['titulo']) ?><?= $nuevo ? ' <span class="chip">sin leer</span>' : '' ?></div>
+              <div class="meta"><?= $av['aviso'] !== null ? $e(Vocabulario::titulo('AVISO_SAP') . ' ' . $av['aviso']) . ' · ' : '' ?><span
                    data-hace="<?= $e($av['cuando']) ?>"><?= $e(substr($av['cuando'], 0, 16)) ?></span></div>
             </div>
             <?php if ($suyo): ?>
-              <a class="btn sm" href="?ver=<?= rawurlencode($av['aviso']) ?>">Ver el caso</a>
+              <a class="btn sm" href="?ver=<?= rawurlencode($av['aviso']) ?>">Ver la orden</a>
             <?php endif; ?>
           </div>
           <?php if ($av['texto'] !== ''): ?><div class="nota"><?= $e($av['texto']) ?></div><?php endif; ?>
@@ -904,16 +956,18 @@ if (!$lista && !$verCapturas):
     /* El vacío también informa. Cada pestaña vacía significa algo distinto y
        decir «no hay nada» en las tres sería desperdiciar el único momento en
        que el técnico tiene toda la pantalla para leer. */
+    $ot = Vocabulario::t('OT_INDUSTEC');
     $vacios = [
-        'pendientes' => ['✓', 'No tienes órdenes pendientes',
-            'Cuando la administración o tu jefe de zona te asignen un caso, aparece aquí. '
-          . 'Si atendiste algo sin orden asignada, puedes emitirla igual con el botón azul.'],
-        'esperando'  => ['—', 'No tienes equipos trabados',
-            'Aquí aparecen los equipos que fuiste a ver y que quedaron esperando un repuesto, '
-          . 'una reparación o una garantía. Desde aquí les puedes insistir a la administración.'],
-        'atendidas'  => ['—', 'Todavía no hay órdenes tuyas atendidas',
-            'En cuanto emitas una orden y llegue su informe al buzón de la empresa, aparece aquí '
-          . 'con su PDF para consultarlo o mandárselo al administrador del local.'],
+        'pendientes' => ['✓', 'No tienes ' . Vocabulario::t('ORDEN', 2) . ' ' . Vocabulario::t('ASIGNADA', 2),
+            ($u['rol'] === 'JEFE_ZONA' ? 'Cuando la administración te asigne una orden, aparece aquí. '
+                                       : 'Cuando la administración o tu jefe de zona te asignen una orden, aparece aquí. ')
+          . 'Si atendiste algo sin aviso SAP, puedes emitir la ' . $ot . ' igual con el botón azul.'],
+        'esperando'  => ['—', 'No tienes ' . Vocabulario::t('ORDEN', 2) . ' ' . Vocabulario::t('ESPERA_REPUESTO', 2),
+            'Aquí aparecen las órdenes que fuiste a ver y cuyo equipo quedó a espera de un repuesto, '
+          . 'una reparación o una garantía. Desde aquí le puedes insistir a la administración.'],
+        'atendidas'  => ['—', 'Tu ' . Vocabulario::t('HISTORIAL') . ' todavía está vacío',
+            'En cuanto emitas una ' . $ot . ' y llegue al buzón de la empresa, aparece aquí '
+          . 'con su PDF para consultarla o mandársela al administrador del local.'],
     ][$tab];
 ?>
   <div class="vacio" style="padding:44px 24px">
@@ -928,7 +982,7 @@ if (!$lista && !$verCapturas):
       <?= Ui::aviso('info',
           '<b>Los recordatorios todavía no están activos.</b>'
         . '<p>Falta aplicar la migración que crea la tabla. Mientras tanto puedes ver '
-        . 'aquí qué quedó esperando, pero no insistir desde la aplicación.</p>') ?>
+        . 'aquí qué quedó ' . $e(Vocabulario::t('ESPERA_REPUESTO')) . ', pero no insistir desde la aplicación.</p>') ?>
     </div>
   <?php endif; ?>
 
@@ -952,7 +1006,7 @@ if (!$lista && !$verCapturas):
           <span class="marca"><?php if ($sinAbrir): ?><i class="nuevo"></i><?php endif; ?></span>
           <span class="cuerpo">
             <span class="lin1">
-              <span class="local"><?php if ($sinCat): ?>Aviso <?= $e($aviso) ?> · sin dato en el catálogo<?php else: ?><?= $e($c['local'] ?? '—') ?> ·
+              <span class="local"><?php if ($sinCat): ?><?= $e(Vocabulario::titulo('AVISO_SAP')) ?> <?= $e($aviso) ?> · sin dato en el catálogo<?php else: ?><?= $e($c['local'] ?? '—') ?> ·
                 <?= $e($c['local_nombre'] ?? $c['restaurante_sap'] ?? '') ?><?php endif; ?></span>
               <span class="cuando"><?= $dias === null ? '' : ($dias <= 0 ? 'hoy' : ($dias === 1 ? 'ayer' : $dias . ' d')) ?></span>
             </span>
@@ -973,11 +1027,13 @@ if (!$lista && !$verCapturas):
                   <span class="chip">insististe <?= (int) $p['insistencias'] ?> ve<?= (int) $p['insistencias'] === 1 ? 'z' : 'ces' ?></span>
                 <?php endif; ?>
               <?php endforeach; ?>
+              <?php /* Lo que se cuenta aquí son los documentos del técnico (OT
+                       INDUSTEC), no órdenes: la orden es la fila entera. */ ?>
               <?php if ($tab === 'atendidas' && !empty($c['_aten']['ots'])): ?>
-                <span class="chip cerrada"><?= count($c['_aten']['ots']) ?> orden<?= count($c['_aten']['ots']) === 1 ? '' : 'es' ?></span>
+                <span class="chip cerrada"><?= count($c['_aten']['ots']) ?> <?= $e(Vocabulario::t('OT_INDUSTEC', count($c['_aten']['ots']))) ?></span>
               <?php endif; ?>
               <?php if ($tab !== 'atendidas' && !empty($enviadas[$aviso])): ?>
-                <span class="chip">enviaste una orden</span>
+                <span class="chip">enviaste una <?= $e(Vocabulario::t('OT_INDUSTEC')) ?></span>
               <?php endif; ?>
             </span>
           </span>
@@ -988,27 +1044,40 @@ if (!$lista && !$verCapturas):
   <?php endif; ?>
 
   <?php if ($verCapturas): ?>
-    <?php $ETIQ_CAP = ['RECIBIDA' => 'recibida en la oficina', 'PROCESADA' => 'procesada', 'RECHAZADA' => 'rechazada']; ?>
+    <?php /* El paso del envío de cada OT INDUSTEC, con los términos del diccionario
+             (los mismos de la cola del celular). Los valores de
+             ot_capturadas.estado no cambian: solo cómo se leen. EMITIDA,
+             ENVIADA y PROCESADA son la misma cosa para el técnico (salió el
+             PDF); NUMERADA y FALLIDA, la que se numeró y no salió. Un valor
+             que no está aquí se sigue mostrando tal como viene. */
+          $ETIQ_CAP = ['RECIBIDA'  => Vocabulario::t('ENVIO_RECIBIDA'),
+                       'EMITIDA'   => Vocabulario::t('ENVIO_EMITIDA'),
+                       'ENVIADA'   => Vocabulario::t('ENVIO_EMITIDA'),
+                       'PROCESADA' => Vocabulario::t('ENVIO_EMITIDA'),
+                       'NUMERADA'  => Vocabulario::t('OT_NO_EMITIDA'),
+                       'FALLIDA'   => Vocabulario::t('OT_NO_EMITIDA'),
+                       'RECHAZADA' => Vocabulario::t('ENVIO_RECHAZADA')]; ?>
     <div style="padding:14px">
-      <h2 style="font-size:14px;margin:0 0 10px;color:var(--ink)">Órdenes que enviaste desde la app</h2>
+      <h2 style="font-size:14px;margin:0 0 10px;color:var(--ink)"><?= $e(Vocabulario::titulo('OT_INDUSTEC')) ?> que enviaste desde la app</h2>
       <?php foreach ($capturas as $k): ?>
         <?php $avk = (string) ($k['aviso'] ?? ''); ?>
         <div class="rep atendido" style="margin-bottom:10px">
           <div class="cab">
             <div style="min-width:0">
-              <div class="que"><?= $avk !== '' ? 'Aviso ' . $e($avk) : 'Sin aviso' ?> · <?= $e($k['local_codigo'] ?? '—') ?></div>
+              <div class="que"><?= $avk !== '' ? $e(Vocabulario::titulo('AVISO_SAP') . ' ' . $avk) : $e(Vocabulario::titulo('SIN_AVISO_SAP')) ?> · <?= $e($k['local_codigo'] ?? '—') ?></div>
               <div class="meta">llenada el <?= $e(substr((string) $k['capturada_en'], 0, 16)) ?> ·
                 <?= $e($ETIQ_CAP[$k['estado']] ?? strtolower((string) $k['estado'])) ?></div>
             </div>
             <?php if ($avk !== '' && isset($misAvisos[$avk])): ?>
-              <a class="btn sm" href="?ver=<?= rawurlencode($avk) ?>">Ver el caso</a>
+              <a class="btn sm" href="?ver=<?= rawurlencode($avk) ?>">Ver la orden</a>
             <?php endif; ?>
           </div>
           <div class="nota">
+            <?php /* El número OT-NNNN ya dice que es una OT INDUSTEC. */ ?>
             <?php if ($k['estado'] === 'RECHAZADA'): ?>
               <?= $e('Motivo: ' . ($k['motivo_rechazo'] ?? 'sin dato')) ?>
             <?php elseif (!empty($k['emitida_en'])): ?>
-              Orden <b><?= $e($k['id_industec']) ?></b> ·
+              <b><?= $e($k['id_industec']) ?></b> ·
               <?php if (Emision::existePdf((string) $k['id_industec'])): ?>
                 <a href="pdf.php?ot=<?= rawurlencode((string) $k['id_industec']) ?>" target="_blank" rel="noopener">Ver PDF</a><?=
                   $prueba ? ' · es de prueba: no se envió a nadie' : '' ?>
@@ -1018,9 +1087,9 @@ if (!$lista && !$verCapturas):
             <?php elseif (!empty($k['emision_error'])): ?>
               El PDF no se pudo generar todavía: se reintenta desde el servidor cada 10 minutos.
             <?php elseif (!empty($k['id_industec'])): ?>
-              Orden <b><?= $e($k['id_industec']) ?></b> · el PDF se reintenta desde el servidor cada 10 minutos.
+              <b><?= $e($k['id_industec']) ?></b> · el PDF se reintenta desde el servidor cada 10 minutos.
             <?php else: ?>
-              Orden recibida antes de la emisión automática (anterior al 2026-09-11): no tiene PDF.
+              <?= $e(Vocabulario::titulo('OT_INDUSTEC')) ?> recibida antes de la emisión automática (anterior al 2026-09-11): no tiene PDF.
             <?php endif; ?>
           </div>
         </div>
@@ -1040,21 +1109,26 @@ if (!$lista && !$verCapturas):
 <?php endif; /* avisos */ ?>
 </main>
 
-<?php /* El botón flotante. Emitir una orden es LA acción del técnico y tiene que
-         estar a un pulgar de distancia desde cualquier punto de la lista. */ ?>
-<a class="fab" href="index.html" aria-label="Emitir una orden de trabajo" title="Emitir una orden">+</a>
+<?php /* El botón flotante. Emitir una OT INDUSTEC es LA acción del técnico y
+         tiene que estar a un pulgar de distancia desde cualquier punto de la lista. */ ?>
+<a class="fab" href="index.html" aria-label="Emitir una <?= $e(Vocabulario::t('OT_INDUSTEC')) ?>"
+   title="Emitir una <?= $e(Vocabulario::t('OT_INDUSTEC')) ?>">+</a>
 
+<?php /* La misma barra que UI.BARRA_TECNICO (ui.js), con los mismos rótulos del
+         diccionario; prueba_barra_tecnico.mjs compara las dos. */ ?>
 <nav class="nav-abajo" aria-label="Principal">
-  <a href="mis.php" class="<?= $tab === 'atendidas' ? '' : 'on' ?>"><span class="ic">▤</span>Bandeja
-    <?php if (count($grupos['pendientes'])): ?>
-      <span class="globo"><?= count($grupos['pendientes']) ?></span>
+  <a href="mis.php" class="<?= $tab === 'atendidas' ? '' : 'on' ?>"><span class="ic">▤</span><?= $e(Vocabulario::titulo('MIS_ORDENES')) ?>
+    <?php /* Cuenta lo mismo que dice «Mis órdenes» (su ayuda en el diccionario): las
+             asignadas y las que están a espera de repuesto, las dos pestañas que abre. */ ?>
+    <?php $nMias = count($grupos['pendientes']) + count($grupos['esperando']); if ($nMias): ?>
+      <span class="globo"><?= $nMias ?></span>
     <?php endif; ?>
   </a>
-  <?php /* El historial es la pestaña «Atendidas»; va en la barra porque es lo
-           segundo que busca el técnico: la orden que ya mandó (T2.13.3). */ ?>
-  <a href="mis.php?t=atendidas" class="<?= $tab === 'atendidas' ? 'on' : '' ?>"><span class="ic">✓</span>Historial</a>
+  <?php /* El historial es la pestaña del mismo nombre; va en la barra porque es
+           lo segundo que busca el técnico: la OT INDUSTEC que ya mandó (T2.13.3). */ ?>
+  <a href="mis.php?t=atendidas" class="<?= $tab === 'atendidas' ? 'on' : '' ?>"><span class="ic">✓</span><?= $e(Vocabulario::titulo('HISTORIAL')) ?></a>
   <a href="index.html"><span class="ic">✎</span>Emitir</a>
-  <a href="pendientes.php"><span class="ic">◷</span>Repuestos
+  <a href="pendientes.php"><span class="ic">◷</span><?= $e(Vocabulario::corto('MODULO_REPUESTOS')) ?>
     <?php $pc = Pendientes::contadores(); if ($pc['abiertos']): ?>
       <span class="globo"><?= $pc['abiertos'] ?></span>
     <?php endif; ?>

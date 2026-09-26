@@ -138,7 +138,9 @@
       // --- LOCAL ---
       var local = (o.local == null || o.local === '') ? null : o.local;
       if (local === null) {
-        add('local', 'LOCAL_REQUERIDO', 'sin local no se puede archivar, cruzar ni facturar la orden');
+        // Vocabulario único (24-sep-2026): lo que se valida es la «OT INDUSTEC»;
+        // «orden» es el trabajo de KFC. Los mismos textos que Validacion.php.
+        add('local', 'LOCAL_REQUERIDO', 'sin local no se puede archivar, cruzar ni facturar la OT INDUSTEC');
       } else if (!locales[local]) {
         add('local', 'LOCAL_FUERA_DE_CATALOGO',
           "'" + local + "' no está en el maestro de " + Object.keys(locales).length + ' locales');
@@ -155,7 +157,7 @@
       var aviso = o.aviso;
       if (aviso == null || aviso === '' || aviso === '0' || aviso === 0) {
         if (!o.sin_aviso) {
-          add('aviso', 'AVISO_VACIO_SIN_DECLARAR', "marca 'esta orden nace sin aviso' o escribe el aviso");
+          add('aviso', 'AVISO_VACIO_SIN_DECLARAR', "marca 'Sin aviso SAP' o escribe el aviso");
         }
       } else if (!/^\d{8}$/.test(String(aviso))) {
         add('aviso', 'AVISO_MAL_FORMADO', "'" + aviso + "' no son 8 dígitos");
@@ -179,7 +181,7 @@
 
       // --- EQUIPOS ---
       var equipos = o.equipos || [];
-      if (!equipos.length) add('equipos', 'SIN_EQUIPO', 'toda orden interviene al menos un equipo');
+      if (!equipos.length) add('equipos', 'SIN_EQUIPO', 'toda OT INDUSTEC interviene al menos un equipo');
 
       var delLocal = local !== null ? (equiposCat[local] || []) : [];
       var activos = {}, tiposLocal = {};
@@ -267,8 +269,8 @@
       }
 
       // --- FIRMA Y EVIDENCIA ---
-      if (!o.firma_presente) add('firma', 'SIN_FIRMA', 'la orden la firma el administrador del local');
-      if (!o.fotos_cantidad) add('fotos', 'SIN_FOTOS', 'sin fotos la orden no tiene evidencia de lo hecho');
+      if (!o.firma_presente) add('firma', 'SIN_FIRMA', 'la OT INDUSTEC la firma el administrador del local');
+      if (!o.fotos_cantidad) add('fotos', 'SIN_FOTOS', 'sin fotos la OT INDUSTEC no tiene evidencia de lo hecho');
 
       // --- TÉCNICOS ---
       var tec = String(o.tecnico == null ? '' : o.tecnico).trim();

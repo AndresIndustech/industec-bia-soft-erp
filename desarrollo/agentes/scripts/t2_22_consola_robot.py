@@ -18,8 +18,10 @@ que verse tan mal como uno caido.
 QUE MUESTRA
   1. El robot        - si el vigilante esta vivo, desde cuando, y cuando dio
                        su ultima senal de vida en el registro.
-  2. SAP / KFC       - los requerimientos que entran por el buzon: casos
-                       vigentes, reparto por zona, cuantos ya se atendieron.
+  2. SAP / KFC       - los requerimientos que entran por el buzon: ordenes
+                       en el buzon, reparto por zona, cuantas ya tienen OT
+                       INDUSTEC. Los estados se nombran con el diccionario
+                       unico (vocabulario.json, via comun.termino).
   3. Yellow elephant - los informes que el formulario genera en produccion,
                        por zona, segun el espejo local. Con el nombre de los
                        que aparecen mientras la consola esta abierta.
@@ -47,7 +49,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from comun import BASE, RESPALDOS, SALIDAS  # noqa: E402
+from comun import BASE, RESPALDOS, SALIDAS, corto, termino  # noqa: E402
 
 LOGS = BASE / "logs"
 CATALOGOS = SALIDAS / "catalogos"
@@ -251,7 +253,7 @@ def pintar(base_espejo: dict, base_avisos: dict, arrancada: datetime,
           color("   (lo que entra por el buzon)", X))
     cas, err = leer_json(CASOS)
     if cas is None:
-        print("   " + color(f"catalogo de casos {err}", R))
+        print("   " + color(f"catalogo de {termino('ORDEN', 2)} {err}", R))
     else:
         r = cas.get("resumen", {})
         gen = cas.get("generado", "?")
@@ -271,7 +273,10 @@ def pintar(base_espejo: dict, base_avisos: dict, arrancada: datetime,
                     "zona": c.get("zona") or "?",
                     "que": (c.get("descripcion_trabajo") or c.get("caso") or "")[:44],
                 })
-        print(f"   Casos vigentes          {color(fmt(r.get('casos_vigentes', 0)), G)}" +
+        # Las cifras del buzon con las palabras de la tarjeta «Por zona» de B.IA: con OT
+        # INDUSTEC de cierre (atendidas), abiertas (con OT sin la de cierre) y a espera de
+        # informe tecnico (sin ninguna OT). Las claves del JSON no cambian.
+        print(f"   {termino('ORDEN', 2).capitalize() + ' en el buzón':<24}{color(fmt(r.get('casos_vigentes', 0)), G)}" +
               delta(len(entrados)))
         pz = r.get("por_zona", {})
         print("   por zona                " +
@@ -285,13 +290,15 @@ def pintar(base_espejo: dict, base_avisos: dict, arrancada: datetime,
         print("   " + color(f"catalogo de atenciones {err}", R))
     else:
         ra = at.get("resumen", {})
-        print(f"   Ya atendidos            {color(fmt(ra.get('con_atencion', 0)), V)}"
+        ot = termino("OT_INDUSTEC")
+        print(f"   {'Con ' + ot:<24}{color(fmt(ra.get('con_atencion', 0)), V)}"
               f" de {fmt(ra.get('casos_pendientes', 0))}")
-        print(f"     cerrados por INDUSTEC {fmt(ra.get('cerradas_por_industec', 0))}")
-        print(f"     atendidos, en curso   {fmt(ra.get('en_curso', 0))}")
-        print(f"   Sin atender todavia     {color(fmt(ra.get('sin_atencion', 0)), A)}")
+        print(f"     {'con ' + corto('OT_INDUSTEC') + ' de cierre':<22}{fmt(ra.get('cerradas_por_industec', 0))}")
+        print(f"     {termino('ABIERTA', 2):<22}{fmt(ra.get('en_curso', 0))}")
+        espera = termino("ESPERA_INFORME", 2)
+        print(f"   {espera[:1].upper() + espera[1:]} {color(fmt(ra.get('sin_atencion', 0)), A)}")
         if ra.get("informes_no_parseados"):
-            print("   " + color(f"informes que no se pudieron leer: "
+            print("   " + color(f"{ot} que no se pudieron leer: "
                                  f"{ra['informes_no_parseados']}", R))
 
     if avisos_nuevos:

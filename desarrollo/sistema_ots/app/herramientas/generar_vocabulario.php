@@ -30,6 +30,13 @@ declare(strict_types=1);
  *
  * Solo toca lo que está entre las marcas `<vocabulario:NOMBRE>` y
  * `</vocabulario:NOMBRE>`. El resto del archivo es de quien lo escribió.
+ *
+ * Y escribe ENTERO `publico/vocabulario_publico.json`: la copia recortada que
+ * se sirve sin sesión a ui.js y a sw.js. El `vocabulario.json` completo trae
+ * notas internas (nombres de personas, rutas de scripts de la estación, los
+ * contratos y las excepciones de la lista negra) y no se sirve: solo lo leen
+ * Vocabulario.php y comun.py desde el disco (.htaccess lo niega con los demás
+ * .json). La copia pública tiene la misma forma que el respaldo de ui.js.
  */
 
 require_once __DIR__ . '/../publico/nucleo/Vocabulario.php';
@@ -119,6 +126,27 @@ function vocJson($v): string
     // estropearía las listas, y aquí no hay listas).
     if (is_array($v) && $v === []) { return '{}'; }
     return json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+}
+
+/** La copia pública del diccionario: el respaldo de ui.js en un archivo, un
+ *  concepto por línea para que un cambio se lea en el diff. */
+function vocPublicoJson(): string
+{
+    $r = vocRespaldoJs();
+    $out = "{\n";
+    $out .= '  "version": ' . vocJson($r['version']) . ",\n";
+    $out .= "  \"conceptos\": {\n";
+    $n = count($r['conceptos']); $i = 0;
+    foreach ($r['conceptos'] as $k => $c) {
+        $out .= '    ' . vocJson((string) $k) . ': ' . vocJson($c) . (++$i < $n ? ',' : '') . "\n";
+    }
+    $out .= "  },\n";
+    $resto = array_diff_key($r, ['version' => 1, 'conceptos' => 1]);
+    $n = count($resto); $i = 0;
+    foreach ($resto as $k => $v) {
+        $out .= '  ' . vocJson((string) $k) . ': ' . vocJson($v) . (++$i < $n ? ',' : '') . "\n";
+    }
+    return $out . "}\n";
 }
 
 /**
@@ -232,6 +260,19 @@ function vocabularioAplicar(bool $escribir): array
         if ($escribir && $nuevo !== $texto) {
             file_put_contents($ruta, $nuevo);
         }
+    }
+
+    // La copia pública va entera: no tiene marcas, la escribe solo este script.
+    $ruta = VOC_PUBLICO . '/vocabulario_publico.json';
+    $contenido = vocPublicoJson();
+    $actual = is_file($ruta) ? str_replace("\r\n", "\n", (string) file_get_contents($ruta)) : null;
+    $igual = $actual === $contenido;
+    $informe[] = ['archivo' => 'vocabulario_publico.json', 'bloque' => 'ARCHIVO',
+                  'estado' => $igual ? 'igual' : ($actual === null ? 'sin marcas' : 'distinto')];
+    if ($escribir && !$igual) {
+        file_put_contents($ruta, $contenido);
+        // Recién escrito: «regenerado», aunque antes no existiera (no es «sin marcas»).
+        $informe[count($informe) - 1]['estado'] = 'distinto';
     }
     return $informe;
 }

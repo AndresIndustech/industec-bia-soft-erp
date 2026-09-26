@@ -28,6 +28,7 @@ declare(strict_types=1);
  */
 require_once __DIR__ . '/nucleo/Ui.php';
 require_once __DIR__ . '/nucleo/Catalogo.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // el estado de la OT que todavía no tiene número
 
 $u = Auth::exigir();
 if (!Ui::puedeModulo('equipos.aprobar', ['SUPERADMIN', 'ADMIN'], $u)) {
@@ -47,7 +48,7 @@ function terminarEq(?string $ok, ?string $error): void
 const DECISIONES = [
     // acción POST => [estado nuevo, acción de bitácora, ¿nota obligatoria?, texto del resultado]
     'aprobar'    => ['APROBADO',  'EQUIPO_APROBAR',  false, 'Equipo aprobado: sigue en la lista del local y la estación lo incorpora al maestro.'],
-    'rechazar'   => ['RECHAZADO', 'EQUIPO_RECHAZAR', true,  'Equipo rechazado: ya no se ofrece en la lista. La orden conserva lo que escribió el técnico.'],
+    'rechazar'   => ['RECHAZADO', 'EQUIPO_RECHAZAR', true,  'Equipo rechazado: ya no se ofrece en la lista. La OT INDUSTEC conserva lo que escribió el técnico.'],
     'ya_existia' => ['FUSIONADO', 'EQUIPO_FUSIONAR', true,  'Marcado como ya existente: ya no se ofrece por duplicado.'],
 ];
 
@@ -73,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($fila['estado'] !== 'PROPUESTO') {
         Auth::bitacora($accionBit, 'equipo_propuesto', $uuid, 'rechazado: ya estaba ' . $fila['estado'], $fila['estado'], null, [], false);
-        terminarEq(null, 'Ese equipo ya fue decidido (' . Ui::e((string) $fila['estado']) . '). Si hay que cambiarlo, se registra de nuevo desde una orden.');
+        terminarEq(null, 'Ese equipo ya fue decidido (' . Ui::e((string) $fila['estado']) . '). Si hay que cambiarlo, se registra de nuevo desde una OT INDUSTEC.');
     }
     // `AND estado = 'PROPUESTO'` cierra la carrera entre dos personas decidiendo
     // a la vez sobre el mismo equipo: solo una escribe.
@@ -147,10 +148,10 @@ Ui::cabecera($u, 'equipos.php', ['equipos' => $cont['PROPUESTO']], ['titulo' => 
   <div class="titulo entra">
     <h1>Equipos nuevos</h1>
     <p class="sub">
-      Los equipos que los técnicos registraron desde una orden porque <b>no estaban en la lista</b> de su local.
+      Los equipos que los técnicos registraron desde una OT INDUSTEC porque <b>no estaban en la lista</b> de su local.
       Desde que se proponen ya se ofrecen en esa lista, marcados, para todas las zonas; aquí la administración los
       confirma: <b>aprobar</b> (pasa al catálogo y la estación lo lleva al maestro), <b>rechazar</b> con motivo
-      (era un error) o <b>ya existía</b> (se registró por duplicado). La orden conserva siempre lo que escribió el técnico.
+      (era un error) o <b>ya existía</b> (se registró por duplicado). La OT INDUSTEC conserva siempre lo que escribió el técnico.
     </p>
   </div>
 
@@ -161,7 +162,7 @@ Ui::cabecera($u, 'equipos.php', ['equipos' => $cont['PROPUESTO']], ['titulo' => 
     <a class="tile <?= $cont['PROPUESTO'] > 0 ? 'ambar' : 'verde' ?>" href="equipos.php?est=PROPUESTO">
       <div class="n" data-n="<?= $cont['PROPUESTO'] ?>"><?= $cont['PROPUESTO'] ?></div>
       <div class="t">Por confirmar</div>
-      <div class="pie">Propuestos por los técnicos</div>
+      <div class="pie">Equipos nuevos que registraron los técnicos</div>
     </a>
     <a class="tile azul" href="equipos.php?est=APROBADO">
       <div class="n" data-n="<?= $cont['APROBADO'] ?>"><?= $cont['APROBADO'] ?></div>
@@ -193,7 +194,7 @@ Ui::cabecera($u, 'equipos.php', ['equipos' => $cont['PROPUESTO']], ['titulo' => 
       <select name="zona">
         <option value="">Todas</option>
         <?php foreach (['UIO', 'LARB', 'CNLJ', 'OTRA'] as $z): ?>
-          <option value="<?= $z ?>" <?= $fZona === $z ? 'selected' : '' ?>><?= $z ?></option>
+          <option value="<?= $z ?>" <?= $fZona === $z ? 'selected' : '' ?>><?= $e(Ui::zonaCorta($z)) ?></option>
         <?php endforeach; ?>
       </select>
     </label>
@@ -205,13 +206,13 @@ Ui::cabecera($u, 'equipos.php', ['equipos' => $cont['PROPUESTO']], ['titulo' => 
   <div class="tabla-wrap">
     <table class="tarjetas equipos">
       <thead><tr>
-        <th>Local</th><th>Equipo</th><th>Lo registró</th><th>En la orden</th><th>Estado</th><th>Decisión</th>
+        <th>Local</th><th>Equipo</th><th>Lo registró</th><th>En la OT INDUSTEC</th><th>Estado</th><th>Decisión</th>
       </tr></thead>
       <tbody>
       <?php if (!$filas): ?>
         <tr><td colspan="6" class="vacio"><?= $hayFiltro
             ? 'Ningún equipo propuesto con esos filtros.'
-            : 'Ningún equipo propuesto todavía: cuando un técnico marque «Equipo nuevo / no está en la lista» en una orden, aparece aquí.' ?></td></tr>
+            : 'Ningún equipo propuesto todavía: cuando un técnico marque «Equipo nuevo / no está en la lista» en una OT INDUSTEC, aparece aquí.' ?></td></tr>
       <?php endif; ?>
       <?php foreach ($filas as $f): [$etq, $clase] = ETIQUETA[$f['estado']] ?? [$f['estado'], 'sin'];
             $detalle = implode(' · ', array_filter([
@@ -224,7 +225,7 @@ Ui::cabecera($u, 'equipos.php', ['equipos' => $cont['PROPUESTO']], ['titulo' => 
           <td data-th="Local">
             <b class="mono"><?= $e($f['local_codigo']) ?></b>
             <div class="sub"><?= $e($nombreLocal[$f['local_codigo']] ?? '') ?>
-              <?php if ($f['zona']): ?> · <span class="zona-<?= strtolower($e($f['zona'])) ?>"><?= $e($f['zona']) ?></span><?php endif; ?>
+              <?php if ($f['zona']): ?> · <span class="zona-<?= strtolower($e($f['zona'])) ?>"><?= $e(Ui::zonaCorta($f['zona'])) ?></span><?php endif; ?>
             </div>
           </td>
           <td data-th="Equipo">
@@ -235,11 +236,14 @@ Ui::cabecera($u, 'equipos.php', ['equipos' => $cont['PROPUESTO']], ['titulo' => 
             <?= $e($f['propuesto_nombre'] ?: $f['propuesto_usuario'] ?: '—') ?>
             <div class="sub mono"><?= $e(substr((string) $f['propuesto_en'], 0, 16)) ?></div>
           </td>
-          <td data-th="En la orden">
+          <td data-th="En la OT INDUSTEC">
             <?php if ($f['orden_id']): ?>
               <a class="mono" href="ordenes.php?q=<?= rawurlencode((string) $f['orden_id']) ?>"><?= $e($f['orden_id']) ?></a>
             <?php elseif ($f['envio_uuid']): ?>
-              <span class="sub">orden en proceso</span>
+              <?php /* No es «en cola»: equipos_propuestos lo inserta envio.php en el
+                       servidor, así que la OT ya salió del celular; lo que le falta es
+                       el número (ot_capturadas.id_industec vacío). */ ?>
+              <span class="sub"><?= $e(Vocabulario::t('OT_INDUSTEC') . ' ' . Vocabulario::t('ENVIO_RECIBIDA') . ', todavía sin número') ?></span>
             <?php else: ?>
               <span class="sub">—</span>
             <?php endif; ?>
@@ -276,7 +280,7 @@ Ui::cabecera($u, 'equipos.php', ['equipos' => $cont['PROPUESTO']], ['titulo' => 
   <p class="sub" style="margin:0 0 12px">
     <b>Aprobar:</b> el equipo queda en el catálogo del local para todas las zonas y la estación lo incorpora al
     maestro en el siguiente saneamiento; si después hay que corregirle la marca o el modelo, se hace en el maestro.
-    <b>Rechazar:</b> deja de ofrecerse en la lista; la orden donde se registró no cambia y el motivo va en la bitácora.
+    <b>Rechazar:</b> deja de ofrecerse en la lista; la OT INDUSTEC donde se registró no cambia y el motivo va en la bitácora.
     <b>Ya existía:</b> el técnico no lo encontró, pero estaba (otro nombre, otro activo fijo): se anota cuál era y
     deja de ofrecerse por duplicado. Nada se borra: cada decisión queda en la
     <a href="bitacora.php?entidad=equipo_propuesto">bitácora</a> con quién y cuándo.

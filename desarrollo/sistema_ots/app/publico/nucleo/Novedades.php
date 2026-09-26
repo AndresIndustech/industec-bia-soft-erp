@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/Ui.php';
 require_once __DIR__ . '/Catalogo.php';
+require_once __DIR__ . '/Vocabulario.php';   // los mensajes nombran los estados con el diccionario único
 
 /**
  * Novedades.php — Lo que el técnico ve en la visita y no era su orden.
@@ -38,15 +39,19 @@ require_once __DIR__ . '/Catalogo.php';
  * para poder demostrar que se avisó y cuándo.
  *
  * LA CLASIFICACION LA PROPONE EL TECNICO, NO LA DECIDE. `responsable_prop` es
- * lo que él cree; el veredicto es del jefe o de la administración. Es la misma
+ * lo que él cree; la resuelve el jefe o la administración. Es la misma
  * regla que las alertas de alcance del buzón: el sistema marca, la persona
  * resuelve.
  */
 final class Novedades
 {
-    /** Las áreas que la operación nombró como causantes de fallas repetidas. */
+    /** Las áreas que la operación nombró como causantes de fallas repetidas.
+     *  Son tipos, no estados (fuera_de_alcance del diccionario): el rótulo
+     *  de cada una se queda. Toda área distinta de EQUIPO_CORRECTIVO es «de
+     *  otra área» (NOVEDAD_OTRA_AREA); la ayuda usa las palabras del
+     *  diccionario («operativo»), no «todavía opera». */
     public const TIPOS = [
-        'EQUIPO_CORRECTIVO' => ['Equipo — necesita correctivo', 'Un equipo que todavía opera pero va a fallar. Le toca a INDUSTEC.'],
+        'EQUIPO_CORRECTIVO' => ['Equipo — necesita correctivo', 'Un equipo todavía operativo que va a fallar. Le toca a INDUSTEC.'],
         'ELECTRICO'         => ['Instalación eléctrica',        'Tomacorrientes, tableros, cableado. Hace fallar equipos una y otra vez.'],
         'VENTILACION'       => ['Ventilación o extracción',     'Campanas, extractores, inyección. Sin extracción los equipos se recalientan.'],
         'DESAGUE'           => ['Desagüe',                      'Sifones, canaletas, tuberías tapadas bajo los equipos.'],
@@ -71,7 +76,7 @@ final class Novedades
         'DERIVADA_SAP'     => ['con aviso SAP', 'Se le pidió el aviso a Grupo KFC y ya tiene número.'],
         'ASUMIDA_INDUSTEC' => ['la asume INDUSTEC', 'Entra en la planificación de INDUSTEC sin aviso nuevo.'],
         'DESCARTADA'       => ['descartada', 'Se revisó y no procedía, con su motivo.'],
-        'RESUELTA'         => ['resuelta', 'La novedad ya se atendió.'],
+        'RESUELTA'         => ['resuelta', 'Lo que se pidió o se asumió por la novedad ya quedó hecho, con una nota de qué se hizo.'],
     ];
     // </vocabulario:ESTADOS>
 
@@ -278,7 +283,8 @@ final class Novedades
     }
 
     /**
-     * El veredicto: cómo se reporta esta novedad.
+     * La resolución: cómo se reporta esta novedad (la columna sigue llamándose
+     * `veredicto_*`; en pantalla es «resolver»).
      *
      * DERIVADA_SAP exige el número de aviso. Sin el número, «se le pidió a KFC»
      * es una afirmación que no se puede sostener tres semanas después, y este
@@ -316,7 +322,8 @@ final class Novedades
 
         $avisoSap = trim($avisoSap);
         if ($estado === 'DERIVADA_SAP' && $avisoSap === '') {
-            return [false, 'Para darla por derivada hace falta el número de aviso que creó Grupo KFC.'];
+            return [false, 'Para marcarla «' . Vocabulario::t('NOVEDAD_CON_AVISO')
+                         . '» hace falta el número de aviso que creó Grupo KFC.'];
         }
         if ($estado === 'DESCARTADA' && trim($nota) === '') {
             return [false, 'Para descartarla hace falta el motivo: el técnico la reportó y merece saber por qué no procede.'];

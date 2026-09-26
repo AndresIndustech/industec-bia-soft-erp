@@ -106,7 +106,7 @@ function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES
   <div class="marca-cab"><span class="punto"></span>B.IA Soft ERP</div>
   <div class="card">
     <h1>B.IA Soft ERP</h1>
-    <p class="sub">INDUSTEC · gestión de órdenes de trabajo</p>
+    <p class="sub">INDUSTEC · gestión de órdenes y OT INDUSTEC</p>
 
     <?php if ($error && !$sesionAbierta): ?>
       <div class="aviso err" role="alert">

@@ -50,6 +50,18 @@ const ZONAS = ['UIO', 'LARB', 'CNLJ', 'OTRA'];
 
 function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
 
+/** El rótulo corto de la zona, del diccionario único (CNLJ se lee «CUENCA-LOJA»,
+ *  como en todas las pantallas). La columna guarda el código y no cambia; una
+ *  zona que no es de las cuatro se muestra tal como viene en el padrón, porque
+ *  es justo el dato que la fila está marcando como inválido. */
+function rotuloZona(?string $z): string
+{
+    if ($z === null || $z === '') { return '—'; }
+    if (!in_array($z, ZONAS, true)) { return $z; }
+    require_once __DIR__ . '/nucleo/Vocabulario.php';
+    return Vocabulario::corto(Vocabulario::deEstado($z, 'zona'));
+}
+
 /** Igual que en usuarios.php: sin I, O, 0, 1, que se confunden al dictarla. */
 function claveTemporal(): string
 {
@@ -216,7 +228,7 @@ $confirmar = 'Se van a crear ' . count($pendientes) . ' cuentas con contraseña 
             <?php foreach ($creadas as $c): ?>
               <tr>
                 <td><?= e($c['nombre']) ?></td>
-                <td><?= e($c['zona'] ?? '—') ?></td>
+                <td><?= e(rotuloZona($c['zona'] ?? null)) ?></td>
                 <td class="mono"><?= e($c['usuario']) ?></td>
                 <td class="clave"><?= e($c['clave']) ?></td>
               </tr>
@@ -263,7 +275,7 @@ $confirmar = 'Se van a crear ' . count($pendientes) . ' cuentas con contraseña 
           <?php foreach ($padron['filas'] as $f): ?>
             <tr class="<?= $f['motivo'] === null ? '' : 'salta' ?>">
               <td><?= e($f['nombre']) ?></td>
-              <td><?= e($f['zona'] ?? '—') ?></td>
+              <td><?= e(rotuloZona($f['zona'] ?? null)) ?></td>
               <td class="mono"><?= e($f['usuario']) ?></td>
               <td><?= e($ROL[$f['rol']] ?? $f['rol']) ?></td>
               <td>

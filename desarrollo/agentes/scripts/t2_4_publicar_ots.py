@@ -34,6 +34,7 @@ USO:
 """
 import argparse
 import json
+import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -42,6 +43,9 @@ import mysql.connector
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from comun import termino  # noqa: E402  (diccionario unico, vocabulario.json)
 
 ENV_PATH = Path(r"D:\INDUSTECH IA\desarrollo\agentes\config\.env")
 SALIDA = Path(r"D:\INDUSTECH IA\SALIDAS IA\OTS")
@@ -165,13 +169,16 @@ def _resumen(wb, filas):
         c.font = Font(bold=True, color="FFFFFF")
         c.fill = PatternFill(start_color=AZUL, end_color=AZUL, fill_type="solid")
 
-    ws.append([f"Catalogo de ordenes de trabajo - INDUSTEC"])
+    # Lo que se cataloga son OT INDUSTEC, el documento que emite el tecnico; «orden» es el
+    # trabajo que pide KFC (vocabulario.json). Los encabezados de columna «# OT (AVISO SAP)»
+    # y «ESTATUS SAP» siguen el plan de Isabel y el export de KFC.
+    ws.append(["Catalogo de OT INDUSTEC"])
     ws.cell(1, 1).font = Font(bold=True, size=14)
     ws.append([f"Generado el {datetime.now():%Y-%m-%d %H:%M}"])
     ws.append([])
 
     titulo("Por zona y tipo")
-    ws.append(["ZONA / TIPO", "ORDENES", ""])
+    ws.append(["ZONA / TIPO", "OT INDUSTEC", ""])
     for (z, m), n in sorted(Counter((f["zona"], f["modulo"]) for f in filas).items()):
         ws.append([f"{z} - {m}", n, ""])
     ws.append(["TOTAL", len(filas), ""])
@@ -180,13 +187,16 @@ def _resumen(wb, filas):
     ws.append([])
 
     titulo("Estado segun SAP")
-    ws.append(["ESTATUS", "ORDENES", "COMO LEERLO"])
+    ws.append(["ESTATUS", "OT INDUSTEC", "COMO LEERLO"])
+    # Las claves son los valores de SAP (ABIERTO/TRATAMIENTO/CERRADO, contrato) y los dos
+    # rotulos que pone leer_ots(); las notas nombran los estados con el diccionario unico.
     notas = {
-        "CERRADO": "SAP da el caso por cerrado. Es el unico criterio de cierre del proyecto.",
-        "TRATAMIENTO": "En curso segun SAP.",
-        "ABIERTO": "SAP lo mantiene abierto.",
-        "(sin aviso en SAP)": "Orden emitida sin numero de aviso. Es un caso normal de la operacion, no un error.",
-        "(no consta)": "El aviso existe en la orden pero no aparece en el export de SAP disponible.",
+        "CERRADO": f"La orden esta {termino('CERRADA_SAP')}. Es el unico criterio de cierre del proyecto.",
+        "TRATAMIENTO": "La orden esta en tratamiento en SAP.",
+        "ABIERTO": "La orden esta abierta en SAP.",
+        "(sin aviso en SAP)": f"{termino('SIN_AVISO_SAP')[:1].upper() + termino('SIN_AVISO_SAP')[1:]}: "
+                              "es normal en la operacion, no un error.",
+        "(no consta)": "La OT INDUSTEC trae aviso SAP, pero ese aviso no aparece en el export de SAP disponible.",
     }
     for est, n in Counter(f["_estatus_sap"] for f in filas).most_common():
         ws.append([est, n, notas.get(est, "")])
@@ -194,7 +204,7 @@ def _resumen(wb, filas):
 
     titulo("Sin PDF localizable")
     sin = [f for f in filas if not f.get("ruta_pdf")]
-    ws.append(["Ordenes cuyo archivo no esta en el arbol", len(sin),
+    ws.append(["OT INDUSTEC cuyo PDF no esta en el arbol", len(sin),
                "Si es mayor que cero, revisar antes de purgar nada del servidor."])
     return ws
 
@@ -226,7 +236,7 @@ def main():
         password=env["DB_PASSWORD"], database=env["DB_NAME"])
 
     todas = leer_ots(cnx)
-    print(f"Ordenes activas en la base: {len(todas)}")
+    print(f"OT INDUSTEC activas en la base: {len(todas)}")
 
     catalogo = SALIDA / "CATALOGO OTS (generado agente).xlsx"
     escribir(todas, catalogo)
@@ -240,7 +250,7 @@ def main():
         sello = datetime.now().strftime("%Y-%m-%d")
         arch = SALIDA / f"NOVEDADES {sello} (generado agente).xlsx"
         escribir(novedades, arch)
-        print(f"  novedades desde {desde}: {len(novedades)} ordenes -> {arch.name}")
+        print(f"  novedades desde {desde}: {len(novedades)} OT INDUSTEC -> {arch.name}")
     else:
         print("  (primera publicacion: no hay novedades que separar)")
 
@@ -251,7 +261,7 @@ def main():
 
     sin_pdf = sum(1 for f in todas if not f.get("ruta_pdf"))
     sin_aviso = sum(1 for f in todas if not f.get("aviso"))
-    (SALIDA / "LEEME.md").write_text(f"""# Catálogo de órdenes de trabajo
+    (SALIDA / "LEEME.md").write_text(f"""# Catálogo de OT INDUSTEC
 
 Generado el **{datetime.now():%Y-%m-%d %H:%M}** desde la base del proyecto.
 Todo archivo aquí lleva la marca *(generado agente)*: ninguno reemplaza ni
@@ -261,7 +271,7 @@ sobrescribe un archivo llevado a mano por la administración.
 
 | Archivo | Para qué |
 |---|---|
-| `CATALOGO OTS (generado agente).xlsx` | **Buscar.** Las {len(todas):,} órdenes, una hoja por zona. La columna `ARCHIVO` dice dónde está el PDF |
+| `CATALOGO OTS (generado agente).xlsx` | **Buscar.** Las {len(todas):,} OT INDUSTEC, una hoja por zona. La columna `ARCHIVO` dice dónde está el PDF |
 | `NOVEDADES {{fecha}} (generado agente).xlsx` | **Revisar a diario.** Solo lo que entró desde la publicación anterior |
 | `NORMALIZACION_*.csv` | Lo que no se pudo clasificar solo, con el motivo escrito |
 
@@ -286,8 +296,8 @@ pendiente 8 veces en la Fase 1. Por eso van separadas y con estos nombres.
 
 | | |
 |---|---|
-| Órdenes publicadas | {len(todas):,} |
-| Sin número de aviso SAP | {sin_aviso:,} — **no es un error**: la orden nace sin aviso cuando el técnico ya estaba en sitio |
+| OT INDUSTEC publicadas | {len(todas):,} |
+| Sin número de aviso SAP | {sin_aviso:,} — **no es un error**: la OT INDUSTEC nace sin aviso SAP cuando el técnico ya estaba en sitio |
 | Sin PDF localizable | {sin_pdf:,} |
 
 Cuando `Sin PDF localizable` sea mayor que cero, hay que resolverlo **antes** de

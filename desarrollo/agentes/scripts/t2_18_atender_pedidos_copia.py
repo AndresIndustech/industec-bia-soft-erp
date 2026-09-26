@@ -122,7 +122,8 @@ def pendientes(env=None) -> list[dict]:
 def atender(limite: int, ejecutar: bool, log=print) -> dict:
     resumen = {"encontrados": 0, "subidos": 0, "no_encontrados": [], "invalidos": []}
     pend = pendientes()
-    log(f"{len(pend)} solicitud(es) sin atender con PDF ausente del servidor")
+    # «solicitud» a secas es el registro de repuesto (vocabulario.json): aqui son pedidos de copia.
+    log(f"{len(pend)} pedido(s) de copia por atender con PDF ausente del servidor")
 
     subidas: list[tuple[str, int]] = []   # (solicitud_id, bytes) de lo que sí se subió
     for p in pend[:limite]:

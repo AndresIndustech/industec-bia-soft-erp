@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Auth.php';
 require_once __DIR__ . '/nucleo/Ui.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // los mensajes que nombran órdenes y su estado
 
 /**
  * usuarios.php — Alta, baja, edición y claves.
@@ -170,8 +171,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $n = (int) (Db::uno("SELECT COUNT(*) n FROM casos_gestion WHERE asignado_a = ? AND estado IN ('ASIGNADO','ESPERA_REPUESTO')",
                                 [$o['usuario_id']])['n'] ?? 0);
             if ($n > 0) {
-                $aviso .= " Tiene $n caso" . ($n === 1 ? '' : 's') . ' asignado' . ($n === 1 ? '' : 's')
-                        . ' en la zona anterior: siguen a su nombre hasta que los reasignes desde Asignar.';
+                // Cuenta ASIGNADO y ESPERA_REPUESTO: se dicen los dos, con el diccionario.
+                $aviso .= " Tiene $n " . Vocabulario::t('ORDEN', $n) . ' en sus manos ('
+                        . Vocabulario::t('ASIGNADA', 2) . ' o ' . Vocabulario::t('ESPERA_REPUESTO')
+                        . ') en la zona anterior: siguen a su nombre hasta que las reasignes desde Asignar.';
             }
         }
         terminar($aviso, null, null, '#u' . (int) $o['usuario_id']);
@@ -209,9 +212,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         tecnico_auto = 0, estado = 'NUEVO'
                   WHERE asignado_a = ? AND estado = 'ASIGNADO'", [$o['usuario_id']]);
             if ($n > 0) {
-                Auth::bitacora('LIBERAR_CASOS', 'usuario', $o['usuario'], "$n casos vuelven a repartir",
+                Auth::bitacora('LIBERAR_CASOS', 'usuario', $o['usuario'],
+                               "$n " . Vocabulario::t('ORDEN', $n) . ' queda' . ($n === 1 ? '' : 'n') . ' ' . Vocabulario::t('SIN_ASIGNAR'),
                                'ASIGNADO', 'NUEVO', ['casos' => $n]);
-                $aviso .= " $n caso" . ($n === 1 ? '' : 's') . ' vuelve' . ($n === 1 ? '' : 'n') . ' a «por repartir».';
+                $aviso .= " $n " . Vocabulario::t('ORDEN', $n) . ' vuelve' . ($n === 1 ? '' : 'n')
+                        . ' a quedar ' . Vocabulario::t('SIN_ASIGNAR') . '.';
             }
         }
         terminar($aviso, null, null, '#u' . (int) $o['usuario_id']);
@@ -378,7 +383,7 @@ Ui::cabecera($u, 'usuarios.php', [], ['titulo' => 'Usuarios y permisos']);
                 <td data-th="Alcance"><?= $x['zona'] ? Ui::zona($x['zona']) : 'Las tres' ?></td>
                 <td data-th="Sesión">
                   <?php if ($abierta): ?>
-                    <span class="chip abierta">abierta</span>
+                    <span class="chip abierta">sesión abierta</span>
                   <?php else: ?>
                     <span class="sub"><?= $x['ultimo_ingreso'] ? e(substr((string) $x['ultimo_ingreso'], 0, 16)) : 'nunca' ?></span>
                   <?php endif; ?>

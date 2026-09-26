@@ -292,7 +292,7 @@ def main():
             plan_por_zona_corr[(f["zona_plan"], f["correlativo_ref"])].append(
                 {"local": loc, "local_ref": f["local_en_referencia"],
                  "aviso_ref": normalizar_aviso(f["aviso_en_referencia"]), "aviso_plan": av})
-    print(f"Planes: {len(plan_por_aviso)} avisos con local asignado a mano")
+    print(f"Planes: {len(plan_por_aviso)} avisos con local anotado a mano")
 
     man = leer_csv(MANIFIESTO, encoding="utf-8-sig")
     # Se resuelven los dos grupos que quedaron sin destino en T1.6:

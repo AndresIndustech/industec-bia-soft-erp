@@ -99,19 +99,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $conteo = Reconciliar::cerrarSinAtencion($catalogoDatos, $atenPrevia, 7, false);
         $tope = max(5, (int) ceil(count($catalogoDatos) * 0.15));
         if ($conteo['candidatos'] === 0) {
-            $error = 'No hay casos con más de 7 días sin informe para cerrar ahora mismo.';
+            $error = 'No hay órdenes con más de 7 días sin ninguna OT INDUSTEC para cerrar sin atención ahora mismo.';
         } elseif ($conteo['candidatos'] > $tope) {
-            $error = 'Se iban a cerrar ' . $conteo['candidatos'] . ' casos de una vez (más del 15% del catálogo). '
+            $error = 'Se iban a cerrar sin atención ' . $conteo['candidatos'] . ' órdenes de una vez (más del 15% del catálogo). '
                    . 'Revisa el buzón antes de forzarlo: puede que el correo no se haya barrido bien.';
             Auth::bitacora('DENEGADO', 'buzon', 'cerrar_sin_atencion', 'supera el 15%: ' . $conteo['candidatos'],
                            null, null, ['candidatos' => $conteo['candidatos'], 'tope' => $tope], false);
         } else {
             $r = Reconciliar::cerrarSinAtencion($catalogoDatos, $atenPrevia, 7, true);
             Auth::bitacora('CERRAR_SIN_ATENCION', 'buzon', 'cerrar_sin_atencion',
-                           $r['cerrados'] . ' casos cerrados por falta de atención (corte ' . $r['corte'] . ')',
+                           $r['cerrados'] . ' ' . Vocabulario::t('ORDEN', $r['cerrados']) . ' '
+                           . Vocabulario::t('CERRADA_SIN_ATENCION', $r['cerrados']) . ' (corte ' . $r['corte'] . ')',
                            null, null, $r);
-            $aviso_ok = $r['cerrados'] . ' caso' . ($r['cerrados'] === 1 ? '' : 's')
-                      . ' cerrado' . ($r['cerrados'] === 1 ? '' : 's') . ' por falta de atención.';
+            // Singular y plural salen del diccionario: «1 orden cerrada sin
+            // atención», «3 órdenes cerradas sin atención».
+            $aviso_ok = $r['cerrados'] . ' ' . Vocabulario::t('ORDEN', $r['cerrados'])
+                      . ' ' . Vocabulario::t('CERRADA_SIN_ATENCION', $r['cerrados']) . '.';
         }
         $_SESSION['flash'] = ['ok' => $aviso_ok, 'error' => $error];
         header('Location: panel.php');
@@ -125,16 +128,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($caso === null) {
         Auth::bitacora('DENEGADO', 'caso', $aviso, "accion=$accion fuera de su alcance",
                        null, null, ['accion' => $accion], false);
-        $error = 'Ese caso no existe o no está en tu alcance.';
+        $error = 'Esa orden no existe o no está en tu alcance.';
     } else {
         Casos::asegurar($aviso, $caso['zona'] ?? null);
         // El estado ANTES de la acción. Sin esto la bitácora guarda un destino
         // sin origen, y no se puede detectar una transición imposible.
         $antes = $gest0[$aviso]['estado'] ?? 'NUEVO';
+        // Lo que se responde si queda una solicitud de repuesto viva (ASG-01):
+        // «pendiente de repuestos» y «Pendientes» eran nombres viejos del
+        // registro y del módulo (SOLICITUD, MODULO_REPUESTOS).
+        $conSolicitud = 'Esa orden tiene una ' . Vocabulario::t('SOLICITUD_EN_TRAMITE') . ': termínala primero en '
+                      . Vocabulario::titulo('MODULO_REPUESTOS') . '.';
 
         if ($accion === 'asignar' && Auth::puede('casos.asignar')) {
             if (!Casos::puedeTransitar('asignar', $antes)) {
-                $error = 'Ese caso no está en un estado que se pueda asignar: primero regularízalo o cierra el pendiente.';
+                // Se dice en qué estado está, no una receta: «regularízalo o cierra
+                // el pendiente» se leía también en órdenes cerradas en SAP o que no
+                // nos competen, donde ninguna de las dos cosas aplica.
+                $error = 'Esa orden está ' . Casos::etiquetaEstado($antes) . ': no se puede asignar.';
                 Auth::bitacora('DENEGADO', 'caso', $aviso, "asignar desde $antes",
                                $antes, null, ['accion' => $accion], false);
             } else {
@@ -152,8 +163,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$ok) {
                     $error = 'Ese técnico no está en tu zona o no está activo.';
                 } elseif ($zonaTec !== $zonaCaso && !$confirmoZona) {
-                    $error = 'El técnico es de ' . $zonaTec . ' y el caso de '
-                           . ($zonaCaso ?: 'sin zona') . '. Marca que confirmas la zona si de verdad quieres asignarlo así.';
+                    $error = 'El técnico es de ' . Ui::nombreZona((string) $zonaTec) . ' y la orden, de '
+                           . Ui::nombreZona((string) $zonaCaso) . '. Marca que confirmas la zona si de verdad quieres asignarla así.';
                 } else {
                     // ESPERA_REPUESTO no cambia de estado al reasignar: sigue
                     // esperando la pieza, solo cambia quién la tiene detrás.
@@ -174,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                    ['tecnico' => $ok[0]['usuario'], 'tecnico_id' => $idt,
                                     'zona_caso' => $zonaCaso, 'zona_tecnico' => $zonaTec,
                                     'confirmo_zona' => $confirmoZona]);
-                    $aviso_ok = 'Caso ' . $aviso . ' asignado a ' . $ok[0]['nombre'] . '.';
+                    $aviso_ok = 'Orden ' . $aviso . ' ' . Vocabulario::t('ASIGNADA') . ' a ' . $ok[0]['nombre'] . '.';
                 }
             }
 
@@ -183,7 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // asignado, sin cambiarle el estado: es un recordatorio, no una
             // transición (ASG-15).
             if (!Casos::puedeTransitar('seguimiento', $antes)) {
-                $error = 'Ese caso no está en un estado donde tenga sentido pedir seguimiento.';
+                $error = 'Esa orden está ' . Casos::etiquetaEstado($antes) . ': no tiene sentido pedir seguimiento.';
             } else {
                 $idt = (int) ($_POST['tecnico'] ?? 0);
                 $texto = trim((string) ($_POST['texto'] ?? ''));
@@ -202,20 +213,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     Auth::bitacora('PEDIR_SEGUIMIENTO', 'caso', $aviso,
                                    'a ' . $ok[0]['usuario'] . ': ' . $texto,
                                    $antes, $antes, ['tecnico' => $ok[0]['usuario'], 'tecnico_id' => $idt]);
-                    $aviso_ok = 'Se le pidió seguimiento a ' . $ok[0]['nombre'] . ' sobre el caso ' . $aviso . '.';
+                    $aviso_ok = 'Se le pidió seguimiento a ' . $ok[0]['nombre'] . ' sobre la orden ' . $aviso . '.';
                 }
             }
 
         } elseif ($accion === 'revision' && Auth::puede('casos.revision')) {
             $motivo = trim((string) ($_POST['motivo'] ?? ''));
             if (!Casos::puedeTransitar('revision', $antes)) {
-                $error = 'Ese caso ya está cerrado: no admite pasar a revisión.';
+                $error = 'Esa orden está ' . Casos::etiquetaEstado($antes) . ': no admite pasar a revisión.';
                 Auth::bitacora('DENEGADO', 'caso', $aviso, "revision desde $antes",
                                $antes, null, ['accion' => $accion], false);
             } elseif ($motivo === '') {
                 // Sin motivo, la administración recibe un caso en revisión y no
                 // sabe qué mirar. El motivo ES la acción.
-                $error = 'Escribe por qué lo mandas a revisión.';
+                $error = 'Escribe por qué la mandas a revisión.';
             } else {
                 Db::ejecutar(
                     "UPDATE casos_gestion
@@ -227,31 +238,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 Auth::bitacora('EN_REVISION', 'caso', $aviso, $motivo,
                                $antes, 'EN_REVISION',
                                ['motivo' => $motivo, 'zona' => $caso['zona'] ?? null]);
-                $aviso_ok = 'Caso ' . $aviso . ' enviado a la administración.';
+                $aviso_ok = 'Orden ' . $aviso . ' ' . Vocabulario::t('EN_REVISION') . ': la resuelve la administración.';
             }
 
         } elseif ($accion === 'veredicto' && Auth::puede('casos.veredicto')) {
             $ver = (string) ($_POST['veredicto'] ?? '');
             $motivo = trim((string) ($_POST['motivo'] ?? ''));
             if (!in_array($ver, ['RESUELTO', 'NO_COMPETE'], true)) {
-                $error = 'Veredicto no válido.';
+                $error = 'Resolución no válida.';
             } elseif (!Casos::puedeTransitar('veredicto', $antes, $ver)) {
                 // RESUELTO solo desde ATENDIDO: el cierre es de dos manos y la
                 // segunda no puede darse antes de que exista la primera
                 // (ASG-01). Cierra también la puerta a un ESPERA_REPUESTO con
                 // el equipo todavía parado.
                 $error = $ver === 'RESUELTO'
-                    ? 'Solo se marca resuelto un caso ya atendido.'
-                    : 'Ese caso ya no está en un estado donde quepa ese veredicto.';
-                Auth::bitacora('DENEGADO', 'caso', $aviso, "veredicto=$ver desde $antes",
+                    ? 'Solo se marca ' . Vocabulario::t('CERRADA_SAP') . ' una orden ' . Vocabulario::t('ATENDIDA') . '.'
+                    : 'Esa orden está ' . Casos::etiquetaEstado($antes) . ': ya no cabe esa resolución.';
+                Auth::bitacora('DENEGADO', 'caso', $aviso, "resolución=$ver desde $antes",
                                $antes, null, ['accion' => $accion], false);
             } elseif ($ver === 'NO_COMPETE' && $motivo === '') {
                 // Decir que un caso no nos compete es lo que se le responde a
                 // KFC. Sin el motivo escrito, esa respuesta no se sostiene.
                 $error = 'Para marcar que no nos compete hace falta el motivo.';
             } elseif ($ver === 'RESUELTO' && tienePendienteVivo($aviso)) {
-                $error = 'Ese caso tiene un pendiente de repuestos abierto: ciérralo primero en Pendientes.';
-                Auth::bitacora('DENEGADO', 'caso', $aviso, 'veredicto con pendiente abierto',
+                $error = $conSolicitud;
+                Auth::bitacora('DENEGADO', 'caso', $aviso, 'resolución con ' . Vocabulario::t('SOLICITUD_EN_TRAMITE'),
                                $antes, null, ['accion' => $accion], false);
             } else {
                 Db::ejecutar(
@@ -261,10 +272,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       WHERE aviso = ?',
                     [$ver, mb_substr($motivo, 0, 255) ?: null, $u['usuario_id'], $aviso]
                 );
-                Auth::bitacora('VEREDICTO', 'caso', $aviso, $ver . ($motivo ? ': ' . $motivo : ''),
+                Auth::bitacora('VEREDICTO', 'caso', $aviso, Casos::etiquetaEstado($ver) . ($motivo ? ': ' . $motivo : ''),
                                $antes, $ver,
                                ['veredicto' => $ver, 'motivo' => $motivo ?: null]);
-                $aviso_ok = 'Caso ' . $aviso . ': ' . Casos::etiquetaEstado($ver) . '.';
+                $aviso_ok = 'Orden ' . $aviso . ': ' . Casos::etiquetaEstado($ver) . '.';
             }
 
         } elseif ($accion === 'cerrado_sap' && Auth::puede('casos.veredicto')) {
@@ -276,24 +287,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              * confirme, el caso sigue siendo un pendiente suyo.
              */
             if (!Casos::puedeTransitar('cerrado_sap', $antes)) {
-                $error = 'Solo se confirma el cierre en SAP de un caso ya atendido.';
-                Auth::bitacora('DENEGADO', 'caso', $aviso, 'cierre SAP sin estar atendido',
+                $error = 'Solo se marca ' . Vocabulario::t('CERRADA_SAP') . ' una orden ' . Vocabulario::t('ATENDIDA') . '.';
+                Auth::bitacora('DENEGADO', 'caso', $aviso, Vocabulario::t('CERRADA_SAP') . ' sin estar atendida',
                                $antes, null, ['accion' => $accion], false);
             } elseif (tienePendienteVivo($aviso)) {
-                $error = 'Ese caso tiene un pendiente de repuestos abierto: ciérralo primero en Pendientes.';
-                Auth::bitacora('DENEGADO', 'caso', $aviso, 'cierre SAP con pendiente abierto',
+                $error = $conSolicitud;
+                Auth::bitacora('DENEGADO', 'caso', $aviso, Vocabulario::t('CERRADA_SAP') . ' con ' . Vocabulario::t('SOLICITUD_EN_TRAMITE'),
                                $antes, null, ['accion' => $accion], false);
             } else {
                 Db::ejecutar(
                     "UPDATE casos_gestion
                         SET estado = 'RESUELTO', veredicto_por = ?, veredicto_en = NOW(),
-                            veredicto_motivo = COALESCE(NULLIF(?, ''), 'cerrado en SAP')
+                            veredicto_motivo = COALESCE(NULLIF(?, ''), 'cerrada en SAP')
                       WHERE aviso = ?",
                     [$u['usuario_id'], trim((string) ($_POST['motivo'] ?? '')), $aviso]
                 );
-                Auth::bitacora('CERRADO_SAP', 'caso', $aviso, 'confirmado en SAP',
+                Auth::bitacora('CERRADO_SAP', 'caso', $aviso, Vocabulario::t('CERRADA_SAP'),
                                $antes, 'RESUELTO', ['ot' => $gest0[$aviso]['ot_cierre'] ?? null]);
-                $aviso_ok = 'Caso ' . $aviso . ' confirmado como cerrado en SAP.';
+                $aviso_ok = 'Orden ' . $aviso . ' ' . Vocabulario::t('CERRADA_SAP') . '.';
             }
 
         } elseif ($accion === 'regularizar' && Auth::puede('casos.veredicto')) {
@@ -302,7 +313,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              * cambia a propósito: sigue siendo un caso que no se atendió, y eso
              * no se borra por haberlo explicado. */
             if (!Casos::puedeTransitar('regularizar', $antes)) {
-                $error = 'Solo se regulariza un caso cerrado por falta de atención.';
+                $error = 'Solo se regulariza una orden ' . Vocabulario::t('CERRADA_SIN_ATENCION') . '.';
             } else {
                 Db::ejecutar(
                     'UPDATE casos_gestion SET regularizado_por = ?, regularizado_en = NOW(),
@@ -310,21 +321,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       WHERE aviso = ?',
                     [$u['usuario_id'], mb_substr(trim((string) ($_POST['motivo'] ?? '')), 0, 500), $aviso]
                 );
-                Auth::bitacora('REGULARIZAR', 'caso', $aviso, 'regularizado ante KFC',
+                Auth::bitacora('REGULARIZAR', 'caso', $aviso, Vocabulario::t('REGULARIZADA') . ' ante KFC',
                                $antes, $antes, ['nota' => $_POST['motivo'] ?? null]);
-                $aviso_ok = 'Caso ' . $aviso . ' marcado como regularizado.';
+                $aviso_ok = 'Orden ' . $aviso . ' ' . Vocabulario::t('REGULARIZADA') . ' ante KFC.';
             }
 
         } elseif ($accion === 'derivar' && Auth::puede('casos.derivar')) {
             $zn = (string) ($_POST['zona_nueva'] ?? '');
             if (!Casos::puedeTransitar('derivar', $antes)) {
-                $error = 'Ese caso ya está cerrado: no se puede derivar.';
+                $error = 'Esa orden está ' . Casos::etiquetaEstado($antes) . ': no se puede derivar.';
                 Auth::bitacora('DENEGADO', 'caso', $aviso, "derivar desde $antes",
                                $antes, null, ['accion' => $accion], false);
             } elseif (!in_array($zn, $ZONAS, true)) {
                 $error = 'Zona no válida.';
             } elseif ($zn === ($caso['zona'] ?? null)) {
-                $error = 'El caso ya está en esa zona.';
+                $error = 'La orden ya está en esa zona.';
             } else {
                 // Se quita la asignación a propósito: el técnico que lo tenía
                 // era de la zona vieja y ya no puede atenderlo.
@@ -340,7 +351,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 Auth::bitacora('DERIVAR', 'caso', $aviso, ($caso['zona'] ?? '?') . ' -> ' . $zn,
                                $antes, $antes === 'ASIGNADO' ? 'NUEVO' : $antes,
                                ['zona_antes' => $caso['zona'] ?? null, 'zona_nueva' => $zn]);
-                $aviso_ok = 'Caso ' . $aviso . ' derivado a ' . $zn . '. Queda sin asignar.';
+                $aviso_ok = 'Orden ' . $aviso . ' derivada a ' . Ui::nombreZona($zn) . '. Queda '
+                          . Vocabulario::t('SIN_ASIGNAR') . '.';
             }
 
         } elseif ($accion === 'otro_trabajo' && Auth::puede('casos.veredicto')) {
@@ -372,7 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                ['decision' => $dec, 'antes' => $gest0[$aviso]['otro_trabajo'] ?? null,
                                 'motivo' => $motivo, 'tipo' => $caso['caso'] ?? null,
                                 'zona' => $caso['zona'] ?? null]);
-                $aviso_ok = 'Caso ' . $aviso . ($dec === 'AUTORIZADO'
+                $aviso_ok = 'Orden ' . $aviso . ($dec === 'AUTORIZADO'
                           ? ': autorizado como otro trabajo.' : ': no autorizado como otro trabajo.');
             }
 
@@ -393,7 +405,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $vuelta = (string) ($_POST['volver'] ?? '');
     if ($vuelta === 'ordenes.php') {
         $destino = 'ordenes.php';
-    } elseif (preg_match('~^asignacion\.php(?:\?zona=(?:UIO|LARB|CNLJ|OTRA))?(?:#sin-asignar-(?:UIO|LARB|CNLJ|OTRA|SIN))?$~', $vuelta)) {
+    } elseif (preg_match('~^asignacion\.php(?:\?zona=(?:UIO|LARB|CNLJ|OTRA|SIN))?(?:#sin-asignar-(?:UIO|LARB|CNLJ|OTRA|SIN))?$~', $vuelta)) {
         // El ancla es `#sin-asignar-X` desde el vocabulario único (antes
         // `#por-repartir-X`); cambia a la vez aquí y en asignacion.php, o la
         // vuelta después de asignar cae al buzón. OTRA y SIN también tienen
@@ -593,23 +605,28 @@ $diasDesde = $generado !== '' ? (int) floor((strtotime($hoy) - strtotime(substr(
 /* Las acciones de la fase siguiente. Se dibujan apagadas y se dice qué harán. */
 $ACCIONES = [
     ['Asignar técnico',   'casos.asignar',
-     'Se elige de los técnicos vigentes de la zona. El caso le aparece en su lista y queda registrado quién lo asignó.'],
-    ['Marcar en revisión', 'casos.revision',
-     'Lo manda a los pendientes de la administración, con el motivo. Es lo que usa el jefe de zona cuando ve algo que no nos compete.'],
-    ['Dar veredicto',      'casos.veredicto',
-     'Solo la administración. Resuelve si el caso nos compete o no, y queda el nombre y la fecha de quien lo resolvió.'],
+     'Se elige de los técnicos vigentes de la zona. La orden le aparece en su lista y queda registrado quién la asignó.'],
+    ['Mandar a revisión', 'casos.revision',
+     'La manda a la administración, con el motivo, para que la resuelva. Es lo que usa el jefe de zona cuando ve algo que no nos compete.'],
+    ['Resolver',          'casos.veredicto',
+     'Solo la administración. Resuelve si la orden nos compete o no, y queda el nombre y la fecha de quien la resolvió.'],
     ['Derivar a otra zona', 'casos.derivar',
-     'Para el caso que llegó al buzón equivocado. El caso cambia de zona y queda sin asignar.'],
+     'Para la orden que llegó al buzón equivocado. La orden cambia de zona y queda sin asignar.'],
     ['Pedir seguimiento',  'casos.seguimiento',
-     'Le manda al técnico un recordatorio sobre un caso que ya tiene asignado. No le cambia el estado: es un aviso, no una transición.'],
+     'Le manda al técnico un recordatorio sobre una orden que ya tiene asignada. No le cambia el estado: es una notificación, no una transición.'],
     ['Otros trabajos',     'casos.veredicto',
-     'Solo la administración. Para un caso fuera del área: si hubo acuerdo con KFC, lo autoriza como «otro trabajo» con el acuerdo escrito, y se reporta aparte como extra. Si no, el veredicto «no nos compete» lo cierra y se le pide a KFC que lo derive.'],
+     'Solo la administración. Para una orden fuera del área: si hubo acuerdo con KFC, la autoriza como «otro trabajo» con el acuerdo escrito, y se reporta aparte como extra. Si no, la resolución «no nos compete» la cierra y se le pide a KFC que la derive.'],
 ];
 
 $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
         'JEFE_ZONA' => 'Jefe de zona', 'TECNICO' => 'Técnico'];
-$ETIQ_ALERTA = ['CON_ALERTA' => 'con alerta', 'POR_CONFIRMAR' => 'por confirmar',
-                'SIN_ALERTA' => 'sin alerta'];
+/* Los dos valores con alerta son el mismo concepto (Casos::fueraDeArea los
+   trata igual): «fuera del área, por resolver». Se distinguen por la razón de
+   la alerta, que es lo que cambia entre uno y otro. */
+$ETIQ_ALERTA = ['CON_ALERTA'    => Vocabulario::t('OTRO_TRABAJO_POR_DECIDIR') . ': local o trabajo fuera del contrato',
+                'POR_CONFIRMAR' => Vocabulario::t('OTRO_TRABAJO_POR_DECIDIR') . ': tipo de trabajo sin criterio',
+                'SIN_ALERTA'    => 'sin alerta'];
+
 
 require_once __DIR__ . '/nucleo/Pendientes.php';
 
@@ -617,18 +634,18 @@ $cuentas = ['casos' => $nSinAsignar > 0 ? ['n' => $nSinAsignar] : null];
 $pc = Pendientes::contadores();
 if ($pc['vencidos'] > 0) { $cuentas['repuestos'] = ['n' => $pc['vencidos'], 'tono' => 'urge']; }
 
-Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
+Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
 ?>
 <div class="wrap ancho">
 
   <div class="titulo entra">
-    <h1>Buzón de casos</h1>
+    <h1>Buzón de órdenes</h1>
     <p class="sub">
       Lo que Grupo KFC pide por el correo de SAP.
       <?php if ($u['rol'] === 'TECNICO'): ?>
-        Ves los casos que te hayan asignado.
+        Ves las órdenes que tienes asignadas.
       <?php elseif ($zonaAlc): ?>
-        Ves los de <b><?= e($zonaAlc) ?></b>, que es tu zona.
+        Ves las de <b><?= e(Ui::nombreZona($zonaAlc)) ?></b>, que es tu zona.
       <?php else: ?>
         Ves las tres zonas.
       <?php endif; ?>
@@ -653,34 +670,35 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
           if ($diasDesde !== null && $diasDesde > 0) { echo ' · hace ' . $diasDesde . ' día' . ($diasDesde === 1 ? '' : 's'); }
         ?>.</b>
         <p style="margin:6px 0 0">
-          El correo avisa cuando KFC <b>crea</b> o <b>elimina</b> un caso, pero
-          <b>no avisa cuando lo cierra</b>. Un caso puede figurar aquí como
-          pendiente y estar cerrado en SAP. Lo que manda es el estado del export
-          de SAP, no esta lista.
+          El correo avisa cuando KFC <b>crea</b> o <b>elimina</b> una orden, pero
+          <b>no avisa cuando la cierra</b>. Una orden puede figurar aquí en el
+          total de órdenes abiertas y estar cerrada en SAP. Lo que manda es el
+          estado del export de SAP, no esta lista.
         </p>
       </div>
 
       <?php if ($u['rol'] === 'TECNICO' && !$todos): ?>
         <div class="nota-regular" style="margin-bottom:16px">
-          <b>Todavía no tienes casos asignados.</b>
+          <b>Todavía no tienes órdenes asignadas.</b>
           <p style="margin:6px 0 0">
-            No es que esté vacío el buzón: hay casos abiertos, pero el reparto
-            entre técnicos todavía no está en funcionamiento. Cuando la
-            administración o tu jefe de zona te asignen uno, aparece aquí.
-            Mientras tanto sigues emitiendo órdenes por
-            <a href="index.html">Emitir orden</a>.
+            Cuando la administración o tu jefe de zona te asignen una, aparece
+            aquí. Mientras tanto sigues emitiendo tus OT INDUSTEC por
+            <a href="index.html">Emitir OT INDUSTEC</a>.
           </p>
         </div>
       <?php endif; ?>
 
       <div class="tiles">
         <div class="tile vence"><div class="n"><?= $nAyer ?></div><div class="t">Llegaron ayer y hoy</div></div>
-        <div class="tile"><div class="n"><?= $nSemana ?></div><div class="t">De los últimos 7 días</div></div>
+        <div class="tile"><div class="n"><?= $nSemana ?></div><div class="t"><?= e(Vocabulario::titulo('ORDENES_NUEVAS_7D')) ?></div></div>
         <div class="tile <?= $nAlerta ? 'alerta' : '' ?>">
-          <div class="n"><?= $nAlerta ?></div><div class="t">Con alerta de alcance</div></div>
-        <div class="tile"><div class="n"><?= $nHoy ?></div><div class="t">Comprometidos hoy</div></div>
+          <div class="n"><?= $nAlerta ?></div><div class="t"><?= e(Vocabulario::titulo('OTRO_TRABAJO_POR_DECIDIR')) ?></div></div>
+        <div class="tile"><div class="n"><?= $nHoy ?></div><div class="t"><?= e(Vocabulario::titulo('FECHA_SAP_HOY')) ?></div></div>
+        <?php /* Cuenta las órdenes con alguna OT INDUSTEC, y de ellas las que ya
+                 tienen la de cierre. No es el estado ATENDIDO: por eso no se
+                 dice «atendidos» ni «cerrados». */ ?>
         <div class="tile atend"><div class="n"><?= $nAtend ?></div>
-          <div class="t">Ya atendidos<?= $nCerrIn ? ' &middot; ' . $nCerrIn . ' cerrados' : '' ?></div></div>
+          <div class="t">Con OT INDUSTEC<?= $nCerrIn ? ' &middot; ' . $nCerrIn . ' de cierre' : '' ?></div></div>
         <div class="tile"><div class="n"><?= count($todos) ?></div><div class="t">En la ventana de 90 días</div></div>
         <?php if ($nSinZona): ?>
           <div class="tile"><div class="n"><?= $nSinZona ?></div><div class="t">Sin zona resuelta</div></div>
@@ -697,21 +715,17 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
          confirma aparte que además lo cerró en SAP.
          ===================================================================== */ ?>
       <?php
-      $PASOS = [
-          'NUEVO'           => 'llegó del correo, sin técnico',
-          'ASIGNADO'        => 'tiene técnico, se espera el informe',
-          'ESPERA_REPUESTO' => 'el equipo quedó trabado',
-          'ATENDIDO'        => 'orden emitida; falta cerrarlo en SAP',
-          'RESUELTO'        => 'cerrado por las dos partes',
-      ];
+      /* La descripción de cada paso es la ayuda del diccionario, la misma
+         que ven los demás roles: antes había aquí otra redacción a mano
+         («llegó del correo, sin técnico», «el equipo quedó trabado»). */
+      $PASOS = ['NUEVO', 'ASIGNADO', 'ESPERA_REPUESTO', 'ATENDIDO', 'RESUELTO'];
       ?>
-      <nav class="linea" aria-label="Estados del caso">
-        <?php foreach ($PASOS as $k => $ayuda): ?>
-          <a href="?est=<?= $k ?>" class="<?= $fEst === $k ? 'on' : '' ?>"
-             title="<?= e(Ui::ayudaEstado($k)) ?>">
+      <nav class="linea" aria-label="Estados de la orden">
+        <?php foreach ($PASOS as $k): ?>
+          <a href="?est=<?= $k ?>" class="<?= $fEst === $k ? 'on' : '' ?>">
             <div class="paso-n" data-n="<?= (int) ($porGestion[$k] ?? 0) ?>">0</div>
             <div class="paso-t"><?= e(Ui::etiquetaEstado($k)) ?></div>
-            <div class="paso-d"><?= e($ayuda) ?></div>
+            <div class="paso-d"><?= e(Ui::ayudaEstado($k)) ?></div>
           </a>
         <?php endforeach; ?>
       </nav>
@@ -736,35 +750,37 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                numero grande: 911 de 918 no es un atraso, es como funciona SAP. */ ?>
       <?php if ($nAtend): ?>
         <div class="nota-regular" style="margin-bottom:14px">
-          <b><?= $nAtend ?> de estos casos ya se atendieron</b><?php if ($nCerrIn): ?>,
-          y <b><?= $nCerrIn ?></b> tienen ya su orden de cierre<?php endif; ?>.
-          Se sabe porque el informe de cada orden llega a este mismo buzón.
+          <b><?= $nAtend ?> de estas órdenes ya tienen OT INDUSTEC</b><?php if ($nCerrIn): ?>,
+          y <b><?= $nCerrIn ?></b> tienen ya su OT INDUSTEC de cierre<?php endif; ?>.
+          Se sabe porque la OT INDUSTEC de cada visita llega a este mismo buzón.
           <p style="margin:6px 0 0">
-            <b>Atendido no es lo mismo que cerrado en SAP.</b> Significa que
-            INDUSTEC hizo el trabajo y emitió la orden; KFC cierra el caso por su
-            lado y de eso el correo no avisa. Sirve para no volver a asignar algo
-            que ya se hizo.
+            <b>Atendida no es lo mismo que cerrada en SAP.</b> «Atendida, por
+            cerrar en SAP» significa que INDUSTEC terminó su parte y emitió su OT
+            INDUSTEC de cierre; KFC cierra la orden en SAP por su lado y de eso
+            el correo no avisa. Sirve para no volver a asignar algo que ya se hizo.
           </p>
         </div>
       <?php endif; ?>
 
       <p class="sub" style="margin:-6px 0 16px">
-        <b><?= $nVencido ?></b> tienen la fecha comprometida pasada, pero
-        <b>eso no es un atraso</b>: SAP casi siempre compromete para el día
-        siguiente, la ventana son 90 días, y el correo no avisa cuando KFC
-        cierra. Buena parte de esos ya están resueltos. Para saber cuáles siguen
-        abiertos de verdad hace falta el export de SAP.
+        <?php /* Dice lo mismo que la ficha del técnico (mis.php): la fecha figura
+                 «atrasado», pero eso solo no quiere decir que INDUSTEC vaya tarde. */ ?>
+        <b><?= $nVencido ?></b> tienen la fecha comprometida en SAP ya cumplida y la
+        fecha figura «<?= e(Vocabulario::t('ATRASADO')) ?>», pero <b>eso no quiere decir que
+        INDUSTEC vaya tarde</b>: SAP casi siempre compromete para el día siguiente, la ventana son 90 días, y el correo no
+        avisa cuando KFC cierra. Buena parte de esas ya están cerradas en SAP.
+        Para saber cuáles siguen abiertas en SAP hace falta el export de SAP.
       </p>
 
       <?php if ($nAlerta): ?>
         <div class="nota-regular" style="margin-bottom:14px">
-          <b>Las alertas no deciden nada.</b> Marcan casos que <i>parecen</i> no
+          <b>Las alertas no deciden nada.</b> Marcan órdenes que <i>parecen</i> no
           corresponder a INDUSTEC —trabajo de infraestructura, local fuera del
-          contrato— para que los encuentres rápido.
+          contrato— para que las encuentres rápido.
           <?php if ($u['rol'] === 'JEFE_ZONA'): ?>
-            Si ves uno así, lo marcas en revisión y la administración resuelve.
+            Si ves una así, la mandas a revisión y la administración la resuelve.
           <?php else: ?>
-            El veredicto es tuyo: el sistema no cierra ni rechaza ningún caso.
+            La resolución es tuya: el sistema no cierra ni rechaza ninguna orden.
           <?php endif; ?>
         </div>
       <?php endif; ?>
@@ -776,7 +792,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
             <select id="f-zona" name="zona">
               <option value="">Todas</option>
               <?php foreach ($porZona as $z => $n): ?>
-                <?php $val = $z === '' ? 'SIN' : $z; $etq = $z === '' ? 'Sin zona' : $z; ?>
+                <?php $val = $z === '' ? 'SIN' : $z; $etq = $z === '' ? 'Sin zona' : Ui::zonaCorta($z); ?>
                 <option value="<?= e($val) ?>" <?= $fZona === $val ? 'selected' : '' ?>>
                   <?= e($etq) ?> (<?= $n ?>)
                 </option>
@@ -820,12 +836,15 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
           </select>
         </div>
         <div class="campo">
-          <label for="f-atn">Atención</label>
+          <?php /* Qué OT INDUSTEC tiene la orden, con los nombres del diccionario:
+                   «Atención», «Sin atender», «Atendidos, en curso» y «Con orden
+                   de cierre» nombraban otras cosas en otras pantallas. */ ?>
+          <label for="f-atn"><?= e(Vocabulario::titulo('OT_INDUSTEC')) ?></label>
           <select id="f-atn" name="atn">
-            <option value="">Todos</option>
-            <option value="sin"     <?= $fAtn === 'sin' ? 'selected' : '' ?>>Sin atender</option>
-            <option value="curso"   <?= $fAtn === 'curso' ? 'selected' : '' ?>>Atendidos, en curso</option>
-            <option value="cerrada" <?= $fAtn === 'cerrada' ? 'selected' : '' ?>>Con orden de cierre</option>
+            <option value="">Todas</option>
+            <option value="sin"     <?= $fAtn === 'sin' ? 'selected' : '' ?>>Sin OT INDUSTEC</option>
+            <option value="curso"   <?= $fAtn === 'curso' ? 'selected' : '' ?>>Con <?= e(Vocabulario::t('OT_EVALUACION')) ?></option>
+            <option value="cerrada" <?= $fAtn === 'cerrada' ? 'selected' : '' ?>>Con <?= e(Vocabulario::t('OT_CIERRE')) ?></option>
           </select>
         </div>
         <?php if ($u['rol'] !== 'TECNICO'): ?>
@@ -833,7 +852,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
             <label for="f-otro">Otros trabajos</label>
             <select id="f-otro" name="otro">
               <option value="">—</option>
-              <option value="por_decidir"   <?= $fOtro === 'por_decidir' ? 'selected' : '' ?>>Fuera del área, por decidir</option>
+              <option value="por_decidir"   <?= $fOtro === 'por_decidir' ? 'selected' : '' ?>><?= e(Vocabulario::titulo('OTRO_TRABAJO_POR_DECIDIR')) ?></option>
               <option value="AUTORIZADO"    <?= $fOtro === 'AUTORIZADO' ? 'selected' : '' ?>>Autorizados</option>
               <option value="NO_AUTORIZADO" <?= $fOtro === 'NO_AUTORIZADO' ? 'selected' : '' ?>>No autorizados</option>
             </select>
@@ -878,21 +897,21 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
       <?php endif; ?>
       <p class="sub" style="margin:0 0 8px">
         <b id="cuenta-casos" data-plantilla="{n}"><?= count($vistos) ?></b>
-        de <?= count($todos) ?> casos
-        <?= count($vistos) === count($todos) ? '' : '(filtrados)' ?>.
-        Primero los que tienen alerta; dentro de cada grupo, el más nuevo arriba.
+        de <?= count($todos) ?> órdenes
+        <?= count($vistos) === count($todos) ? '' : '(filtradas)' ?>.
+        Primero las que parecen fuera del área; dentro de cada grupo, la más nueva arriba.
       </p>
 
       <div class="tabla-wrap">
         <table id="tabla-casos">
           <thead><tr>
-            <th>Aviso</th><th>Local</th><th>Zona</th><th>Caso</th>
-            <th>Prioridad</th><th>Atención</th><th>Comprometido</th><th>Acciones</th>
+            <th><?= e(Vocabulario::titulo('AVISO_SAP')) ?></th><th>Local</th><th>Zona</th><th>Qué pide</th>
+            <th>Prioridad</th><th><?= e(Vocabulario::titulo('OT_INDUSTEC')) ?></th><th>Comprometido</th><th>Acciones</th>
           </tr></thead>
           <tbody>
           <?php if (!$vistos): ?>
             <tr><td colspan="8" class="vacio">
-              No hay casos con esos filtros. <a href="casos.php">Ver todos</a>.
+              No hay órdenes con esos filtros. <a href="casos.php">Ver todas</a>.
             </td></tr>
           <?php endif; ?>
           <?php foreach ($vistos as $c): ?>
@@ -911,7 +930,9 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
             <tr class="<?= $conAlerta ? 'con-alerta' : '' ?>" data-b="<?= $claveFila ?>">
               <td>
                 <span class="mono"><?= e($c['aviso'] ?? '—') ?></span>
-                <span class="desc mono" style="font-size:11px"><?= e($c['orden_trabajo'] ?? '') ?></span>
+                <?php if (!empty($c['orden_trabajo'])): ?>
+                  <span class="desc mono" style="font-size:11px"><?= e(Vocabulario::t('NUM_ORDEN_SAP') . ' ' . $c['orden_trabajo']) ?></span>
+                <?php endif; ?>
               </td>
               <td>
                 <b><?= e($c['local'] ?? '—') ?></b>
@@ -921,7 +942,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                 <?php if (!empty($c['zona'])): ?>
                   <?= Ui::zona($c['zona']) ?>
                   <?php if (!empty($c['zona_discrepa'])): ?>
-                    <span class="alerta-txt">llegó al buzón de <?= e($c['zona_por_buzon'] ?? '?') ?></span>
+                    <span class="alerta-txt">llegó al buzón de <?= e(Ui::zonaCorta((string) ($c['zona_por_buzon'] ?? '?'))) ?></span>
                   <?php endif; ?>
                 <?php else: ?>
                   <?= Ui::zona(null) ?>
@@ -956,11 +977,11 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                 $ats = $atencion($av0);
                 ?>
                 <?php if ($ats === null): ?>
-                  <span class="sub">sin atender</span>
-                  <span class="desc mono">creado <?= e($c['fecha_creacion'] ?? '—') ?></span>
+                  <span class="sub">sin OT INDUSTEC</span>
+                  <span class="desc mono">llegó <?= e($c['fecha_creacion'] ?? '—') ?></span>
                 <?php else: ?>
                   <span class="chip <?= $ats === 'CERRADA' ? 'cerrada' : 'curso' ?>">
-                    <?= $ats === 'CERRADA' ? 'con orden de cierre' : 'atendido, en curso' ?>
+                    con <?= e(Vocabulario::t($ats === 'CERRADA' ? 'OT_CIERRE' : 'OT_EVALUACION')) ?>
                   </span>
                   <?php foreach ($docs[$av0] ?? [] as $d): ?>
                     <?php /* El enlace solo si el PDF está en el servidor: armado a
@@ -975,7 +996,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                         <?= e($d['ot']) ?>
                       <?php endif; ?>
                       <?= $d['fecha'] !== null ? '· ' . e($d['fecha']) : '' ?>
-                      <?php if ($d['cierre']): ?><b>· cierre</b><?php endif; ?>
+                      <?php if ($d['cierre']): ?><b>· de cierre</b><?php endif; ?>
                       <?php if (Auth::puede('ots.pdf') && !$d['pdf']): ?>
                         <span class="derivado">PDF no cargado al archivo todavía</span>
                       <?php endif; ?>
@@ -991,7 +1012,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
               </td>
               <td class="mono <?= $vencido ? 'vencido' : '' ?>">
                 <?= e($c['fecha_estimada'] ?? '—') ?>
-                <?php if ($vencido): ?><span class="desc vencido">pasada</span><?php endif; ?>
+                <?php if ($vencido): ?><span class="desc vencido"><?= e(Vocabulario::t('ATRASADO')) ?></span><?php endif; ?>
               </td>
               <td>
                 <?php
@@ -1011,7 +1032,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                              caso: el trabajo esta hecho y falta su parte. Se
                              pone primero y destacado porque es SU pendiente. */ ?>
                     <button class="btn primary" type="button" data-accion="cerrado_sap">
-                      Ya lo cerré en SAP
+                      Ya la cerré en SAP
                     </button>
                   <?php endif; ?>
 
@@ -1019,7 +1040,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                            desde aquí (ASG-01): el cierre de dos manos empieza
                            en Pendientes, no en el buzón. */ ?>
                   <?php if ($est === 'ESPERA_REPUESTO'): ?>
-                    <a class="btn" href="pendientes.php?q=<?= rawurlencode((string) ($c['aviso'] ?? '')) ?>">Ver pendiente</a>
+                    <a class="btn" href="pendientes.php?q=<?= rawurlencode((string) ($c['aviso'] ?? '')) ?>">Ver la <?= e(Vocabulario::t('SOLICITUD')) ?></a>
                   <?php endif; ?>
 
                   <?php if ($est === 'CERRADO_SIN_ATENCION' && empty($g['regularizado_en'])
@@ -1030,12 +1051,12 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                   <?php endif; ?>
 
                   <?php if (Auth::puede('casos.revision') && Casos::puedeTransitar('revision', $est)): ?>
-                    <button class="btn" type="button" data-accion="revision">En revisión</button>
+                    <button class="btn" type="button" data-accion="revision">Mandar a revisión</button>
                   <?php endif; ?>
 
                   <?php if (Auth::puede('casos.veredicto') && $est !== 'ATENDIDO'
                             && $est !== 'CERRADO_SIN_ATENCION' && $est !== 'ESPERA_REPUESTO'): ?>
-                    <button class="btn" type="button" data-accion="veredicto">Veredicto</button>
+                    <button class="btn" type="button" data-accion="veredicto">Resolver</button>
                   <?php endif; ?>
 
                   <?php if (Auth::puede('casos.derivar') && Casos::puedeTransitar('derivar', $est)): ?>
@@ -1058,7 +1079,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                   <span class="desc">
                     <?= Ui::estado(Ui::estadoVista($est, $g)) ?>
                     <?php if (!empty($g['tecnico_nombre'])): ?>
-                      · <?= e($g['tecnico_nombre']) ?><?= $g['tecnico_auto'] ? ' (del informe)' : '' ?>
+                      · <?= e($g['tecnico_nombre']) ?><?= $g['tecnico_auto'] ? ' (de la OT INDUSTEC)' : '' ?>
                     <?php endif; ?>
                   </span>
                   <?php /* El informe con el que se atendió, junto al botón que lo
@@ -1068,7 +1089,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                            es su mano del cierre de dos manos. */ ?>
                   <?php if (!empty($g['ot_cierre']) && Auth::puede('casos.veredicto')): ?>
                     <?php $oc = (string) $g['ot_cierre']; ?>
-                    <span class="desc">informe:
+                    <span class="desc"><?= e(Vocabulario::t('OT_CIERRE')) ?>:
                       <?php if (Auth::puede('ots.pdf') && Emision::existePdf($oc)): ?>
                         <a class="mono" href="pdf.php?ot=<?= rawurlencode($oc) ?>" target="_blank" rel="noopener"><?= e($oc) ?></a>
                       <?php else: ?>
@@ -1088,7 +1109,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                     <?= e($g['otro_trabajo_motivo'] ?? '') ?>
                   </span>
                 <?php elseif (Casos::otroTrabajoPorDecidir($c, $g)): ?>
-                  <span class="desc" style="color:#92400e">fuera del área: falta decidir si es un otro trabajo</span>
+                  <span class="desc" style="color:#92400e"><?= e(Vocabulario::t('OTRO_TRABAJO_POR_DECIDIR')) ?>: ¿es un otro trabajo?</span>
                 <?php endif; ?>
                 <?php /* La continuidad (T2.25). Aquí es donde se AUDITA: el
                          técnico declara el enlace sin pedir permiso, y esto es
@@ -1101,9 +1122,9 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                         title="<?= e(($g['continua_nombre'] ?? 'alguien') . ' lo declaró el '
                                      . substr((string) ($g['continua_en'] ?? ''), 0, 16)
                                      . ($g['continua_nota'] ? ': ' . $g['continua_nota'] : '')) ?>">
-                    continúa el aviso <?= e((string) $g['continua_de']) ?><?php
-                      if (!empty($g['continua_ot'])): ?> · orden <?= e((string) $g['continua_ot']) ?><?php
-                      else: ?> · sin orden propia<?php endif; ?>
+                    <?= e(Vocabulario::t('CONTINUIDAD')) ?> <?= e((string) $g['continua_de']) ?><?php
+                      if (!empty($g['continua_ot'])): ?> · OT INDUSTEC <?= e((string) $g['continua_ot']) ?><?php
+                      else: ?> · sin OT INDUSTEC propia<?php endif; ?>
                   </span>
                   <?php
                     /* Quién empezó y quién sigue: los DOS nombres, siempre, sin
@@ -1120,8 +1141,11 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
                     <span class="desc" style="color:#64748b">no consta quién atendió ese trabajo anterior</span>
                   <?php else: ?>
                     <span class="desc" style="color:<?= $cruce ? '#b45309' : '#64748b' ?>"
-                          title="<?= e('Lo anterior consta por ' . $qo['fuente']
-                                       . ($cruce ? '. Cruce de técnico: es el flujo alternativo, revísalo.'
+                          title="<?= e('Lo anterior consta por '
+                                       // `fuente` es un dato que comparan las pruebas del servidor
+                                       // («la orden» / «asignado»); aquí se lee con el diccionario.
+                                       . (['la orden' => 'la OT INDUSTEC que firmó', 'asignado' => 'la asignación'][$qo['fuente']] ?? $qo['fuente'])
+                                       . ($cruce ? '. Lo empezó otro técnico: es el flujo alternativo, revísalo.'
                                                  : '')) ?>">
                       <?= $cruce ? '⚠ ' : '' ?>lo empezó <?= e($qo['nombre']) ?><?php
                         if ($qAhora !== ''): ?> · sigue <?= e($qAhora) ?><?php endif; ?>
@@ -1149,12 +1173,13 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
             <li><b><?= e($etiqueta) ?></b> — <?= e($queHace) ?></li>
           <?php endforeach; ?>
           <?php if (Auth::puede('casos.veredicto')): ?>
-            <li><b>Ya lo cerré en SAP</b> — aparece en los casos que INDUSTEC ya
-              cerró. Es tu confirmación de que además lo cerraste del lado de
-              KFC, que es el dato que el correo nunca trae.</li>
-            <li><b>Regularizar</b> — para los que se cerraron por falta de
-              atención. Deja de contarlos como pendiente tuyo; el caso sigue
-              constando como no atendido, porque eso no se borra.</li>
+            <li><b>Ya la cerré en SAP</b> — aparece en las órdenes
+              <?= e(Vocabulario::t('ATENDIDA', 2)) ?>: INDUSTEC ya emitió su OT
+              INDUSTEC de cierre. Es tu confirmación de que además la cerraste en
+              SAP, que es el dato que el correo nunca trae.</li>
+            <li><b>Regularizar</b> — para las órdenes <?= e(Vocabulario::t('CERRADA_SIN_ATENCION', 2)) ?>.
+              Queda explicada ante KFC y deja de contar como tarea tuya; la orden
+              sigue constando como cerrada sin atención, porque eso no se borra.</li>
           <?php endif; ?>
         </ul>
       </div>
@@ -1162,7 +1187,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
       <?php endif; ?>
 
       <?php if (!empty($fuente['revisar']['sin_local']) && $zonaAlc === null): ?>
-        <h2 style="margin-top:26px">Casos sin local resuelto</h2>
+        <h2 style="margin-top:26px">Órdenes sin local identificado</h2>
         <p class="sub" style="margin:0 0 10px">
           El nombre que manda SAP no calza con ningún local del maestro. No se
           les adivina la zona, así que no aparecen en el buzón de ningún jefe:
@@ -1170,7 +1195,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
         </p>
         <div class="tabla-wrap">
           <table>
-            <thead><tr><th>Aviso</th><th>Orden</th><th>Como lo escribe SAP</th></tr></thead>
+            <thead><tr><th><?= e(Vocabulario::titulo('AVISO_SAP')) ?></th><th><?= e(Vocabulario::titulo('NUM_ORDEN_SAP')) ?></th><th>Como lo escribe SAP</th></tr></thead>
             <tbody>
             <?php foreach ($fuente['revisar']['sin_local'] as $s): ?>
               <tr>
@@ -1209,7 +1234,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
       <label id="acc-confirmo-zona-wrap" hidden
              style="display:flex;gap:6px;align-items:flex-start;margin-top:8px;font-size:12.5px;font-weight:400">
         <input type="checkbox" name="confirmo_zona" id="acc-confirmo-zona" value="1" style="margin-top:2px">
-        <span>Sé que es de otra zona y quiero asignarlo igual.</span>
+        <span>Sé que es de otra zona y quiero asignarla igual.</span>
       </label>
     </div>
 
@@ -1217,15 +1242,15 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
       <label for="acc-zn">Zona a la que va</label>
       <select name="zona_nueva" id="acc-zn">
         <?php foreach ($ZONAS as $z): ?>
-          <option value="<?= e($z) ?>"><?= e($z) ?></option>
+          <option value="<?= e($z) ?>"><?= e(Ui::zonaCorta($z)) ?></option>
         <?php endforeach; ?>
       </select>
     </div>
 
     <div id="acc-veredicto" hidden>
-      <label for="acc-vd">Veredicto</label>
+      <label for="acc-vd"><?= e(Vocabulario::titulo('RESOLUCION_ADMIN')) ?></label>
       <select name="veredicto" id="acc-vd">
-        <option value="RESUELTO">Nos compete y está resuelto</option>
+        <option value="RESUELTO">Nos compete y ya está <?= e(Vocabulario::t('CERRADA_SAP')) ?></option>
         <option value="NO_COMPETE">No es trabajo de INDUSTEC: se cierra y se pide a KFC que lo derive</option>
       </select>
     </div>
@@ -1233,7 +1258,8 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
     <?php /* «Otros trabajos» (011). El motivo es obligatorio: si se autoriza, es
              el acuerdo con KFC que respalda el trabajo extra ante el cliente. */ ?>
     <div id="acc-otro" hidden>
-      <label for="acc-ot">Decisión</label>
+      <?php /* «Decisión» es solo de KFC: aquí resuelve la administración. */ ?>
+      <label for="acc-ot">Cómo se resuelve</label>
       <select name="decision" id="acc-ot">
         <option value="AUTORIZADO">Autorizar como otro trabajo: hubo acuerdo con KFC</option>
         <option value="NO_AUTORIZADO">No autorizar: no se cuenta como extra</option>
@@ -1263,21 +1289,21 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de casos']);
 /* Qué pide cada acción. Sale de aquí y no del HTML de cada fila para que el
    texto que ve la persona esté en un solo sitio y no en 900 copias. */
 var ACC = {
-  asignar:     { t:'Asignar el caso',            a:'Le va a aparecer en su lista de órdenes. Queda registrado quién lo asignó.',
+  asignar:     { t:'Asignar la orden',           a:'Le va a aparecer en su lista de órdenes. Queda registrado quién la asignó.',
                  campos:['tecnico'], ok:'Asignar' },
-  seguimiento: { t:'Pedir seguimiento',          a:'Le aparece al técnico en sus avisos, dentro de la app. No le cambia el estado al caso.',
+  seguimiento: { t:'Pedir seguimiento',          a:'Le aparece al técnico en sus notificaciones, dentro de la app. No le cambia el estado a la orden.',
                  campos:['tecnico','texto'], ok:'Pedir' },
-  revision:    { t:'Mandar a revisión',          a:'Va a los pendientes de administración con el motivo que escribas.',
-                 campos:['motivo'], ok:'Mandar', motivo:'Por qué lo mandas' },
-  veredicto:   { t:'Dar veredicto',              a:'Resuelve si el caso nos compete. Queda tu nombre y la fecha.',
+  revision:    { t:'Mandar a revisión',          a:'La orden queda en revisión y la resuelve la administración, con el motivo que escribas.',
+                 campos:['motivo'], ok:'Mandar', motivo:'Por qué la mandas' },
+  veredicto:   { t:'Resolver la orden',          a:'Resuelve si la orden nos compete. Queda tu nombre y la fecha.',
                  campos:['veredicto','motivo'], ok:'Guardar', motivo:'Motivo (obligatorio si no nos compete)' },
-  derivar:     { t:'Derivar a otra zona',        a:'El caso pasa a la otra zona y queda SIN asignar: el técnico que lo tenía ya no puede atenderlo.',
+  derivar:     { t:'Derivar a otra zona',        a:'La orden pasa a la otra zona y queda sin asignar: el técnico que la tenía ya no puede atenderla.',
                  campos:['zona'], ok:'Derivar' },
-  cerrado_sap: { t:'Confirmar el cierre en SAP', a:'INDUSTEC ya emitió la orden de cierre. Esto es que además ya lo cerraste en SAP, que es lo que el correo nunca avisa.',
+  cerrado_sap: { t:'Marcar como cerrada en SAP', a:'INDUSTEC ya emitió su OT INDUSTEC de cierre. Esto es que además ya la cerraste en SAP, que es lo que el correo nunca avisa.',
                  campos:['motivo'], ok:'Confirmar', motivo:'Nota (opcional)' },
-  regularizar: { t:'Marcar como regularizado',   a:'Se cerró por falta de atención. Esto deja de contarlo como pendiente tuyo; el caso sigue constando como no atendido.',
+  regularizar: { t:'Marcar como regularizada',   a:'Se cerró sin atención. Esto la deja explicada ante KFC y deja de contar como tarea tuya; la orden sigue constando como cerrada sin atención.',
                  campos:['motivo'], ok:'Regularizar', motivo:'Qué se hizo (opcional)' },
-  otro_trabajo: { t:'Otros trabajos',           a:'Un trabajo fuera del área de INDUSTEC hecho por acuerdo con KFC se autoriza aquí: se cuenta y se reporta aparte, como extra, y el caso sigue su flujo normal. Si no hubo acuerdo, lo que corresponde es el veredicto «no nos compete».',
+  otro_trabajo: { t:'Otros trabajos',           a:'Un trabajo fuera del área de INDUSTEC hecho por acuerdo con KFC se autoriza aquí: se cuenta y se reporta aparte, como extra, y la orden sigue su flujo normal. Si no hubo acuerdo, lo que corresponde es la resolución «no nos compete».',
                   campos:['otro','motivo'], ok:'Guardar', motivo:'El acuerdo con KFC (o por qué no se autoriza)' }
 };
 /* Los técnicos asignables, para reconstruir el <select> según la zona del
@@ -1285,7 +1311,8 @@ var ACC = {
    (ASG-03, D4). Sale de aquí y no de un <option> fijo porque la misma lista
    sirve para 900 filas de zonas distintas con un solo diálogo. */
 var TECNICOS = <?= json_encode(array_map(
-    fn($t) => ['id' => (int) $t['usuario_id'], 'nombre' => $t['nombre'], 'zona' => (string) $t['zona']],
+    fn($t) => ['id' => (int) $t['usuario_id'], 'nombre' => $t['nombre'], 'zona' => (string) $t['zona'],
+               'zr' => Ui::zonaCorta((string) $t['zona'])],
     Casos::tecnicosAsignables()
 ), JSON_UNESCAPED_UNICODE) ?>;
 
@@ -1296,7 +1323,7 @@ function opcionesTecnico(zona, permitirOtras) {
   var propios = TECNICOS.filter(function (t) { return t.zona === zona; });
   var otros   = TECNICOS.filter(function (t) { return t.zona !== zona; });
   propios.forEach(function (t) {
-    var o = new Option(t.nombre + ' (' + t.zona + ')', t.id);
+    var o = new Option(t.nombre + ' (' + t.zr + ')', t.id);
     o.dataset.zona = t.zona;
     sel.add(o);
   });
@@ -1304,7 +1331,7 @@ function opcionesTecnico(zona, permitirOtras) {
     var og = document.createElement('optgroup');
     og.label = 'Otras zonas (confirmar)';
     otros.forEach(function (t) {
-      var o = new Option(t.nombre + ' · ' + t.zona, t.id);
+      var o = new Option(t.nombre + ' · ' + t.zr, t.id);
       o.dataset.zona = t.zona;
       og.appendChild(o);
     });

@@ -38,6 +38,7 @@ from openpyxl.utils import get_column_letter
 
 sys.path.insert(0, str(Path(__file__).parent))
 from t2_historico_correctivos import COLS, COLS_NINGUNO, CARPETA_ZONA, MESES, PLANTILLAS, SALIDA
+from comun import termino
 
 ORIGEN = Path(r"D:\RESPALDOS\_ORIGEN_DRIVE\GESTION DE OTS INDUSTEC\2026\PLANES SEMANALES")
 CARPETA_REAL = {"UIO": "PLAN DE TRABAJO _ ZONA UIO", "LARB": "PLAN DE TRABAJO _ ZONA LARB",
@@ -61,9 +62,11 @@ TIPO_POR_DEFECTO = "contradice evidencia estable (revisar el archivo)"
 EVIDENCIA = {
     "LOCAL": "centro de coste del aviso en SAP",
     "FECHA DE INICIO": "fecha de notificacion del aviso en SAP",
-    "#OT INDUSTEC EVALUACION": "orden de evaluacion en el arbol canonico",
-    "#OT INDUSTEC CIERRE": "orden de cierre en el arbol canonico",
-    "FECHA CIERRE": "fecha de atencion de la orden de cierre",
+    # Las claves son las columnas del plan de Isabel (contrato); la evidencia se nombra
+    # con el diccionario unico: el documento del tecnico es la OT INDUSTEC.
+    "#OT INDUSTEC EVALUACION": "OT INDUSTEC de evaluación en el árbol canónico",
+    "#OT INDUSTEC CIERRE": "OT INDUSTEC de cierre en el árbol canónico",
+    "FECHA CIERRE": "fecha de atención de la OT INDUSTEC de cierre",
     "ESTATUS SAP": "campo 'Estatus 2 de la Orden' del export SAP",
 }
 
@@ -134,8 +137,10 @@ def cierres_inferidos():
                 clave = re.sub(r"\s*el \d{2}/\d{2}/\d{4}", "", nota.split(";")[0]).strip()
                 conteo[clave] = conteo.get(clave, 0) + 1
                 # Solo se listan los cierres que son una decision, no los que
-                # tienen fecha de cierre tecnico detras
-                if "falta de atencion" in nota:
+                # tienen fecha de cierre tecnico detras. Los planes generados desde
+                # el vocabulario unico dicen «cerrada sin atención»; los anteriores,
+                # «cerrado por falta de atencion»: se reconocen los dos.
+                if "falta de atencion" in nota or termino("CERRADA_SIN_ATENCION") in nota:
                     filas.append([zona, mes, ws.cell(r, 2).value, ws.cell(r, 5).value,
                                   ws.cell(r, 6).value, nota])
     return filas, conteo

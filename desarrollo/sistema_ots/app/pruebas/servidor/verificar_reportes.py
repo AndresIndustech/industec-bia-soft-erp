@@ -66,8 +66,9 @@ def main():
     vh.anotar("T2.14.5", "reportes.php?zona=UIO (administración) y reportes.php (jefe UIO) → 200", st == 200 and st2 == 200, f"{st} · {st2}")
     vh.anotar("T2.14.5", "la cifra de casos de UIO coincide entre la administración y el jefe", casos_de(c_adm) is not None and casos_de(c_adm) == casos_de(c_jefe), f"{casos_de(c_adm)} · {casos_de(c_jefe)}")
     vh.anotar("T2.14.5", "hay sección de rendimiento por técnico y de cumplimiento del preventivo", "Rendimiento por técnico" in c_adm and "Cumplimiento del preventivo" in c_adm, "")
-    vh.anotar("T2.14.5", "hay filtros rápidos de zona y selector de mes para la administración", 'name="mes"' in c_adm and ">CNLJ<" in c_adm, "")
-    vh.anotar("T2.14.5", "el jefe no ve el filtro de otras zonas", ">CNLJ<" not in c_jefe.split("Tablero de servicio")[1][:1500], "")
+    # Desde el vocabulario único (24-sep-2026) el botón de CNLJ se rotula «CUENCA-LOJA».
+    vh.anotar("T2.14.5", "hay filtros rápidos de zona y selector de mes para la administración", 'name="mes"' in c_adm and ">CUENCA-LOJA<" in c_adm, "")
+    vh.anotar("T2.14.5", "el jefe no ve el filtro de otras zonas", ">CUENCA-LOJA<" not in c_jefe.split("Tablero de servicio")[1][:1500], "")
     st, _, c_mes = adm.pedir("reportes.php?mes=2026-09")
     vh.anotar("T2.14.5", "reportes.php?mes=AAAA-MM → 200 y lo dice", st == 200 and "septiembre de 2026" in c_mes, st)
     st, _, c_todas = adm.pedir("reportes.php")
@@ -87,7 +88,13 @@ def main():
         import openpyxl
         wb = openpyxl.load_workbook(io.BytesIO(cuerpo), read_only=True)
         nombres = wb.sheetnames
-        vh.anotar("T2.14.5", "openpyxl lo abre: hojas Resumen y Casos abiertos", "Resumen" in nombres and "Casos abiertos" in nombres, nombres)
+        # La hoja de las órdenes abiertas se llama con el término del TOTAL (vocabulario.json).
+        vh.anotar("T2.14.5", "openpyxl lo abre: hojas Resumen y TOTAL DE ÓRDENES ABIERTAS", "Resumen" in nombres and "TOTAL DE ÓRDENES ABIERTAS" in nombres, nombres)
+        if "TOTAL DE ÓRDENES ABIERTAS" in nombres:
+            ws = wb["TOTAL DE ÓRDENES ABIERTAS"]
+            cab = [c.value for c in next(ws.iter_rows(min_row=6, max_row=6))]
+            vh.anotar("T2.14.5", "la hoja trae el aviso SAP, la clasificación de la tarjeta y el estado del equipo",
+                      "AVISO SAP" in cab and "CLASIFICACIÓN" in cab and "ESTADO DEL EQUIPO" in cab, cab)
     except ImportError:
         print("   (openpyxl no está en este PC: se contaron las hojas dentro del zip)")
     except Exception as ex:

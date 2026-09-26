@@ -412,7 +412,7 @@ def escribir_excel(hoy: date, siembra: list[dict], descartados: list[dict],
     try:
         wb.save(XLSX)
     except PermissionError:
-        sys.exit(f"'{XLSX}' está abierto en otro programa (Excel). Ciérralo y vuelve a correr el script; "
+        sys.exit(f"'{XLSX}' está en uso en otro programa (Excel). Ciérralo y vuelve a correr el script; "
                   f"no se fuerza la escritura (I-4).")
 
 

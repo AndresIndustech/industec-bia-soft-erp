@@ -394,6 +394,15 @@ final class Ui
              . self::e($rot[0] ?? $z) . '</span>';
     }
 
+    /** El rótulo corto de la zona como texto (UIO, LARB, CUENCA-LOJA, OTRA),
+     *  para opciones de un filtro o enlaces donde no cabe el distintivo de
+     *  `zona()`. Un código que el diccionario no conoce sale tal cual (I-7). */
+    public static function zonaCorta(?string $z): string
+    {
+        $z = strtoupper(trim((string) $z));
+        return self::ZONAS[$z][0] ?? $z;
+    }
+
     /** «Zona UIO», «Zona Cuenca-Loja»: la zona dentro de una frase o un chip de
      *  texto, con mayúscula inicial. Código desconocido: «Zona XYZ», tal cual. */
     public static function nombreZona(string $z): string
@@ -433,7 +442,7 @@ final class Ui
         if ($d === 1) { return '<span class="edad edad-hoy">ayer</span>'; }
         if ($d <= 3)  { return '<span class="edad edad-3">' . $d . ' días</span>'; }
         if ($d <= 7)  { return '<span class="edad edad-7">' . $d . ' días</span>'; }
-        return '<span class="edad edad-viejo" title="Pasada la semana, el caso se cierra por falta de atención">'
+        return '<span class="edad edad-viejo" title="Pasada la semana sin ninguna OT INDUSTEC, la orden se cierra sin atención">'
              . $d . ' días</span>';
     }
 
@@ -457,7 +466,8 @@ final class Ui
         if ($h >= 48) {
             $d = floor($h / 24);
             return ['clase' => 'edad edad-viejo',
-                    'texto' => 'vencido hace ' . ($d >= 1 ? $d . ' día' . ($d == 1 ? '' : 's') : round($h - 48) . ' h'),
+                    // «vencida», en femenino: lo que vence es la solicitud (VENCIDO_48H).
+                    'texto' => 'vencida hace ' . ($d >= 1 ? $d . ' día' . ($d == 1 ? '' : 's') : round($h - 48) . ' h'),
                     'vencido' => true, 'horas' => $h];
         }
         $faltan = 48 - $h;

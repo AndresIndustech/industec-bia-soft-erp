@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Ui.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // qué hizo cada acción y cómo se llama cada estado
 
 /**
  * bitacora.php — Quién hizo qué, y quién consultó qué.
@@ -31,6 +32,81 @@ if (!Ui::puedeModulo('bitacora.ver', ['SUPERADMIN', 'ADMIN'], $u)) {
 }
 
 $e = fn(?string $s): string => Ui::e($s);
+
+/* -------------------------------------------------------------------------
+   LO QUE SE LEE, Y LO QUE SE GUARDA. La base guarda códigos (CERRADO_SIN_ATENCION,
+   VEREDICTO, NUEVO → ASIGNADO) y así se quedan: son el registro, y por ellos se
+   filtra. Lo que se MUESTRA es el nombre del diccionario (24-sep-2026): hasta
+   entonces la pantalla pintaba «cerrado sin atencion» o «veredicto» en crudo,
+   con palabras que el resto del sistema ya no usa. El código sigue a la vista
+   en el `title`, para quien audite contra la base.
+   ------------------------------------------------------------------------- */
+$ACCION_TXT = [
+    'ASIGNAR'              => 'asignar la orden',
+    'ASIGNADO_AUTO'        => Vocabulario::t('ASIGNADA') . ' por su OT INDUSTEC (automático)',
+    'ATENDIDO_AUTO'        => Vocabulario::t('ATENDIDA') . ' (automático)',
+    'REABRIR'              => 'reabrir la orden',
+    'DERIVAR'              => 'derivar a otra zona',
+    'EN_REVISION'          => 'mandar a revisión',
+    'VEREDICTO'            => Vocabulario::t('RESOLUCION_ADMIN'),
+    'CERRADO_SAP'          => Vocabulario::t('CERRADA_SAP'),
+    'CERRADO_SAP_MASIVO'   => Vocabulario::t('CERRADA_SAP') . ' (en bloque)',
+    'CERRAR_SIN_ATENCION'  => 'cerrar sin atención las de 7+ días sin OT INDUSTEC',
+    'CERRADO_SIN_ATENCION' => Vocabulario::t('CERRADA_SIN_ATENCION'),
+    'REGULARIZAR'          => 'regularizar ante KFC',
+    'REGULARIZAR_MASIVO'   => 'regularizar ante KFC (en bloque)',
+    'OT_CIERRE_CON_PENDIENTE' => Vocabulario::t('OT_CIERRE') . ' con ' . Vocabulario::t('SOLICITUD_EN_TRAMITE'),
+    'CASO_CONTINUA'        => Vocabulario::t('CONTINUIDAD'),
+    'CASO_DESCONTINUA'     => 'deshacer la continuidad',
+    'LIBERAR_CASOS'        => 'dejar sus órdenes ' . Vocabulario::t('SIN_ASIGNAR'),
+    'VER_AVISOS'           => 'ver sus ' . Vocabulario::t('NOTIFICACION', 2),
+    'PENDIENTE_ABRE'       => 'abrir una ' . Vocabulario::t('SOLICITUD'),
+    'PENDIENTE_MUEVE'      => 'avanzar la ' . Vocabulario::t('SOLICITUD'),
+    'PENDIENTE_RESPONDE'   => 'responder en la ' . Vocabulario::t('SOLICITUD'),
+    'PENDIENTE_REGISTRA_SAP' => 'registrar la ' . Vocabulario::t('SOLICITUD') . ' en SAP',
+    'PENDIENTE_VEREDICTO_KFC' => Vocabulario::t('DECISION_KFC'),
+    'PENDIENTE_RESUELTO_POR_ORDEN' => Vocabulario::t('SOLICITUD') . ' ' . Vocabulario::t('SOLICITUD_TERMINADA')
+                                    . ' por la ' . Vocabulario::t('OT_CIERRE'),
+    'PENDIENTE_ORDEN_CONCLUIDA_SIN_CERRAR' => Vocabulario::t('OT_CIERRE') . ' con la ' . Vocabulario::t('SOLICITUD_EN_TRAMITE'),
+    'PENDIENTE_REPORTE_TARDIO' => Vocabulario::t('SOLICITUD') . ' reportada tarde',
+    'PENDIENTE_SIN_AVISO'  => Vocabulario::t('SIN_AVISO_SAP'),
+    'PENDIENTE_REGULARIZADO' => 'aviso SAP puesto a una ' . Vocabulario::t('SIN_AVISO_SAP'),
+    'CRONOGRAMA_AGENDA'    => 'agendar el ingreso preventivo',
+    'CRONOGRAMA_REAGENDA'  => 'reagendar el ingreso preventivo',
+    'CRONOGRAMA_KIT'       => 'kit del ingreso preventivo',
+    'CRONOGRAMA_NOTA'      => 'nota del ingreso preventivo',
+    'CRONOGRAMA_CIERRE'    => 'marcar como ' . Vocabulario::t('PREV_EJECUTADO') . ' el ingreso preventivo',
+    'EMISION'              => 'emitir la OT INDUSTEC',
+    'EMISION_FALLIDA'      => Vocabulario::t('OT_NO_EMITIDA'),
+    'ENVIO_RECIBIDO'       => 'OT INDUSTEC ' . Vocabulario::t('ENVIO_RECIBIDA'),
+    'ENVIO_RECHAZADO'      => 'OT INDUSTEC ' . Vocabulario::t('ENVIO_RECHAZADA'),
+    'ENVIO_OBSERVADO'      => 'OT INDUSTEC recibida con observaciones',
+    'ENVIO_AJENO'          => 'OT INDUSTEC llenada por otro usuario',
+    'NOVEDAD_REPORTA'      => 'reportar una ' . Vocabulario::t('NOVEDAD'),
+    'NOVEDAD_RESUELVE'     => 'resolver una ' . Vocabulario::t('NOVEDAD'),
+];
+/** El nombre de una acción. Las que no están en el mapa se leen como antes
+ *  (en minúsculas y sin guiones bajos): no nombran ningún estado. */
+$accionTxt = static fn(?string $a): string =>
+    $ACCION_TXT[(string) $a] ?? strtolower(str_replace('_', ' ', (string) $a));
+
+/** El nombre de un estado según la entidad. Un código que el diccionario no
+ *  conoce se muestra tal como está en la base (I-7): es el dato, no un nombre
+ *  inventado para taparlo. */
+$DOMINIO = ['caso' => 'caso', 'pendiente' => 'pendiente', 'novedad' => 'novedad'];
+$estadoTxt = static function (?string $entidad, ?string $est) use ($DOMINIO): string {
+    if ($est === null || $est === '') { return '—'; }
+    $dom = $DOMINIO[(string) $entidad] ?? null;
+    if ($dom === null) { return $est; }
+    try {
+        $txt = Vocabulario::t(Vocabulario::deEstado($est, $dom));
+    } catch (VocabularioError $ex) {
+        return $est;
+    }
+    // Los estados heredados de la solicitud se leen con su paso de entonces.
+    $paso = $dom === 'pendiente' ? (Vocabulario::todo()['detalle_pendiente_heredado'][strtoupper($est)] ?? null) : null;
+    return $paso !== null ? $txt . ' · ' . $paso : $txt;
+};
 
 $fUsuario   = trim((string) ($_GET['usuario'] ?? ''));
 $fAccion    = strtoupper(trim((string) ($_GET['accion'] ?? '')));
@@ -78,12 +154,15 @@ if ($formato === 'csv') {
     $salida = fopen('php://output', 'w');
     fwrite($salida, "\xEF\xBB\xBF");   // BOM: Excel en Windows abre el UTF-8 con tildes
     fputcsv($salida, ['id', 'cuando', 'usuario', 'accion', 'entidad', 'referencia', 'detalle',
-                      'estado_antes', 'estado_despues', 'exito', 'ip', 'equipo', 'datos'], ';');
+                      'estado_antes', 'estado_despues', 'exito', 'ip', 'equipo', 'datos',
+                      'accion_texto', 'estado_antes_texto', 'estado_despues_texto'], ';');
     $filas = Db::todos("SELECT b.* FROM bitacora b WHERE $where ORDER BY b.id DESC LIMIT $TOPE_CSV", $par);
     foreach ($filas as $f) {
         fputcsv($salida, [$f['id'], $f['cuando'], $f['usuario'], $f['accion'], $f['entidad'], $f['referencia'],
                           $f['detalle'], $f['estado_antes'], $f['estado_despues'], $f['exito'], $f['ip'],
-                          $f['equipo'], $f['datos']], ';');
+                          $f['equipo'], $f['datos'], $accionTxt($f['accion']),
+                          $f['estado_antes'] !== null ? $estadoTxt($f['entidad'], $f['estado_antes']) : '',
+                          $f['estado_despues'] !== null ? $estadoTxt($f['entidad'], $f['estado_despues']) : ''], ';');
     }
     fclose($salida);
     exit;
@@ -148,7 +227,7 @@ Ui::cabecera($u, 'bitacora.php', [], ['titulo' => 'Bitácora']);
       <select id="f-accion" name="accion">
         <option value="">Todas</option>
         <?php foreach ($acciones as $a): ?>
-          <option value="<?= $e($a) ?>" <?= $fAccion === $a ? 'selected' : '' ?>><?= $e(strtolower(str_replace('_', ' ', $a))) ?></option>
+          <option value="<?= $e($a) ?>" <?= $fAccion === $a ? 'selected' : '' ?>><?= $e($accionTxt($a)) ?></option>
         <?php endforeach; ?>
       </select>
     </div>
@@ -225,7 +304,7 @@ Ui::cabecera($u, 'bitacora.php', [], ['titulo' => 'Bitácora']);
             <?php endif; ?>
           </td>
           <td data-th="Qué">
-            <span class="chip <?= (int) $f['exito'] === 0 ? 'chip-no' : '' ?>"><?= $e(strtolower(str_replace('_', ' ', (string) $f['accion']))) ?></span>
+            <span class="chip <?= (int) $f['exito'] === 0 ? 'chip-no' : '' ?>" title="<?= $e((string) $f['accion']) ?>"><?= $e($accionTxt($f['accion'])) ?></span>
             <?php if ((int) $f['exito'] === 0): ?><span class="desc" style="color:var(--danger)">denegado o fallido</span><?php endif; ?>
           </td>
           <td data-th="Sobre">
@@ -238,7 +317,7 @@ Ui::cabecera($u, 'bitacora.php', [], ['titulo' => 'Bitácora']);
               <?php endif; ?>
             <?php endif; ?>
             <?php if ($f['estado_antes'] !== null || $f['estado_despues'] !== null): ?>
-              <span class="desc"><?= $e((string) ($f['estado_antes'] ?? '—')) ?> → <?= $e((string) ($f['estado_despues'] ?? '—')) ?></span>
+              <span class="desc" title="<?= $e((string) ($f['estado_antes'] ?? '—') . ' → ' . (string) ($f['estado_despues'] ?? '—')) ?>"><?= $e($estadoTxt($f['entidad'], $f['estado_antes'])) ?> → <?= $e($estadoTxt($f['entidad'], $f['estado_despues'])) ?></span>
             <?php endif; ?>
           </td>
           <td data-th="Detalle">

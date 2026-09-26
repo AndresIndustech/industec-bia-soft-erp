@@ -303,8 +303,8 @@
       hidden: '#local', clear: '#localClear',
       clave: function (l) { return l.codigo; },
       etiqueta: function (l) { return l.codigo + ' · ' + l.nombre; },
-      buscarEn: function (l) { return l.codigo + ' ' + l.nombre + ' ' + l.cadena + ' ' + l.zona; },
-      grupo: function (l) { return l.zona; },
+      buscarEn: function (l) { return l.codigo + ' ' + l.nombre + ' ' + l.cadena + ' ' + l.zona + ' ' + nombreZona(l.zona); },
+      grupo: function (l) { return nombreZona(l.zona); },
       fila: function (l) {
         return '<span class="cod">' + esc(l.codigo) + '</span> · ' + esc(l.nombre) +
                ' <span class="cad">(' + esc(l.cadena) + ')</span>';
@@ -317,13 +317,21 @@
     }));
   }
 
+  /* El rótulo de una zona sale del diccionario (CNLJ se lee «CUENCA-LOJA»,
+     decisión del 24-sep-2026). Si el diccionario no conoce la zona, se muestra
+     el código tal como viene: es el dato, no un texto inventado (I-7). */
+  function nombreZona(z) {
+    try { return UI.T.corto(UI.T.deEstado(z, 'zona')); } catch (e) { return z; }
+  }
+
   /* ---------- Combobox de ÓRDENES ASIGNADAS ---------- */
   var comboAviso = null;
   function initComboAviso() {
     comboAviso = crearCombo({
       wrap: '#avisoCombo', input: '#avisoBusca', lista: '#avisoLista',
       hidden: '#aviso', clear: '#avisoClear',
-      vacio: 'No tienes casos asignados. Si atendiste algo sin caso, elige «Sin orden asignada».',
+      vacio: 'No tienes ' + UI.T('ORDEN', 2) + ' ' + UI.T('ASIGNADA', 2) + '. Si atendiste algo sin aviso SAP, '
+           + 'elige «' + UI.T.titulo('SIN_AVISO_SAP') + '».',
       clave: function (a) { return a.aviso; },
       etiqueta: function (a) { return a.aviso + ' · ' + (a.local || a.centro_coste_sap || 'sin dato en el catálogo') + ' · ' + (a.caso || 'sin tipo'); },
       buscarEn: function (a) {
@@ -360,9 +368,10 @@
     if (!nota) return;
     var n = AVISOS.datos.length;
     var cob = AVISOS.cobertura || {};
+    // Al técnico, sus órdenes asignadas; a la oficina, las de su alcance.
     var partes = [(YO && YO.rol === 'TECNICO')
-      ? (n === 1 ? 'Tienes 1 caso asignado.' : 'Tienes ' + n + ' casos asignados.')
-      : (n === 1 ? '1 caso en tu alcance.' : n + ' casos en tu alcance.')];
+      ? 'Tienes ' + n + ' ' + UI.T('ORDEN', n) + ' ' + UI.T('ASIGNADA', n) + '.'
+      : n + ' ' + UI.T('ORDEN', n) + ' en tu alcance.'];
     if (cob.advertencia) partes.push(cob.advertencia);
     else if (cob.hasta) partes.push('Catálogo SAP al corte del ' + fechaCorta(cob.hasta) + ', no en vivo.');
     nota.textContent = partes.join(' ');
@@ -423,19 +432,19 @@
     if (!n) return;
     if (!YO) {
       n.textContent = 'No se pudo leer tu sesión';
-      nota.textContent = 'Vuelve a entrar al sistema. La orden tiene que quedar firmada '
+      nota.textContent = 'Vuelve a entrar al sistema. La ' + UI.T('OT_INDUSTEC') + ' tiene que quedar firmada '
                        + 'con tu nombre y sin eso no se puede emitir.';
       nota.style.color = '#b91c1c';
       return;
     }
     var t = tecnicoSesion();
     n.textContent = YO.nombre;
-    if (t && t.zona) { z.textContent = 'Zona ' + t.zona; z.hidden = false; }
+    if (t && t.zona) { z.textContent = 'Zona ' + nombreZona(t.zona); z.hidden = false; }
     $('#tecSesion').value = t ? String(t.id) : '';
     nota.textContent = (t && t.del_padron)
-      ? 'Sale de tu sesión: no se elige y queda como firma de la orden.'
+      ? 'Sale de tu sesión: no se elige y queda como firma de la ' + UI.T('OT_INDUSTEC') + '.'
       : 'Sale de tu sesión. Tu nombre no está en el padrón de técnicos vigentes: el sistema '
-      + 'no va a aceptar la orden hasta que la administración te agregue.';
+      + 'no va a aceptar la ' + UI.T('OT_INDUSTEC') + ' hasta que la administración te agregue.';
   }
 
   function alElegirAviso(a) {
@@ -444,12 +453,13 @@
     if (a.local && localesPorCodigo[a.local]) {
       comboLocal.elegirPorClave(a.local);
       comboLocal.bloquear(true);
-      $('#localNota').textContent = 'Viene de la orden ' + a.aviso + '. Si el trabajo fue en otro local, elige “Sin orden asignada”.';
+      $('#localNota').textContent = 'Viene de la orden ' + a.aviso + '. Si el trabajo fue en otro local, elige “'
+        + UI.T.titulo('SIN_AVISO_SAP') + '”.';
     } else {
       comboLocal.bloquear(false);
       // Un caso que no está en el catálogo del buzón solo trae su número (T2.13.3).
       $('#localNota').textContent = a.sin_catalogo
-        ? 'Este caso no está en el listado del buzón: elige el local a mano.'
+        ? 'Esta orden no está en el listado del buzón: elige el local a mano.'
         : 'El centro de coste ' + (a.centro_coste_sap || '?') +
           ' de esta orden no resuelve contra el maestro. Elige el local a mano.';
     }
@@ -458,7 +468,7 @@
     var tipo = caso.indexOf('preventivo') !== -1 ? 'PREVENTIVO' : 'CORRECTIVO';
     fijarTipo(tipo);
     $('#tipoDerivado').hidden = false;
-    $('#tipoDerivado').textContent = 'Derivado del caso “' + (a.caso || 'sin tipo') + '” de la orden. Corrígelo si no corresponde.';
+    $('#tipoDerivado').textContent = 'Derivado del trabajo “' + (a.caso || 'sin tipo') + '” de la orden. Corrígelo si no corresponde.';
     // H-09: primero se resuelve el equipo (fija `equipoAmbiguo` si hay varios
     // activos iguales), y recién con eso se pinta la ficha, que es donde se
     // avisa si no se pudo identificar entre ellos.
@@ -479,6 +489,17 @@
   /* La ficha reproduce lo que trae el correo de SAP. Los campos que el export
      actual NO tiene (prioridad, fecha comprometida, descripción del pedido)
      se muestran como "sin dato": decirlo es la regla, no rellenarlo (I-7). */
+  /* El estado de la orden en la ficha. Con `estatus_clave` (el estado de la
+     base que manda catalogos.php, VOCABULARIO.md §10.2) el nombre sale del
+     diccionario, igual que en la oficina; si el servidor todavía manda solo
+     el texto, se muestra ese texto, que ya viene armado en PHP. */
+  function estatusDe(a) {
+    if (a.estatus_clave) {
+      try { return UI.T(UI.T.deEstado(a.estatus_clave)); } catch (e) { /* el texto del servidor */ }
+    }
+    return a.estatus;
+  }
+
   function pintarFicha(a) {
     var f = $('#fichaAviso');
     var prio = (a.prioridad || '').toUpperCase();
@@ -489,14 +510,14 @@
       '<div class="ficha-tit">' +
         '<span class="ficha-aviso">' + esc(a.aviso) + '</span>' +
         '<span class="prio ' + clase + '">' + esc(prio || 'PRIORIDAD SIN DATO') + '</span>' +
-        '<span class="chip">' + esc(a.estatus) + '</span>' +
+        '<span class="chip">' + esc(estatusDe(a)) + '</span>' +
       '</div>' +
       '<dl>' +
         '<dt>Trabajo</dt><dd>' + (a.caso ? esc(a.caso) : sd) + '</dd>' +
         '<dt>Local</dt><dd>' + (a.local || a.centro_coste_sap
           ? esc(a.local || a.centro_coste_sap) + ' · ' + esc(a.local_nombre || '') : sd) + '</dd>' +
         '<dt>Notificado</dt><dd>' + (a.fecha_notificacion ? esc(fechaCorta(a.fecha_notificacion)) : sd) + '</dd>' +
-        '<dt>Comprometido</dt><dd>' + (a.fecha_estimada ? esc(fechaCorta(a.fecha_estimada)) : sd) + '</dd>' +
+        '<dt>Fecha SAP</dt><dd>' + (a.fecha_estimada ? esc(fechaCorta(a.fecha_estimada)) : sd) + '</dd>' +
         '<dt>Activo</dt><dd>' + (a.equipo_denominacion ? esc(limpiarTipo(a.equipo_denominacion)) : sd) + '</dd>' +
       '</dl>' +
       (a.descripcion_trabajo
@@ -574,9 +595,9 @@
     } else if (v === correoDelSistema && l && v === l.correo_local) {
       texto = 'Viene del maestro. Si cambió, corrígelo aquí.'; ambar = false;
     } else if (v === correoDelSistema) {
-      texto = 'Propuesto de una orden anterior de este local. Corrígelo si no es el correcto.'; ambar = false;
+      texto = 'Propuesto de una ' + UI.T('OT_INDUSTEC') + ' anterior de este local. Corrígelo si no es el correcto.'; ambar = false;
     } else {
-      texto = 'La orden saldrá a este correo.'; ambar = false;
+      texto = 'La ' + UI.T('OT_INDUSTEC') + ' saldrá a este correo.'; ambar = false;
     }
     msg.textContent = texto;
     msg.style.color = ambar ? '#b45309' : '';
@@ -603,7 +624,7 @@
       return;
     }
     chips.hidden = false;
-    $('#chipZona').textContent = l.zona;
+    $('#chipZona').textContent = nombreZona(l.zona);
     $('#chipCadena').textContent = l.cadena;
     $('#chipClienteWrap').hidden = false;
     $('#chipCliente').textContent = (l.cadena === 'KFC') ? 'GRUPO KFC' : l.cadena;
@@ -675,10 +696,10 @@
       var ja = etiquetaCargo(a.tipo) === 'jefe de zona', jb = etiquetaCargo(b.tipo) === 'jefe de zona';
       return ja !== jb ? (ja ? -1 : 1) : a.nombre.localeCompare(b.nombre);
     });
-    var cab = zona ? 'Elige a quien te acompañó (' + esc(zona) + ')…' : 'Elige a quien te acompañó…';
+    var cab = zona ? 'Elige a quien te acompañó (' + esc(nombreZona(zona)) + ')…' : 'Elige a quien te acompañó…';
     return '<option value="">' + cab + '</option>' + lista.map(function (t) {
       return '<option value="' + t.id + '"' + (String(t.id) === String(elegido) ? ' selected' : '') + '>' +
-             esc(t.nombre) + ' · ' + esc(etiquetaCargo(t.tipo)) + (zona && t.zona !== zona ? ' (' + esc(t.zona) + ')' : '') +
+             esc(t.nombre) + ' · ' + esc(etiquetaCargo(t.tipo)) + (zona && t.zona !== zona ? ' (' + esc(nombreZona(t.zona)) + ')' : '') +
              '</option>';
     }).join('');
   }
@@ -737,7 +758,7 @@
     $('#equipos').appendChild(wrap);
 
     wrap.querySelector('[data-quitar-eq]').addEventListener('click', function () {
-      if ($$('#equipos .bloque').length <= 1) { alert('Toda orden interviene al menos un equipo.'); return; }
+      if ($$('#equipos .bloque').length <= 1) { alert('Toda ' + UI.T('OT_INDUSTEC') + ' interviene al menos un equipo.'); return; }
       wrap.remove();
       $$('#equipos .bloque').forEach(function (b, k) {
         b.querySelector('.bloque-tit span').textContent = 'Equipo #' + (k + 1);
@@ -825,16 +846,17 @@
     // H-10/D8: los que otro técnico ya propuso para este local (Catalogo::
     // cargar() los fusiona con `propuesto:true`). Elegir uno de estos NO es
     // "equipo nuevo" -- ya está propuesto-- así que no dispara la nota ni la
-    // regla EQUIPO_NUEVO_PROPUESTO otra vez.
+    // regla EQUIPO_NUEVO_PROPUESTO otra vez. Los rótulos son los del
+    // diccionario (EQUIPO_PROPUESTO); el flujo es el mismo (I-8).
     if (propuestos.length) {
       var ogp = document.createElement('optgroup');
-      ogp.label = 'Propuestos por otros técnicos (pendientes de aprobar)';
+      ogp.label = UI.T.titulo('EQUIPO_PROPUESTO') + ' (los registró otro técnico)';
       propuestos.forEach(function (e) {
         var o = document.createElement('option');
         o.value = e.equipo_sap;
         o.dataset.cod = e.codigo_activo || '';
         o.dataset.tipo = e.tipo || '';
-        o.textContent = limpiarTipo(e.tipo) + (e.codigo_activo ? ' · AF ' + e.codigo_activo : '') + ' · propuesto';
+        o.textContent = limpiarTipo(e.tipo) + (e.codigo_activo ? ' · AF ' + e.codigo_activo : '') + ' · ' + UI.T.corto('EQUIPO_PROPUESTO');
         ogp.appendChild(o);
       });
       sel.appendChild(ogp);
@@ -1238,7 +1260,7 @@
     $('#subcabecera').textContent = (v === 'PREVENTIVO')
       ? 'Preventivo — el bloque de equipo se repite, hasta 7' : 'Correctivo';
     $('#txtAtiempo').textContent = (v === 'PREVENTIVO')
-      ? 'Sus equipos quedaron operando con normalidad:' : 'Su requerimiento fue atendido a tiempo:';
+      ? 'Sus equipos quedaron operativos:' : 'Su requerimiento fue atendido a tiempo:';
   }
 
   function fijarOrigen(v) {
@@ -1556,14 +1578,14 @@
     /* La premisa del servicio, hecha regla: una intervención concluye el
        trabajo. Dejar un equipo sin concluir es legítimo —es la excepción
        prevista— pero exige decir qué se encontró, porque ese texto es lo que
-       sostiene el veredicto de las 48 horas y la respuesta a Grupo KFC. */
+       sostiene la validación de las 48 horas y la respuesta a Grupo KFC. */
     if (o.pendiente && !o.pendiente.diagnostico) {
       extra.push({ campo: 'pen_diagnostico', severidad: 'BLOQUEA',
                    mensaje: 'si el trabajo no quedó concluido, escribe qué encontraste' });
     }
     if (o.pendiente && o.pendiente.deshabilitado && !o.pendiente.equipo_desc && !o.aviso) {
       extra.push({ campo: 'pen_equipo', severidad: 'ADVIERTE',
-                   mensaje: 'la orden no tiene aviso y el equipo no está identificado: '
+                   mensaje: 'la ' + UI.T('OT_INDUSTEC') + ' no tiene aviso y el equipo no está identificado: '
                           + 'la administración no va a saber de qué equipo se trata' });
     }
     var ts = tecnicoSesion();
@@ -1583,16 +1605,16 @@
     }
     if (o.origen === 'ASIGNADA' && !o.aviso) {
       extra.push({ campo: 'aviso', severidad: 'BLOQUEA',
-        mensaje: 'elige la orden asignada, o cambia a “Sin orden asignada”' });
+        mensaje: 'elige la orden asignada, o cambia a “' + UI.T.titulo('SIN_AVISO_SAP') + '”' });
     }
     if (o.origen === 'SIN_ASIGNAR' && !o.motivo_sin_aviso) {
       extra.push({ campo: 'aviso', severidad: 'BLOQUEA',
-        mensaje: 'decí por qué no había orden asignada; la administración lo necesita para regularizarla' });
+        mensaje: 'decí por qué no tiene aviso SAP; la administración lo necesita para pedírselo a KFC' });
     }
     if (o.origen === 'SIN_ASIGNAR' && o.uso_repuesto) {
-      // Regla del cliente: sin aviso no se piden repuestos hasta regularizar.
+      // Regla del cliente: sin aviso no se piden repuestos hasta tener el aviso.
       extra.push({ campo: 'repuestos', severidad: 'ADVIERTE',
-        mensaje: 'sin aviso SAP no se puede tramitar el repuesto hasta que la administración regularice la orden' });
+        mensaje: 'sin aviso SAP no se puede tramitar el repuesto hasta que la administración le pida el aviso a KFC' });
     }
     return extra;
   }
@@ -1609,7 +1631,7 @@
 
   /* ---------- Panel de validación ---------- */
   var ETIQUETAS = {
-    local: 'Local', zona: 'Zona', aviso: 'Orden / aviso SAP', tipo: 'Tipo',
+    local: 'Local', zona: 'Zona', aviso: 'Aviso SAP', tipo: 'Tipo',
     dia_intervencion: 'Día', equipos: 'Equipos', uso_repuesto: 'Repuesto',
     repuestos: 'Repuestos', fecha_atencion: 'Fecha', inicio: 'Tiempos',
     fin: 'Hora de fin', actividades: 'Actividades', firma: 'Firma',
@@ -1620,7 +1642,7 @@
     panel.className = 'validacion';
     if (!hallazgos.length) {
       panel.classList.add('ok');
-      panel.innerHTML = '<b>Todo en orden.</b> La orden puede enviarse.';
+      panel.innerHTML = '<b>Todo listo.</b> La ' + esc(UI.T('OT_INDUSTEC')) + ' puede enviarse.';
       return { bloquea: false };
     }
     var bloq = hallazgos.filter(function (h) { return h.severidad === 'BLOQUEA'; });
@@ -1663,7 +1685,7 @@
     // el botón no hacía nada y el técnico no sabía por qué.
     if (!CAT || !validar) {
       if (window.UI) {
-        UI.toast('No se cargaron los locales ni los equipos: no se puede validar la orden. '
+        UI.toast('No se cargaron los locales ni los equipos: no se puede validar la ' + UI.T('OT_INDUSTEC') + '. '
                 + 'Conéctate una vez y vuelve a intentarlo.', 'err', { vida: 9000 });
       }
       return;
@@ -1686,7 +1708,7 @@
         btn.disabled = false;
         btn.textContent = 'Revisar y enviar';
         if (window.UI) {
-          UI.toast('No se pudo preparar el envío. Recarga la aplicación antes de llenar la orden.', 'err');
+          UI.toast('No se pudo preparar el envío. Recarga la aplicación antes de llenar la ' + UI.T('OT_INDUSTEC') + '.', 'err');
         }
         return;
       }
@@ -1710,7 +1732,7 @@
         btn.disabled = false;
         btn.textContent = 'Revisar y enviar';
         if (window.UI) {
-          UI.toast('No se pudo guardar la orden en este celular. No cierres la pantalla: '
+          UI.toast('No se pudo guardar la ' + UI.T('OT_INDUSTEC') + ' en este celular. No cierres la pantalla: '
                  + 'anota los datos antes de salir.', 'err');
         }
       });
@@ -1723,12 +1745,14 @@
          descarta sin leer. */
       if (window.UI && UI.confirmar) {
         UI.confirmar({
-          titulo: 'Hay ' + hallazgos.length + ' aviso' + (hallazgos.length === 1 ? '' : 's') + ' para revisar',
-          detalle: 'No impiden enviar, pero conviene mirarlos: quedan marcados en la orden '
+          // «advertencia», no «aviso»: aviso es solo el número de SAP, y en este
+          // mismo formulario hay un campo «Aviso SAP».
+          titulo: 'Hay ' + hallazgos.length + ' advertencia' + (hallazgos.length === 1 ? '' : 's') + ' para revisar',
+          detalle: 'No impiden enviar, pero conviene mirarlos: quedan marcados en la ' + UI.T('OT_INDUSTEC') + ' '
                  + 'y la administración los va a ver.',
           ok: 'Enviar así'
         }, seguir);
-      } else if (confirm('Hay ' + hallazgos.length + ' aviso(s) para revisar. ¿Enviar igual?')) {
+      } else if (confirm('Hay ' + hallazgos.length + ' advertencia' + (hallazgos.length === 1 ? '' : 's') + ' para revisar. ¿Enviar igual?')) {
         seguir();
       }
       return;
@@ -1750,7 +1774,10 @@
     $('#rNnnnNota').hidden = !!r.id_industec;
     if (r.que_sigue) {
       $('#rEstado').className = 'aviso ' + (emitida ? 'ok' : 'info');
-      $('#rEstadoTxt').innerHTML = '<b>' + (emitida ? 'Orden emitida.' : 'Orden recibida.') + '</b> ' + esc(r.que_sigue);
+      // El paso del envío con su término (ENVIO_EMITIDA / ENVIO_RECIBIDA), el
+      // mismo que la cola y el historial de mis.php.
+      $('#rEstadoTxt').innerHTML = '<b>' + esc(UI.T('OT_INDUSTEC') + ' '
+        + UI.T(emitida ? 'ENVIO_EMITIDA' : 'ENVIO_RECIBIDA') + '.') + '</b> ' + esc(r.que_sigue);
     }
     var verPdf = $('#rVerPdf');
     if (emitida && r.id_industec && verPdf) {
@@ -1767,20 +1794,25 @@
     $('#rTarea').hidden = !o.sin_aviso;
 
     $('#rEstado').className = 'aviso ' + (conSenal ? 'info' : 'warn');
+    var ot = esc(UI.T('OT_INDUSTEC'));
     $('#rEstadoTxt').innerHTML = conSenal
-      ? '<b>Orden guardada y en camino.</b> Se está enviando ahora. Si la señal se corta, '
+      ? '<b>' + ot + ' guardada y en camino.</b> Se está enviando ahora. Si la señal se corta, '
       + 'sale sola cuando vuelva, con la aplicación abierta — no hace falta que la llenes otra vez.'
-      : '<b>Orden guardada en este celular.</b> No hay señal, así que todavía no salió. '
-      + 'Sale sola cuando vuelvas a abrir la aplicación con señal. '
+      : '<b>' + ot + ' guardada en este celular.</b> No hay señal, así que todavía no salió: queda '
+      + esc(UI.T('ENVIO_EN_COLA')) + '. Sale sola cuando vuelvas a abrir la aplicación con señal. '
       + 'Puedes seguir llenando las siguientes.';
 
     var extra = [];
+    /* Si el equipo quedó deshabilitado corre el plazo de 48 h. Si no, el local
+       lo sigue usando y va como equipo operativo: el «va como trabado» de antes
+       le decía trabado a un equipo que no lo estaba (VOCABULARIO.md, EQUIPO_OPERATIVO). */
     if (o.pendiente) {
       extra.push(o.pendiente.deshabilitado
-        ? 'El equipo va como deshabilitado. Cuando la orden llegue al sistema se abre el plazo '
-        + 'de 48 horas para decidir la vía —repuesto, reparación, garantía o baja—, contado desde ahora.'
-        : 'El equipo va como trabado. No corre el plazo de 48 horas porque el local todavía '
-        + 'lo puede usar.');
+        ? 'El equipo va como deshabilitado. Cuando la ' + UI.T('OT_INDUSTEC') + ' llegue al sistema se abre el plazo '
+        + 'de 48 horas para que tu jefe de zona valide la vía —repuesto, reparación en taller, garantía o baja—, '
+        + 'contado desde ahora.'
+        : 'Va como ' + UI.T('EQUIPO_OPERATIVO') + ': el local todavía lo puede usar, así que no corre '
+        + 'el plazo de 48 horas.');
     }
     if (o.novedades && o.novedades.length) {
       extra.push('Reportaste ' + o.novedades.length + ' novedad'
@@ -1858,7 +1890,7 @@
     $('#fecha_atencion').addEventListener('change', sincronizarInicioFin);
     $('#addTecnico').addEventListener('click', filaTecnico);
     $('#addEquipo').addEventListener('click', function () {
-      if ($$('#equipos .bloque').length >= 7) { alert('Máximo 7 equipos por orden. Para el resto, una nueva OT.'); return; }
+      if ($$('#equipos .bloque').length >= 7) { alert('Máximo 7 equipos por ' + UI.T('OT_INDUSTEC') + '. Para el resto, emite otra.'); return; }
       bloqueEquipo();
     });
     $('#otForm').addEventListener('submit', alEnviar);
@@ -1920,7 +1952,7 @@
       var equiposPedidos = params.get('equipos');
       var localPreventivo = params.get('local');
 
-      /* Viene de «Emitir la orden de este caso» en la bandeja: el caso ya está
+      /* Viene de «Emitir OT INDUSTEC» en la ficha de la orden: la orden ya está
          asignado y entra puesto, sin buscarlo ni teclearlo. Hasta el 2026-09-10
          el enlace mandaba ?aviso= y aquí solo se leía ?local=. */
       var avisoPedido = params.get('aviso');
@@ -1930,8 +1962,8 @@
         if (comboAviso.elegirPorClave(avisoPedido)) {
           comboAviso.bloquear(true);
         } else {
-          $('#avisoCobertura').textContent = 'El caso ' + avisoPedido + ' no está entre los casos '
-            + 'guardados en este celular. Si te lo acaban de asignar, abre la app con señal para actualizarla.';
+          $('#avisoCobertura').textContent = 'La orden ' + avisoPedido + ' no está entre las ' + UI.T('ORDEN', 2) + ' '
+            + 'guardadas en este celular. Si te la acaban de asignar, abre la app con señal para actualizarla.';
         }
       } else if (tipoPedido === 'PREVENTIVO' && localPreventivo && localesPorCodigo[localPreventivo]) {
         /* H-17: cada visita del cronograma enlaza aquí con
@@ -1972,7 +2004,7 @@
         Cola.leer(reintentarUuid).then(function (fila) {
           if (!fila || !fila.orden) {
             reintentarUuid = null;
-            if (window.UI) { UI.toast('Esa orden ya no está guardada en este celular para corregir.', 'err'); }
+            if (window.UI) { UI.toast('Esa ' + UI.T('OT_INDUSTEC') + ' ya no está guardada en este celular para corregir.', 'err'); }
             return;
           }
           volcarOrden(fila.orden);
@@ -1983,11 +2015,15 @@
         });
       }
 
+      /* Las órdenes que se le ofrecen son las asignadas a él: «abiertas» es
+         otra cosa en el diccionario (las que ya tienen OT INDUSTEC de
+         evaluación), así que aquí se dicen «asignadas» (decisión del 24-sep). */
+      var nAv = AVISOS.datos.length;
       $('#pendientes').textContent =
         'Catálogo: ' + CAT.locales.length + ' locales · ' +
         Object.keys(CAT.equipos).length + ' con activos · ' +
         CAT.tipos.length + ' tipos · ' + CAT.tecnicos.length + ' técnicos · ' +
-        AVISOS.datos.length + ' órdenes abiertas.';
+        nAv + ' ' + UI.T('ORDEN', nAv) + ' ' + UI.T('ASIGNADA', nAv) + '.';
     }).catch(function (err) {
       /* Un mensaje que diga que hacer, no solo que fallo. El anterior era
          «No se pudo cargar el catálogo: catalogos.php respondió 503», que le
@@ -2000,7 +2036,7 @@
       aviso.innerHTML = '<span class="ic" aria-hidden="true">✕</span><div class="cuerpo">' +
         '<b>No se pudieron cargar los locales ni los equipos.</b>' +
         '<p>' + (navigator.onLine
-          ? 'Hay señal, así que es un problema del sistema. Avisa a la administración antes de llenar la orden a mano.'
+          ? 'Hay señal, así que es un problema del sistema. Avisa a la administración antes de llenar la ' + UI.T('OT_INDUSTEC') + ' a mano.'
           : 'Estás sin señal y este celular no tiene una copia guardada. Conéctate una vez y la aplicación queda lista para trabajar sin cobertura.') +
         '</p><p class="small">Detalle técnico: ' + String(err && err.message || err) + '</p></div>';
       caja.appendChild(aviso);
@@ -2008,7 +2044,7 @@
       // sigue visible (no se esconde el formulario, es mejora progresiva),
       // pero deja claro por qué no reacciona.
       var btn = $('#submitBtn');
-      if (btn) { btn.disabled = true; btn.title = 'Sin catálogo no se puede validar la orden'; }
+      if (btn) { btn.disabled = true; btn.title = 'Sin catálogo no se puede validar la ' + UI.T('OT_INDUSTEC'); }
     });
   });
 

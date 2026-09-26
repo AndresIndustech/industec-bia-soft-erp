@@ -65,9 +65,21 @@
   var bd = null;
 
   // Los motivos que la pantalla reconoce para elegir la etiqueta de cada fila.
+  // Se guardan tal cual en la fila del celular y se COMPARAN al pintar: si se
+  // cambia el texto, las filas que ya están guardadas con el viejo dejan de
+  // reconocerse. Por eso no se tocan aunque cambie el vocabulario.
   var FALTA_ENTRAR = 'hay que volver a entrar al sistema';
   var AJENA        = 'la llenó otro usuario: tiene que entrar él para enviarla';
   var SIN_PERMISO  = 'tu usuario no tiene permiso para enviar órdenes: avisa a la administración';
+  // Lo que se PINTA para SIN_PERMISO: la constante de arriba se queda como valor
+  // de comparación (filas ya guardadas), pero en pantalla habla del documento que
+  // no se pudo enviar, la OT INDUSTEC, y no de «órdenes» (el trabajo de KFC).
+  // Sin ui.js (no debería pasar: la lista solo se pinta con él) se pinta la
+  // constante tal cual, que es mejor que no decir nada.
+  function textoError(e) {
+    if (e !== SIN_PERMISO || !global.UI || !global.UI.T) { return e; }
+    return 'tu usuario no tiene permiso para enviar ' + global.UI.T('OT_INDUSTEC', 2) + ': avisa a la administración';
+  }
 
   function abrir() {
     if (bd) { return Promise.resolve(bd); }
@@ -213,7 +225,7 @@
   Cola.reencolar = function (uuid, orden, usuarioId, nuevasFotos) {
     nuevasFotos = nuevasFotos || [];
     return Cola.leer(uuid).then(function (fila) {
-      if (!fila) { throw new Error('esa orden ya no está guardada en este celular'); }
+      if (!fila) { throw new Error('esa OT INDUSTEC ya no está guardada en este celular'); }
       var previas = fila.fotos || [];
       var base = previas.length;
       var nuevas = nuevasFotos.map(function (f, i) { return { uuid: f.uuid, n: base + i, blob: f.blob, subida: false }; });
@@ -347,7 +359,7 @@
               // E-23: el servidor ya tiene el tope de fotos de esta orden.
               // La foto que sobra no sirve para nada más: se descarta.
               f.descartada = true;
-              f.error = res.cuerpo.motivo || 'el máximo de fotos por orden ya se alcanzó';
+              f.error = res.cuerpo.motivo || 'el máximo de fotos por OT INDUSTEC ya se alcanzó';
               f.blob = null;
               return guardar(fila).then(function () { return true; });
             }
@@ -388,9 +400,11 @@
         // botón «Ver PDF») en vez del texto fijo de siempre.
         global.dispatchEvent(new CustomEvent('orden-emitida', { detail: { uuid: fila.uuid, recibo: fila.recibo } }));
         if (global.UI) {
-          UI.toast(id ? (emitida ? 'Orden ' + id + ' emitida. El PDF está en tu historial.'
-                                  : 'Orden ' + id + ' recibida. El PDF se genera desde el servidor.')
-                      : 'Orden de ' + (fila.resumen.local || 'el local') + ' enviada.', 'ok');
+          // El número OT-NNNN ya dice qué es; detrás va el paso del envío con
+          // su término del diccionario (ENVIO_EMITIDA / ENVIO_RECIBIDA).
+          UI.toast(id ? (emitida ? id + ' ' + UI.T('ENVIO_EMITIDA') + ': el PDF está en tu historial.'
+                                  : id + ' ' + UI.T('ENVIO_RECIBIDA') + ': el PDF se genera desde el servidor.')
+                      : UI.T('OT_INDUSTEC') + ' de ' + (fila.resumen.local || 'el local') + ' enviada.', 'ok');
           if (anexos.length) { UI.toast(anexos.join(' '), 'warn', { vida: 12000 }); }
         }
       });
@@ -419,7 +433,7 @@
       fila.ultimo_error = FALTA_ENTRAR;
       return guardar(fila).then(function () {
         if (global.UI) {
-          UI.toast('Tu sesión se cerró. Vuelve a entrar y la orden se envía sola.', 'warn',
+          UI.toast('Tu sesión se cerró. Vuelve a entrar y la ' + UI.T('OT_INDUSTEC') + ' se envía sola.', 'warn',
                    { vida: 9000 });
         }
       });
@@ -441,7 +455,7 @@
       fila.estado = 'RECHAZADA';
       fila.ultimo_error = res.cuerpo.motivo || ('el servidor la rechazó (' + res.http + ')');
       return guardar(fila).then(function () {
-        if (global.UI) { UI.toast('Una orden no se pudo enviar: ' + fila.ultimo_error, 'err'); }
+        if (global.UI) { UI.toast(UI.T('OT_INDUSTEC') + ' ' + UI.T('ENVIO_RECHAZADA') + ': ' + fila.ultimo_error, 'err'); }
       });
     }
     // 5xx: es del servidor o del camino, y eso sí se reintenta. Se cuenta el
@@ -454,7 +468,9 @@
   /* --- Lo que ve el técnico ---------------------------------------------
      Un recuadro con cuántas van y en qué estado. Sin esto la cola es un
      mecanismo invisible, y a lo invisible no se le tiene confianza: el técnico
-     vuelve a llenar la orden «por si acaso» y llegan dos. */
+     vuelve a llenar la orden «por si acaso» y llegan dos.
+     Cada paso se nombra con el diccionario (ENVIO_EN_COLA, ENVIO_DETENIDA,
+     ENVIO_RECHAZADA): lo que viaja es la OT INDUSTEC, no la orden de KFC. */
   function pintar() {
     var caja = document.getElementById('cola');
     if (!caja) { return; }
@@ -471,25 +487,23 @@
       var clase = (rechazadas.length || sesion) ? 'cola'
                 : (navigator.onLine ? 'cola enviando' : 'cola');
 
+      var T = global.UI.T;
       var titulo, detalle;
       if (rechazadas.length) {
-        titulo = rechazadas.length === 1
-          ? 'Una orden no se pudo enviar'
-          : rechazadas.length + ' órdenes no se pudieron enviar';
-        detalle = 'El servidor las revisó y no las aceptó. Lee el motivo y consúltalo con tu '
-                + 'jefe de zona; cuando esté resuelto, descártala.';
+        titulo = rechazadas.length + ' ' + T('OT_INDUSTEC', rechazadas.length) + ' '
+               + T('ENVIO_RECHAZADA', rechazadas.length);
+        detalle = 'El servidor las revisó y no las aceptó. Lee el motivo, corrígela y reenvíala; '
+                + 'si tienes dudas, consúltalo con tu jefe de zona. Si ya no hace falta, descártala.';
       } else if (sesion) {
-        titulo = enCurso === 1
-          ? '1 orden esperando que vuelvas a entrar'
-          : enCurso + ' órdenes esperando que vuelvas a entrar';
+        titulo = enCurso + ' ' + T('OT_INDUSTEC', enCurso) + ' ' + T('ENVIO_DETENIDA', enCurso)
+               + ': vuelve a entrar';
         detalle = 'Tu sesión se cerró. Están a salvo: entra al sistema y se envían solas.';
       } else if (navigator.onLine) {
-        titulo = enCurso === 1 ? 'Enviando 1 orden…' : 'Enviando ' + enCurso + ' órdenes…';
+        titulo = 'Enviando ' + enCurso + ' ' + T('OT_INDUSTEC', enCurso) + '…';
         detalle = 'Se están enviando solas. No hace falta que hagas nada.';
       } else {
-        titulo = enCurso === 1
-          ? '1 orden guardada, esperando señal'
-          : enCurso + ' órdenes guardadas, esperando señal';
+        titulo = enCurso + ' ' + T('OT_INDUSTEC', enCurso) + ' ' + T('ENVIO_EN_COLA', enCurso)
+               + ', salen con señal';
         detalle = 'Están a salvo en este celular. Salen solas cuando vuelvas a abrir la '
                 + 'aplicación con señal.';
       }
@@ -498,14 +512,16 @@
                  '<div><b>' + esc(titulo) + '</b><div style="margin-top:2px">' + esc(detalle) + '</div></div></div><ul>';
 
       filas.forEach(function (f) {
-        var etiqueta = f.estado === 'RECHAZADA' ? 'rechazada'
+        // «enviando» y los tres motivos de detenida se quedan (el diccionario
+        // los conserva); «en espera» era de la orden que espera repuesto.
+        var etiqueta = f.estado === 'RECHAZADA' ? T('ENVIO_RECHAZADA')
                      : f.ultimo_error === FALTA_ENTRAR ? 'falta entrar'
                      : f.ultimo_error === AJENA ? 'de otro usuario'
                      : f.ultimo_error === SIN_PERMISO ? 'sin permiso'
-                     : (navigator.onLine ? 'enviando' : 'en espera');
-        html += '<li><span>' + esc(f.resumen.local || 'Orden sin local') +
+                     : (navigator.onLine ? 'enviando' : T('ENVIO_EN_COLA'));
+        html += '<li><span>' + esc(f.resumen.local || T('OT_INDUSTEC') + ' sin local') +
                 (f.resumen.aviso ? ' · aviso ' + esc(f.resumen.aviso) : '') + '</span>' +
-                '<span class="est-envio">' + etiqueta + '</span></li>';
+                '<span class="est-envio">' + esc(etiqueta) + '</span></li>';
         if (f.estado === 'RECHAZADA') {
           // H-07: «Corregir» manda al formulario con `?reintentar=<uuid>`,
           // que app.js reconoce y vuelca la orden, la firma y las fotos que
@@ -520,7 +536,7 @@
           // -tras entrar con la sesión correcta, o tras recibir el permiso-,
           // y «Descartar» existe por si ya se resolvió de otra forma.
           html += '<li style="background:transparent;padding:0 9px 6px;font-size:12px">' +
-                  esc(f.ultimo_error) +
+                  esc(textoError(f.ultimo_error)) +
                   ' <button type="button" class="btn sm" data-reintentar="' + esc(f.uuid) + '">Reintentar</button>' +
                   ' <button type="button" class="btn sm" data-descartar="' + esc(f.uuid) + '">Descartar</button></li>';
         }
@@ -536,12 +552,12 @@
           var descartar = function () { Cola.olvidar(b.getAttribute('data-descartar')); };
           if (global.UI && UI.confirmar) {
             UI.confirmar({
-              titulo: 'Descartar esta orden',
+              titulo: 'Descartar esta ' + UI.T('OT_INDUSTEC'),
               detalle: 'Se borra de este celular y no se vuelve a enviar. Hazlo solo si ya se '
                      + 'resolvió por otro camino.',
               ok: 'Descartar'
             }, descartar);
-          } else if (confirm('¿Descartar esta orden? Se borra del celular y no se vuelve a enviar.')) {
+          } else if (confirm('¿Descartar esta OT INDUSTEC? Se borra del celular y no se vuelve a enviar.')) {
             descartar();
           }
         });

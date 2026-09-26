@@ -47,6 +47,12 @@ import openpyxl
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import t2_27_fuentes as F  # noqa: E402
+from comun import corto, termino  # noqa: E402
+
+# Vocabulario: los valores de ESTATUS IND (CERRADO, INFORME TECNICO, PENDIENTE OK OP´S…),
+# las hojas RESUMEN, RESUMEN IND y ND INDUSTEC y las columnas del libro de KFC son contrato
+# y se escriben tal cual. Lo que no es de KFC ni de Isabel —la evidencia de cada propuesta,
+# la hoja LEEME, la consola— nombra los estados con el diccionario único (comun.termino).
 
 # El RESUMEN de ella tiene las columnas de FILTRO con «Estatus 2 del Aviso» reemplazada
 # por «ESTATUS IND» en la misma posición (semana 38, Sent UID 10231).
@@ -92,7 +98,7 @@ def proponer(aviso: str, ots: dict, status: dict, previa: dict) -> tuple[str, st
     mias = ots.get(aviso, [])
     cierre = [o for o in mias if o["estado_ot"] == "CERRADA"]
     if cierre:
-        return "CERRADO", f"orden de cierre {cierre[-1]['id_industec']} del {cierre[-1]['fecha_atencion']:%d/%m}"
+        return "CERRADO", f"{termino('OT_CIERRE')} {cierre[-1]['id_industec']} del {cierre[-1]['fecha_atencion']:%d/%m}"
     if aviso in status:
         k = status[aviso][10]
         t = traducir_responsable(str(k or ""))
@@ -101,8 +107,10 @@ def proponer(aviso: str, ots: dict, status: dict, previa: dict) -> tuple[str, st
     if previa.get(aviso):
         return previa[aviso], "lo que se reportó la semana anterior (sin evidencia nueva)"
     if mias:
-        return "INFORME TECNICO", f"hay visita ({mias[-1]['id_industec']} del {mias[-1]['fecha_atencion']:%d/%m}) pero no orden de cierre"
-    return "INFORME TECNICO", "no hay ninguna orden de INDUSTEC con este aviso: falta la visita o su informe"
+        return "INFORME TECNICO", (f"{termino('ABIERTA')}: hay visita ({mias[-1]['id_industec']} del "
+                                   f"{mias[-1]['fecha_atencion']:%d/%m}) pero no {termino('OT_CIERRE')}")
+    return "INFORME TECNICO", (f"{termino('ESPERA_INFORME')}: no hay ninguna {termino('OT_INDUSTEC')} con este "
+                               f"{termino('AVISO_SAP')} (falta la visita o su OT)")
 
 
 # ---------------------------------------------------------------------------
@@ -285,11 +293,12 @@ def escribir_revision(res: dict) -> Path:
         f"Excel de KFC: {res['sap'].name}",
         f"STATUS del martes (responsables): {res['status'].name if res['status'] else 'no se usó'}",
         f"Respuesta de la semana anterior (ESTATUS IND previo): {res['anterior'].name if res['anterior'] else 'no se usó'}",
-        f"Órdenes de INDUSTEC: base local, hasta el {res['corte']:%d/%m/%Y}.",
+        f"{termino('OT_INDUSTEC')}: base local, hasta el {res['corte']:%d/%m/%Y}.",
         "",
-        f"RESUMEN: {len(res['mias'])} correctivos de INDUSTEC abiertos o en tratamiento en SAP (mismo filtro que la hoja RESUMEN que se devuelve a KFC).",
-        "ESTATUS IND es una PROPUESTA. En orden de solidez: CERRADO si hay orden de cierre; lo que dice el STATUS del martes;",
-        "lo que se puso la semana anterior; e INFORME TECNICO si no hay orden de cierre. Revise la columna «De dónde sale».",
+        f"RESUMEN: {len(res['mias'])} {termino('ORDEN', len(res['mias']))} correctivas de INDUSTEC abiertas o en tratamiento "
+        "en SAP (mismo filtro que la hoja RESUMEN que se devuelve a KFC).",
+        f"ESTATUS IND es una PROPUESTA. En orden de solidez: CERRADO si hay {termino('OT_CIERRE')}; lo que dice el STATUS del martes;",
+        f"lo que se puso la semana anterior; e INFORME TECNICO si no hay {termino('OT_CIERRE')}. Revise la columna «De dónde sale».",
         "Lo que solo sabe la administración (un despacho coordinado por teléfono, una importación) hay que ajustarlo a mano.",
         "",
         "El libro de KFC se devuelve intacto: sus hojas y tablas dinámicas no se tocaron; se agregaron RESUMEN, RESUMEN IND y ND INDUSTEC.",
@@ -314,13 +323,15 @@ def cuerpo_correo(res: dict) -> str:
     abiertas = [(e, n) for e, n in res["orden"] if e != "CERRADO"]
     lineas = [
         "Estimados,",
-        "Se envía el estatus de las órdenes de trabajo correspondientes a las tres zonas que maneja Industec (Quito, Cuenca y LARB).",
+        # Las zonas con su rótulo del diccionario, como en el STATUS del martes y en B.IA.
+        "Se envía el estatus de las órdenes correspondientes a las tres zonas que maneja Industec "
+        f"({corto('ZONA_UIO')}, {corto('ZONA_LARB')} y {corto('ZONA_CNLJ')}).",
         f"Actualmente se registra un total de {total} órdenes, de las cuales {cer} se encuentran en estado CERRADO"
         + (f" y {total - cer} continúan en gestión:" if abiertas else "."),
     ]
     lineas += [f"  *   {e}: {n}" for e, n in abiertas]
     if res["nd"]:
-        lineas.append(f"De las órdenes sin proveedor asignado (N/D), {len(res['nd'])} corresponden a Industec.")
+        lineas.append(f"De las {termino('ND_SIN_PROVEEDOR', 2)}, {len(res['nd'])} corresponden a Industec.")
     lineas += ["Se adjunta el reporte con la hoja RESUMEN.", "Saludos cordiales,"]
     return "\n".join(lineas)
 
@@ -343,7 +354,7 @@ def main():
     ap.add_argument("--sap", help="Excel semanal de KFC; por omisión, el último de Recibidos")
     ap.add_argument("--status", help="STATUS_PENDIENTES del martes; por omisión, el último de Enviados")
     ap.add_argument("--anterior", help="respuesta enviada la semana previa; por omisión, la última de Enviados")
-    ap.add_argument("--corte", help="órdenes hasta esta fecha (AAAA-MM-DD); por omisión, hoy")
+    ap.add_argument("--corte", help="OT INDUSTEC hasta esta fecha (AAAA-MM-DD); por omisión, hoy")
     ap.add_argument("--comparar", help="respuesta real de la misma semana, para medir la propuesta")
     a = ap.parse_args()
     corte = dt.date.fromisoformat(a.corte) if a.corte else dt.date.today()
@@ -362,7 +373,8 @@ def main():
     rev = escribir_revision(res)
     correo = res["destino"].with_name(f"CORREO RESPUESTA SEMANA {res['semana']} (generado agente).txt")
     correo.write_text(cuerpo_correo(res), encoding="utf-8")
-    print(f"\n  {len(res['mias'])} correctivos de INDUSTEC abiertos o en tratamiento · ND de INDUSTEC: {len(res['nd'])}")
+    print(f"\n  {len(res['mias'])} {termino('ORDEN', len(res['mias']))} correctivas de INDUSTEC abiertas o en tratamiento "
+          f"en SAP · {termino('ND_SIN_PROVEEDOR', 2)} de INDUSTEC: {len(res['nd'])}")
     print(f"  ESTATUS IND propuesto: {dict(res['orden'])}")
     print(f"  Respuesta: {res['destino']}\n  Revisión:  {rev}\n  Correo:    {correo}")
     if a.comparar:

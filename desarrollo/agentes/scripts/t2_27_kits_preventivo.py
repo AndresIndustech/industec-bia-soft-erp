@@ -13,13 +13,18 @@ El cronograma del servidor (ingresos_preventivos) conserva las fechas del plan
 anual: la ejecución real va dos a tres semanas detrás y nadie reprogramó
 ninguna (0 reagendas en el año). El 14-sep ella pidió kits para G001–G006 del
 18-sep al 2-oct; la tabla los tiene para el 2 al 15-sep. Y el 21-sep pidió kit
-para K062 y V074, que la tabla da por CUMPLIDOS. Con esa tabla sola, el pedido
-saldría con locales y fechas equivocados.
+para K062 y V074, que la tabla da por ejecutados (estado CUMPLIDO). Con esa
+tabla sola, el pedido saldría con locales y fechas equivocados.
 
 Por eso el generador arma la lista de lo que el cronograma dice que falta
-—ingresos vencidos sin cumplir y los de las próximas dos semanas—, en el formato
-exacto del correo, con la FECHA DE INGRESO en blanco: la fecha real la pone quien
-programa la visita. Y lista las contradicciones que encontró.
+—ingresos atrasados sin ejecutar y los de las próximas dos semanas—, en el
+formato exacto del correo, con la FECHA DE INGRESO en blanco: la fecha real la
+pone quien programa la visita. Y lista las contradicciones que encontró.
+
+Los estados del preventivo se nombran con el diccionario único (vocabulario.json,
+vía comun.termino): EJECUTADO · PENDIENTE · ATRASADO, la leyenda del jefe técnico.
+«vencida» es solo el plazo de 48 h de una solicitud; un ingreso que pasó su fecha
+está «atrasado». Los valores de la base (CUMPLIDO, CANCELADO) se comparan tal cual.
 
 Uso:
     .venv/Scripts/python.exe scripts/t2_27_kits_preventivo.py                 # las tres zonas, próximas 2 semanas
@@ -38,6 +43,7 @@ from openpyxl.styles import Font, PatternFill
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import t2_27_fuentes as F  # noqa: E402
+from comun import corto, de_estado, termino  # noqa: E402
 
 ORDINAL = {1: "1", 2: "2", 3: "3", 4: "4"}
 
@@ -93,7 +99,8 @@ def main():
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "PEDIDO DE KITS"
-    ws["A1"] = f"Ingresos de preventivo pendientes según el cronograma — vencidos y próximos {a.dias} días (al {hoy:%d/%m/%Y})"
+    ws["A1"] = (f"Ingresos de preventivo {termino('PREV_PENDIENTE', 2)} según el cronograma — "
+                f"{termino('ATRASADO', 2)} y próximos {a.dias} días (al {hoy:%d/%m/%Y})")
     ws["A1"].font = Font(bold=True, size=13)
     ws["A2"] = "Propuesta del agente: la FECHA DE INGRESO real la pone quien programa la visita. El cronograma no está reprogramado."
     ws["A2"].font = Font(italic=True, color="FFC00000")
@@ -103,7 +110,9 @@ def main():
         c.font = Font(bold=True, color="FFFFFFFF")
         c.fill = PatternFill("solid", start_color="FF2F75B5")
     for i, p in enumerate(sorted(pendientes, key=lambda p: (p["zona"], p["plan"])), start=1):
-        for j, v in enumerate([i, p["local"], p["ubicacion"], p["cadena"], p["zona"], p["numero"], p["plan"],
+        # La zona con su rótulo corto del diccionario (CNLJ se lee CUENCA-LOJA), como en B.IA.
+        zona = corto(de_estado(p["zona"], "zona")) if p["zona"] in ("UIO", "LARB", "CNLJ", "OTRA") else p["zona"]
+        for j, v in enumerate([i, p["local"], p["ubicacion"], p["cadena"], zona, p["numero"], p["plan"],
                                p["vencido_dias"] or None, p["kit"], None], start=1):
             c = ws.cell(row=4 + i, column=j, value=v)
             if isinstance(v, dt.date):
@@ -125,7 +134,8 @@ def main():
         html.append(f"<tr><td>{i}</td><td>{escape(p['local'])}</td><td>{escape(p['ubicacion'])}</td><td></td><td></td></tr>")
     html.append("</table>")
     (salida / f"PEDIDO KITS PREVENTIVO {a.zona or 'TRES ZONAS'} (tabla para el correo, generado agente).html").write_text("\n".join(html), encoding="utf-8")
-    print(f"Pendientes según el cronograma: {len(pendientes)} (vencidos: {sum(1 for p in pendientes if p['vencido_dias'])})")
+    print(f"Ingresos {termino('PREV_PENDIENTE', 2)} según el cronograma: {len(pendientes)} "
+          f"({termino('ATRASADO', 2)}: {sum(1 for p in pendientes if p['vencido_dias'])})")
     print(f"Contradicciones: {len(contradicciones)}")
     for c in contradicciones[:8]:
         print("  -", c[0], c[1])

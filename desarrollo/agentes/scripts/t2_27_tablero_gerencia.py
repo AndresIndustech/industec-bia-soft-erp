@@ -15,14 +15,22 @@ KFC le reasigna a INDUSTEC un ND a mitad de semana, le cuenta en contra).
 
 Con eso este tablero le dice a la gerencia, con los datos del lunes:
   - INDICADOR KFC: la serie de INDUSTEC contra los demás proveedores, semana a semana;
-  - POR CERRAR EN SAP: los avisos que INDUSTEC ya cerró con su orden y que SAP
-    sigue contando abiertos. Cada uno que se cierre en SAP (la transacción IW22, a
-    la que INDUSTEC tiene acceso desde el 31-07) sube el indicador de la semana;
-  - SIN ORDEN: avisos asignados a INDUSTEC en SAP sin ninguna orden nuestra;
-  - TIEMPOS: de la notificación a la primera visita y a la orden de cierre;
-  - PENDIENTES: antigüedad y responsable de lo que espera repuesto;
+  - ATENDIDAS, POR CERRAR EN SAP: las órdenes que ya tienen OT INDUSTEC de cierre
+    y que SAP sigue contando abiertas. Cada una que se cierre en SAP (la
+    transacción IW22, a la que INDUSTEC tiene acceso desde el 31-07) sube el
+    indicador de la semana;
+  - A ESPERA DE INFORME TÉCNICO: órdenes de INDUSTEC abiertas en SAP sin ninguna
+    OT INDUSTEC;
+  - TIEMPOS: de la notificación a la primera visita y a la OT INDUSTEC de cierre;
+  - A ESPERA DE REPUESTO: antigüedad y responsable de lo que espera repuesto;
   - REINCIDENCIA: equipos y locales que vuelven a fallar;
   - TÉCNICOS: la carga de las últimas cuatro semanas.
+
+Los nombres de las hojas, de las filas y de los estados salen del diccionario
+único (sistema_ots/app/publico/vocabulario.json, vía comun.termino): la gerencia
+lee las mismas palabras que la administración en B.IA y que KFC en sus reportes.
+Lo que viene de KFC (ESTATUS A/B, «Mant. Correctivo», ABIERTO/TRATAMIENTO) se
+compara tal cual, porque es su sistema.
 
 Uso:
     .venv/Scripts/python.exe scripts/t2_27_tablero_gerencia.py                     # con lo último del correo
@@ -46,9 +54,26 @@ from openpyxl.utils import get_column_letter
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import t2_27_fuentes as F  # noqa: E402
+from comun import corto, de_estado, termino, titulo, vocabulario  # noqa: E402
 
 PROVEEDORES = ["INDUSTEC", "IN HOUSE", "MEGASERVICIOS", "SERVICENTURIOSA", "#N/A"]
 AZUL, BLANCO = "FF17365D", "FFFFFFFF"
+
+
+def cap(s: str) -> str:
+    """Primera letra en mayúscula sin tocar el resto: str.capitalize() convertiría
+    «OT INDUSTEC» en «Ot industec»."""
+    return s[:1].upper() + s[1:]
+
+
+def rotulo_zona(z: str | None) -> str:
+    """La zona como se lee en las pantallas de B.IA (CNLJ -> CUENCA-LOJA).
+
+    Un valor que el diccionario no trae se muestra tal cual: es un dato de la base,
+    y cambiarlo por un texto adivinado sería peor que dejarlo (I-7)."""
+    if not z:
+        return titulo("SIN_ZONA")
+    return corto(de_estado(z, "zona")) if str(z).strip().upper() in vocabulario()["zona"] else z
 
 
 def abiertos(sap: dict, proveedor: str) -> set:
@@ -108,7 +133,7 @@ def calcular(sap_ruta: Path, historial: Path | None, status_ruta: Path | None, c
     cnx = F.conectar()
     zonas = F.zonas_de_locales(cnx)
     ots = F.ordenes_por_aviso(cnx, corte)
-    zona = lambda loc: F.zona_de(loc, zonas) or "SIN ZONA"
+    zona = lambda loc: rotulo_zona(F.zona_de(loc, zonas))
 
     # ---- Indicador KFC: serie por semana ------------------------------------
     serie = []
@@ -196,7 +221,7 @@ def calcular(sap_ruta: Path, historial: Path | None, status_ruta: Path | None, c
                           COUNT(DISTINCT fecha_atencion), COUNT(DISTINCT local_codigo)
                      FROM ots WHERE en_cuarentena = 0 AND correlativo < 90000 AND fecha_atencion BETWEEN %s AND %s
                     GROUP BY tecnico_nombre, zona ORDER BY zona, COUNT(*) DESC""", (corte - dt.timedelta(days=28), corte))
-    tecnicos = [list(x) for x in cur.fetchall()]
+    tecnicos = [[x[0], rotulo_zona(x[1])] + list(x[2:]) for x in cur.fetchall()]
     cnx.close()
     return dict(semana=semana, sap_ruta=sap_ruta, corte=corte, serie=serie, mias=mias, por_cerrar=por_cerrar,
                 sin_orden=sin_orden, con_visita=con_visita, proyeccion=proyeccion, tiempos=tiempos,
@@ -225,36 +250,57 @@ def _titulo(ws, texto: str, sub: str = ""):
         ws["A2"].font = Font(italic=True, color="FF595959")
 
 
+def hojas() -> dict:
+    """Nombres de las hojas que nombran un concepto, del diccionario (Excel admite 31
+    caracteres: el título de ESPERA_INFORME, «ÓRDENES A ESPERA…», no cabe, así que la
+    hoja lleva el término en mayúsculas). Antes se llamaban POR CERRAR EN SAP, SIN
+    ORDEN y PENDIENTES; ningún otro script las lee por nombre."""
+    return {"atendidas": titulo("ATENDIDA").upper(),               # ATENDIDAS, POR CERRAR EN SAP
+            "espera_informe": termino("ESPERA_INFORME").upper(),   # A ESPERA DE INFORME TÉCNICO
+            "espera_repuesto": termino("ESPERA_REPUESTO").upper()}  # A ESPERA DE REPUESTO
+
+
 def escribir(res: dict, destino: Path) -> Path:
     wb = openpyxl.Workbook()
     fecha = "%d/%m/%Y"
+    H = hojas()
+    ot, ot_cierre = termino("OT_INDUSTEC"), termino("OT_CIERRE")
+    no_disp = "no disponible"   # I-7: sin dato se dice, no se deja un cero
 
     # ---------------- PORTADA
     ws = wb.active
     ws.title = "PORTADA"
     _titulo(ws, f"Tablero de gerencia · semana {res['semana']} de KFC",
-            f"Excel de KFC: {res['sap_ruta'].name} · órdenes de INDUSTEC hasta el {res['corte']:{fecha}} · generado por el agente")
+            f"Excel de KFC: {res['sap_ruta'].name} · {ot} hasta el {res['corte']:{fecha}} · generado por el agente")
     ult = next((s for s in reversed(res["serie"]) if s["kfc"]), None)
+    # Las filas de abajo se leen como las de la tarjeta «Por zona»: atendidas (ya tienen la
+    # OT de cierre), abiertas (tienen la de evaluación y les falta la de cierre) y a espera de
+    # informe técnico (ninguna OT INDUSTEC todavía). «abiertas en SAP» es lo que dice KFC.
     lineas = [
-        ("Correctivos de INDUSTEC abiertos en SAP (lunes)", len(res["mias"])),
-        ("   ya cerrados por INDUSTEC con su orden, abiertos en SAP", len(res["por_cerrar"])),
-        ("   con visita pero sin orden de cierre", len(res["con_visita"])),
-        ("   sin ninguna orden de INDUSTEC", len(res["sin_orden"])),
-        ("Indicador KFC si esta semana se cierran en SAP los que ya tienen orden de cierre",
-         f"{res['proyeccion'] * 100:.1f} %" if res["proyeccion"] is not None else "sin dato"),
+        (f"{cap(termino('ORDEN', 2))} correctivas de INDUSTEC abiertas en SAP (lunes)", len(res["mias"])),
+        (f"   {termino('ATENDIDA', 2)} (con {ot_cierre})", len(res["por_cerrar"])),
+        (f"   {termino('ABIERTA', 2)} (con {termino('OT_EVALUACION')}, sin la de cierre)", len(res["con_visita"])),
+        (f"   {termino('ESPERA_INFORME', 2)} (sin ninguna {ot})", len(res["sin_orden"])),
+        (f"Indicador KFC si esta semana se cierran en SAP las que ya tienen {ot_cierre}",
+         f"{res['proyeccion'] * 100:.1f} %" if res["proyeccion"] is not None else no_disp),
     ]
     if ult:
         k = ult["kfc"]
         lineas.append((f"Indicador KFC de la semana {ult['semana']} (reproducido de sus archivos): INDUSTEC",
-                       f"{k['INDUSTEC'][2] * 100:.2f} %" if k["INDUSTEC"][2] is not None else "sin dato"))
+                       f"{k['INDUSTEC'][2] * 100:.2f} %" if k["INDUSTEC"][2] is not None else no_disp))
         for p in PROVEEDORES[1:]:
             if k[p][2] is not None:
                 lineas.append((f"      {p}", f"{k[p][2] * 100:.2f} %"))
     if res["pendientes"]:
+        # «DESHABILITADO» es el valor de la columna ESTATUS DEL EQUIPO de la plantilla de
+        # Isabel (contrato): se compara tal cual.
         desh = [p for p in res["pendientes"] if str(p["estado"]).upper() == "DESHABILITADO"]
-        lineas += [("Pendientes del STATUS del martes", len(res["pendientes"])),
-                   ("   equipos DESHABILITADOS", len(desh)),
-                   ("   deshabilitados hace más de 7 días", sum(1 for p in desh if (p["dias"] or 0) > 7))]
+        # Las filas del STATUS son el plan de Isabel (arrastradas + altas con repuesto
+        # pedido), no el «total de órdenes abiertas» del buzón de B.IA: son otro universo
+        # y no llevan ese nombre, para que nadie compare dos cifras que no son la misma.
+        lineas += [(f"{cap(termino('ORDEN', 2))} del STATUS del martes", len(res["pendientes"])),
+                   (f"   {termino('EQUIPO_DESHABILITADO', 2)}", len(desh)),
+                   (f"   {termino('EQUIPO_DESHABILITADO', 2)} hace más de 7 días", sum(1 for p in desh if (p["dias"] or 0) > 7))]
     lineas.append(("Equipos con 3 o más correctivos en 90 días", len(res["reincidentes"])))
     for i, (t, v) in enumerate(lineas, start=4):
         ws.cell(row=i, column=1, value=t)
@@ -263,10 +309,12 @@ def escribir(res: dict, destino: Path) -> Path:
         c.alignment = Alignment(horizontal="right")
     n = 4 + len(lineas) + 1
     ws.cell(row=n, column=1, value="Qué hacer antes de la reunión del jueves").font = Font(bold=True, color=AZUL, size=12)
+    n_pc, n_so = len(res["por_cerrar"]), len(res["sin_orden"])
     acciones = [
-        f"1. Cerrar en SAP (IW22) los {len(res['por_cerrar'])} avisos de la hoja POR CERRAR EN SAP: INDUSTEC ya emitió la orden de cierre.",
-        f"2. Revisar los {len(res['sin_orden'])} avisos SIN ORDEN: o falta la visita, o no son de INDUSTEC y hay que pedir la reasignación.",
-        "3. Mover los deshabilitados más antiguos (hoja PENDIENTES): es lo que KFC mira primero.",
+        f"1. Cerrar en SAP (IW22) {n_pc} {termino('ORDEN', n_pc)} de la hoja {H['atendidas']}: INDUSTEC ya emitió su {ot_cierre}.",
+        f"2. Revisar {n_so} {termino('ORDEN', n_so)} de la hoja {H['espera_informe']}: o falta la visita, o no son de INDUSTEC "
+        "y hay que pedir la reasignación.",
+        f"3. Mover los {termino('EQUIPO_DESHABILITADO', 2)} más antiguos (hoja {H['espera_repuesto']}): es lo que KFC mira primero.",
     ]
     for i, t in enumerate(acciones, start=n + 1):
         ws.cell(row=i, column=1, value=t)
@@ -275,9 +323,12 @@ def escribir(res: dict, destino: Path) -> Path:
 
     # ---------------- INDICADOR KFC
     ws = wb.create_sheet("INDICADOR KFC")
+    cerradas_sap = termino("CERRADA_SAP", 2)
     _titulo(ws, "El indicador con que KFC mide a cada proveedor",
-            "% cerrado = 1 − (avisos del lunes que siguen abiertos el viernes ÷ correctivos abiertos del lunes). Reproducido exacto en la semana 35.")
-    _encabezado(ws, 4, ["Semana"] + [f"Abiertos lunes {p}" for p in PROVEEDORES] + [f"% cerrado {p}" for p in PROVEEDORES],
+            f"% {cerradas_sap} = 1 − ({termino('ORDEN', 2)} del lunes que siguen abiertas en SAP el viernes ÷ "
+            f"{termino('ORDEN', 2)} correctivas abiertas en SAP el lunes). Reproducido exacto en la semana 35.")
+    _encabezado(ws, 4, ["Semana"] + [f"Abiertas en SAP el lunes · {p}" for p in PROVEEDORES]
+                + [f"% {cerradas_sap} · {p}" for p in PROVEEDORES],
                 [10] + [14] * 10)
     for i, s in enumerate(res["serie"], start=5):
         ws.cell(row=i, column=1, value=s["semana"])
@@ -289,20 +340,21 @@ def escribir(res: dict, destino: Path) -> Path:
     if len(res["serie"]) >= 2:
         fin = 4 + len(res["serie"])
         g = LineChart()
-        g.title = "Correctivos abiertos el lunes, por proveedor"
-        g.y_axis.title = "avisos"
+        g.title = f"{cap(termino('ORDEN', 2))} correctivas abiertas en SAP el lunes, por proveedor"
+        g.y_axis.title = termino("ORDEN", 2)
         g.x_axis.title = "semana"
         g.add_data(Reference(ws, min_col=2, max_col=6, min_row=4, max_row=fin), titles_from_data=True)
         g.set_categories(Reference(ws, min_col=1, min_row=5, max_row=fin))
         g.height, g.width = 8, 18
         ws.add_chart(g, f"A{fin + 3}")
 
-    # ---------------- POR CERRAR EN SAP
-    ws = wb.create_sheet("POR CERRAR EN SAP")
-    _titulo(ws, f"{len(res['por_cerrar'])} avisos que INDUSTEC ya cerró y SAP sigue contando abiertos",
-            "Cada uno que se cierre en SAP antes del viernes sube el indicador de la semana.")
-    _encabezado(ws, 4, ["Aviso", "Local", "Zona", "Notificación", "ESTATUS A", "ESTATUS B", "Responsable SAP", "Equipo",
-                        "Orden de cierre", "Fecha cierre", "Días desde el cierre"], [11, 8, 8, 12, 13, 18, 15, 34, 30, 12, 10])
+    # ---------------- ATENDIDAS, POR CERRAR EN SAP
+    ws = wb.create_sheet(H["atendidas"])
+    _titulo(ws, f"{n_pc} {termino('ORDEN', n_pc)} {termino('ATENDIDA', n_pc)}: INDUSTEC ya emitió su {ot_cierre} "
+                "y SAP las sigue contando abiertas",
+            "Cada una que se cierre en SAP antes del viernes sube el indicador de la semana.")
+    _encabezado(ws, 4, [titulo("AVISO_SAP"), "Local", "Zona", f"Fecha del {termino('AVISO_SAP')}", "ESTATUS A", "ESTATUS B", "Responsable SAP", "Equipo",
+                        titulo("OT_CIERRE"), "Fecha del cierre", "Días desde el cierre"], [11, 8, 12, 12, 13, 18, 15, 34, 30, 12, 10])
     for i, f in enumerate(sorted(res["por_cerrar"], key=lambda x: -x[-1]), start=5):
         for j, v in enumerate(f, start=1):
             c = ws.cell(row=i, column=j, value=v)
@@ -310,12 +362,13 @@ def escribir(res: dict, destino: Path) -> Path:
                 c.number_format = "dd/mm/yyyy"
     ws.freeze_panes = "A5"
 
-    # ---------------- SIN ORDEN
-    ws = wb.create_sheet("SIN ORDEN")
-    _titulo(ws, f"{len(res['sin_orden'])} avisos de INDUSTEC en SAP sin ninguna orden nuestra",
-            "Si no llegó el correo del aviso, no hay visita. Si no es de INDUSTEC, pedir la reasignación antes de que cuente en contra.")
-    _encabezado(ws, 4, ["Aviso", "Local", "Zona", "Notificación", "ESTATUS A", "ESTATUS B", "Responsable SAP", "Equipo",
-                        "Días", "Lo que pidió el local"], [11, 8, 8, 12, 13, 18, 15, 34, 7, 90])
+    # ---------------- A ESPERA DE INFORME TÉCNICO
+    ws = wb.create_sheet(H["espera_informe"])
+    _titulo(ws, f"{n_so} {termino('ORDEN', n_so)} de INDUSTEC abiertas en SAP, {termino('ESPERA_INFORME', n_so)}: "
+                f"sin ninguna {ot}",
+            "Si no llegó el correo del aviso SAP, no hay visita. Si no es de INDUSTEC, pedir la reasignación antes de que cuente en contra.")
+    _encabezado(ws, 4, [titulo("AVISO_SAP"), "Local", "Zona", f"Fecha del {termino('AVISO_SAP')}", "ESTATUS A", "ESTATUS B", "Responsable SAP", "Equipo",
+                        "Días", "Lo que pidió el local"], [11, 8, 12, 12, 13, 18, 15, 34, 7, 90])
     for i, f in enumerate(sorted(res["sin_orden"], key=lambda x: -(x[-2] or 0)), start=5):
         for j, v in enumerate(f, start=1):
             c = ws.cell(row=i, column=j, value=v)
@@ -326,9 +379,11 @@ def escribir(res: dict, destino: Path) -> Path:
     # ---------------- TIEMPOS
     ws = wb.create_sheet("TIEMPOS")
     _titulo(ws, "Tiempos de atención de los correctivos de INDUSTEC (2026)",
-            "Días calendario desde la notificación en SAP. «1.ª visita»: la primera orden de INDUSTEC. «Cierre»: la primera orden CERRADA.")
-    _encabezado(ws, 4, ["Zona", "Mes", "Avisos", "Con visita", "1.ª visita: mediana", "1.ª visita: p90", "% visita ≤1 día",
-                        "% visita ≤2 días", "Cierre INDUSTEC: mediana", "Cierre SAP: mediana"], [9, 9, 8, 10, 12, 11, 11, 11, 13, 12])
+            f"Días calendario desde la notificación en SAP. «1.ª visita»: la primera {ot}. «{cap(ot_cierre)}»: la primera "
+            f"{ot_cierre}. «{cap(termino('CERRADA_SAP'))}»: el cierre técnico que registra SAP.")
+    _encabezado(ws, 4, ["Zona", "Mes", cap(termino("ORDEN", 2)), "Con visita", "1.ª visita: mediana", "1.ª visita: p90", "% visita ≤1 día",
+                        "% visita ≤2 días", f"{cap(ot_cierre)}: mediana", f"{cap(termino('CERRADA_SAP'))}: mediana"],
+                [12, 9, 8, 10, 12, 11, 11, 11, 13, 12])
     i = 5
     for (z, m), t in sorted(res["tiempos"].items()):
         resp = t["resp"]
@@ -343,12 +398,13 @@ def escribir(res: dict, destino: Path) -> Path:
         i += 1
     ws.freeze_panes = "A5"
 
-    # ---------------- PENDIENTES
-    ws = wb.create_sheet("PENDIENTES")
-    _titulo(ws, "Lo que espera repuesto: antigüedad y responsable",
-            f"Del STATUS del martes: {res['status_ruta'].name if res['status_ruta'] else 'no se dio'}")
+    # ---------------- A ESPERA DE REPUESTO (las filas del STATUS del martes de Isabel)
+    ws = wb.create_sheet(H["espera_repuesto"])
+    _titulo(ws, f"{cap(termino('ORDEN', 2))} {termino('ESPERA_REPUESTO', 2)}: antigüedad y responsable",
+            f"Del STATUS del martes: {res['status_ruta'].name if res['status_ruta'] else no_disp}")
     tramos = [("0–7 días", 0, 7), ("8–15", 8, 15), ("16–30", 16, 30), ("más de 30", 31, 10 ** 6)]
-    _encabezado(ws, 4, ["Responsable"] + [t[0] for t in tramos] + ["Total", "Deshabilitados"], [44, 10, 10, 10, 12, 8, 14])
+    _encabezado(ws, 4, ["Responsable"] + [t[0] for t in tramos] + ["Total", cap(termino("EQUIPO_DESHABILITADO", 2))],
+                [44, 10, 10, 10, 12, 8, 14])
     por_resp = collections.defaultdict(list)
     for p in res["pendientes"]:
         clave = re.split(r"[/(]", p["resp"])[0].strip().upper() or "SIN RESPONSABLE"
@@ -362,8 +418,8 @@ def escribir(res: dict, destino: Path) -> Path:
         ws.cell(row=i, column=7, value=sum(1 for p in lista if str(p["estado"]).upper() == "DESHABILITADO"))
         i += 1
     i += 2
-    ws.cell(row=i, column=1, value="Equipos DESHABILITADOS, del más antiguo al más nuevo").font = Font(bold=True, color=AZUL)
-    _encabezado(ws, i + 1, ["Aviso", "Zona", "Local", "Equipo", "Responsable", "Días"])
+    ws.cell(row=i, column=1, value=f"{cap(termino('EQUIPO_DESHABILITADO', 2))}, del más antiguo al más nuevo").font = Font(bold=True, color=AZUL)
+    _encabezado(ws, i + 1, [titulo("AVISO_SAP"), "Zona", "Local", "Equipo", "Responsable", "Días"])
     for k, p in enumerate(sorted((p for p in res["pendientes"] if str(p["estado"]).upper() == "DESHABILITADO"),
                                  key=lambda p: -(p["dias"] or 0)), start=i + 2):
         for j, v in enumerate([p["aviso"], p["zona"], p["local"], p["equipo"], p["resp"], p["dias"]], start=1):
@@ -390,9 +446,10 @@ def escribir(res: dict, destino: Path) -> Path:
     # ---------------- TÉCNICOS
     ws = wb.create_sheet("TECNICOS")
     _titulo(ws, "Carga por técnico, últimas 4 semanas",
-            "Órdenes emitidas por técnico (según el nombre escrito en la orden). No mide calidad: una emergencia compleja cuenta igual que una visita simple.")
-    _encabezado(ws, 4, ["Técnico", "Zona", "Órdenes", "Correctivo (evaluación abierta)", "Correctivo cerrado", "Preventivo",
-                        "Días con órdenes", "Locales distintos"], [30, 8, 9, 16, 12, 11, 11, 11])
+            f"{ot} emitidas por técnico (según el nombre escrito en la OT). No mide calidad: una emergencia compleja cuenta igual que una visita simple.")
+    _encabezado(ws, 4, ["Técnico", "Zona", titulo("OT_INDUSTEC"), f"{titulo('OT_EVALUACION')} (correctivo)",
+                        f"{titulo('OT_CIERRE')} (correctivo)", "Preventivo",
+                        f"Días con {ot}", "Locales distintos"], [30, 12, 11, 16, 16, 11, 11, 11])
     for i, f in enumerate(res["tecnicos"], start=5):
         for j, v in enumerate(f, start=1):
             ws.cell(row=i, column=j, value=int(v) if isinstance(v, (int, decimal.Decimal)) else v)
@@ -409,7 +466,7 @@ def main():
     ap.add_argument("--sap", help="Excel del lunes de KFC; por omisión, el último de Recibidos")
     ap.add_argument("--historial", help="carpeta con los Excel de KFC de semanas anteriores (lunes y ANALISIS/ACTUALIZADO)")
     ap.add_argument("--status", help="STATUS_PENDIENTES más reciente; por omisión, el último de Enviados")
-    ap.add_argument("--corte", help="órdenes hasta esta fecha (AAAA-MM-DD); por omisión, hoy")
+    ap.add_argument("--corte", help="OT INDUSTEC hasta esta fecha (AAAA-MM-DD); por omisión, hoy")
     a = ap.parse_args()
     corte = dt.date.fromisoformat(a.corte) if a.corte else dt.date.today()
     sap = Path(a.sap) if a.sap else (F.bajar_ultimo_adjunto("INBOX", r"REPORTE.*SEMANA.*CORRECTIVO.*\.xlsx$", dias=10, antes_de=corte + dt.timedelta(days=1)) or [None])[0]
@@ -429,15 +486,17 @@ def main():
     destino = F.SALIDAS / f"{corte:%Y-%m-%d}" / f"TABLERO GERENCIA SEMANA {res['semana']} (generado agente).xlsx"
     escribir(res, destino)
     print(f"Tablero de la semana {res['semana']}: {destino}")
-    print(f"  INDUSTEC abiertos en SAP: {len(res['mias'])} · ya cerrados por INDUSTEC: {len(res['por_cerrar'])} · "
-          f"con visita sin cierre: {len(res['con_visita'])} · sin orden: {len(res['sin_orden'])}")
+    print(f"  {termino('ORDEN', 2)} de INDUSTEC abiertas en SAP: {len(res['mias'])} · "
+          f"{termino('ATENDIDA', 2)}: {len(res['por_cerrar'])} · {termino('ABIERTA', 2)}: {len(res['con_visita'])} · "
+          f"{termino('ESPERA_INFORME', 2)}: {len(res['sin_orden'])}")
     print(f"  Proyección del indicador si se cierran en SAP: "
           f"{res['proyeccion'] * 100:.1f} %" if res["proyeccion"] is not None else "  sin proyección")
     for s in res["serie"]:
         k = s["kfc"]
-        print(f"  semana {s['semana']}: abiertos lunes INDUSTEC {s['lunes']['INDUSTEC']}"
+        print(f"  semana {s['semana']}: abiertas en SAP el lunes (INDUSTEC) {s['lunes']['INDUSTEC']}"
               + (f" · indicador KFC INDUSTEC {k['INDUSTEC'][2] * 100:.2f} %" if k and k['INDUSTEC'][2] is not None else ""))
-    print(f"  reincidentes: {len(res['reincidentes'])} · técnicos: {len(res['tecnicos'])} · pendientes: {len(res['pendientes'])}")
+    print(f"  reincidentes: {len(res['reincidentes'])} · técnicos: {len(res['tecnicos'])} · "
+          f"{termino('ORDEN', 2)} del STATUS: {len(res['pendientes'])}")
 
 
 if __name__ == "__main__":

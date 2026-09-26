@@ -17,14 +17,21 @@ subtítulo de la semana no se actualiza y las «cerradas» se escriben a mano.
 El generador parte del archivo que ELLA mandó la semana anterior —es la
 plantilla y es lo único que guarda su criterio: PRESUPUESTO y RESPONSABLES— y
 calcula lo que cambió con evidencia:
-  - QUITA las que ya tienen orden de cierre de INDUSTEC (acierta 12 de 12 al
-    reproducir la semana 4 desde la 3);
-  - AGREGA las nuevas: orden correctiva ABIERTA, sin orden de cierre, con
-    repuesto pedido (capta 21 de las 28 que ella agregó);
+  - QUITA las que ya tienen OT INDUSTEC de cierre: quedan atendidas, por cerrar
+    en SAP (acierta 12 de 12 al reproducir la semana 4 desde la 3);
+  - AGREGA las nuevas: orden correctiva con OT INDUSTEC de evaluación, sin la de
+    cierre y con repuesto pedido (capta 21 de las 28 que ella agregó);
   - refresca ESTATUS SAP con el Excel que KFC mandó el lunes.
 Lo que no se puede decidir con datos va al archivo de REVISIÓN, no al reporte:
 cuáles de las altas propuestas ella no incluiría, qué presupuesto y
 responsable tienen las nuevas, y qué filas SAP ya dio por cerradas.
+
+VOCABULARIO
+La plantilla de Isabel es contrato y no se toca: COLS, las hojas ORDENES y
+RESUMEN, «ZONA C-L», OPERATIVO/DESHABILITADO y el «órdenes cerradas» del correo.
+Todo lo demás que escribe este script (el archivo de REVISIÓN, el texto del
+correo, la consola) nombra los estados con el diccionario único
+(vocabulario.json, vía comun.termino), como las pantallas de B.IA.
 
 Uso:
     .venv/Scripts/python.exe scripts/t2_27_status_semanal.py                 # el martes de esta semana
@@ -46,10 +53,23 @@ import openpyxl
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import t2_27_fuentes as F  # noqa: E402
+from comun import corto, de_estado, termino, titulo  # noqa: E402
 
-COLS = ["ZONA", "# OT", "LOCAL", "FECHA DE INICIO", "EQUIPO", "MARCA", "TRABAJO REALIZADO / EVALUACIÓN",
+COLS =["ZONA", "# OT", "LOCAL", "FECHA DE INICIO", "EQUIPO", "MARCA", "TRABAJO REALIZADO / EVALUACIÓN",
         "REPUESTO", "ESTATUS SAP", "PRESUPUESTO", "RESPONSABLES", "ESTATUS DEL EQUIPO", "ANTIGÜEDAD (DÍAS)"]
 ETIQUETA_A_ZONA = {v: k for k, v in F.ETIQUETA_ZONA.items()}
+
+
+def hojas_revision() -> dict:
+    """Hojas del archivo de REVISIÓN que nombran un concepto. No son de la plantilla de
+    Isabel (esas son ORDENES y RESUMEN): las genera la estación, así que hablan con el
+    diccionario. Antes se llamaban QUITADAS, AGREGADAS y CERRADAS SEMANA; ningún otro
+    script las lee por nombre."""
+    abiertas = termino("ABIERTA", 2).upper()
+    return {"atendidas": titulo("ATENDIDA").upper(),                    # ATENDIDAS, POR CERRAR EN SAP
+            "nuevas": f"{abiertas} NUEVAS",                             # ABIERTAS NUEVAS
+            "otras": f"OTRAS {abiertas}",                               # OTRAS ABIERTAS
+            "cierres": f"{titulo('OT_CIERRE').upper()} (SEMANA)"}       # OT INDUSTEC DE CIERRE (SEMANA)
 
 
 def leer_anterior(ruta: Path) -> tuple[list[dict], openpyxl.Workbook]:
@@ -129,7 +149,7 @@ def generar(fecha: dt.date, anterior: Path, sap_ruta: Path, cerradas_manual: lis
     previas, wb = leer_anterior(anterior)
     prev_avisos = {f["aviso"] for f in previas}
     if len(prev_avisos) != len(previas):
-        print(f"  AVISO: {anterior.name} trae avisos repetidos; se conserva la primera fila de cada uno.")
+        print(f"  ATENCIÓN: {anterior.name} trae avisos SAP repetidos; se conserva la primera fila de cada uno.")
     sap = F.leer_sap_semanal(sap_ruta)
     cnx = F.conectar()
     zonas = F.zonas_de_locales(cnx)
@@ -148,7 +168,7 @@ def generar(fecha: dt.date, anterior: Path, sap_ruta: Path, cerradas_manual: lis
         mias = ots.get(f["aviso"], [])
         cierre = [o for o in mias if o["estado_ot"] == "CERRADA"]
         if cierre:
-            f["_motivo"] = f"orden de cierre {cierre[-1]['id_industec']} del {cierre[-1]['fecha_atencion']:%d/%m}"
+            f["_motivo"] = f"{termino('OT_CIERRE')} {cierre[-1]['id_industec']} del {cierre[-1]['fecha_atencion']:%d/%m}"
             quitadas.append(f)
             continue
         s = sap.get(f["aviso"])
@@ -161,13 +181,14 @@ def generar(fecha: dt.date, anterior: Path, sap_ruta: Path, cerradas_manual: lis
         # (puede saber por teléfono que el equipo quedó parado).
         nuevas = [o for o in mias if o["fecha_atencion"] >= desde and o["estado_equipo"]]
         if nuevas and nuevas[-1]["estado_equipo"].upper() != str(f["ESTATUS DEL EQUIPO"] or "").upper():
-            por_confirmar.append((f, f"orden nueva {nuevas[-1]['id_industec']} dice {nuevas[-1]['estado_equipo'].upper()}; "
-                                     f"el reporte anterior decía {f['ESTATUS DEL EQUIPO']}"))
+            por_confirmar.append((f, f"la {termino('OT_INDUSTEC')} {nuevas[-1]['id_industec']}, más nueva, dice "
+                                     f"{nuevas[-1]['estado_equipo'].upper()}; el reporte anterior decía {f['ESTATUS DEL EQUIPO']}"))
             f["ESTATUS DEL EQUIPO"] = nuevas[-1]["estado_equipo"].upper()
         if s and s.get("estatus_a") == "CERRADO" and any(x in nuevo_i for x in ("REDE", "MEDE")):
-            por_confirmar.append((f, f"SAP ya cerró el aviso y el repuesto figura {nuevo_i}: confirmar si sigue pendiente"))
+            por_confirmar.append((f, f"la orden ya figura {termino('CERRADA_SAP')} y el repuesto figura {nuevo_i}: "
+                                     "confirmar si sigue pendiente"))
         if not mias:
-            por_confirmar.append((f, "no hay ninguna orden de INDUSTEC con este aviso en la base"))
+            por_confirmar.append((f, f"no hay ninguna {termino('OT_INDUSTEC')} con este {termino('AVISO_SAP')} en la base"))
         conservadas.append(f)
 
     agregadas, otras_abiertas = [], []
@@ -185,9 +206,9 @@ def generar(fecha: dt.date, anterior: Path, sap_ruta: Path, cerradas_manual: lis
         # tres de cada cuatro altas, y la cuarta es justo la que ella tiene que ver.
         motivo_fuera = None
         if not (desde <= lista[0]["fecha_atencion"] <= corte):
-            motivo_fuera = f"la primera orden es del {lista[0]['fecha_atencion']:%d/%m}, antes de esta semana"
+            motivo_fuera = f"la primera {termino('OT_INDUSTEC')} es del {lista[0]['fecha_atencion']:%d/%m}, antes de esta semana"
         elif not F.tiene_repuesto(ult["repuestos"]):
-            motivo_fuera = "la orden no pide repuesto"
+            motivo_fuera = f"la {termino('OT_INDUSTEC')} no pide repuesto"
         elif any(x in sap_i(s) for x in YA_ENTREGADO):
             motivo_fuera = f"SAP marca el repuesto como {sap_i(s)} (ya despachado o entregado)"
         if motivo_fuera:
@@ -211,20 +232,21 @@ def generar(fecha: dt.date, anterior: Path, sap_ruta: Path, cerradas_manual: lis
             "PRESUPUESTO": None,       # criterio de la administración: no se inventa
             "RESPONSABLES": None,      # ídem
             "ESTATUS DEL EQUIPO": (ult["estado_equipo"] or "").upper().strip() or None,
-            "_motivo": f"{ult['id_industec']} del {ult['fecha_atencion']:%d/%m}: orden abierta con repuesto pedido y sin orden de cierre",
+            "_motivo": (f"{ult['id_industec']} del {ult['fecha_atencion']:%d/%m}: {termino('OT_EVALUACION')} "
+                        f"con repuesto pedido y sin {termino('OT_CIERRE')}"),
             "_sap_a": (s or {}).get("estatus_a"),
         }
         if not fila["ZONA"]:
-            por_confirmar.append((fila, f"el local {ult['local_codigo']} no está en el maestro: sin zona"))
+            por_confirmar.append((fila, f"el local {ult['local_codigo']} no está en el maestro: {termino('SIN_ZONA')}"))
         if not fila["ESTATUS DEL EQUIPO"]:
-            por_confirmar.append((fila, "la orden no dice si el equipo quedó operativo o deshabilitado"))
+            por_confirmar.append((fila, f"la {termino('OT_INDUSTEC')} no dice si el equipo quedó operativo o deshabilitado"))
         agregadas.append(fila)
 
     filas = conservadas + agregadas
     filas.sort(key=lambda f: (F.ORDEN_ZONA.get(ETIQUETA_A_ZONA.get(f["ZONA"], ""), 9),
                               f["FECHA DE INICIO"] or dt.datetime.max, str(f["# OT"])))
 
-    # «Cerradas en la semana»: órdenes de cierre de INDUSTEC emitidas del martes anterior al lunes,
+    # «Cerradas en la semana»: OT INDUSTEC de cierre emitidas del martes anterior al lunes,
     # por zona. Ella las escribe a mano y no se pudieron reproducir desde ninguna fuente, así que
     # aquí se usa una definición explícita (y se puede imponer la suya con --cerradas).
     cur = cnx.cursor()
@@ -351,6 +373,11 @@ def generar(fecha: dt.date, anterior: Path, sap_ruta: Path, cerradas_manual: lis
 
 
 def cuerpo_correo(res: dict) -> str:
+    # El correo del martes que acompaña al STATUS es CONTRATO (contratos_externos de
+    # vocabulario.json: «el correo del martes que la acompaña»): Isabel y KFC lo leen igual
+    # cada semana, así que va palabra por palabra como lo escribe ella, sin el diccionario.
+    # Su «{total} órdenes abiertas» son las filas del STATUS (el plan de Isabel), NO el
+    # «total de órdenes abiertas» del buzón de B.IA: por eso no se usa TOTAL_ABIERTAS aquí.
     c, f = res["cuenta"], res["fecha"]
     lin = lambda z, et: f"  *   {et}: {c[z][0]} órdenes, {c[z][1]} operativas y {c[z][2]} deshabilitadas."
     cer = sum(res["cerradas"])
@@ -371,25 +398,32 @@ def escribir_revision(res: dict) -> Path:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "LEEME"
+    H = hojas_revision()
+    ot, ot_cierre = termino("OT_INDUSTEC"), termino("OT_CIERRE")
+    nq, na, no = len(res["quitadas"]), len(res["agregadas"]), len(res["otras_abiertas"])
     lineas = [
         f"Revisión del STATUS_PENDIENTES de la semana {res['n']} ({res['fecha']:%d/%m/%Y}) — generado por el agente",
         "",
         f"Punto de partida: {res['anterior'].name} (el reporte que se mandó la semana anterior).",
         f"Estado de SAP: {res['sap'].name} (el Excel que KFC mandó el lunes).",
-        f"Órdenes de INDUSTEC: base local, hasta el {res['corte']:%d/%m/%Y}.",
+        f"{ot}: base local, hasta el {res['corte']:%d/%m/%Y}.",
         "",
-        f"Se QUITARON {len(res['quitadas'])} órdenes: ya tienen orden de cierre de INDUSTEC (hoja QUITADAS).",
-        f"Se AGREGARON {len(res['agregadas'])}: orden correctiva abierta desde el {res['desde']:%d/%m}, con repuesto pedido y sin cierre (hoja AGREGADAS).",
+        f"Se QUITARON {nq} {termino('ORDEN', nq)}: ya tienen {ot_cierre} y quedan {termino('ATENDIDA', nq)} (hoja {H['atendidas']}).",
+        f"Se AGREGARON {na} {termino('ORDEN', na)} {termino('ABIERTA', na)}: correctivas con {termino('OT_EVALUACION')} desde el "
+        f"{res['desde']:%d/%m}, con repuesto pedido y sin {ot_cierre} (hoja {H['nuevas']}).",
         "  Las agregadas llegan SIN presupuesto ni responsable: esas dos columnas son criterio de la administración y no se inventan.",
         "  Al reproducir la semana 4 desde la 3, esta regla captó 21 de las 28 que se agregaron a mano y propuso 21 más.",
-        "  Revise la hoja AGREGADAS y borre del reporte las que no correspondan.",
+        f"  Revise la hoja {H['nuevas']} y borre del reporte las que no correspondan.",
         f"Se actualizó ESTATUS SAP en {len(res['cambios_i'])} filas con el Excel de KFC (hoja ESTATUS SAP).",
         f"Hay {len(res['por_confirmar'])} filas para confirmar (hoja POR CONFIRMAR).",
-        f"Otras {len(res['otras_abiertas'])} órdenes siguen abiertas (últimos 30 días) y NO entraron, cada una con su motivo (hoja OTRAS ABIERTAS):",
+        f"Otras {no} {termino('ORDEN', no)} {termino('ABIERTA', no)} (últimos 30 días) NO entraron, cada una con su motivo "
+        f"(hoja {H['otras']}):",
         "  sin repuesto pedido, repuesto ya despachado según SAP (REDE/MEDE), o anteriores a esta semana. Si alguna debe ir, cópiela al reporte.",
         "",
-        "«Cerradas» de la semana (RESUMEN C15:C17): órdenes de cierre de INDUSTEC emitidas del "
-        f"{res['desde']:%d/%m} al {res['corte']:%d/%m}, por zona: UIO {res['cerradas'][0]}, LARB {res['cerradas'][1]}, C-L {res['cerradas'][2]}.",
+        # «Cerradas» entre comillas es el rótulo de su RESUMEN (contrato); lo que cuenta son OT de cierre.
+        f"«Cerradas» de la semana (RESUMEN C15:C17): {termino('OT_CIERRE', 2)} emitidas del "
+        f"{res['desde']:%d/%m} al {res['corte']:%d/%m}, por zona: {corto('ZONA_UIO')} {res['cerradas'][0]}, "
+        f"{corto('ZONA_LARB')} {res['cerradas'][1]}, {corto('ZONA_CNLJ')} {res['cerradas'][2]} (hoja {H['cierres']}).",
         "  Si se lleva otra cuenta, se puede imponer con --cerradas UIO,LARB,CL.",
         "",
         "Diferencias con el archivo hecho a mano, a propósito:",
@@ -411,19 +445,25 @@ def escribir_revision(res: dict) -> Path:
         for col, ancho in zip("ABCDEFGH", (12, 12, 10, 28, 70, 14, 14, 14)):
             h.column_dimensions[col].width = ancho
 
-    hoja("QUITADAS", ["# OT", "ZONA", "LOCAL", "EQUIPO", "Por qué sale"],
+    # «# OT», «ZONA», «ESTATUS SAP», «ESTATUS DEL EQUIPO» y «ESTATUS A» son los nombres de las
+    # columnas de la plantilla de Isabel y del libro de KFC (contrato): se repiten tal cual para
+    # que ella encuentre la fila en su reporte.
+    hoja(H["atendidas"], ["# OT", "ZONA", "LOCAL", "EQUIPO", "Por qué sale"],
          [[f["# OT"], f["ZONA"], f["LOCAL"], f["EQUIPO"], f["_motivo"]] for f in res["quitadas"]])
-    hoja("AGREGADAS", ["# OT", "ZONA", "LOCAL", "EQUIPO", "Por qué entra", "ESTATUS SAP", "SAP (aviso)", "Equipo"],
+    hoja(H["nuevas"], ["# OT", "ZONA", "LOCAL", "EQUIPO", "Por qué entra", "ESTATUS SAP", "ESTATUS A (SAP)", "ESTATUS DEL EQUIPO"],
          [[f["# OT"], f["ZONA"], f["LOCAL"], f["EQUIPO"], f["_motivo"], f["ESTATUS SAP"], f["_sap_a"], f["ESTATUS DEL EQUIPO"]] for f in res["agregadas"]])
     hoja("ESTATUS SAP", ["# OT", "Antes (reporte anterior)", "Ahora (SAP del lunes)"],
          [[a, b, c] for a, b, c in res["cambios_i"]])
     hoja("POR CONFIRMAR", ["# OT", "ZONA", "LOCAL", "Qué confirmar"],
          [[f["# OT"], f["ZONA"], f["LOCAL"], m] for f, m in res["por_confirmar"]])
-    hoja("OTRAS ABIERTAS", ["# OT", "LOCAL", "Primera orden", "Equipo", "Por qué NO entró", "ESTATUS SAP", "SAP (aviso)"],
+    hoja(H["otras"], ["# OT", "LOCAL", f"Primera {termino('OT_INDUSTEC')}", "Equipo", "Por qué NO entró", "ESTATUS SAP", "ESTATUS A (SAP)"],
          [[a, u["local_codigo"], f"{u['id_industec']} ({u['fecha_atencion']:%d/%m})", (u["equipo"] or "").upper(), m,
            sap_i(s), (s or {}).get("estatus_a")] for a, u, s, m in sorted(res["otras_abiertas"], key=lambda x: x[0])])
-    hoja("CERRADAS SEMANA", ["Orden de cierre", "Zona", "Aviso", "Local", "Fecha"],
-         [list(x) for x in res["detalle_cerradas"]])
+    hoja(H["cierres"], [titulo("OT_CIERRE"), "Zona", titulo("AVISO_SAP"), "Local", "Fecha"],
+         # La zona de la base (UIO/LARB/CNLJ/OTRA) se rotula como en las pantallas; un valor que el
+         # diccionario no trae se deja tal cual (es un dato, no un texto que haya que adivinar).
+         [[x[0], corto(de_estado(x[1], "zona")) if x[1] in ("UIO", "LARB", "CNLJ", "OTRA") else x[1]] + list(x[2:])
+          for x in res["detalle_cerradas"]])
     destino = res["destino"].with_name(f"REVISION STATUS_PENDIENTES SEMANA {res['n']} {F.MES3[res['fecha'].month - 1]} (generado agente).xlsx")
     wb.save(destino)
     return destino
@@ -484,7 +524,7 @@ def main():
     a = ap.parse_args()
     fecha = dt.date.fromisoformat(a.fecha) if a.fecha else F.martes_de_envio(dt.date.today())
     if fecha.weekday() != 1:
-        print(f"  Aviso: {fecha} no es martes; el reporte se nombra por el martes de envío.")
+        print(f"  Atención: {fecha} no es martes; el reporte se nombra por el martes de envío.")
     if a.anterior:
         anterior = Path(a.anterior)
     else:
@@ -506,10 +546,13 @@ def main():
     correo = res["destino"].with_name(f"CORREO STATUS_PENDIENTES SEMANA {res['n']} (generado agente).txt")
     correo.write_text(cuerpo_correo(res), encoding="utf-8")
     c = res["cuenta"]
-    print(f"\n  {res['total']} órdenes: UIO {c['ZONA UIO'][0]} · LARB {c['ZONA LARB'][0]} · C-L {c['ZONA C-L'][0]} "
+    print(f"\n  {res['total']} {termino('ORDEN', res['total'])}: {corto('ZONA_UIO')} {c['ZONA UIO'][0]} · "
+          f"{corto('ZONA_LARB')} {c['ZONA LARB'][0]} · {corto('ZONA_CNLJ')} {c['ZONA C-L'][0]} "
           f"| operativas {res['oper']} · deshabilitadas {res['desh']}")
-    print(f"  quitadas {len(res['quitadas'])} · agregadas {len(res['agregadas'])} · ESTATUS SAP actualizado en {len(res['cambios_i'])} · por confirmar {len(res['por_confirmar'])}")
-    print(f"  cerradas de la semana (UIO, LARB, C-L): {res['cerradas']}")
+    print(f"  salen ({termino('ATENDIDA', 2)}) {len(res['quitadas'])} · entran ({termino('ABIERTA', 2)} nuevas) "
+          f"{len(res['agregadas'])} · ESTATUS SAP actualizado en {len(res['cambios_i'])} · por confirmar {len(res['por_confirmar'])}")
+    print(f"  {termino('OT_CIERRE', 2)} de la semana ({corto('ZONA_UIO')}, {corto('ZONA_LARB')}, {corto('ZONA_CNLJ')}): "
+          f"{res['cerradas']}")
     print(f"  Reporte:  {res['destino']}\n  Revisión: {rev}\n  Correo:   {correo}")
     if a.comparar:
         ok = comparar(res["destino"], Path(a.comparar), anterior)

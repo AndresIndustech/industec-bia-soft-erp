@@ -6,8 +6,16 @@ require_once __DIR__ . '/Catalogo.php';
 require_once __DIR__ . '/Destinatarios.php';   // T2.28.2: a quién va la cola y qué imprime el PDF
 
 /**
- * Emision.php — Convierte una orden recibida en una orden de trabajo: su número,
- * su PDF y su correo (T2.13, la migración 008).
+ * Emision.php — Convierte una OT INDUSTEC recibida del celular en un documento
+ * emitido: su número OT-NNNN, su PDF y su correo (T2.13, la migración 008).
+ *
+ * VOCABULARIO (24-sep-2026): lo que se emite aquí es la «OT INDUSTEC», no «la
+ * orden» (esa palabra es del trabajo que pide KFC). Los mensajes que alguien lee
+ * —el error que queda anotado en la captura— usan ese término. NO cambian, porque
+ * son contrato (contratos_externos de vocabulario.json): el asunto «ORDEN DE
+ * TRABAJO INDUSTEC - OT-…» y el cuerpo del correo («nueva OT:», «Zona:», «Local:»,
+ * «ORDEN SAP:», «Tipo de Trabajo:», «Estado de OT:»), que t2_11_informes_ot.py lee
+ * campo por campo; por eso «Zona:» lleva el código (CNLJ), no el rótulo.
  *
  * ============================================================================
  * EL ORDEN IMPORTA (DISENO_APP_OTS.md §3)
@@ -133,7 +141,7 @@ final class Emision
     {
         $r = ['id_industec' => null, 'pdf' => false, 'correo' => null, 'error' => null];
         $c = Db::uno('SELECT * FROM ot_capturadas WHERE captura_id = ?', [$capturaId]);
-        if ($c === null) { $r['error'] = 'la orden no existe'; return $r; }
+        if ($c === null) { $r['error'] = 'la OT INDUSTEC no existe'; return $r; }
         $orden  = json_decode((string) $c['carga'], true) ?: [];
         $zona   = (string) ($c['zona'] ?? '');
         $local  = (string) ($c['local_codigo'] ?? '');

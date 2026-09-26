@@ -212,7 +212,7 @@ def main():
     print()
     print(f"Referencias a OT extraidas: {len(filas)}")
     print(f"  con correlativo identificable: {con_corr}")
-    print(f"  con LOCAL asignado por la administracion: {con_local}")
+    print(f"  con LOCAL anotado por la administracion: {con_local}")
     print(f"Indice escrito en: {SALIDA}")
     if incidencias:
         print(f"\nIncidencias ({len(incidencias)}):")

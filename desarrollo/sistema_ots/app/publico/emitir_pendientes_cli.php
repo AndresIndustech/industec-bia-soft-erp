@@ -2,7 +2,8 @@
 declare(strict_types=1);
 
 /**
- * emitir_pendientes_cli.php — Reemite las órdenes que quedaron a medias.
+ * emitir_pendientes_cli.php — Reemite las OT INDUSTEC que quedaron a medias
+ * (OT INDUSTEC no emitidas: RECIBIDA, NUMERADA o FALLIDA).
  *
  * POR QUE EXISTE
  * Cuando la emisión falla (dompdf caído, disco lleno, serie sin contador) la
@@ -45,7 +46,7 @@ $antes = Db::todos(
       ORDER BY recibida_en LIMIT " . $max
 );
 if ($antes === []) {
-    echo date('Y-m-d H:i') . " · nada pendiente de emitir\n";
+    echo date('Y-m-d H:i') . " · ninguna OT INDUSTEC por emitir\n";
     exit(0);
 }
 
@@ -61,5 +62,5 @@ foreach ($antes as $f) {
         echo "  sigue    captura {$f['captura_id']}: " . ($r['error'] ?? 'sin motivo') . "\n";
     }
 }
-echo date('Y-m-d H:i') . " · $ok emitidas, " . count($mal) . " siguen fallando de " . count($antes) . "\n";
+echo date('Y-m-d H:i') . " · $ok OT INDUSTEC emitidas, " . count($mal) . " siguen sin emitirse de " . count($antes) . "\n";
 exit($mal === [] ? 0 : 2);

@@ -5,6 +5,7 @@ require_once __DIR__ . '/Casos.php';
 require_once __DIR__ . '/Pendientes.php';
 require_once __DIR__ . '/Novedades.php';
 require_once __DIR__ . '/Ui.php';
+require_once __DIR__ . '/Vocabulario.php';   // los rótulos que ve KFC son los mismos de la oficina
 
 /**
  * Reportes.php — Los números del tablero y de la exportación, calculados una sola vez.
@@ -16,14 +17,21 @@ require_once __DIR__ . '/Ui.php';
  * pantalla lo dibuja y `reporte_exportar.php` lo escribe en cada formato.
  *
  * DOS CORTES, LOS DOS EN EL SERVIDOR
- *   zona: la administración elige (Las tres · UIO · LARB · CNLJ); un jefe de
- *         zona recibe la suya aunque pida otra (el alcance manda).
- *   mes:  AAAA-MM sobre la fecha de creación del caso en SAP; sin mes, todo el
- *         periodo que trae el buzón (los 90 días del correo).
+ *   zona: la administración elige (Las tres · UIO · LARB · CUENCA-LOJA); un
+ *         jefe de zona recibe la suya aunque pida otra (el alcance manda).
+ *   mes:  AAAA-MM sobre la fecha de creación de la orden en SAP; sin mes, todo
+ *         el periodo que trae el buzón (los 90 días del correo).
+ *
+ * LAS MISMAS PALABRAS QUE LA OFICINA (vocabulario único, 24-sep-2026). Lo que
+ * recibe KFC en Excel, PDF y PowerPoint nombra cada cosa con el término de
+ * `vocabulario.json`, igual que las pantallas: «total de órdenes abiertas»,
+ * «vencidas (48 h)», «ejecutado» y «atrasado» en el preventivo. Por eso los
+ * rótulos de los gráficos y del semáforo se piden aquí a `Vocabulario::` y
+ * no se escriben en cada formato.
  *
  * NADA SE ESTIMA (I-7). Si un insumo falta —el índice del archivo vacío, el
- * cronograma sin importar, ningún caso con informe— la sección lo dice y la
- * cifra sale como null, nunca como cero disfrazado.
+ * cronograma sin importar, ninguna orden con OT INDUSTEC— la sección lo dice y
+ * la cifra sale como null, nunca como cero disfrazado.
  */
 final class Reportes
 {
@@ -49,7 +57,8 @@ final class Reportes
      *
      * @return array con claves: meta, salud, edad, zonas, estados, meses, locales,
      *               reincidentes, tipos, tecnicos_firma, cadenas, c48, novedades,
-     *               rendimiento, preventivo, casos_abiertos, archivo
+     *               rendimiento, preventivo, casos_abiertos (las órdenes del TOTAL
+     *               DE ÓRDENES ABIERTAS; la clave se conserva), archivo
      */
     public static function calcular(?string $zona, ?string $mes): array
     {
@@ -69,6 +78,21 @@ final class Reportes
             $casos = array_values(array_filter($casos, fn($c) => substr((string) ($c['fecha_creacion'] ?? ''), 0, 7) === $mes));
         }
         $hoy = date('Y-m-d');
+
+        /* El TOTAL DE ÓRDENES ABIERTAS lo decide UNA sola función, la misma de la
+           tarjeta «Por zona» del panel (`Casos::clasificar()`, que aplica
+           `grupoOrden()` y cuenta una vez cada cadena de continuidad). Antes el
+           reporte tenía su propio «siguen abiertos» —todo lo que no estaba
+           cerrado, ATENDIDO incluido— y KFC recibía una cifra distinta de la que
+           Isabel ve en pantalla con el mismo nombre. */
+        $informes = Casos::informesPorAviso($gestion);
+        $clasif   = Casos::clasificar($casos, $gestion, $informes);
+        $otOk     = (bool) $informes['ot_disponible'];
+        $equipoOk = (bool) $informes['equipo_disponible'];
+        // Sin una fuente, la fila no se puede calcular: null, no 0 (I-7).
+        $nAbiertas = $otOk ? 0 : null;
+        $nEsperaInforme = $otOk ? 0 : null;
+        $nDeshabilitados = $equipoOk ? 0 : null;
 
         /* --- Una sola pasada sobre los casos ---------------------------------- */
         $porZona = ['UIO' => 0, 'LARB' => 0, 'CNLJ' => 0];
@@ -110,7 +134,10 @@ final class Reportes
                     'fecha'         => substr((string) ($c['fecha_creacion'] ?? ''), 0, 10),
                     'trabajo'       => (string) ($c['caso'] ?? ''),
                     'ot'            => (string) ($g['ot_cierre'] ?? ''),
-                    'estatus'       => Ui::etiquetaEstado($estado),
+                    // Por el estado de VISTA, como el gráfico: una orden cerrada
+                    // sin atención y ya regularizada se lee «regularizada» aquí
+                    // también, no «cerrada sin atención».
+                    'estatus'       => Ui::etiquetaEstado($vista),
                     'acuerdo'       => (string) ($g['otro_trabajo_motivo'] ?? ''),
                     'autorizo'      => (string) ($g['otro_trabajo_nombre'] ?? ''),
                     'autorizado_en' => substr((string) ($g['otro_trabajo_en'] ?? ''), 0, 10),
@@ -134,9 +161,10 @@ final class Reportes
             $tp = trim((string) ($c['caso'] ?? '')) ?: 'Sin clasificar';
             $porTipo[$tp] = ($porTipo[$tp] ?? 0) + 1;
 
-            $vivo = !in_array($estado, ['RESUELTO', 'NO_COMPETE', 'CERRADO_SIN_ATENCION'], true);
+            // En el total: la misma regla que la tarjeta (ver `$clasif` arriba).
+            $k = $clasif[$aviso] ?? ['grupo' => null, 'en_total' => false];
             $d = Ui::dias($c['fecha_creacion'] ?? null);
-            if ($vivo) {
+            if ($k['en_total']) {
                 $abiertos++;
                 if ($d !== null) {
                     if ($d <= 1)      { $edad['Hoy y ayer']++; }
@@ -144,9 +172,20 @@ final class Reportes
                     elseif ($d <= 7)  { $edad['De 4 a 7 días']++; }
                     else              { $edad['Más de una semana']++; }
                 }
-                // La hoja «Casos abiertos» con las columnas del plan de zona y el
-                // semáforo de la administración (amarillo INDUSTEC, naranja KFC,
-                // verde repuestos SAP, rojo emergente o vencido).
+                if ($otOk && $k['grupo'] === 'ABIERTA') { $nAbiertas++; }
+                elseif ($otOk)                          { $nEsperaInforme++; }
+                $equipo = $equipoOk ? Casos::estadoEquipo($aviso, $informes) : null;
+                if ($equipo === 'DESHABILITADO') { $nDeshabilitados++; }
+                // La hoja «TOTAL DE ÓRDENES ABIERTAS» con las columnas del plan de
+                // zona y el semáforo de la administración (amarillo le toca a
+                // INDUSTEC, naranja le toca a KFC, verde repuesto en seguimiento,
+                // rojo emergente). El verde es ESPERA_REPUESTO sin ninguna solicitud
+                // a espera de KFC: incluye las por validar, por registrar en SAP, en
+                // taller de INDUSTEC, despachadas y sin solicitud, así que su rótulo
+                // (LE_TOCA_KFC_REPUESTO) NO nombra responsable. Partirlo por quién
+                // debe la acción es lógica pendiente de Andrés con Isabel. El rojo
+                // cuenta días desde que LLEGÓ la orden (o ALTA sin asignar), no
+                // desde el último movimiento: así lo dice la ayuda de EMERGENTE.
                 $tr = $trabados[$aviso] ?? null;
                 if ($d !== null && $d > 7 || strtoupper((string) ($c['prioridad'] ?? '')) === 'ALTA' && $estado === 'NUEVO') {
                     $sem = 'rojo';
@@ -164,8 +203,15 @@ final class Reportes
                     'fecha'     => substr((string) ($c['fecha_creacion'] ?? ''), 0, 10),
                     'equipo'    => trim((string) ($c['activo_fijo'] ?? '')),
                     'trabajo'   => (string) ($c['caso'] ?? ''),
-                    'estatus'   => Ui::etiquetaEstado($estado),
+                    'estatus'   => Ui::etiquetaEstado($vista),
                     'estado'    => $estado,
+                    // La fila de la tarjeta en que cae, con su mismo rótulo. Sin las
+                    // fuentes de OT no se sabe si es abierta o a espera (I-7).
+                    'grupo'     => $otOk ? Vocabulario::titulo((string) $k['grupo']) : 'no disponible',
+                    // El equipo por su evidencia más reciente, como la fila
+                    // EQUIPOS DESHABILITADOS: vacío es «sin dato», nunca Operativo.
+                    'equipo_estado' => !$equipoOk ? 'no disponible'
+                        : Vocabulario::t(Vocabulario::deEstado((string) $equipo, 'estado_equipo')),
                     'dias'      => $d,
                     'prioridad' => (string) ($c['prioridad'] ?? ''),
                     'observaciones' => trim((string) (($g['nota'] ?? '') ?: mb_strimwidth((string) ($c['descripcion_trabajo'] ?? ''), 0, 160, '…', 'UTF-8'))),
@@ -214,9 +260,10 @@ final class Reportes
         $archivo = self::archivo($zona, $mes);
 
         /* --- Los arreglos que consumen los gráficos --------------------------- */
+        // El color va por la clave (CNLJ); lo que se lee es el rótulo (CUENCA-LOJA).
         $dZona = [];
-        foreach ($porZona as $z => $n) { if ($n > 0) { $dZona[] = ['e' => $z, 'v' => $n, 'c' => self::COLOR_ZONA[$z]]; } }
-        if ($sinZona > 0) { $dZona[] = ['e' => 'Sin zona', 'v' => $sinZona, 'c' => '#94a3b8']; }
+        foreach ($porZona as $z => $n) { if ($n > 0) { $dZona[] = ['e' => self::rotuloZona($z), 'v' => $n, 'c' => self::COLOR_ZONA[$z]]; } }
+        if ($sinZona > 0) { $dZona[] = ['e' => self::rotuloZona(''), 'v' => $sinZona, 'c' => '#94a3b8']; }
 
         $dEstado = [];
         foreach ($porEstado as $k => $n) { $dEstado[] = ['e' => Ui::etiquetaEstado($k), 'v' => $n, 'c' => Ui::colorEstado($k)]; }
@@ -236,11 +283,13 @@ final class Reportes
         foreach (array_slice($porTecnicoFirma, 0, 12, true) as $t => $n) { $dTecnico[] = ['e' => $t, 'v' => $n]; }
         $dCadena = [];
         foreach (array_slice($cadenas, 0, 8, true) as $k => $n) { $dCadena[] = ['e' => $k, 'v' => $n]; }
+        // Los cuatro tramos del plazo, con los nombres de la oficina: KFC lee
+        // «Vencidas (48 h)», no «Vencidos ahora» ni «Reloj corriendo».
         $d48 = [
-            ['e' => 'Validados a tiempo', 'v' => $c48['a_tiempo'],  'c' => '#1baf7a'],
-            ['e' => 'Validados tarde',    'v' => $c48['tarde'],     'c' => '#eda100'],
-            ['e' => 'Reloj corriendo',    'v' => $c48['corriendo'], 'c' => '#2a78d6'],
-            ['e' => 'Vencidos ahora',     'v' => $c48['vencidos'],  'c' => '#e34948'],
+            ['e' => Vocabulario::titulo('VALIDADA') . ' a tiempo',  'v' => $c48['a_tiempo'],  'c' => '#1baf7a'],
+            ['e' => Vocabulario::titulo('VALIDADA') . ' tarde',     'v' => $c48['tarde'],     'c' => '#eda100'],
+            ['e' => Vocabulario::titulo('POR_VALIDAR') . ', a tiempo', 'v' => $c48['corriendo'], 'c' => '#2a78d6'],
+            ['e' => Vocabulario::titulo('VENCIDO_48H'),             'v' => $c48['vencidos'],  'c' => '#e34948'],
         ];
 
         return [
@@ -250,9 +299,14 @@ final class Reportes
                 'casos' => count($casos), 'hay_fuente' => (bool) $fuente,
                 'alcance_fijo' => $za !== null,
             ],
+            // `abiertos` es el TOTAL DE ÓRDENES ABIERTAS; `abiertas`, `espera_informe`
+            // y `deshabilitados` son las otras tres filas de la tarjeta (null si
+            // falta la fuente que las decide).
             'salud' => ['con_informe' => $conInforme, 'concluidos' => $concluidos, 'concluye_una' => $concluyeUna,
                         'en_curso' => $enCurso, 'con_pendiente' => $conPendiente,
-                        'pct_concluye' => $pctConcluye, 'abiertos' => $abiertos],
+                        'pct_concluye' => $pctConcluye, 'abiertos' => $abiertos,
+                        'abiertas' => $nAbiertas, 'espera_informe' => $nEsperaInforme,
+                        'deshabilitados' => $nDeshabilitados],
             'edad' => $dEdad,
             'zonas' => $dZona, 'por_zona' => $porZona, 'sin_zona' => $sinZona,
             'estados' => $dEstado, 'por_estado' => $porEstado,
@@ -518,7 +572,7 @@ final class Reportes
     {
         $src = self::ingresosPreventivos($zona);
         $out = ['fuente' => $src['fuente'], 'generado' => $src['generado'], 'total' => 0,
-                'cumplidos_a_tiempo' => 0, 'cumplidos_tarde' => 0, 'vencidos' => 0, 'en_curso' => 0,
+                'cumplidos_a_tiempo' => 0, 'cumplidos_tarde' => 0, 'vencidos' => 0, 'en_curso' => 0, 'sin_cierre' => 0,
                 'por_iniciar' => 0, 'planificados' => 0, 'sin_agendar' => 0, 'reagendados' => 0,
                 'kits_confirmados' => 0, 'pct_a_tiempo' => null, 'por_zona' => [], 'motivos' => [], 'estados' => []];
         if ($src['fuente'] === null) { return $out; }
@@ -528,9 +582,19 @@ final class Reportes
             if ($mes !== null && substr((string) ($pv['inicio'] ?? ''), 0, 7) !== $mes) { continue; }
             $e = self::estadoPreventivo($i, $hoy);
             if ($e === 'cancelado') { continue; }
+            /* El mismo corte que cronograma.js: un ingreso «en curso» cuyo fin
+               previsto ya pasó está «atrasado, por marcar como ejecutado»
+               (PREV_SIN_CIERRE), no en ejecución. `estadoPreventivo()` sigue
+               devolviendo 'encurso' porque es el contrato con cronograma.js, que
+               hace este mismo corte del lado del navegador. Sin esto KFC leía
+               «en ejecución» ingresos de hace dos meses. */
+            if ($e === 'encurso') {
+                $finPrev = (string) ($pv['fin'] ?? $pv['inicio'] ?? '');
+                if ($finPrev !== '' && $finPrev < $hoy) { $e = 'sincerrar'; }
+            }
             $z = (string) ($i['zona'] ?? '');
             $pz = &$out['por_zona'][$z !== '' ? $z : 'Sin zona'];
-            $pz = $pz ?? ['total' => 0, 'cumplidos' => 0, 'a_tiempo' => 0, 'vencidos' => 0, 'sin_agendar' => 0, 'en_curso' => 0];
+            $pz = $pz ?? ['total' => 0, 'cumplidos' => 0, 'a_tiempo' => 0, 'vencidos' => 0, 'sin_agendar' => 0, 'en_curso' => 0, 'sin_cierre' => 0];
             $out['total']++; $pz['total']++;
             if ($e === 'cumplido') {
                 $finReal = (string) ($i['real']['fin'] ?? $i['real']['inicio'] ?? '');
@@ -540,6 +604,7 @@ final class Reportes
                 $pz['cumplidos']++; if ($aTiempo) { $pz['a_tiempo']++; }
             } elseif ($e === 'vencido')     { $out['vencidos']++; $pz['vencidos']++; }
             elseif ($e === 'encurso')       { $out['en_curso']++; $pz['en_curso']++; }
+            elseif ($e === 'sincerrar')     { $out['sin_cierre']++; $pz['sin_cierre']++; }
             elseif ($e === 'poriniciar')    { $out['por_iniciar']++; }
             elseif ($e === 'planificado')   { $out['planificados']++; }
             elseif ($e === 'sinagendar')    { $out['sin_agendar']++; $pz['sin_agendar']++; }
@@ -550,12 +615,17 @@ final class Reportes
         }
         $cerrados = $out['cumplidos_a_tiempo'] + $out['cumplidos_tarde'] + $out['vencidos'];
         $out['pct_a_tiempo'] = $cerrados > 0 ? (int) round($out['cumplidos_a_tiempo'] * 100 / $cerrados) : null;
+        // La leyenda del jefe técnico (EJECUTADO · PENDIENTE · ATRASADO), con los
+        // términos del diccionario: «Cumplidos», «Vencidos» y «En curso» eran
+        // nombres que solo tenía este reporte.
+        $ejecutados = self::mayuscula(Vocabulario::t('PREV_EJECUTADO', 2));
         $out['estados'] = [
-            ['e' => 'Cumplidos a tiempo', 'v' => $out['cumplidos_a_tiempo'], 'c' => '#1baf7a'],
-            ['e' => 'Cumplidos tarde',    'v' => $out['cumplidos_tarde'],    'c' => '#eda100'],
-            ['e' => 'Vencidos',           'v' => $out['vencidos'],           'c' => '#e34948'],
-            ['e' => 'En curso',           'v' => $out['en_curso'],           'c' => '#2a78d6'],
-            ['e' => 'Sin agendar',        'v' => $out['sin_agendar'],        'c' => '#94a3b8'],
+            ['e' => $ejecutados . ' a tiempo',                         'v' => $out['cumplidos_a_tiempo'], 'c' => '#1baf7a'],
+            ['e' => $ejecutados . ' tarde',                            'v' => $out['cumplidos_tarde'],    'c' => '#eda100'],
+            ['e' => self::mayuscula(Vocabulario::t('ATRASADO', 2)),    'v' => $out['vencidos'],           'c' => '#e34948'],
+            ['e' => Vocabulario::titulo('PREV_SIN_CIERRE'),            'v' => $out['sin_cierre'],         'c' => '#eb6834'],
+            ['e' => Vocabulario::titulo('PREV_EN_EJECUCION'),          'v' => $out['en_curso'],           'c' => '#2a78d6'],
+            ['e' => Vocabulario::titulo('PREV_SIN_AGENDAR'),           'v' => $out['sin_agendar'],        'c' => '#94a3b8'],
         ];
         // Los motivos de reagenda salen de la tabla; con el JSON no existen todavía.
         if ($src['fuente'] === 'tabla') {
@@ -648,5 +718,43 @@ final class Reportes
         if ($mes === null) { return 'todo el periodo del buzón (90 días)'; }
         $M = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
         return $M[(int) substr($mes, 5, 2) - 1] . ' de ' . substr($mes, 0, 4);
+    }
+
+    /**
+     * La zona como se LEE en tablas y gráficos: UIO, LARB, CUENCA-LOJA, OTRA o
+     * «sin zona» (la forma corta del diccionario, la misma del chip de las
+     * pantallas). CNLJ sigue siendo la clave de la base y del color; lo que ve
+     * KFC es CUENCA-LOJA (decisión del 24-sep-2026). Un código que el
+     * diccionario no conoce se muestra tal como vino: es el dato, no un nombre
+     * inventado para taparlo (I-7).
+     */
+    public static function rotuloZona(?string $z): string
+    {
+        $k = strtoupper(trim((string) $z));
+        if ($k === 'SIN ZONA') { $k = ''; }            // la clave con que el preventivo agrupa lo que no tiene zona
+        $mapa = Vocabulario::mapas()['zona'] ?? [];
+        return array_key_exists($k, $mapa) ? Vocabulario::corto($mapa[$k]) : (string) $z;
+    }
+
+    /**
+     * El texto de cada color del semáforo del plan de zona, del diccionario:
+     * antes lo escribían a mano, y distinto, `reporte_exportar.php` y
+     * `reporte_pdf.php` («Pendiente INDUSTEC», «Emergente / vencido»).
+     *
+     * @return array<string,string> amarillo|naranja|verde|rojo => rótulo
+     */
+    public static function semaforo(): array
+    {
+        $out = [];
+        foreach (['amarillo', 'naranja', 'verde', 'rojo'] as $color) {
+            $out[$color] = Vocabulario::titulo(Vocabulario::deEstado($color, 'semaforo'));
+        }
+        return $out;
+    }
+
+    /** Primera letra en mayúscula («ejecutados» → «Ejecutados»), sin tocar el resto. */
+    public static function mayuscula(string $s): string
+    {
+        return mb_strtoupper(mb_substr($s, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($s, 1, null, 'UTF-8');
     }
 }

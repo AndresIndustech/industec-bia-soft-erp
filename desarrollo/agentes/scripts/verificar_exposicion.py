@@ -86,7 +86,7 @@ def main():
             # El origen ya bloquea, pero el CDN sigue sirviendo lo que cacheo.
             marca, _ = "EN CACHE", solo_cache.append(nombre)
         else:
-            marca = "cerrado"
+            marca = "bloqueado"
         print(f"  {str(c_cdn):<5} {str(c_org):<7} {marca:<9} {nombre}")
 
     print("\nESTO TIENE QUE SEGUIR FUNCIONANDO (200)")
@@ -115,7 +115,7 @@ def main():
               "Purgar. Hasta entonces la exposicion sigue abierta para quien "
               "tenga la URL.")
         sys.exit(1)
-    print("Todo cerrado en origen y en CDN, y el formulario del tecnico sigue en pie.")
+    print("Todo bloqueado en origen y en CDN, y el formulario del tecnico sigue en pie.")
 
 
 if __name__ == "__main__":

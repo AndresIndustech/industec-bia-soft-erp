@@ -84,14 +84,16 @@ def main():
     st, _, c = sa.pedir("mis.php?t=atendidas")
     anotar("T2.13.3", "historial de A: el sintético atendido aparece", st == 200 and f"?ver={ATENDIDO}" in c, st)
     n_cap = int(sql("SELECT COUNT(*) n FROM ot_capturadas WHERE usuario_id = ?", [a])[0]["n"])
-    anotar("T2.13.3", "historial de A: las órdenes que mandó desde la app",
-           n_cap == 0 or "Órdenes que enviaste desde la app" in c, f"{n_cap} en ot_capturadas")
+    # Vocabulario único (24-sep-2026): lo que manda el técnico es la «OT INDUSTEC».
+    anotar("T2.13.3", "historial de A: las OT INDUSTEC que mandó desde la app",
+           n_cap == 0 or "OT INDUSTEC que enviaste desde la app" in c, f"{n_cap} en ot_capturadas")
     st, _, c = sa.pedir(f"mis.php?ver={ATENDIDO}")
-    anotar("T2.13.3", "ficha del atendido sin orden de cierre: lo dice (I-7)", st == 200 and "No hay PDF de cierre" in c, st)
-    anotar("T2.13.3", "ficha del atendido: no ofrece emitir otra orden", "Emitir la orden de este caso" not in c, "")
+    anotar("T2.13.3", "ficha del atendido sin OT INDUSTEC de cierre: lo dice (I-7)",
+           st == 200 and "No hay OT INDUSTEC de cierre" in c, st)
+    anotar("T2.13.3", "ficha del atendido: no ofrece emitir otra OT INDUSTEC", "Emitir OT INDUSTEC" not in c, "")
     st, _, c = sa.pedir(f"mis.php?ver={ABIERTO}")
     anotar("T2.13.3", "ficha del abierto fuera del catálogo: lo dice y ofrece emitir",
-           st == 200 and "no está en el listado del buzón" in c and "Emitir la orden de este caso" in c, st)
+           st == 200 and "no está en el listado del buzón" in c and "Emitir OT INDUSTEC" in c, st)
     st, cab, _ = sb.pedir(f"mis.php?ver={ABIERTO}")
     anotar("T2.13.3", "técnico B pidiendo la ficha del caso de A → vuelve a su bandeja",
            st == 302 and "ver=" not in cab.get("Location", ""), f"{st} → {cab.get('Location', '')}")
@@ -104,7 +106,7 @@ def main():
                                           "diagnostico": "PRUEBA T2.13.3: caso fuera del catálogo; no es un equipo real"})
     p = sql("SELECT pendiente_id, zona FROM pendientes WHERE aviso = ? AND activo_fijo = 'PRUEBA-SINCAT'", [ABIERTO])
     try:
-        anotar("T2.13.3", "«No pude concluir» en un caso fuera del catálogo abre el pendiente, en su zona",
+        anotar("T2.13.3", "«El equipo no quedó operativo» en una orden fuera del catálogo abre la solicitud, en su zona",
                st == 302 and len(p) == 1 and p[0]["zona"] == "UIO", f"{st} · {p}")
         est = sql("SELECT estado FROM casos_gestion WHERE aviso = ?", [ABIERTO])[0]["estado"]
         anotar("T2.13.3", "el caso pasa a ESPERA_REPUESTO y se sigue ofreciendo",
@@ -135,8 +137,8 @@ def main():
     st, _, c = sa.pedir("envio.php", cuerpo_json={
         "envio_uuid": str(uuid.uuid4()), "usuario_captura": a,
         "capturada_en": datetime.datetime.now(datetime.timezone.utc).isoformat(), "orden": orden})
-    anotar("T2.13.3", "la orden contra ese caso entra sin «no figura entre tus casos vigentes»",
-           st == 200 and "no figura entre tus casos" not in c, f"{st} · {c[:100]}")
+    anotar("T2.13.3", "la OT INDUSTEC contra esa orden entra sin «esa orden no figura entre las tuyas»",
+           st == 200 and "no figura entre las tuyas" not in c, f"{st} · {c[:100]}")
     st, _, c = sa.pedir("mis.php?t=atendidas")
     anotar("T2.13.3", "y aparece en su historial, con su número de orden y su PDF (la 008)",
            f"Aviso {ABIERTO}" in c and f"-{ABIERTO}-UIO" in c and "Ver PDF" in c, st)
@@ -163,7 +165,7 @@ def main():
     # «Te quitaron» sale de la asignación anterior en la bitácora: la de preparar_prueba
     # fue por SQL, así que primero el jefe se lo asigna a A por la pantalla.
     sj.pedir("casos.php", form={"accion": "asignar", "aviso": caso, "tecnico": a})
-    # H-12 (009): el «visto» lo deja solo la pestaña Avisos (`VER_AVISOS`), no
+    # H-12 (009): el «visto» lo deja solo la pestaña Notificaciones (t=avisos, `VER_AVISOS`), no
     # cualquier GET a mis.php: antes, abrir una ficha ya contaba como leído.
     sa.pedir("mis.php?t=avisos")
     sb.pedir("mis.php?t=avisos")        # los dos abren sus avisos: ahí queda su «visto»
@@ -175,11 +177,11 @@ def main():
     anotar("T2.13.5", "el jefe le pasa a B un caso de A → B 1 aviso y A 1 («te quitaron»)",
            st == 302 and na == 1 and nb == 1, f"{st} · A={na} B={nb}")
     st, _, c = sb.pedir("mis.php?t=avisos")
-    anotar("T2.13.5", "B lo ve en su pestaña Avisos: «Te asignaron un caso», con enlace",
-           "Te asignaron un caso" in c and f"?ver={caso}" in c, st)
+    anotar("T2.13.5", "B lo ve en su pestaña Notificaciones: «Te asignaron una orden», con enlace",
+           "Te asignaron una orden" in c and f"?ver={caso}" in c, st)
     st, _, c = sa.pedir("mis.php?t=avisos")
-    anotar("T2.13.5", "A ve «Te quitaron un caso», sin enlace a una ficha que ya no es suya",
-           "Te quitaron un caso" in c and f"?ver={caso}" not in c, st)
+    anotar("T2.13.5", "A ve «Te quitaron una orden», sin enlace a una ficha que ya no es suya",
+           "Te quitaron una orden" in c and f"?ver={caso}" not in c, st)
     na, nb = avisos_de(sa), avisos_de(sb)
     anotar("T2.13.5", "A y B abrieron su bandeja → los dos en 0", na == 0 and nb == 0, f"A={na} B={nb}")
     time.sleep(1.2)
