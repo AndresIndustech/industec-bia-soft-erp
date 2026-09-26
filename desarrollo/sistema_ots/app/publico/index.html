@@ -187,9 +187,13 @@
           <span class="derivado" id="msgCorreoLocal">Escribe o elige el correo del local.</span>
         </div>
         <div>
-          <label>Correo del jefe de operaciones</label>
-          <input type="email" name="correojefeop" id="correojefeop" readonly>
-          <span class="derivado">Buzón de zona de INDUSTEC — el mismo que recibe en copia los avisos de SAP.</span>
+          <!-- T2.28.3 (obs. 2, D-G): ya no es un campo -nada fijo en el
+               formulario-, sino una línea informativa que resuelve el
+               servidor (catalogos.php, con Destinatarios::copiasPorLocal())
+               con las mismas reglas que usa la emisión. -->
+          <span class="derivado">Esta orden también se enviará a: <b id="tambienEnvioResumen">—</b>
+            <button type="button" class="btn sm ghost" id="tambienEnvioVer" hidden aria-expanded="false">ver</button></span>
+          <div class="derivado" id="tambienEnvioLista" hidden></div>
         </div>
       </div>
 

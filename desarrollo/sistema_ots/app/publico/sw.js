@@ -35,7 +35,9 @@
      v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
      recibe el numero de la orden. Con el armazon viejo el celular seguiria
      mandando la orden sin ellas. */
-const VERSION = 'ot-industec-v18';  // v18: el buscador del equipo ya no borra lo que se escribe (2026-09-24)
+const VERSION = 'ot-industec-v20';  // v20: ficha del equipo -marca, modelo y serie que se quedan, casilla «sin placa» (T2.28.6, 2026-09-24)
+// v19: correo del jefe de operaciones ya no es un campo fijo; «también se enviará a» (T2.28.3, 2026-09-24)
+// v18: el buscador del equipo ya no borra lo que se escribe (2026-09-24)
 // v17: el equipo se busca escribiendo y se crea si no está; acompañantes de la zona de la orden (2026-09-24)
 // v16: correo y administrador editables, repuestos con texto libre, lista de casos que ya no se recorta (2026-09-24)
 // v15: estilo.css — distintivo «regularizado», neutro en vez del rojo de «sin atender» (2026-09-22)

@@ -378,18 +378,39 @@ try {
                       . '») no parece un correo válido del local: la orden sale al correo del maestro.';
         }
         if ($adminNombre !== '' && $localCod !== '') {
+            $correoParam = $correoValido ? mb_substr($correoEscrito, 0, 160) : null;
             try {
+                // El correo anterior de ESTE administrador, para saber si el
+                // que llega lo cambia (T2.28.3): se lee antes del upsert, en
+                // la misma transacción, así que no hay carrera con otra orden.
+                $previoAdmin = $correoParam !== null ? Db::uno(
+                    'SELECT correo FROM locales_admin WHERE local_codigo = ? AND nombre = ?',
+                    [mb_substr($localCod, 0, 12), mb_substr($adminNombre, 0, 120)]
+                ) : null;
                 Db::ejecutar(
-                    "INSERT INTO locales_admin (local_codigo, nombre, correo, veces, visto_ultimo, fuente)
-                     VALUES (?, ?, ?, 1, NOW(), 'ORDEN')
+                    "INSERT INTO locales_admin
+                        (local_codigo, nombre, correo, veces, visto_ultimo, fuente, correo_veces, correo_visto)
+                     VALUES (?, ?, ?, 1, NOW(), 'ORDEN', IF(? IS NOT NULL, 1, 0), IF(? IS NOT NULL, NOW(), NULL))
                      ON DUPLICATE KEY UPDATE veces = veces + 1, visto_ultimo = NOW(), activo = 1,
-                                             correo = COALESCE(VALUES(correo), correo)",
-                    [mb_substr($localCod, 0, 12), mb_substr($adminNombre, 0, 120),
-                     $correoValido ? mb_substr($correoEscrito, 0, 160) : null]
+                                             correo = COALESCE(VALUES(correo), correo),
+                                             /* Solo cuenta «visto» cuando la orden trajo un correo
+                                                válido: un técnico que deja el campo vacío no debe
+                                                borrar ni envejecer el que ya se había aprendido. */
+                                             correo_veces = IF(VALUES(correo) IS NOT NULL, correo_veces + 1, correo_veces),
+                                             correo_visto = IF(VALUES(correo) IS NOT NULL, NOW(), correo_visto)",
+                    [mb_substr($localCod, 0, 12), mb_substr($adminNombre, 0, 120), $correoParam,
+                     $correoParam, $correoParam]
                 );
+                $previoCorreo = $previoAdmin['correo'] ?? null;
+                if ($correoParam !== null && $previoCorreo !== null && $previoCorreo !== $correoParam) {
+                    Auth::bitacora('ADMIN_CORREO_CAMBIO', 'local', $localCod,
+                        "$adminNombre ($localCod): el correo pasó de '$previoCorreo' a '$correoParam'",
+                        $previoCorreo, $correoParam, ['nombre' => $adminNombre], true);
+                }
             } catch (Throwable $ex) {
-                // Sin la 009 no existe `locales_admin`: no es motivo para
-                // perder la orden, que ya está guardada.
+                // Sin la 009 no existe `locales_admin`, y sin la 013 no
+                // existen `correo_veces`/`correo_visto` (T2.28.3): no es
+                // motivo para perder la orden, que ya está guardada.
             }
         }
 
@@ -454,6 +475,89 @@ try {
             } catch (Throwable $ex) {
                 // Sin la 009 no existe `equipos_propuestos`: el equipo sigue
                 // dentro de la carga JSON de la orden, solo que sin fila propia.
+            }
+        }
+
+        // La ficha del equipo (T2.28.6, obs. 4): marca, modelo y serie que se
+        // quedan para la próxima orden del mismo equipo. Clave: equipo_sap
+        // real, o PROPUESTO:<uuid> para uno recién propuesto -la MISMA
+        // convención que usa Catalogo::fusionarPropuestos(), así que la ficha
+        // de un equipo nuevo ya queda con la clave que va a tener cuando el
+        // catálogo lo fusione. Solo con orden NUEVA (§5.4, como locales_admin
+        // y equipos_propuestos) y dentro de try/catch: sin la 014 no existe
+        // `equipos_ficha`, y eso no es motivo para perder la orden.
+        foreach ((array) ($orden['equipos'] ?? []) as $eq) {
+            if (!is_array($eq)) { continue; }
+            $claveEq = null;
+            if (!empty($eq['equipo_sap'])) {
+                $claveEq = mb_substr((string) $eq['equipo_sap'], 0, 60);
+            } elseif (!empty($eq['nuevo'])) {
+                $eqUuid = strtolower((string) ($eq['equipo_uuid'] ?? ''));
+                if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $eqUuid)) {
+                    $claveEq = 'PROPUESTO:' . $eqUuid;
+                }
+            }
+            if ($claveEq === null || $localCod === '') { continue; }
+
+            $marcaCruda  = isset($eq['marca'])  ? (string) $eq['marca']  : null;
+            $modeloCrudo = isset($eq['modelo']) ? (string) $eq['modelo'] : null;
+            $serieCruda  = isset($eq['serie'])  ? (string) $eq['serie']  : null;
+            $marcaNueva  = Validacion::esMarcador($marcaCruda)  ? null : mb_substr(Validacion::normMarca($marcaCruda), 0, 80);
+            $modeloNuevo = Validacion::esMarcador($modeloCrudo) ? null : mb_substr(trim((string) $modeloCrudo), 0, 80);
+            $serieNueva  = Validacion::esMarcador($serieCruda)  ? null : mb_substr(trim((string) $serieCruda), 0, 80);
+            $sinPlacaNueva = !empty($eq['sin_placa']);
+
+            try {
+                $previaFicha = Db::uno(
+                    'SELECT marca, modelo, serie, sin_placa FROM equipos_ficha WHERE equipo_clave = ?', [$claveEq]
+                );
+                // COALESCE: un campo vacío o marcador (marcaNueva === null) NO
+                // pisa lo que ya había -es el punto entero de la ficha: no se
+                // borra un dato real con un vacío de una orden distinta.
+                Db::ejecutar(
+                    "INSERT INTO equipos_ficha
+                        (equipo_clave, local_codigo, marca, modelo, serie, sin_placa, fuente,
+                         actualizado_por, envio_uuid)
+                     VALUES (?, ?, ?, ?, ?, ?, 'ORDEN', ?, ?)
+                     ON DUPLICATE KEY UPDATE
+                        local_codigo    = VALUES(local_codigo),
+                        marca           = COALESCE(VALUES(marca), marca),
+                        modelo          = COALESCE(VALUES(modelo), modelo),
+                        serie           = COALESCE(VALUES(serie), serie),
+                        sin_placa       = VALUES(sin_placa),
+                        fuente          = 'ORDEN',
+                        actualizado_por = VALUES(actualizado_por),
+                        actualizado_en  = NOW(),
+                        envio_uuid      = VALUES(envio_uuid)",
+                    [$claveEq, mb_substr($localCod, 0, 12), $marcaNueva, $modeloNuevo, $serieNueva,
+                     $sinPlacaNueva ? 1 : 0, (int) $u['usuario_id'], $uuid]
+                );
+                $antesMarca    = $previaFicha['marca'] ?? null;
+                $antesModelo   = $previaFicha['modelo'] ?? null;
+                $antesSerie    = $previaFicha['serie'] ?? null;
+                $antesSinPlaca = $previaFicha !== null ? (bool) $previaFicha['sin_placa'] : false;
+                $cambios = [];
+                if ($marcaNueva !== null && $marcaNueva !== $antesMarca) { $cambios[] = ['marca', $antesMarca, $marcaNueva]; }
+                if ($modeloNuevo !== null && $modeloNuevo !== $antesModelo) { $cambios[] = ['modelo', $antesModelo, $modeloNuevo]; }
+                if ($serieNueva !== null && $serieNueva !== $antesSerie) { $cambios[] = ['serie', $antesSerie, $serieNueva]; }
+                if ($sinPlacaNueva !== $antesSinPlaca) { $cambios[] = ['sin_placa', $antesSinPlaca ? '1' : '0', $sinPlacaNueva ? '1' : '0']; }
+                foreach ($cambios as [$campo, $antesCambio, $despuesCambio]) {
+                    Db::ejecutar(
+                        'INSERT INTO equipos_ficha_cambios (equipo_clave, campo, antes, despues, por, envio_uuid)
+                         VALUES (?, ?, ?, ?, ?, ?)',
+                        [$claveEq, $campo, $antesCambio, $despuesCambio, (int) $u['usuario_id'], $uuid]
+                    );
+                }
+                // La serie cambió desde un valor REAL (no la primera vez que se
+                // conoce el equipo): posible reemplazo, y el jefe de zona no
+                // tiene otra forma de enterarse que mirar la bitácora a mano.
+                if ($serieNueva !== null && $antesSerie !== null && $serieNueva !== $antesSerie) {
+                    Auth::bitacora('EQUIPO_SERIE_CAMBIO', 'equipo', $claveEq,
+                        "$localCod: la serie pasó de '$antesSerie' a '$serieNueva' -- posible reemplazo del equipo",
+                        $antesSerie, $serieNueva, ['local' => $localCod], true);
+                }
+            } catch (Throwable $ex) {
+                // Sin la 014 no existe `equipos_ficha`: la orden ya está guardada.
             }
         }
 

@@ -378,6 +378,10 @@ final class Emision
                 'marca'         => $eq['marca'] ?? null,
                 'modelo'        => $eq['modelo'] ?? null,
                 'serie'         => $eq['serie'] ?? null,
+                // T2.28.6 (obs. 4): la placa se pudo leer, o no se pudo -el
+                // PDF lo dice con esas palabras en vez de dejar los tres
+                // campos en blanco, que I-7 leería como "no se preguntó".
+                'sin_placa'     => !empty($eq['sin_placa']),
                 'estado'        => $eq['estado'] ?? null,
                 'obs'           => $eq['obs'] ?? null,
             ];

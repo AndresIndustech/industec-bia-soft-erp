@@ -34,6 +34,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Auth.php';
 require_once __DIR__ . '/nucleo/Casos.php';
 require_once __DIR__ . '/nucleo/Catalogo.php';
+require_once __DIR__ . '/nucleo/Destinatarios.php';
 $u = Auth::exigir('ots.crear', true);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -61,6 +62,29 @@ $base = (string) Catalogo::carpeta();
 $admins = Catalogo::admins();
 $adminsV2 = Catalogo::adminsV2();
 $diagCat = Catalogo::diagnosticos();
+// T2.28.6 (obs. 4): la ficha de cada equipo (marca, modelo, serie que se
+// quedan) y las marcas/modelos más frecuentes para las sugerencias.
+$fichas = Catalogo::fichas();
+$marcasCat = Catalogo::marcas();
+$modelosCat = Catalogo::modelos();
+
+/* «También se enviará a» (T2.28.3, obs. 2): reemplaza el campo fijo
+ * «Correo del jefe de operaciones» del formulario (D-G). Se calcula para
+ * los 100 locales de una sola vez -$filasDest se lee UNA vez, no una por
+ * local- con Destinatarios::copiasPorLocal(), la misma tabla y las mismas
+ * reglas (ámbito, activo, cadena) que usa Emision::encolar() al emitir; si
+ * la 013 no está o no tiene filas, cae al mismo respaldo de siempre
+ * (correo_jefe_op del maestro + config.php), así que la línea nunca queda
+ * vacía por falta de siembra. */
+$filasDestOrden = Destinatarios::filas('ORDEN');
+$destinatariosCc = [];
+foreach ($locales as $l) {
+    $cod = (string) ($l['codigo'] ?? '');
+    if ($cod === '') { continue; }
+    $destinatariosCc[$cod] = Destinatarios::copiasPorLocal(
+        $filasDestOrden, $l, (string) ($l['zona'] ?? ''), $cod, $l['cadena'] ?? null
+    );
+}
 
 /**
  * Las ordenes que se le ofrecen al tecnico.
@@ -154,7 +178,15 @@ echo json_encode([
     // propuestos ahí dentro): son datos de apoyo para la interfaz.
     'admins'              => (object) $admins,
     'admins_v2'           => (object) $adminsV2,
+    // T2.28.3: quién más recibe la orden de cada local (jefe de zona +
+    // copias), para la línea «también se enviará a» del formulario.
+    'destinatarios_cc'    => (object) $destinatariosCc,
     'familias'            => $diagCat['familias'],
     'diagnosticos'        => $diagCat['diagnosticos'],
     'repuestos_frecuentes' => $diagCat['repuestos'],
+    // T2.28.6: prellenado de marca/modelo/serie desde la última orden de ese
+    // equipo, y las sugerencias de marca/modelo para el texto libre.
+    'fichas'              => (object) $fichas,
+    'marcas'              => array_values($marcasCat),
+    'modelos'             => (object) $modelosCat,
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
