@@ -1823,6 +1823,43 @@ python verificar_seguridad.py   # 28 · 0
 
 ### La siguiente acción, concreta
 
+> **Primero, el piloto de UIO tras el 28-sep-2026** (la OT del piloto: construida,
+> revisada y **desplegada** en darkviolet, `4240a67`; cifras en `ESTADO.md` **§1w**).
+> Las 14 OT que la app emitió del 24 al 27-sep (OT-9125…OT-9152) **nunca llegaron a
+> Grupo KFC**. B.IA sigue en modo PRUEBA; lo que vale es el formulario de siempre.
+>
+> 1. **Los técnicos emiten por producción, con la hoja del piloto**, las OT que
+>    faltan (ftipan, ajumbo; kchimbo como jefe de zona). **9 avisos no tienen
+>    ninguna OT de producción:** 10354744, 10355280, 10355352, 10355361,
+>    10355442, 10356500, 10356710, 10356734 y 10356794. **4 solo tienen OT de
+>    otra visita** (julio–agosto, «Abierta»): 10339233, 10347336, 10347813 y
+>    10349426 — también necesitan la de esta visita. El 10356680 ya tiene la
+>    OT-1921, pero no consta como de cierre. Y **cerrar y abrir la app una vez**
+>    con señal, para que el celular tome la v24 (hasta entonces sigue viendo el ✓).
+> 2. **Isabel revisa en SAP los 11 casos que cerró hoy con una OT 9xxx** (el buzón
+>    muestra 12 bajo el resumen, con «Ver cuáles» → `?est=RESUELTO&piloto=1`):
+>    registra la OT INDUSTEC de cierre del formulario de siempre cuando llegue. El
+>    aviso desaparece solo cuando la de producción reemplaza a la del piloto.
+> 3. **Revisar en `reclutamiento@` si llegaron de producción la OT-1919, 1920,
+>    1923 y 1924**: el robot solo las tiene como HISTORICO (del árbol), no por el
+>    correo. Si llegaron y el robot no las leyó, es un fallo del robot; si no
+>    llegaron, KFC tampoco las tiene.
+> 4. **Andrés decide** las dos preguntas abiertas de «Lo que está bloqueado».
+> 5. Antes de volver a correr el arnés de servidor: subir a `~/respaldos/` los
+>    `limpiar_pruebas.php` y `deshacer_prueba.php` de la rama (los del servidor no
+>    retiran las filas sueltas del Archivo).
+> 6. **La estación fusiona `pc/ot-piloto-no-cierra-2026-09-28` antes de desplegar
+>    nada** (lleva dentro `pc/panel-estados-administradora-2026-09-27` y
+>    `pc/buzon-simplificado-2026-09-27`): desplegar desde otra base pisaría lo que
+>    hoy está vivo (error nº 48).
+>
+> **Para el corte a PRODUCCION**, además de lo de siempre: cargar a mano el
+> contador real de cada serie en `correlativos` **antes** de poner
+> `'emision_modo' => 'PRODUCCION'`. Desde el 28-sep, `Emision::reservar()` se
+> niega a emitir un número ≥ 9000 en PRODUCCION (la OT queda FALLIDA con el
+> motivo), así que olvidarlo ya no produce una OT mal clasificada: produce una
+> que no sale, y se ve.
+
 **Q. T2.28 · Las observaciones de la revisión con INDUSTEC** — 📋 **aprobada el
 2026-09-23, Fase 1 prácticamente cerrada el 2026-09-24** (falta solo lo que
 depende de una puerta humana o de tiempo real). La especificación entera está
@@ -2401,7 +2438,9 @@ sobre-contó el backlog 8× en T1.11.
 |---|---|
 | ~~Aplicar la 007~~ | ✅ **Aplicada el 2026-09-11** en el sitio de pruebas, dos veces sin duplicar; la 008, 009 y 010 también. La **003** de agentes quedó superada en parte por la 008 (Hostinger); lo que resta es de la estación y va con el corte |
 | ~~Las 4 comprobaciones rotas de `prueba_48h.php` y `prueba_offline.mjs`~~ | ✅ **Hecho el 2026-09-13** (T2.14.7): 120·0 y rutas por `PHP_BIN`/`CHROME_BIN` |
-| **Desplegar el buzón simplificado** (`pc/buzon-simplificado-2026-09-27`: `casos.php`, `asignacion.php`, `nucleo/Casos.php`) | **Andrés**: el comando por nombre está en `ESTADO.md` §1v; después, mirar buzón y Asignación con sesión de administración, jefe de zona y técnico, y responder las 5 preguntas de §1v (qué es «semana», qué es «OT generada», qué es «cerrada» por zona) |
+| ~~Desplegar el buzón simplificado~~ (`pc/buzon-simplificado-2026-09-27`: `casos.php`, `asignacion.php`, `nucleo/Casos.php`) | ✅ **Desplegado el 2026-09-28**, pisado por el panel a las 08:16 UTC y repuesto con el despliegue de la OT del piloto (`4240a67`, `ESTADO.md` §1w). Sigue pendiente, de **Andrés**: mirar buzón y Asignación con sesión de administración, jefe de zona y técnico, y responder las 5 preguntas de §1v (qué es «semana», qué es «OT generada», qué es «cerrada» por zona) |
+| **La OT del piloto «cerrada» deja la orden asignada, no intacta** (decisión 2 al pie de la letra decía que envio.php no la tocara) | **Andrés**: hoy `atenderPorOrden()` la trata como «sin concluir» y solo la asigna a quien fue (queda en su bandeja, a espera de informe técnico, no cae en «cerrada sin atención» a los 7 días, no arrastra la cadena). Si prefiere que no la toque, es una línea en `envio.php` |
+| **El aviso 10356500 cuenta como ÓRDENES ABIERTAS, no como «a espera de informe técnico»** | **Andrés**: la solicitud de repuesto 53 (abierta desde la OT-9147) lo pasa a ESPERA_REPUESTO, y la regla D-A cuenta eso como orden abierta. La decisión 2 dice «a espera de informe técnico hasta que llegue la OT de producción»: ¿cuál manda? |
 | Desplegar a UIO, y 48 h después a LARB y CNLJ | **Andrés** (I-8). El 2026-09-11 el rediseño se subió entero al sitio de pruebas porque nadie lo usa; el piloto por zona se decide cuando empiece el uso real |
 | ~~Que el PDF y el correo salgan del sistema nuevo~~ | ✅ **El PDF, desde el 2026-09-11** (la 008, en el sitio de pruebas). El correo queda en `email_queue`; falta el despachador y los datos reales del corte: contadores de `counter_{zona}.txt` y destinatarios en `config.php` |
 | El 36% del correctivo que el buzón no trae | Confirmar la causa — ver `SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md` |
@@ -2856,6 +2895,27 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     salvaguarda que el usuario no ve no protege al usuario; lo que es de
     prueba se dice en la pantalla donde se toma la decisión, con el color y
     el icono de una advertencia, y nunca mueve el estado de algo real.
+
+50. **Una clave nueva del diccionario con un `vocabulario_publico.json` viejo tumba
+    la carga del formulario.** `UI.T.titulo('OT_PILOTO')` lanza si la clave no
+    está, y `ui.js` acepta cualquier vocabulario que traiga `version`, aunque sea
+    el de ayer (el del trabajador de servicio anterior o una copia del CDN,
+    error nº 13). La llamada iba dentro de `pintarYo()`, así que la excepción
+    cortaba la cadena que arma los combos: el técnico abría el formulario sin
+    local ni aviso. Lo encontró un revisor leyendo el código y se **confirmó en
+    Chrome** quitando el arreglo (`prueba_franja_piloto.mjs`, caso 3). **Regla:**
+    una clave que falta en el vocabulario cargado sale del respaldo embebido
+    (misma versión que el `ui.js`), lo que va en la carga del formulario lleva
+    su texto fijo de respaldo, y todo cambio de la app del técnico se prueba
+    también con la caché de ayer, no solo con la de hoy.
+
+51. **`NOT (criterio)` no es el complemento del criterio cuando hay NULL.** Al
+    medir la limpieza de la bitácora, «a borrar» (2.642) + «quedan» (3.835) no
+    sumaba el total (6.504): 27 filas del sistema, con `usuario_id` y `usuario`
+    NULL, daban NULL en el criterio y no caían en ningún lado. El DELETE no las
+    habría tocado —estaba bien—, pero el informe habría dicho una cifra de
+    «quedan» falsa. **Regla:** antes de un DELETE se cuentan los dos lados, el
+    de afuera con `NOT COALESCE(criterio, 0)`, y se aborta si no suman el total.
 
 ### Lo que no se toca, nunca
 
