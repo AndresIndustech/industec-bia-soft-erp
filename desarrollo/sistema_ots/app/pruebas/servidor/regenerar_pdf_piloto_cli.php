@@ -406,22 +406,50 @@ function respaldar(array $plan, string $dir): void
         }
         $lista[$p['ot'] . '.pdf'] = $orig;
     }
-    ksort($lista);
-    $sums = '';
-    foreach ($lista as $nombre => $h) { $sums .= "$h  $nombre\n"; }
+    /* SHA256SUMS: lo que ya estaba se comprueba y no se toca; lo nuevo se suma.
+       Así, si la lista crece después de una corrida (p. ej. la captura 204),
+       el mismo respaldo sirve (28-sep-2026: antes abortaba «no coincide»). */
     $archSums = $dir . '/SHA256SUMS';
+    $previa = [];
     if (is_file($archSums)) {
-        if ((string) file_get_contents($archSums) !== $sums) { salir("$archSums ya existe y no coincide"); }
-    } else {
-        file_put_contents($archSums, $sums);
-    }
-    $archFilas = $dir . '/filas_antes.json';
-    if (!is_file($archFilas)) {
-        if (array_filter($plan, fn($p) => $p['estado'] !== 'PENDIENTE')) {
-            salir("falta $archFilas y ya hay capturas regeneradas: las filas de antes no se pueden volver a tomar");
+        foreach ((array) file($archSums, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $l) {
+            if (!preg_match('/^([0-9a-f]{64})  (\S+)$/', (string) $l, $m)) { salir("$archSums tiene una línea ilegible: $l"); }
+            $previa[$m[2]] = $m[1];
         }
-        $filas = [];
-        foreach ($plan as $p) { $filas[$p['ot']] = ['ot_capturadas' => $p['c'], 'ot_archivo' => $p['arch']]; }
+    }
+    foreach ($lista as $nombre => $h) {
+        if (isset($previa[$nombre]) && $previa[$nombre] !== $h) { salir("$archSums ya dice otra huella para $nombre"); }
+    }
+    $union = $previa + $lista;
+    ksort($union);
+    $sums = '';
+    foreach ($union as $nombre => $h) { $sums .= "$h  $nombre\n"; }
+    if (!is_file($archSums) || (string) file_get_contents($archSums) !== $sums) {
+        if (file_put_contents($archSums . '.tmp', $sums) !== strlen($sums) || !rename($archSums . '.tmp', $archSums)) {
+            salir("no se pudo escribir $archSums");
+        }
+    }
+    /* Las filas de antes: `filas_antes.json` es el registro de la primera corrida
+       y no se reescribe nunca. Las capturas que se sumen después van a un
+       `filas_antes_<fecha>.json` aparte, y solo si todavía están como el día de
+       la emisión: las de una ya regenerada no se pueden volver a tomar. */
+    $tomadas = [];
+    foreach ((array) glob($dir . '/filas_antes*.json') as $f) {
+        $doc = json_decode((string) file_get_contents((string) $f), true);
+        if (!is_array($doc['filas'] ?? null)) { salir("$f no se puede leer"); }
+        $tomadas += array_fill_keys(array_keys($doc['filas']), basename((string) $f));
+    }
+    $filas = [];
+    foreach ($plan as $p) {
+        if (isset($tomadas[$p['ot']])) { continue; }
+        if ($p['estado'] !== 'PENDIENTE') {
+            salir("{$p['ot']} ya está regenerada y sus filas de antes no están en $dir: no se pueden volver a tomar");
+        }
+        $filas[$p['ot']] = ['ot_capturadas' => $p['c'], 'ot_archivo' => $p['arch']];
+    }
+    $archFilas = null;
+    if ($filas !== []) {
+        $archFilas = $dir . '/' . ($tomadas === [] ? 'filas_antes.json' : 'filas_antes_' . date('Ymd_His') . '.json');
         $json = json_encode(['tomado_en' => date('Y-m-d H:i:s'), 'pedido' => PEDIDO, 'filas' => $filas],
                             JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         if ($json === false || file_put_contents($archFilas, $json) !== strlen($json)) {
@@ -429,7 +457,9 @@ function respaldar(array $plan, string $dir): void
         }
     }
     chmod($dir, 0700);
-    echo "\nrespaldo: " . count($lista) . " PDF originales, SHA256SUMS y filas_antes.json en $dir ✓\n";
+    echo "\nrespaldo: " . count($lista) . ' PDF originales (' . (count($union) - count($previa)) . ' nuevos), SHA256SUMS con '
+         . count($union) . ' y las filas de antes' . ($archFilas !== null ? ' en ' . basename($archFilas) : ' ya tomadas')
+         . " en $dir ✓\n";
 }
 respaldar($plan, $DIR_RESP);
 if ($modo === 'RESPALDAR') {

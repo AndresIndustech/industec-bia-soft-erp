@@ -179,6 +179,10 @@ afirmar('una captura que la lista nombra entra al conjunto sea cual sea su fecha
         str_contains($con, "(string) \$f['emitida_en'] <= HASTA_PEDIDO || isset(\$REGENERAR[\$k])"), true);
 afirmar('una corrida cortada entre rename y commit se reconoce y dice el remedio (el original del respaldo)',
         str_contains($con, 'parece una corrida cortada entre el reemplazo del PDF y el commit') && str_contains($con, 'sha256sum -c'), true);
+afirmar('el respaldo suma lo nuevo a SHA256SUMS sin tocar lo que ya estaba',
+        str_contains($con, '$union = $previa + $lista;') && str_contains($con, 'ya dice otra huella para'), true);
+afirmar('filas_antes.json no se reescribe: las capturas nuevas van a filas_antes_<fecha>.json',
+        str_contains($con, "'filas_antes_' . date('Ymd_His') . '.json'") && str_contains($con, "glob(\$dir . '/filas_antes*.json')"), true);
 afirmar('la OT-9125 lleva su nota (la línea del jefe de operaciones, D-G) a la bitácora',
         (bool) preg_match('/\$NOTAS = \[\s*166 => /', $con) && str_contains($con, "'nota'             => \$NOTAS[\$cid] ?? null"), true);
 
