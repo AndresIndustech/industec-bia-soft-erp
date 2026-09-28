@@ -77,11 +77,18 @@ if ($prueba) {
 }
 
 // --- PHPMailer, fuera de la carpeta web (app/lib, como dompdf) --------------
+/* Un nivel MENOS que en nucleo/Emision.php, porque este archivo vive en ot/ y
+   aquel en ot/nucleo/. Hasta el 28-sep-2026 se copió la fórmula tal cual
+   (dirname(__DIR__, 5)) y en Hostinger buscaba /home/lib/ot/vendor, que no
+   existe: en PRODUCCION el despachador habría salido con «falta PHPMailer»
+   (exit 3) sin mandar un solo correo. No se notó porque en PRUEBA sale antes,
+   arriba. En Hostinger: ~/domains/<sitio>/public_html/ot → 4 niveles = ~.
+   En la estación: app/publico → 1 nivel = app/, y ahí está app/lib. */
 if (!class_exists(\PHPMailer\PHPMailer\PHPMailer::class)) {
     foreach (array_filter([
         $cfg['dompdf_autoload'] ?? null,
-        dirname(__DIR__, 5) . '/lib/ot/vendor/autoload.php',
-        dirname(__DIR__, 2) . '/lib/vendor/autoload.php',
+        dirname(__DIR__, 4) . '/lib/ot/vendor/autoload.php',   // Hostinger: ~/lib/ot, fuera de public_html
+        dirname(__DIR__) . '/lib/vendor/autoload.php',         // estación: app/lib
     ]) as $a) {
         if (is_file($a)) { require_once $a; break; }
     }
