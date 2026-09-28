@@ -75,7 +75,7 @@ Tus acciones sobre una orden:
 
 ![Asignación por zona](capturas/jefe/asignacion_php.png)
 
-Tu bloque de zona tiene cuatro cifras arriba: **Sin asignar**, **Sin órdenes asignadas** (técnicos libres), **Con 8 o más** (técnicos cargados) y **Asignadas**. Toca **«Sin asignar»** y bajas a la tabla de esas órdenes.
+Tu bloque de zona tiene tres cifras arriba: **Sin asignar**, **ÓRDENES A ESPERA DE INFORME TÉCNICO** (abiertas sin ninguna OT INDUSTEC emitida) y **A espera de repuesto**; cada una es un enlace que deja delante esas órdenes en el buzón. Toca **«Sin asignar»** y bajas a la tabla de esas órdenes.
 
 Debajo, **tu equipo ordenado por carga**: cada técnico con sus órdenes **asignadas**, cuántas están **a espera de repuesto** y cuántas llevan ya su **OT de cierre**, y el distintivo «asignadas hace 3+ días» si tiene órdenes quietas. Así asignas al que tiene menos.
 

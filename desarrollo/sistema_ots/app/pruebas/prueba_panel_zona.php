@@ -76,6 +76,11 @@ $orden('90000021', 'LARB', ['estado' => 'NUEVO']);                              
 $orden('90000022', 'LARB', ['estado' => 'ASIGNADO', 'asignado_a' => 8, 'asignado_en' => '2026-09-24']); // mismo día: Operativo (correo) y Deshabilitado (app)
 $orden('90000023', 'LARB', ['estado' => 'NUEVO'], '2026-09-10', 'CON_ALERTA');                  // fuera del área, por resolver
 $orden('90000062', 'LARB', ['estado' => 'NO_COMPETE']);                                        // fuera
+// --- Fuera del TOTAL, para las cifras del buzón simplificado (27-sep-2026):
+//     «cerradas en SAP», «órdenes generadas» y «nuevas en 7 días» (hoy + 6). ---
+$orden('90000063', 'LARB', ['estado' => 'RESUELTO'], '2026-09-23');                             // cerrada en SAP, creada hace 1 día: nueva
+$orden('90000064', 'CNLJ', ['estado' => 'RESUELTO'], '2026-09-18');                             // creada hace 6 días: nueva (borde)
+$orden('90000065', 'CNLJ', ['estado' => 'NO_COMPETE'], '2026-09-17');                           // creada hace 7 días: NO es nueva
 // --- CNLJ, OTRA y sin zona -------------------------------------------------
 $orden('90000031', 'CNLJ', ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 9, 'asignado_en' => '2026-09-10']);
 $orden('90000041', 'OTRA', ['estado' => 'NUEVO']);
@@ -211,6 +216,33 @@ afirmar('órdenes sin técnico (tarea «sin asignar») = fila 1 + fila 2',
                           + array_sum(array_column($tz['zonas'], 'sin_asignar')));
 
 /* -------------------------------------------------------------------------
+   3b. Las cifras del buzón simplificado y de Asignación (27-sep-2026): salen
+       del mismo recorrido que la tarjeta, así que se prueban aquí.
+   ------------------------------------------------------------------------- */
+echo "\n=== Buzón simplificado: generadas, cerradas en SAP y nuevas en 7 días ===\n";
+afirmar('UIO: órdenes generadas (todas las del buzón, en cualquier estado)', $U['en_buzon'], 16);
+afirmar('LARB / CNLJ / OTRA / sin zona: generadas', [$L['en_buzon'], $C['en_buzon'], $tz['zonas']['OTRA']['en_buzon'], $tz['zonas']['']['en_buzon']], [5, 3, 1, 1]);
+afirmar('cerradas en SAP (RESUELTO) por zona: UIO / LARB / CNLJ', [$U['cerradas_sap'], $L['cerradas_sap'], $C['cerradas_sap']], [1, 1, 1]);
+afirmar('nuevas en 7 días = hoy + 6 anteriores: la de hace 6 cuenta, la de hace 7 no', [$L['nuevas_7d'], $C['nuevas_7d'], $U['nuevas_7d']], [1, 1, 0]);
+afirmar('totales del conjunto: generadas / cerradas en SAP / nuevas', [$tz['en_buzon'], $tz['cerradas_sap'], $tz['nuevas_7d']], [26, 3, 2]);
+afirmar('las tres zonas: generadas / cerradas en SAP / nuevas / atendidas', [$tz['tres_zonas']['en_buzon'], $tz['tres_zonas']['cerradas_sap'], $tz['tres_zonas']['nuevas_7d'], $tz['tres_zonas']['atendidas']], [24, 3, 2, 1]);
+afirmar('filas 1 y 2 del conjunto (Asignación y resumen del buzón), OTRA y sin zona incluidas', [$tz['abiertas'], $tz['espera_informe']], [10, 7]);
+afirmar('filas 1 y 2 de las tres zonas', [$tz['tres_zonas']['abiertas'], $tz['tres_zonas']['espera_informe']], [10, 5]);
+$okGen = true;
+foreach ($tz['zonas'] as $z => $t) {
+    // Generadas es el universo de la zona: todo lo demás es subconjunto, y las
+    // que no están en el TOTAL son atendidas, cerradas en SAP, no nos compete o
+    // cerradas sin atención (regularizadas o no); la cadena descuenta una.
+    if ($t['total'] + $t['atendidas'] + $t['cerradas_sap'] > $t['en_buzon']) { $okGen = false; echo "    $z: total+atendidas+cerradas > generadas\n"; }
+    if ($t['nuevas_7d'] > $t['en_buzon']) { $okGen = false; }
+}
+afirmar('en cada zona, TOTAL + atendidas + cerradas en SAP ≤ generadas, y nuevas ≤ generadas', $okGen, true);
+$sinAtenTodo = Casos::tarjetasPorZona($casos, $gestion, Casos::indiceInformes($gestion, null, $capturadas, $archivo, $pendientes), HOY);
+afirmar('sin atenciones.json: generadas, cerradas en SAP y nuevas siguen numéricas; filas 1 y 2 del conjunto = null',
+        [$sinAtenTodo['zonas']['UIO']['en_buzon'], $sinAtenTodo['cerradas_sap'], $sinAtenTodo['nuevas_7d'], $sinAtenTodo['abiertas'], $sinAtenTodo['espera_informe']],
+        [16, 3, 2, null, null]);
+
+/* -------------------------------------------------------------------------
    4. El buzón (`casos.php?grupo=`) lista EXACTAMENTE las filas de la cifra.
    ------------------------------------------------------------------------- */
 echo "\n=== casos.php?grupo=: la cifra = las filas del enlace ===\n";
@@ -326,6 +358,38 @@ $ce = Casos::cifrasEstado($casos, $gestion2);
 afirmar('el cuadro del inicio desglosa la cuarta cifra: 1 + 1, ninguna sin precisar (solo hay dos a espera de repuesto)',
         [$ce['repuesto_gestion']['JEFES_TEC_KFC'], $ce['repuesto_gestion']['APROBACION_DESPACHO'], $ce['repuesto_gestion']['SIN_PRECISAR']], [1, 1, 0]);
 afirmar('y ese desglose suma las a espera de repuesto, orden por orden', array_sum($ce['repuesto_gestion']), $ce['cifras']['GESTION_PROVEEDORES_KFC']);
+
+/* -------------------------------------------------------------------------
+   8. El buzón y Asignación piden al diccionario los rótulos del buzón
+      simplificado (27-sep-2026) y ya no pintan los cuadros retirados.
+   ------------------------------------------------------------------------- */
+echo "\n=== Buzón y Asignación: rótulos del diccionario, cuadros retirados ===\n";
+$srcCasos = (string) file_get_contents(__DIR__ . '/../publico/casos.php');
+$srcAsig  = (string) file_get_contents(__DIR__ . '/../publico/asignacion.php');
+$pide = static fn(string $src, string $clave): bool => (bool) preg_match('/\$cuadroB?\(\'' . $clave . '\'|Vocabulario::titulo\(\'' . $clave . '\'/', $src);
+afirmar('buzón: resumen con ESPERA_INFORME, ABIERTA, TOTAL_ABIERTAS, ATENDIDA, CERRADA_SAP y ORDENES_NUEVAS_7D',
+        array_map(fn($k) => $pide($srcCasos, $k), ['ESPERA_INFORME', 'ABIERTA', 'TOTAL_ABIERTAS', 'ATENDIDA', 'CERRADA_SAP', 'ORDENES_NUEVAS_7D']),
+        [true, true, true, true, true, true]);
+afirmar('buzón: la tabla por zona enlaza cada cifra a su filtro (grupo= y est=)',
+        [str_contains($srcCasos, "'grupo=espera_informe'"), str_contains($srcCasos, "'grupo=abiertas'"),
+         str_contains($srcCasos, "'grupo=total'"), str_contains($srcCasos, "'est=ATENDIDO'"), str_contains($srcCasos, "'est=RESUELTO'")],
+        [true, true, true, true, true]);
+afirmar('Asignación: sin asignar, ESPERA_INFORME y ESPERA_REPUESTO',
+        [str_contains($srcAsig, "Vocabulario::titulo('SIN_ASIGNAR')"), str_contains($srcAsig, "\$cuadro('ESPERA_INFORME'"), str_contains($srcAsig, "\$cuadro('ESPERA_REPUESTO'")],
+        [true, true, true]);
+// El marcado exacto que se pintaba, no la palabra: los comentarios sí pueden nombrarlos.
+$retirados = ['<div class="t">Llegaron ayer y hoy</div>', '<div class="t">En la ventana de 90 días</div>',
+              '<div class="t">Sin zona resuelta</div>', '<b>Las alertas no deciden nada.</b>',
+              '<div class="t">Sin órdenes asignadas</div>', '<div class="t">Con 8 o más</div>',
+              '<div class="pie">piénsalo antes de darle otra</div>', '<div class="pie">de todo el equipo</div>',
+              '<nav class="linea"'];
+$quedan = [];
+foreach ($retirados as $r) {
+    if (str_contains($srcCasos, $r)) { $quedan[] = 'casos.php: ' . $r; }
+    if (str_contains($srcAsig, $r)) { $quedan[] = 'asignacion.php: ' . $r; }
+}
+afirmar('los cuadros que la administradora retiró ya no se pintan', $quedan, []);
+afirmar('buzón: sigue el filtro «Alerta» (fuera del área se resuelve desde aquí)', str_contains($srcCasos, 'name="alerta"'), true);
 
 printf("\n%d comprobaciones · %d fallos\n", $total, $fallos);
 exit($fallos === 0 ? 0 : 1);

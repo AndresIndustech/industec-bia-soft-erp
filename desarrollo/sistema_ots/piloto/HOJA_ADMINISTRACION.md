@@ -101,7 +101,7 @@ Lo que cada acción hace y desde qué estado se permite está en «Qué hace cad
 
 ![Asignación de las tres zonas](capturas/admin/asignacion_php.png)
 
-Arriba, cuatro cifras del conjunto: **Sin asignar**, **Sin órdenes asignadas** (técnicos libres), **Con 8 o más** (técnicos cargados) y **Asignadas**. Debajo, **un bloque por zona** con las mismas cuatro cifras, su tabla **«Sin asignar»** y **su equipo ordenado por carga**: cada técnico con sus órdenes asignadas, las que están a espera de repuesto y cuántas llevan ya su OT INDUSTEC de cierre (**«OT de cierre»**), más el distintivo «asignadas hace 3+ días» cuando corresponde.
+Arriba, tres cifras del conjunto: **Sin asignar**, **ÓRDENES A ESPERA DE INFORME TÉCNICO** (abiertas sin ninguna OT INDUSTEC emitida) y **A espera de repuesto**; cada una es un enlace que deja delante esas órdenes en el buzón. Debajo, **un bloque por zona** con las mismas cuatro cifras, su tabla **«Sin asignar»** y **su equipo ordenado por carga**: cada técnico con sus órdenes asignadas, las que están a espera de repuesto y cuántas llevan ya su OT INDUSTEC de cierre (**«OT de cierre»**), más el distintivo «asignadas hace 3+ días» cuando corresponde.
 
 ![La zona UIO](capturas/admin/asignacion_uio.png)
 
