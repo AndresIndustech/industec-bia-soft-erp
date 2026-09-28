@@ -307,5 +307,25 @@ foreach (token_get_all((string) file_get_contents(__DIR__ . '/../publico/panel.p
 }
 afirmar('panel.php: ningún término de la lista negra en texto visible', $hallados, []);
 
+/* -------------------------------------------------------------------------
+   La gestión del repuesto (022) es un dato aparte del estado: anotar el paso
+   no mueve la orden de grupo ni cambia una sola cifra de la tarjeta.
+   ------------------------------------------------------------------------- */
+echo "\n=== La gestión del repuesto (022) no toca la tarjeta ===\n";
+$gestion2 = $gestion;
+$porAviso = static fn(string $a): array => array_values(array_filter($casos, fn($c) => $c["aviso"] === $a))[0];
+$gestion2['90000005']['repuesto_gestion'] = 'JEFES_TEC_KFC';       // sin documento, a espera de repuesto
+$gestion2['90000031']['repuesto_gestion'] = 'APROBACION_DESPACHO'; // con OT de evaluación
+$inf2 = Casos::indiceInformes($gestion2, $aten, $capturadas, $archivo, $pendientes, '2026-09-24 06:00');
+$tz2  = Casos::tarjetasPorZona($casos, $gestion2, $inf2, HOY);
+afirmar('90000005 sigue en ÓRDENES ABIERTAS con el paso anotado', Casos::grupoOrden($porAviso("90000005"), $gestion2['90000005'], $inf2), 'ABIERTA');
+afirmar('90000031 sigue en ÓRDENES ABIERTAS con el paso anotado', Casos::grupoOrden($porAviso("90000031"), $gestion2['90000031'], $inf2), 'ABIERTA');
+afirmar('las tarjetas por zona son idénticas con y sin el paso', $tz2['zonas'], $tz['zonas']);
+afirmar('el total general no cambia', $tz2['total'], $tz['total']);
+$ce = Casos::cifrasEstado($casos, $gestion2);
+afirmar('el cuadro del inicio desglosa la cuarta cifra: 1 + 1, ninguna sin precisar (solo hay dos a espera de repuesto)',
+        [$ce['repuesto_gestion']['JEFES_TEC_KFC'], $ce['repuesto_gestion']['APROBACION_DESPACHO'], $ce['repuesto_gestion']['SIN_PRECISAR']], [1, 1, 0]);
+afirmar('y ese desglose suma las a espera de repuesto, orden por orden', array_sum($ce['repuesto_gestion']), $ce['cifras']['GESTION_PROVEEDORES_KFC']);
+
 printf("\n%d comprobaciones · %d fallos\n", $total, $fallos);
 exit($fallos === 0 ? 0 : 1);

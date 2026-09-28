@@ -999,26 +999,56 @@ conteo directo por estado) y `verificar_cifras.py` (10 nuevas: las cuatro tarjet
 en la bitácora. Nadie ha visto el cuadro en un navegador con sesión. Al desplegar: `panel.php`, `nucleo/Casos.php`,
 `vocabulario.json`, `vocabulario_publico.json`, `ui.js`, `sw.js` (6 archivos), y correr `tarjeta_cli.php ADMIN` en el servidor.
 
-**AMPLIACIÓN A MEDIAS (27-sep-2026, commit WIP por corte de créditos).** Isabel precisó los pasos SAP del repuesto (PENDIENTE
-GESTIÓN PROVEEDORES NACIONALES · BODEGA KFC · JEFES TEC. DE MANTENIMIENTO KFC · APROBACIÓN PARA DESPACHO) y cuatro
-identificaciones «en novedades» (PROVEEDOR EXTERNO · POR DECIDIR, QUITAR O MEJORAR · RIESGO ALTO, DERIVAR RESPONSABLE ·
-YA TIENE AVISO EN SAP, MANT. CONSTRUCTIVO INDUSTEC). **Corrección al coordinador:** las cuatro identificaciones son marcas de
-la **novedad** (módulo `novedades_visita.php`, que ya tiene riesgo, responsable propuesto y aviso SAP), no marcas de la orden.
-**Hecho, en código, sin probar en navegador ni contra base:** `sql/022_gestion_repuesto_y_marcas_novedad.sql` (columna
-`casos_gestion.repuesto_gestion` + `_por/_en`, tabla `novedad_marcas`, permiso `casos.repuesto_gestion` a ADM/JZ);
-`vocabulario.json` v2026-09-27.2 (+9 conceptos `REP_*` y `MARCA_*`, regenerado; `sw.js` v23); `Casos::REPUESTO_GESTION` y el
-desglose `repuesto_gestion` en `cifrasEstado()`; `Novedades::MARCAS/VIVAS/marcas()/marcar()`, contadores con `marcas` y
-grupo `vivas` + filtro `marca`; `casos.php` acción `repuesto_gestion` (diálogo, botón, filtro `?rep=`, dato en la fila);
-`novedades_visita.php` acción `identificar` (diálogo con casillas, chips, filtros rápidos por marca); `panel.php` pie de la
-cuarta cifra desglosado por paso y fila «Novedades · identificadas»; `verificar_esquema.php` bloque 022. `php -l` limpio en
-los seis PHP; `prueba_vocabulario` 154·0, `prueba_claves_vocabulario` 760·0, `prueba_lista_negra` 0, `prueba_panel_zona` 70·0.
-**Roja:** `prueba_cifras_estado.php` 77·1 — la comprobación «con cero órdenes: cuatro ceros y ningún estado» compara contra el
-retorno viejo; ahora `cifrasEstado()` devuelve además `repuesto_gestion`: hay que actualizar el esperado (trivial).
-**Falta:** extender `prueba_cifras_estado.php` (desglose por paso, claves `REP_*`/`MARCA_*` en el diccionario) y
-`prueba_panel_zona.php`; render con la Db falsa de panel/casos/novedades; `tarjeta_cli.php` y `verificar_cifras.py` para el
-desglose; `VOCABULARIO.md` (versión .2, §4, §11); revisar a mano `novedades_visita.php` y `casos.php` (editados por script,
-no leídos después); preguntas 5-7 para Andrés: ¿el paso del repuesto va en la orden (como quedó) o en la solicitud
-(`pendientes`)?; ¿las marcas son de la novedad (como quedó) y no de la orden?; ¿«POR DECIDIR» lo decide KFC (así se rotuló)?
+**AMPLIACIÓN (27-sep-2026): la gestión del repuesto y las marcas de la novedad — HECHA en la rama, sin desplegar.** Isabel
+precisó los pasos SAP del repuesto (PENDIENTE GESTIÓN PROVEEDORES NACIONALES · BODEGA KFC · JEFES TEC. DE MANTENIMIENTO KFC ·
+APROBACIÓN PARA DESPACHO) y cuatro identificaciones «en novedades» (PROVEEDOR EXTERNO · POR DECIDIR, QUITAR O MEJORAR · RIESGO
+ALTO, DERIVAR RESPONSABLE · YA TIENE AVISO EN SAP, MANT. CONSTRUCTIVO INDUSTEC). Tres decisiones mías, **pendientes de Andrés**
+(preguntas 9-11 de `VOCABULARIO.md` §11): el paso del repuesto es un dato **de la orden** (`casos_gestion.repuesto_gestion`, NULL
+= sin precisar; aparte del estado, como `otro_trabajo`), no de la solicitud; las cuatro identificaciones son **marcas de la
+novedad** (`novedad_marcas`, varias por novedad), no de la orden — corrección al coordinador: el módulo de novedades ya tenía
+riesgo, responsable propuesto y aviso SAP; y «POR DECIDIR» se rotula como decisión de KFC (regla de la versión .6).
+
+Qué quedó: `sql/022_gestion_repuesto_y_marcas_novedad.sql` (columna + tabla + permiso `casos.repuesto_gestion` a ADM/JZ;
+idempotente, con su reversión escrita); `vocabulario.json` **v2026-09-27.2** (+9 conceptos `REP_*`/`MARCA_*`; títulos de los
+pasos en MAYÚSCULAS porque copian el registro SAP; regenerados `ui.js` y `vocabulario_publico.json`; `sw.js` v23);
+`Casos::REPUESTO_GESTION` y el desglose `repuesto_gestion` en `cifrasEstado()`; `Novedades::MARCAS/VIVAS/marcas()/marcar()`,
+contadores con `marcas` (null si la 022 no está: el panel dice «no disponible»), grupo `vivas` y filtro `marca`; `casos.php`
+acción «Gestión del repuesto» (diálogo, botón en la fila a espera de repuesto, filtro `?rep=`, paso visible en la fila);
+`novedades_visita.php` acción «Identificar» (casillas, chips en la fila, filtros rápidos por marca con cifra; el técnico ve los
+chips, no identifica); `panel.php` pie de la cuarta cifra desglosado por paso con enlace, y fila «Novedades · identificadas»;
+`verificar_esquema.php` bloque «migracion 022» y `$mas022` en los permisos.
+
+**Auditoría de los dos WIP (a03f066 → 2517bbc → 692f522):** el `2517bbc` del coordinador solo confirmó la 022 y mi `692f522`
+la dejó byte a byte igual (no hay duplicado). Leídos a mano los diffs de `casos.php`, `novedades_visita.php`, `panel.php`,
+`Casos.php` y `Novedades.php`: ningún cambio de fondo. Lo corregido en el cierre: la comprobación «con cero órdenes» de
+`prueba_cifras_estado.php` (retorno ampliado) y una expectativa mía en `prueba_panel_zona.php` que había pisado por error una
+línea original (CNLJ `[1, 1, 1]`, restaurada y verificada contra git).
+
+**Verificación (local, PHP 8.3.35, sin servidor):**
+
+```
+prueba_cifras_estado 143·0 (desglose por paso, filtro ?rep=, claves REP_*/MARCA_* con lista negra, la 022 declara los mismos valores que los mapas)
+prueba_panel_zona 76·0 (el paso no mueve la tarjeta) · prueba_vocabulario 154·0 · prueba_claves_vocabulario 760·0 · prueba_lista_negra 0 hallazgos
+prueba_48h 125·0 · prueba_despacho 20·0 · prueba_contratos.mjs 57·0 · prueba_graficos.mjs 62·0 · generar_vocabulario --comprobar al día
+php -l 85 archivos sin errores · node --check ui.js sw.js · py_compile verificar_cifras.py
+render con Db falsa (20 órdenes + 2 novedades sintéticas con 3 marcas), sin Warning en lo del producto:
+  panel ADMIN: pie de la 4.ª cifra «1 pendiente gestión bodega KFC · 1 … jefes técnicos … · 1 sin precisar la gestión» con sus 3 enlaces;
+        novedades 1·0·1·1 · panel JEFE_ZONA UIO: «1 sin precisar» y las mismas 4 marcas de su zona
+  casos ADMIN: 3 botones «Gestión del repuesto» (las 3 a espera de repuesto), filtro f-rep, diálogo acc-rep, el paso en cada fila;
+        ?est=ESPERA_REPUESTO&rep=BODEGA_KFC → 1 fila, &rep=SIN → 1 fila · JEFE_ZONA: 1 botón · TECNICO: 0
+  novedades ADMIN: 2 «Identificar», 3 chips, 4 filtros por marca, diálogo · TECNICO: 3 chips, 0 «Identificar», 0 filtros
+  (19 «Undefined array key nombre» en Casos.php:1374 —quienAtendio— son de la Db falsa, que no une usuarios; no del producto)
+prueba_continuidad, prueba_destinatarios y prueba_casos_prueba no corren aquí: exigen nucleo/config.php (base real)
+```
+
+**NO comprobado:** nada contra darkviolet ni la base real; la 022 no se ha aplicado en ningún sitio; `tarjeta_cli.php` (+7
+comprobaciones del desglose) y `verificar_cifras.py` (+desglose y `?rep=`) están escritos sin correr; ningún navegador con sesión.
+
+**Para desplegar (cuando Andrés autorice; primero UIO, I-8):** aplicar `sql/022_gestion_repuesto_y_marcas_novedad.sql` con
+`aplicar_sql.php` y correr `verificar_esquema.php`; subir 9 archivos: `panel.php`, `casos.php`, `novedades_visita.php`,
+`nucleo/Casos.php`, `nucleo/Novedades.php`, `vocabulario.json`, `vocabulario_publico.json`, `ui.js`, `sw.js` (+
+`verificar_esquema.php` y `pruebas/servidor/tarjeta_cli.php` como herramientas); después `tarjeta_cli.php ADMIN` en el servidor.
+Sin la 022 aplicada, el código no rompe: el paso sale «sin precisar» y las marcas «no disponible».
 
 **Preguntas para Andrés** (ninguna bloquea; la 1 solo cambia el número grande): (1) ¿«atendido (cerrado)» = ATENDIDO +
 RESUELTO, o solo las ya cerradas en SAP? (2) ¿«asignados (en gestión técnica)» = solo ASIGNADO, sin EN_REVISION? (3) Isabel dice
@@ -2837,7 +2867,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| ~~Cuadro «En qué estado están» con las cuatro cifras de la administradora~~ (pedido de Isabel del 27-sep-2026, fuera del plan) | ✅ **Hecha en la rama `pc/panel-estados-administradora-2026-09-27` el 2026-09-27, SIN desplegar ni empujar** — Steven, desde el PC de Andrés, en un worktree aparte (`_wt_panel_estados_2026-09-27`) para no cruzarse con la conversación que edita `casos.php` | 2026-09-27 | `panel.php`, `Casos.php` (función nueva), `vocabulario.json` (+4 conceptos, v2026-09-27.1) y lo que regenera, `sw.js` v22, `tarjeta_cli.php`, `verificar_cifras.py`, `VOCABULARIO.md`. No toca la base ni el árbol canónico. Detalle, cifras y preguntas en **§1u** |
+| ~~Cuadro «En qué estado están» con las cuatro cifras de la administradora, + gestión del repuesto y marcas de la novedad (migración 022)~~ (pedido de Isabel del 27-sep-2026, fuera del plan) | ✅ **Hecha en la rama `pc/panel-estados-administradora-2026-09-27` el 2026-09-27, SIN desplegar ni empujar** — Steven, desde el PC de Andrés, en un worktree aparte (`_wt_panel_estados_2026-09-27`) para no cruzarse con la conversación que edita `casos.php` | 2026-09-27 | `panel.php`, `Casos.php` (función nueva), `vocabulario.json` (+4 conceptos, v2026-09-27.1) y lo que regenera, `sw.js` v22, `tarjeta_cli.php`, `verificar_cifras.py`, `VOCABULARIO.md`. No toca la base ni el árbol canónico. Detalle, cifras y preguntas en **§1u** |
 | ~~Vocabulario SAP en todo el sistema~~ (pedido de la administradora, fuera del plan) | ✅ **Terminada y desplegada en darkviolet el 2026-09-26** — ramas `pc/vocabulario-sap-2026-09-24` y `pc/vocabulario-sobre-vivo-2026-09-26` | 2026-09-24 | Solo texto visible, `vocabulario.json` y la tarjeta «Por zona»; no tocó la base ni el árbol canónico. Falta que la **estación empuje T2.28.3/T2.28.6** y fusione estas ramas en `master`, y que alguien vea las pantallas con sesión. Detalle, cifras y cómo se revierte en **§1t** |
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
 | ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó, se detuvo a propósito una vez (error nº 44) y se relanzó. ✅ **T2.28.2, el módulo de correos, construido, desplegado y verificado el 2026-09-24** (013 aplicada, `TODO OK`; `correos.php`; `Destinatarios::resolver()`; el tope y el cupo por hora del despachador — `§1s-undecies`). **Pendiente, de aprobación:** `correos_sembrar_cli.php --ejecutar` (el simulacro ya da 3/3 contra el maestro). De T2.28.3 ya está lo que cubrió el arreglo urgente; sigue T2.28.6 en el carril. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b puntos 7 y 8 |

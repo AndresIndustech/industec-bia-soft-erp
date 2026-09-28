@@ -66,8 +66,8 @@ $orden('91000004', 'CNLJ', ['estado' => 'ASIGNADO', 'asignado_a' => 9]);
 $orden('91000005', 'LARB', ['estado' => 'asignado', 'asignado_a' => 8]);   // en minúsculas: cuenta igual
 $orden('91000006', 'UIO',  ['estado' => 'EN_REVISION', 'asignado_a' => 7]);
 $orden('91000007', 'UIO',  ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 7]);
-$orden('91000008', 'CNLJ', ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 9]);
-$orden('91000009', 'LARB', ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 8, 'continua_de' => '91000007']); // cadena: cuenta por orden
+$orden('91000008', 'CNLJ', ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 9, 'repuesto_gestion' => 'bodega_kfc']);   // en minúsculas: cuenta igual
+$orden('91000009', 'LARB', ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 8, 'continua_de' => '91000007', 'repuesto_gestion' => 'BODEGA_KFC']); // cadena: cuenta por orden; con paso de la gestión
 $orden('91000010', 'UIO',  ['estado' => 'ATENDIDO', 'ot_cierre' => 'OT-9010-X-91000010-UIO']);
 $orden('91000011', 'LARB', ['estado' => 'ATENDIDO', 'ot_cierre' => 'OT-9011-X-91000011-LARB']);
 $orden('91000012', 'UIO',  ['estado' => 'RESUELTO']);
@@ -78,7 +78,7 @@ $orden('91000016', 'OTRA', ['estado' => 'NO_COMPETE']);
 $orden('91000017', 'UIO',  ['estado' => 'CERRADO_SIN_ATENCION']);                                   // sin regularizar
 $orden('91000018', 'LARB', ['estado' => 'CERRADO_SIN_ATENCION', 'regularizado_en' => '2026-09-21 10:00:00']);
 $orden('91000019', 'CNLJ', ['estado' => 'CERRADO_SIN_ATENCION', 'regularizado_en' => '2026-09-22 10:00:00']);
-$orden('91000020', '',     ['estado' => 'ASIGNADO', 'asignado_a' => 9]);                            // sin zona: cuenta igual
+$orden('91000020', '',     ['estado' => 'ASIGNADO', 'asignado_a' => 9, 'repuesto_gestion' => 'APROBACION_DESPACHO']); // sin zona; el paso sin ESPERA_REPUESTO no cuenta
 
 // Una fila de gestión SIN orden en el catálogo (fuera de la ventana de 90 días):
 // no cuenta en ningún lado, igual que en el buzón y en la tarjeta.
@@ -120,9 +120,42 @@ afirmar('por_estado suma las 20 órdenes (nada se pierde ni se duplica)', array_
 afirmar('la regularizada cuenta como REGULARIZADO (estado de vista)', $pe['REGULARIZADO'], 2);
 afirmar('y solo la sin regularizar como CERRADO_SIN_ATENCION', $pe['CERRADO_SIN_ATENCION'], 1);
 afirmar('la fila de gestión sin orden en el catálogo no cuenta', isset($pe['ATENDIDO']) && $pe['ATENDIDO'] === 2, true);
-afirmar('con cero órdenes: cuatro ceros y ningún estado', Casos::cifrasEstado([], $gestion),
+afirmar('con cero órdenes: cuatro ceros, ningún estado y el desglose en cero', Casos::cifrasEstado([], $gestion),
         ['cifras' => ['CREADA_NO_COMPETE' => 0, 'EN_GESTION_TECNICA' => 0, 'ATENDIDA_CERRADA' => 0, 'GESTION_PROVEEDORES_KFC' => 0],
-         'por_estado' => []]);
+         'por_estado' => [],
+         'repuesto_gestion' => ['PROVEEDORES_NACIONALES' => 0, 'BODEGA_KFC' => 0, 'JEFES_TEC_KFC' => 0, 'APROBACION_DESPACHO' => 0, 'SIN_PRECISAR' => 0]]);
+
+/* -------------------------------------------------------------------------
+   3b. El desglose de la cuarta cifra por paso de la gestión de KFC (022).
+   ------------------------------------------------------------------------- */
+echo "\n=== 3b. Gestión del repuesto: el desglose de la cuarta cifra ===\n";
+$rep = $r['repuesto_gestion'];
+afirmar('las claves son los cuatro pasos + SIN_PRECISAR, en ese orden', array_keys($rep),
+        array_merge(array_keys(Casos::REPUESTO_GESTION), ['SIN_PRECISAR']));
+afirmar('BODEGA_KFC = 2 (una en minúsculas)', $rep['BODEGA_KFC'], 2);
+afirmar('SIN_PRECISAR = 1 (la 91000007, sin paso)', $rep['SIN_PRECISAR'], 1);
+afirmar('los otros pasos en 0', [$rep['PROVEEDORES_NACIONALES'], $rep['JEFES_TEC_KFC'], $rep['APROBACION_DESPACHO']], [0, 0, 0]);
+afirmar('el desglose suma exactamente la cuarta cifra', array_sum($rep), $cifras['GESTION_PROVEEDORES_KFC']);
+afirmar('un paso anotado en una orden que NO espera repuesto no cuenta (91000020)', $rep['APROBACION_DESPACHO'], 0);
+$gRara = $gestion; $gRara['91000007']['repuesto_gestion'] = 'PASO_QUE_NO_EXISTE';
+afirmar('un valor que el mapa no conoce cuenta como sin precisar, no se pierde',
+        Casos::cifrasEstado($casos, $gRara)['repuesto_gestion']['SIN_PRECISAR'], 1);
+// El filtro del buzón (casos.php ?rep=): la cifra de cada paso es las filas de su enlace.
+$filtroRep = static function (string $rep) use ($casos, $gestion): int {
+    $n = 0;
+    foreach ($casos as $c) {
+        $g = $gestion[(string) $c['aviso']] ?? null;
+        if (($g['estado'] ?? '') !== 'ESPERA_REPUESTO') { continue; }
+        $paso = strtoupper((string) ($g['repuesto_gestion'] ?? ''));
+        if ($rep === 'SIN' ? isset(Casos::REPUESTO_GESTION[$paso]) : $paso !== $rep) { continue; }
+        $n++;
+    }
+    return $n;
+};
+foreach (Casos::REPUESTO_GESTION as $paso => $_) {
+    afirmar("$paso = filas de casos.php?est=ESPERA_REPUESTO&rep=$paso", $rep[$paso], $filtroRep($paso));
+}
+afirmar('SIN_PRECISAR = filas de casos.php?est=ESPERA_REPUESTO&rep=SIN', $rep['SIN_PRECISAR'], $filtroRep('SIN'));
 
 /* -------------------------------------------------------------------------
    4. El diccionario: las claves existen, los rótulos son los de la
@@ -182,6 +215,46 @@ foreach (Casos::CIFRAS_ESTADO as $clave => $estados) {
     afirmar("$clave = filas de casos.php?est=" . implode('+', $estados), $cifras[$clave], $filas);
 }
 afirmar('la regularizada NO sale en casos.php?est=CERRADO_SIN_ATENCION', $filtroEst('CERRADO_SIN_ATENCION'), 1);
+
+/* -------------------------------------------------------------------------
+   6. Los conceptos de la 022 en el diccionario: los pasos del repuesto y las
+   marcas de la novedad, con sus textos fuera de la lista negra.
+   ------------------------------------------------------------------------- */
+echo "\n=== 6. Gestión del repuesto y marcas de la novedad, en el diccionario ===\n";
+require_once __DIR__ . '/../publico/nucleo/Novedades.php';
+$revisar = static function (string $clave, string $quien) use ($d, $negra): void {
+    $c = $d['conceptos'][$clave] ?? null;
+    afirmar("$clave existe con término, plural, título y ayuda",
+            $c !== null && !empty($c['termino']) && !empty($c['plural']) && !empty($c['titulo']) && !empty($c['ayuda']), true);
+    if ($c === null) { return; }
+    afirmar("  lo ven ADM y JZ ($quien)", in_array('ADM', $c['roles'] ?? [], true) && in_array('JZ', $c['roles'] ?? [], true), true);
+    foreach (['termino', 'titulo', 'ayuda'] as $campo) {
+        $txt = mb_strtolower((string) $c[$campo]);
+        $malas = [];
+        foreach ($negra as $t) {
+            if (preg_match('/(?<![\p{L}\p{N}])' . preg_quote($t, '/') . '(?![\p{L}\p{N}])/u', $txt)) { $malas[] = $t; }
+        }
+        afirmar("  $campo sin palabras de la lista negra", $malas, []);
+    }
+};
+foreach (Casos::REPUESTO_GESTION as $valor => $clave) { $revisar($clave, "paso $valor"); }
+$revisar('REP_SIN_PRECISAR', 'derivado');
+foreach (Novedades::MARCAS as $valor => $clave) {
+    $revisar($clave, "marca $valor");
+    afirmar("  $clave también lo ve el técnico (ve su novedad)", in_array('TEC', $d['conceptos'][$clave]['roles'] ?? [], true), true);
+}
+afirmar('los cuatro pasos copian el registro SAP de la administradora: título en MAYÚSCULAS',
+        array_map(fn($k) => mb_strtoupper(Vocabulario::titulo($k)) === Vocabulario::titulo($k), array_values(Casos::REPUESTO_GESTION)), [true, true, true, true]);
+afirmar('«por decidir» nombra a quien decide (KFC), como fija la versión .6',
+        str_contains(mb_strtolower(Vocabulario::t('MARCA_POR_DECIDIR_KFC')), 'kfc'), true);
+afirmar('Novedades::VIVAS = todos los estados menos descartada y resuelta',
+        array_values(array_diff(array_keys(Novedades::ESTADOS), Novedades::VIVAS)), ['DESCARTADA', 'RESUELTA']);
+afirmar('la 022 declara los mismos pasos que Casos::REPUESTO_GESTION',
+        (bool) preg_match("/repuesto_gestion\s+ENUM\('" . implode("','", array_keys(Casos::REPUESTO_GESTION)) . "'\)/",
+                          (string) file_get_contents(__DIR__ . '/../sql/022_gestion_repuesto_y_marcas_novedad.sql')), true);
+afirmar('la 022 declara las mismas marcas que Novedades::MARCAS',
+        (bool) preg_match("/marca\s+ENUM\('" . implode("','", array_keys(Novedades::MARCAS)) . "'\)/",
+                          (string) file_get_contents(__DIR__ . '/../sql/022_gestion_repuesto_y_marcas_novedad.sql')), true);
 
 echo "\n$total comprobaciones · $fallos fallos\n";
 exit($fallos === 0 ? 0 : 1);

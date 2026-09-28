@@ -125,5 +125,21 @@ $chk('«de ellas, a espera de repuesto» de la tarjeta ≤ la cifra del cuadro (
 $chk('por_estado del gráfico suma las órdenes en alcance', array_sum($ce['por_estado']) === count($casos), array_sum($ce['por_estado']) . ' vs ' . count($casos));
 $chk('las regularizadas no cuentan como cerradas sin atención', ($ce['por_estado']['CERRADO_SIN_ATENCION'] ?? 0) === ($vista['CERRADO_SIN_ATENCION'] ?? 0));
 
+// ---- el desglose de la cuarta cifra por paso de la gestión de KFC (022) ----
+// Conteo directo aquí; si la 022 no está aplicada, `repuesto_gestion` no viene en las filas y todo es sin precisar.
+$repDirecto = ['SIN_PRECISAR' => 0];
+foreach ($casos as $c) {
+    $g = $gestion[(string) ($c['aviso'] ?? '')] ?? null;
+    if (strtoupper((string) ($g['estado'] ?? '')) !== 'ESPERA_REPUESTO') { continue; }
+    $p = strtoupper((string) ($g['repuesto_gestion'] ?? ''));
+    $repDirecto[$p === '' ? 'SIN_PRECISAR' : $p] = ($repDirecto[$p === '' ? 'SIN_PRECISAR' : $p] ?? 0) + 1;
+}
+echo "gestión del repuesto (022): " . json_encode($ce['repuesto_gestion'], JSON_UNESCAPED_UNICODE) . "\n";
+$chk('el desglose suma la cifra a espera de repuesto', array_sum($ce['repuesto_gestion']) === $ce['cifras']['GESTION_PROVEEDORES_KFC']);
+foreach ($ce['repuesto_gestion'] as $paso => $n) {
+    $chk("paso $paso = conteo directo", $n === ($repDirecto[$paso] ?? 0), "$n vs " . ($repDirecto[$paso] ?? 0));
+}
+$chk('ningún valor fuera del mapa en la base', !array_diff_key($repDirecto, $ce['repuesto_gestion']), implode(',', array_keys(array_diff_key($repDirecto, $ce['repuesto_gestion']))));
+
 echo "\n" . $ok . ' comprobaciones · ' . $mal . " fallos\n";
 exit($mal === 0 ? 0 : 1);

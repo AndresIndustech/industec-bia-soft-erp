@@ -1,6 +1,6 @@
 # Vocabulario único de B.IA Soft ERP
 
-**Versión del diccionario:** `2026-09-27.1` · **Fuente única:** `app/publico/vocabulario.json` · **Fecha:** 27 de septiembre de 2026
+**Versión del diccionario:** `2026-09-27.2` · **Fuente única:** `app/publico/vocabulario.json` · **Fecha:** 27 de septiembre de 2026
 
 Este documento es para Andrés, para Isabel y para quien programe. La fuente es el JSON: si este documento y el JSON no coinciden, **manda el JSON**. La tabla de conceptos de la §4 se generó desde el JSON.
 
@@ -118,6 +118,11 @@ Este documento es para Andrés, para Isabel y para quien programe. La fuente es 
 - `GESTION_PROVEEDORES_KFC` «A espera de repuesto · gestión proveedores KFC» = ESPERA_REPUESTO, **orden por orden** (la sublínea «de ellas, a espera de repuesto» de la tarjeta cuenta una vez por cadena de continuidad, así que puede ser menor). «repuesto» en singular, como en `ESPERA_REPUESTO`.
 - Se cuenta sobre el catálogo de 90 días del buzón, por el estado de vista (`Ui::estadoVista()`), y cada cifra de un solo estado es las filas de `casos.php?est=`. El gráfico de barras sigue debajo con los nueve estados y su «Ver los números», ahora titulado «Todos los estados». La tarjeta «A espera de repuesto» de «Cómo va el buzón» se retira: es la cuarta cifra del cuadro. Los ven ADM y JZ (el jefe de zona, sobre su zona). `sw.js` pasa a v22. Preguntas para Andrés en §11 (6 a 8).
 
+**Versión `2026-09-27.2`: la gestión del repuesto y las marcas de la novedad (27-sep-2026, ampliación del pedido de la administradora).** Ella precisó las opciones que usa en SAP para una orden a espera de repuesto —PENDIENTE GESTION PROVEEDORES NACIONALES · PENDIENTE GESTION BODEGA KFC · PENDIENTE GESTION JEFES TEC. DE MANTENIMIENTO KFC · PENDIENTE APROBACION PARA DESPACHO— y lo que quiere «identificar en novedades»: PROVEEDOR EXTERNO (no son de INDUSTEC) · POR DECIDIR, QUITAR O MEJORAR · RIESGO ALTO (DERIVAR RESPONSABLE) · YA TIENE AVISO EN SAP (MANT. CONSTRUCTIVO INDUSTEC). Migración `022_gestion_repuesto_y_marcas_novedad.sql`; nueve conceptos nuevos, ningún término existente cambia; `sw.js` v23:
+- **`REP_PROVEEDORES_NACIONALES`, `REP_BODEGA_KFC`, `REP_JEFES_TEC_KFC`, `REP_APROBACION_DESPACHO`**: el paso de la gestión de KFC, valor de `casos_gestion.repuesto_gestion` (mapa `Casos::REPUESTO_GESTION`). Título en MAYÚSCULAS porque copian el registro SAP de la administradora (regla 3 de §2). **`REP_SIN_PRECISAR`** es el NULL: lo que ven todas las órdenes al aplicar la 022, y no se inventa. Es un dato **aparte del estado**, como `otro_trabajo`: la orden sigue `ESPERA_REPUESTO`; lo anota la administración o el jefe de zona (permiso nuevo `casos.repuesto_gestion`) con «Gestión del repuesto» en el buzón; el técnico no. La cuarta cifra del cuadro del inicio se desglosa por paso en su pie, cada parte con su enlace `casos.php?est=ESPERA_REPUESTO&rep=` (o `rep=SIN`).
+- **`MARCA_PROVEEDOR_EXTERNO`, `MARCA_POR_DECIDIR_KFC`, `MARCA_RIESGO_ALTO`, `MARCA_AVISO_SAP`**: marcas de la **novedad** (tabla `novedad_marcas`, mapa `Novedades::MARCAS`), no de la orden: el módulo de novedades ya tenía riesgo, responsable propuesto y aviso SAP, y sus cuatro puntos son exactamente eso. Una novedad puede llevar varias; se ponen con «Identificar» en `novedades_visita.php` (permiso `novedades.gestionar`: administración y jefe de zona), no mueven el estado, y se cuentan sobre las novedades **vivas** (todas menos descartadas y resueltas) en la fila «Novedades · identificadas» del cuadro del inicio, con enlace `novedades_visita.php?g=vivas&marca=`. «POR DECIDIR» se rotula «por decidir de KFC: quitar o mejorar» porque «decidir» es solo de KFC (versión .6). «PROVEEDOR EXTERNO» no es `NO_COMPETE` (que es la orden) ni `NOVEDAD_OTRA_AREA` (que es el tipo). `MARCA_AVISO_SAP` es una marca manual, distinta del estado `NOVEDAD_CON_AVISO`.
+- Pruebas: `prueba_cifras_estado.php` (desglose, filtro, claves y lista negra, y que la 022 declare los mismos valores que los mapas) y `prueba_panel_zona.php` (el paso no mueve la tarjeta). Preguntas para Andrés en §11 (9 a 11).
+
 ---
 
 ## 2. Reglas del diccionario
@@ -199,6 +204,15 @@ Cancelado queda fuera de la leyenda. FERIADO todavía no existe en B.IA.
 | `EN_GESTION_TECNICA` | asignada, en gestión técnica / asignadas, en gestión técnica | Asignadas · en gestión técnica | — (= ASIGNADO) | ADM JZ | cuadro «En qué estado están» del inicio (27-sep-2026) |
 | `ATENDIDA_CERRADA` | atendida, cerrada por INDUSTEC / atendidas, cerradas por INDUSTEC | Atendidas · cerradas por INDUSTEC | — (= ATENDIDO + RESUELTO) | ADM JZ | cuadro «En qué estado están» del inicio (27-sep-2026); «atendido (cerrado)» de la administradora |
 | `GESTION_PROVEEDORES_KFC` | a espera de repuesto, en gestión de proveedores de KFC | A espera de repuesto · gestión proveedores KFC | — (= ESPERA_REPUESTO, orden por orden) | ADM JZ | cuadro «En qué estado están» del inicio (27-sep-2026); tarjeta «A espera de repuesto» de «Cómo va el buzón» |
+| `REP_PROVEEDORES_NACIONALES` | pendiente gestión proveedores nacionales | PENDIENTE GESTIÓN PROVEEDORES NACIONALES | `casos_gestion.repuesto_gestion`:PROVEEDORES_NACIONALES (022) | ADM JZ | registro SAP de la administradora (27-sep-2026) |
+| `REP_BODEGA_KFC` | pendiente gestión bodega KFC | PENDIENTE GESTIÓN BODEGA KFC | repuesto_gestion:BODEGA_KFC | ADM JZ | registro SAP de la administradora |
+| `REP_JEFES_TEC_KFC` | pendiente gestión jefes técnicos de mantenimiento KFC | PENDIENTE GESTIÓN JEFES TEC. DE MANTENIMIENTO KFC | repuesto_gestion:JEFES_TEC_KFC | ADM JZ | registro SAP de la administradora |
+| `REP_APROBACION_DESPACHO` | pendiente aprobación para despacho | PENDIENTE APROBACIÓN PARA DESPACHO | repuesto_gestion:APROBACION_DESPACHO | ADM JZ | registro SAP de la administradora |
+| `REP_SIN_PRECISAR` | sin precisar la gestión | Sin precisar | repuesto_gestion:NULL (derivado) | ADM JZ | — |
+| `MARCA_PROVEEDOR_EXTERNO` | proveedor externo | Proveedor externo | `novedad_marcas.marca`:PROVEEDOR_EXTERNO (022) | ADM JZ TEC | «PROVEEDOR EXTERNO (NO SON DE INDUSTEC)» de la administradora |
+| `MARCA_POR_DECIDIR_KFC` | por decidir de KFC: quitar o mejorar | Por decidir de KFC · quitar o mejorar | marca:POR_DECIDIR_KFC | ADM JZ TEC | «POR DECIDIR, QUITAR O MEJORAR» |
+| `MARCA_RIESGO_ALTO` | riesgo alto, derivar responsable | Riesgo alto · derivar responsable | marca:RIESGO_ALTO | ADM JZ TEC | «RIESGO ALTO (DERIVAR RESPONSABLE)» |
+| `MARCA_AVISO_SAP` | ya tiene aviso en SAP, mantenimiento constructivo INDUSTEC | Ya tiene aviso en SAP · mant. constructivo INDUSTEC | marca:AVISO_SAP | ADM JZ TEC | «YA TIENE AVISO EN SAP (MANT. CONSTRUCTIVO INDUSTEC)» |
 
 #### Conjuntos de la tarjeta y del tablero
 
@@ -778,6 +792,9 @@ Ninguna bloquea la etapa E1. Van en una sola conversación, con sus propias cifr
 6. **Cuadro «En qué estado están» (27-sep-2026), para Andrés:** «Atendido (cerrado)» se cuenta como ATENDIDO + RESUELTO (atendidas por cerrar en SAP + cerradas en SAP), porque RESUELTO solo se alcanza desde ATENDIDO. ¿O quería solo las **ya cerradas en SAP**? El pie del cuadro muestra las dos partes con su enlace, así que la decisión solo cambia el número grande.
 7. «Asignados (en gestión técnica)» se cuenta como **solo ASIGNADO**: no las EN_REVISION (en manos de la administración) ni las a espera de repuesto (cuarta cifra). ¿Correcto?
 8. Ella escribe «a espera de repuestos» (plural) y «gestión proveedores KFC»; el diccionario mantiene «a espera de repuesto» (singular, como `ESPERA_REPUESTO`) y agrega «· gestión proveedores KFC» como calificativo. ¿Se deja así o se cambia el término en todo el sistema?
+9. **Gestión del repuesto (versión .2):** el paso (proveedores nacionales · bodega KFC · jefes técnicos KFC · aprobación para despacho) quedó como dato **de la orden** (`casos_gestion.repuesto_gestion`), porque la cifra que ella mira es por orden y hay órdenes a espera de repuesto sin solicitud. La alternativa es llevarlo en la **solicitud** (`pendientes`, hoy REGISTRADO_SAP/ESPERA_KFC = «PENDIENTE OK OP´S», pregunta 1) y derivar el de la orden. ¿Cuál?
+10. **Las cuatro identificaciones son marcas de la novedad**, no de la orden (el módulo de novedades ya tenía riesgo, responsable propuesto y aviso SAP). ¿Correcto, o ella quería marcar órdenes?
+11. «POR DECIDIR, QUITAR O MEJORAR» se rotuló «por decidir de KFC: quitar o mejorar» (decide KFC). ¿Es KFC quien decide, o la administración de INDUSTEC?
 
 ## 12. Tareas posteriores (no son de esta etapa)
 

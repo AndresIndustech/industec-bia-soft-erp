@@ -47,9 +47,14 @@ $ref = ['CSA_SIN' => 0, 'REG' => 0, 'ABIERTOS' => 0, 'TOTAL_ABIERTAS' => 0, 'N' 
 $filas = [];
 // `continua_de` llega con la 012: sin ella, cada orden es su propia cadena.
 try {
-    $gs = Db::todos('SELECT aviso, estado, regularizado_en, continua_de FROM casos_gestion');
+    // `repuesto_gestion` llega con la 022: sin ella, todo es sin precisar.
+    $gs = Db::todos('SELECT aviso, estado, regularizado_en, continua_de, repuesto_gestion FROM casos_gestion');
 } catch (Throwable $e) {
-    $gs = Db::todos('SELECT aviso, estado, regularizado_en, NULL AS continua_de FROM casos_gestion');
+    try {
+        $gs = Db::todos('SELECT aviso, estado, regularizado_en, continua_de, NULL AS repuesto_gestion FROM casos_gestion');
+    } catch (Throwable $e2) {
+        $gs = Db::todos('SELECT aviso, estado, regularizado_en, NULL AS continua_de, NULL AS repuesto_gestion FROM casos_gestion');
+    }
 }
 foreach ($gs as $f) { $filas[(string) $f['aviso']] = $f; }
 $raices = [];
@@ -72,7 +77,12 @@ foreach ($enCat as $a => $_) {
     $v = strtoupper((string) $f['estado']);
     if ($v === 'CERRADO_SIN_ATENCION' && !empty($f['regularizado_en'])) { $v = 'REGULARIZADO'; }
     $ref['VISTA'][$v] = ($ref['VISTA'][$v] ?? 0) + 1;
+    if ($v === 'ESPERA_REPUESTO') {
+        $p = strtoupper((string) ($f['repuesto_gestion'] ?? '')) ?: 'SIN_PRECISAR';
+        $ref['REP'][$p] = ($ref['REP'][$p] ?? 0) + 1;
+    }
 }
+$ref['REP'] = $ref['REP'] ?? [];
 $conc = 0; $una = 0; $curso = 0;
 foreach (Casos::atenciones() as $a => $x) {
     if (!isset($enCat[(string) $a])) { continue; }
@@ -193,6 +203,16 @@ ok("panel: a espera de repuesto (gestión proveedores KFC) = ESPERA_REPUESTO", c
 sin_enlace = [v for k, v in cuadro.items() if k.startswith("sin enlace")]
 ok("panel: atendidas, cerradas por INDUSTEC = ATENDIDO + RESUELTO", sin_enlace == [V.get("ATENDIDO", 0) + V.get("RESUELTO", 0)], [sin_enlace, V.get("ATENDIDO", 0), V.get("RESUELTO", 0)])
 ok("panel: ya no está la tarjeta vieja «A espera de repuesto» del buzón", "est=ESPERA_REPUESTO&amp;grupo=total" not in h)
+# El desglose de la cuarta cifra por paso de la gestión de KFC (022): cada enlace del pie
+# lleva su cifra, y esa cifra es las filas de casos.php?est=ESPERA_REPUESTO&rep=.
+pie_rep = dict((mp.group(1), int(mp.group(2))) for mp in re.finditer(r'href="casos\.php\?est=ESPERA_REPUESTO&amp;rep=([A-Z_]+)"[^>]*>(\d+) ', seg))
+for paso, n in pie_rep.items():
+    clave = "SIN_PRECISAR" if paso == "SIN" else paso
+    ok(f"panel: gestión del repuesto {paso} = SQL", n == ref["REP"].get(clave, 0), [n, ref["REP"].get(clave, 0)])
+    hr = pagina("casos.php", f"['est' => 'ESPERA_REPUESTO', 'rep' => '{paso}']")
+    mr = re.search(r'<b id="cuenta-casos"[^>]*>(\d+)</b>', hr)
+    ok(f"casos.php?est=ESPERA_REPUESTO&rep={paso}: filas = la cifra del pie", mr is not None and int(mr.group(1)) == n, [mr.group(1) if mr else None, n])
+ok("panel: el desglose suma la cuarta cifra", sum(pie_rep.values()) == V.get("ESPERA_REPUESTO", 0), [sum(pie_rep.values()), V.get("ESPERA_REPUESTO", 0)])
 for est in ("NO_COMPETE", "ASIGNADO", "ESPERA_REPUESTO", "ATENDIDO", "RESUELTO"):
     he = pagina("casos.php", f"['est' => '{est}']")
     mc = re.search(r'<b id="cuenta-casos"[^>]*>(\d+)</b>', he)
