@@ -906,9 +906,11 @@ Las hojas del piloto solo cambiaron en la frase de las cifras de Asignación; la
 ```
 cd "…\INDUSTECH IA" (la rama pc/buzon-simplificado-2026-09-27)
 INDUSTEC_LLAVE_SSH=C:/Users/andre/.ssh/industec_hostinger_pc INDUSTEC_SSH_USER=u671729428 \
-  python desarrollo/agentes/scripts/t2_10_desplegar.py nucleo/Casos.php casos.php asignacion.php --comprobar-web casos.php asignacion.php
+  python desarrollo/agentes/scripts/t2_10_desplegar.py nucleo/Casos.php casos.php asignacion.php
 ```
-Antes: comparar con el servidor ignorando CRLF/LF. Después: entrar como administración, jefe de zona y técnico y mirar
+El script sube, verifica por hash y comprueba lo que entrega la web en el mismo paso; `--comprobar-web` es
+**excluyente** (solo compara, no sube), así que va en una corrida aparte, antes, para ver que esos 3 archivos son los
+únicos que difieren del servidor (comparando sin CRLF/LF). Después: entrar como administración, jefe de zona y técnico y mirar
 el buzón y Asignación; `php ~/respaldos/tarjeta_cli.php ADMIN` sigue sirviendo (no imprime las claves nuevas, pero
 `Casos.php` es el mismo). Rollback: subir los 3 archivos desde `pc/vocabulario-sobre-vivo-2026-09-26`.
 
