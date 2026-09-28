@@ -901,7 +901,19 @@ fila. Si falta una fuente de OT INDUSTEC, las filas 1 y 2 dicen «no disponible�
 en este PC porque no hay `catalogos/casos_sap.json` local (no es de este cambio); `prueba_offline.mjs` ya fallaba.
 Las hojas del piloto solo cambiaron en la frase de las cifras de Asignación; las capturas del piloto siguen siendo las viejas.
 
-**Cómo se despliega (a la espera de autorización de Andrés; son 3 archivos, por nombre, no `--todo`):**
+**DESPLEGADO A DARKVIOLET EL 2026-09-28** (Andrés: «despliega todo»). Antes de subir se comparó por SSH (sha256 sin
+CRLF/LF; `--comprobar-web` no sirve para `.php`, la web lo ejecuta): `nucleo/Casos.php` y `asignacion.php` vivos =
+`c53d4fd`; **`casos.php` vivo = `pc/doble-enter-cerrado-sap-2026-09-27`** (§1u ya estaba desplegado). Se fusionó esa rama
+en esta (`0b3ee13`; solo `ESTADO.md` chocó, se conservaron §1u y §1v) y se volvió a probar: `prueba_panel_zona` 85·0,
+lista negra 0, claves 749·0, vocabulario 154·0, 48h 125·0, contratos 57·0, gráficos 62·0, `prueba_dialogo_seguro` 23·0.
+`t2_10_desplegar.py nucleo/Casos.php casos.php asignacion.php` → 3 de 3, hash vivo = local (`495ffe5e…`, `0b68879…`,
+`20b9bc4…`); `php -l` con el PHP del servidor 3/3 sin errores; `login.php` 200; `error_log` sin entradas nuevas.
+`tarjeta_cli.php` (subido a `~/respaldos`, corrido y borrado) contra la base real: ADMIN, JZ:UIO y JZ:CNLJ **20·0 cada
+uno**; TOTAL 136 = conteo directo por estado; con las claves nuevas: tres zonas generadas 875, cerradas en SAP 128,
+nuevas en 7 días 57, atendidas 21 (UIO 53 = 16 + 37 · LARB 23 · CNLJ 60 = 38 + 22). **Falta:** que Andrés o Isabel
+miren buzón y Asignación con sesión (administración, jefe de zona, técnico) y respondan las 5 preguntas de abajo.
+
+**El comando que se usó (por nombre, no `--todo`):**
 
 ```
 cd "…\INDUSTECH IA" (la rama pc/buzon-simplificado-2026-09-27)
