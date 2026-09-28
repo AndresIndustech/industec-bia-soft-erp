@@ -928,6 +928,49 @@ sola en el diccionario; si Isabel quiere una sola, hay que decidir si suma las d
 con la OT INDUSTEC de cierre, no con SAP). (5) Los términos de KFC (ABIERTO · SIN GESTIÓN / TRATAMIENTO · INFORME
 TÉCNICO / CERRADO) son contrato del libro de KFC (§6 de `VOCABULARIO.md`) y **no** se usaron como rótulo: se usaron los
 de Isabel del 24-sep, que son su traducción; si ella prefiere los de KFC en pantalla, es un cambio de diccionario.
+## 1u. Doble Enter = Confirmar, con pantalla de seguridad, en «Marcar como cerrada en SAP» (2026-09-27, fuera del plan, pedido de Andrés)
+
+**Commit `190eea3` en la rama `pc/doble-enter-cerrado-sap-2026-09-27` (empujada a GitHub) y desplegado a darkviolet el
+2026-09-27 con autorización de Andrés** (`t2_10_desplegar.py casos.php` → `1 de 1 archivos`; SHA-256 del archivo en el
+servidor `7d7a352f…bdb6`, idéntico al local; `php -l` sobre el archivo desplegado sin errores). Antes de subir se comprobó
+que lo vivo era exactamente el `casos.php` del 26-sep (`HEAD~1`, idéntico salvo CRLF). Ojo: la línea «la web entrega
+exactamente lo que se subió» del desplegador **no cubre `.php`** (solo compara `.js/.css/.html`), así que la prueba de la
+web es el SHA en disco más el 302 al login que da la URL sin sesión. **Pendiente: fusión en `master` desde la estación**
+y que alguien lo mire con sesión de administración (`PLAN_INDUSTEC.md` §11b, acción **R**).
+Andrés pidió que en el diálogo «Marcar como cerrada en SAP · NNNN» un doble Enter haga Confirmar, y que
+antes de confirmar aparezca «¿Está seguro?» por si el doble Enter fue involuntario.
+
+**Qué quedó funcionando** — todo en `desarrollo/sistema_ots/app/publico/casos.php`:
+
+- **El diálogo nuevo `#acc-seguro`** (líneas 1288-1301, comentario incluido; el `<dialog>` va de la 1294 a la 1301): «¿Estás seguro de que deseas confirmar?», el texto
+  «Vas a marcar la orden NNNN como cerrada en SAP. Si el doble Enter fue sin querer, vuelve.» y dos botones,
+  «No, volver» (con `autofocus` **y** `focus()` explícito) y «Sí, marcar como cerrada». No es `window.confirm()`
+  a propósito: ese acepta con Enter, y un tercer Enter involuntario habría cerrado la orden igual.
+- **La bandera `seguro:true` en `ACC.cerrado_sap`** (línea 1318), única acción que la lleva. Las otras siete
+  (`asignar`, `seguimiento`, `revision`, `veredicto`, `derivar`, `regularizar`, `otro_trabajo`) no cambian.
+- **El handler de `submit`** (líneas 1364-1389): conserva la validación de `confirmo_zona` para `asignar` y,
+  para una acción con `seguro`, intercepta el envío —venga del botón Confirmar o del doble Enter— y abre
+  `#acc-seguro`. Solo «Sí» pone la bandera `seguroOk` y reenvía con `requestSubmit()`; «No» o Esc cierran la
+  seguridad y devuelven el foco a la nota, que nunca se borró porque `#acc` no se cerró.
+- **El doble Enter** (líneas 1403-1420): en el textarea de la nota, Enter sin Shift no inserta salto (la nota
+  es «en una línea», como dice el placeholder) y dos Enter dentro de 1,5 s llaman a `requestSubmit()`, que
+  respeta `required` y pasa por el handler de arriba. Shift+Enter sigue insertando salto. `abrir()` reinicia la
+  bandera y el contador (líneas 1424-1425).
+
+**Cómo se comprobó:**
+
+| Comprobación | Resultado |
+|---|---|
+| `ssh -p 65002 -i ~/.ssh/industec_hostinger_pc u671729428@82.25.73.181 'php -l' < casos.php` (por stdin, no escribe nada en el servidor) | `No syntax errors detected in Standard input code` |
+| `node --check` sobre el bloque `<script>` extraído | sintaxis OK |
+| `node prueba_contratos.mjs` (todo `getElementById` tiene su `id`, incluidos los cuatro nuevos) | **57 · 0** |
+| `node prueba_graficos.mjs` | **62 · 0** |
+| **`node prueba_dialogo_seguro.mjs`** — nueva: recorta el diálogo y su JS **reales** de `casos.php`, los carga en **Edge sin ventana** y dispara las teclas y clics | **23 · 0**: un Enter no envía; el doble Enter abre la seguridad **con el foco en «No, volver»** y con el número de orden; «No» y Esc vuelven a la nota **sin perderla**; Confirmar también pasa por la seguridad; «Sí» envía **una sola vez**; dos Enter a más de 1,5 s no confirman; Shift+Enter no cuenta; `revision` no intercepta Enter, respeta `required` y envía sin seguridad; `asignar` a otra zona sin la casilla sigue avisando |
+
+**Lo que NO se comprobó:** la pantalla **con sesión real** en darkviolet (no se desplegó), el diálogo **en un celular**
+(la seguridad hereda el estilo `@media (max-width:560px)` del `dialog`, pero nadie lo miró), y que un **Enter físico** sobre
+«No, volver» dispare el clic: la prueba verifica que el foco está ahí, que es lo que hace que el navegador convierta
+Enter en clic; la activación por teclado no se puede simular con un evento sintético.
 
 ## 1t. Vocabulario SAP: las mismas palabras para todos los roles (2026-09-24/26, fuera del plan, pedido de la administradora)
 
