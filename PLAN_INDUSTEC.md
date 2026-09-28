@@ -2831,6 +2831,32 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     `--ejecutar` nuevo, correr primero el simulacro sin `--ejecutar` como
     prueba de humo — así se encontró este, antes de tocar ningún dato.
 
+48. **Dos despliegues el mismo día, desde dos worktrees, y el segundo pisa al
+    primero sin decir nada.** El 28-sep-2026 el buzón simplificado subió
+    `casos.php` y `nucleo/Casos.php` a las 08:13 UTC y el panel de estados
+    subió los suyos a las 08:16, hechos sobre una base que no tenía el buzón
+    simplificado. Los dos despliegues «verificaron por hash» lo que subían, y
+    los dos pasaron: el hash comprueba que llegó lo que mandaste, no que lo
+    que mandaste contenga lo del otro. Quedó en el servidor una mezcla que no
+    es ningún commit (`asignacion.php` de una rama pidiendo claves que el
+    `Casos.php` de la otra no devuelve). **Regla:** antes de desplegar, bajar
+    el sha256 de cada archivo a subir y compararlo contra el commit del que
+    partiste (`git show <base>:<ruta>`); si el vivo no es tu base, fusiona lo
+    vivo primero. Y lo que se construye encima de lo vivo parte de un commit
+    que es la foto exacta del servidor.
+
+49. **Un modo de prueba que le dice «emitida ✓» a un usuario real.** El sitio
+    de pruebas emitía en modo PRUEBA con todas las salvaguardas del lado del
+    documento —serie 9000, franja en el PDF, correo retenido— y ninguna del
+    lado de la persona: la app pintaba «OT INDUSTEC emitida» en verde, el
+    historial decía «emitida» y la ayuda afirmaba que el correo había salido a
+    KFC. Cuando el piloto pasó a uso real, 14 OT se dieron por enviadas, 12
+    órdenes se cerraron en SAP con un número que KFC no tiene y una solicitud
+    de repuesto quedó colgando de un documento que no vale. **Regla:** una
+    salvaguarda que el usuario no ve no protege al usuario; lo que es de
+    prueba se dice en la pantalla donde se toma la decisión, con el color y
+    el icono de una advertencia, y nunca mueve el estado de algo real.
+
 ### Lo que no se toca, nunca
 
 1. **`G:\Mi unidad`** (Drive de INDUSTEC) es de solo lectura, **indefinidamente**.
