@@ -2375,6 +2375,7 @@ sobre-contó el backlog 8× en T1.11.
 |---|---|
 | ~~Aplicar la 007~~ | ✅ **Aplicada el 2026-09-11** en el sitio de pruebas, dos veces sin duplicar; la 008, 009 y 010 también. La **003** de agentes quedó superada en parte por la 008 (Hostinger); lo que resta es de la estación y va con el corte |
 | ~~Las 4 comprobaciones rotas de `prueba_48h.php` y `prueba_offline.mjs`~~ | ✅ **Hecho el 2026-09-13** (T2.14.7): 120·0 y rutas por `PHP_BIN`/`CHROME_BIN` |
+| **Desplegar el buzón simplificado** (`pc/buzon-simplificado-2026-09-27`: `casos.php`, `asignacion.php`, `nucleo/Casos.php`) | **Andrés**: el comando por nombre está en `ESTADO.md` §1v; después, mirar buzón y Asignación con sesión de administración, jefe de zona y técnico, y responder las 5 preguntas de §1v (qué es «semana», qué es «OT generada», qué es «cerrada» por zona) |
 | Desplegar a UIO, y 48 h después a LARB y CNLJ | **Andrés** (I-8). El 2026-09-11 el rediseño se subió entero al sitio de pruebas porque nadie lo usa; el piloto por zona se decide cuando empiece el uso real |
 | ~~Que el PDF y el correo salgan del sistema nuevo~~ | ✅ **El PDF, desde el 2026-09-11** (la 008, en el sitio de pruebas). El correo queda en `email_queue`; falta el despachador y los datos reales del corte: contadores de `counter_{zona}.txt` y destinatarios en `config.php` |
 | El 36% del correctivo que el buzón no trae | Confirmar la causa — ver `SALIDAS IA\OTS\HALLAZGO_BUZON_VS_SAP.md` |

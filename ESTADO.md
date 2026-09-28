@@ -3,7 +3,7 @@
 > **Empieza por aquí.** Este archivo dice dónde vamos; [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) dice qué hay que construir y con qué criterios.
 > Si vas a trabajar, **anótate primero en §5 (Trabajo en paralelo)** antes de tocar nada.
 
-**Última actualización:** 2026-09-23
+**Última actualización:** 2026-09-27
 **Fase en curso:** 2 · Automatización — **construida y desplegada en el sitio de pruebas; lo que sigue es el piloto en UIO** (paquete en `desarrollo/sistema_ots/piloto/`). La Fase 1 quedó cerrada
 **Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
 
@@ -859,6 +859,73 @@ la que dejó T2.23.
   haga falta para las otras baterías.
 
 ---
+
+## 1v. Buzón simplificado y cifras de Asignación con los términos de la administradora (2026-09-27, fuera del plan, pedido de Isabel)
+
+**Rama `pc/buzon-simplificado-2026-09-27`** (a partir de `c53d4fd`, lo desplegado en darkviolet el 26-sep), subida a
+GitHub, **sin desplegar**. Isabel (capturas del buzón y de Asignación, 27-sep) quiere en el buzón solo tres cosas —el
+resumen general con los términos de su registro SAP/KFC, cuántas órdenes se generaron en la semana y cuántas por zona
+con lo abierto y lo cerrado— y en Asignación «sin asignar» como cifra general, «pendientes de informe técnico» y
+«pendientes de repuesto», las mismas para el jefe de zona. No se inventó ningún término: los rótulos son los del
+diccionario (`vocabulario.json` **no cambió**, sigue en `2026-09-24.6`), y las cifras salen de **una sola función**,
+`Casos::tarjetasPorZona()`, la misma de la tarjeta «Por zona» del panel y del filtro `?grupo=` del buzón.
+
+**Qué se quitó y qué se puso** (código: `casos.php`, `asignacion.php`, `nucleo/Casos.php`):
+
+| Antes (captura de Isabel) | Ahora | Clave del diccionario · definición |
+|---|---|---|
+| «Llegaron ayer y hoy», «Órdenes nuevas en 7 días», «Fuera del área, por resolver», «Con fecha SAP hoy», «Con OT INDUSTEC · N de cierre», «En la ventana de 90 días», «Sin zona resuelta» y los tres cuadros de texto (OT INDUSTEC, fecha comprometida, alertas) | **Retirados.** Las órdenes fuera del área siguen al alcance por el filtro «Alerta» (y por la sublínea de la tarjeta del panel); la fecha SAP sigue en cada fila | — |
+| Línea de estados «Sin asignar · Asignadas · A espera de repuesto · Atendidas, por cerrar en SAP · Cerradas en SAP» | **Resumen general**, cinco cuadros: ÓRDENES A ESPERA DE INFORME TÉCNICO (pie: «de ellas, N sin asignar») · ÓRDENES ABIERTAS (pie: «de ellas, N a espera de repuesto») · TOTAL DE ÓRDENES ABIERTAS · Atendidas, por cerrar en SAP · Cerradas en SAP. Cada uno enlaza a sus filas (`?grupo=` / `?est=`) | `ESPERA_INFORME` = abierta sin ninguna OT INDUSTEC emitida (lo que KFC llama ABIERTO · SIN GESTIÓN) · `ABIERTA` = con OT de evaluación y sin cierre, siempre con las que esperan repuesto (TRATAMIENTO · INFORME TÉCNICO) · `TOTAL_ABIERTAS` = las dos · `ATENDIDA` = ATENDIDO · `CERRADA_SAP` = RESUELTO (D-A, D-B del 24-sep) |
+| «Fuera de esa línea: en revisión · no nos compete · cerradas sin atención · regularizadas» | Se queda, como «También en el buzón:» | los mismos conceptos |
+| — | **Órdenes nuevas en 7 días**: hoy más los seis días anteriores por `fecha_creacion`, con el desglose por zona en el pie; enlaza a `?dias=6` | `ORDENES_NUEVAS_7D`. Corrige un desfase: `casos.php` contaba `-7 días` con `>=`, ocho días en un número que dice «7» (el panel ya contaba seis) |
+| — | **Por zona**: tabla ZONA UIO · LARB · CUENCA-LOJA (+ OTRA y sin zona solo si traen algo) × Órdenes generadas (90 días) · A ESPERA DE INFORME TÉCNICO · ÓRDENES ABIERTAS · TOTAL DE ÓRDENES ABIERTAS · Atendidas, por cerrar en SAP · Cerradas en SAP, y la fila TOTAL de las tres zonas; cada cifra enlaza a `casos.php?zona=X&grupo=…` o `&est=…`. Debajo, la línea que cuadra el TOTAL del resumen con la fila (OTRA y sin zona) | claves nuevas de `tarjetasPorZona()`: `en_buzon`, `cerradas_sap`, `nuevas_7d` por zona y total, y `abiertas` / `espera_informe` del conjunto |
+| Asignación: «Sin asignar · en todas las zonas», «Sin órdenes asignadas · de N en el equipo», «Con 8 o más · piénsalo antes de darle otra», «Asignadas y a espera de repuesto · de todo el equipo» | **Sin asignar** (cifra general, sin pie) · **ÓRDENES A ESPERA DE INFORME TÉCNICO** · **A espera de repuesto**; lo mismo en el bloque de cada zona (y por tanto en el del jefe de zona). Los dos cuadros de técnicos se retiraron; la carga de cada técnico sigue abajo, persona por persona | `SIN_ASIGNAR` (sigue contando con `Casos::sinAsignar()`: NUEVO + EN_REVISION, la diferencia con el panel sigue pendiente de Andrés) · `ESPERA_INFORME` · `ESPERA_REPUESTO` |
+
+El técnico ve el resumen y el cuadro semanal de sus órdenes, no la tabla por zona. El jefe de zona ve una sola
+fila. Si falta una fuente de OT INDUSTEC, las filas 1 y 2 dicen «no disponible», nunca 0 (I-7).
+
+**Cómo se comprobó** (Git Bash, `desarrollo/sistema_ots/app`, PHP 8.3.35 de `D:\SOFTWARE\PHP83`):
+
+| Prueba | Antes | Después |
+|---|---|---|
+| `prueba_panel_zona.php` (+3 órdenes sintéticas fuera del TOTAL y 15 afirmaciones: generadas, cerradas en SAP, nuevas ≤ 6 días y el borde de 7, totales, subconjuntos, «no disponible», y que el buzón y Asignación piden las claves nuevas y ya no pintan los cuadros retirados) | 70·0 | **85·0** |
+| `prueba_vocabulario.php` · `prueba_claves_vocabulario.php` · `prueba_lista_negra.php` | 154·0 · 748·0 · 0 | 154·0 · **749·0** · **0** |
+| Compuerta de cobertura (`verificar_diccionario.py` de la sesión del 24-sep, contra el mismo JSON) | APRUEBA `.6`, todo en 0 | APRUEBA `.6`, todo en 0 |
+| `prueba_48h` · `prueba_despacho` · `prueba_destinatarios` · `prueba_casos_prueba` · `validacion_test` | 125·0 · 20·0 · 22·0 · 7·0 · 37/37 | iguales |
+| `prueba_contratos.mjs` · `prueba_graficos.mjs` · `prueba_barra_tecnico.mjs` | 57·0 · 62·0 · OK | iguales |
+| `php -l` sobre `publico/` | 66/66 | 66/66 |
+| Render sin base (doble de `Db`, datos sintéticos; el arnés del 24-sep) de `casos.php` y `asignacion.php` como ADMIN, JEFE_ZONA:UIO y TECNICO | — | 0 avisos PHP nuevos (los 2 `tecnico_auto` ya salían con el `casos.php` original: el doble no trae esa columna); el resumen, el cuadro semanal y la tabla cuadran entre sí (UIO 7 generadas = 5 del TOTAL + 1 atendida + 1 cerrada sin atención; fila TOTAL 8 + OTRA 1 + sin zona 1 = 10 del resumen); el jefe ve una fila y ningún TOTAL; el técnico no ve la tabla |
+
+**Lo que NO se comprobó:** nada en darkviolet ni con sesión (no se desplegó); `verificar_http.py`, `verificar_cifras.py` y
+`capturar_pantallas.mjs` (necesitan el servidor; ninguno afirma los textos retirados); `prueba_continuidad.php` no corre
+en este PC porque no hay `catalogos/casos_sap.json` local (no es de este cambio); `prueba_offline.mjs` ya fallaba.
+Las hojas del piloto solo cambiaron en la frase de las cifras de Asignación; las capturas del piloto siguen siendo las viejas.
+
+**Cómo se despliega (a la espera de autorización de Andrés; son 3 archivos, por nombre, no `--todo`):**
+
+```
+cd "…\INDUSTECH IA" (la rama pc/buzon-simplificado-2026-09-27)
+INDUSTEC_LLAVE_SSH=C:/Users/andre/.ssh/industec_hostinger_pc INDUSTEC_SSH_USER=u671729428 \
+  python desarrollo/agentes/scripts/t2_10_desplegar.py nucleo/Casos.php casos.php asignacion.php --comprobar-web casos.php asignacion.php
+```
+Antes: comparar con el servidor ignorando CRLF/LF. Después: entrar como administración, jefe de zona y técnico y mirar
+el buzón y Asignación; `php ~/respaldos/tarjeta_cli.php ADMIN` sigue sirviendo (no imprime las claves nuevas, pero
+`Casos.php` es el mismo). Rollback: subir los 3 archivos desde `pc/vocabulario-sobre-vivo-2026-09-26`.
+
+**Ojo con la fusión:** el árbol principal del PC tiene sin confirmar el «doble Enter» de `casos.php` (§1u, otra zona del
+archivo) y hay un worktree `_wt_panel_estados_2026-09-27` con el cuadro «En qué estado están» de `panel.php` + 4 conceptos
+nuevos en `vocabulario.json` (otra conversación). Tres cambios de tres conversaciones sobre el mismo repo: fusionar de
+uno en uno y correr `prueba_panel_zona.php`, `prueba_claves_vocabulario.php` y `prueba_lista_negra.php` después de cada uno.
+
+**Preguntas que solo Andrés o Isabel pueden responder:** (1) «semana» = hoy más seis días anteriores (como el panel) o
+lunes a domingo; si es lo segundo, es una línea en `tarjetasPorZona()`. (2) «OTs generadas» = órdenes que KFC creó
+(`fecha_creacion` del aviso, lo implementado) o OT INDUSTEC emitidas por los técnicos. (3) «Resumen general de OTs
+atendidas»: se leyó como el resumen de estados; si ella quiere solo atendidas + cerradas en SAP, se quitan tres cuadros.
+(4) «Cerradas» por zona: hoy son dos columnas (atendidas, por cerrar en SAP · cerradas en SAP) porque «cerrada» nunca va
+sola en el diccionario; si Isabel quiere una sola, hay que decidir si suma las dos (su plan de seguimiento marca CERRADA
+con la OT INDUSTEC de cierre, no con SAP). (5) Los términos de KFC (ABIERTO · SIN GESTIÓN / TRATAMIENTO · INFORME
+TÉCNICO / CERRADO) son contrato del libro de KFC (§6 de `VOCABULARIO.md`) y **no** se usaron como rótulo: se usaron los
+de Isabel del 24-sep, que son su traducción; si ella prefiere los de KFC en pantalla, es un cambio de diccionario.
 
 ## 1t. Vocabulario SAP: las mismas palabras para todos los roles (2026-09-24/26, fuera del plan, pedido de la administradora)
 
@@ -2765,6 +2832,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
+| **Buzón simplificado y cifras de Asignación** (pedido de Isabel, fuera del plan) | Conversación desde el PC de Andrés — rama `pc/buzon-simplificado-2026-09-27` en GitHub, **hecha y sin desplegar** (espera autorización) | 2026-09-27 | Solo `casos.php`, `asignacion.php`, `nucleo/Casos.php` (tres claves nuevas en `tarjetasPorZona()`), `prueba_panel_zona.php` (85·0) y una frase en las dos hojas del piloto. No toca la base, el árbol canónico ni `vocabulario.json`. Detalle, cifras y comando de despliegue en **§1v**. Conviven con dos cambios sin confirmar de otras conversaciones (§1u en el árbol principal y el worktree `_wt_panel_estados_2026-09-27`): fusionar de uno en uno |
 | ~~Vocabulario SAP en todo el sistema~~ (pedido de la administradora, fuera del plan) | ✅ **Terminada y desplegada en darkviolet el 2026-09-26** — ramas `pc/vocabulario-sap-2026-09-24` y `pc/vocabulario-sobre-vivo-2026-09-26` | 2026-09-24 | Solo texto visible, `vocabulario.json` y la tarjeta «Por zona»; no tocó la base ni el árbol canónico. Falta que la **estación empuje T2.28.3/T2.28.6** y fusione estas ramas en `master`, y que alguien vea las pantallas con sesión. Detalle, cifras y cómo se revierte en **§1t** |
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
 | ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó, se detuvo a propósito una vez (error nº 44) y se relanzó. ✅ **T2.28.2, el módulo de correos, construido, desplegado y verificado el 2026-09-24** (013 aplicada, `TODO OK`; `correos.php`; `Destinatarios::resolver()`; el tope y el cupo por hora del despachador — `§1s-undecies`). **Pendiente, de aprobación:** `correos_sembrar_cli.php --ejecutar` (el simulacro ya da 3/3 contra el maestro). De T2.28.3 ya está lo que cubrió el arreglo urgente; sigue T2.28.6 en el carril. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b puntos 7 y 8 |
