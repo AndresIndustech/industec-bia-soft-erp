@@ -305,7 +305,16 @@ final class Emision
                 if (($fila['emitida_en'] ?? null) !== null && is_file($ruta)) {
                     $pdo->commit();
                 } else {
-                    $pdf = self::pdf($c, $orden, $id);
+                    /* Un solo instante para la emisión (28-sep-2026): el que
+                       imprime el PDF («Documento generado automáticamente el …»)
+                       es el que se graba en emitida_en. Antes el PDF tomaba
+                       date() antes de dompdf y la columna NOW() después: si el
+                       render cruzaba un cambio de minuto, toda regeneración
+                       —que imprime emitida_en— discrepaba del original en esa
+                       línea. Si la orden ya estaba emitida (PDF perdido, E-10),
+                       vale la emitida_en leída bajo el candado. */
+                    $emitidaEn = ($fila['emitida_en'] ?? null) !== null ? (string) $fila['emitida_en'] : date('Y-m-d H:i:s');
+                    $pdf = self::pdf(['emitida_en' => $emitidaEn] + $c, $orden, $id);
                     if (!is_dir(self::dirPdf())) { mkdir(self::dirPdf(), 0755, true); }
                     $tmp = $ruta . '.' . bin2hex(random_bytes(4)) . '.tmp';
                     if (file_put_contents($tmp, $pdf) !== strlen($pdf) || !rename($tmp, $ruta)) {
@@ -317,12 +326,12 @@ final class Emision
                        recibió KFC; la nueva va aparte (E-10). */
                     $regen = ($fila['emitida_en'] ?? null) !== null;
                     Db::ejecutar("UPDATE ot_capturadas
-                                     SET emitida_en = COALESCE(emitida_en, NOW()),
+                                     SET emitida_en = COALESCE(emitida_en, ?),
                                          pdf_sha256 = COALESCE(pdf_sha256, ?),
                                          pdf_sha256_regen = ?,
                                          estado = 'EMITIDA', emision_error = NULL
                                    WHERE captura_id = ?",
-                                 [$huella, $regen && ($fila['pdf_sha256'] ?? null) !== $huella ? $huella : null, $capturaId]);
+                                 [$emitidaEn, $huella, $regen && ($fila['pdf_sha256'] ?? null) !== $huella ? $huella : null, $capturaId]);
                     if ($regen) {
                         Auth::bitacora('REGENERAR_PDF', 'ot', $id, 'PDF regenerado desde la fila', null, null,
                                        ['sha256_original' => $fila['pdf_sha256'] ?? null, 'sha256_nuevo' => $huella]);
@@ -596,10 +605,13 @@ final class Emision
 
     /**
      * «Documento generado automáticamente el …»: la hora de la emisión original
-     * si la orden ya se emitió (`ot_capturadas.emitida_en`), y la de ahora solo
-     * en la primera emisión. Hasta el 28-sep-2026 era siempre la de ahora, así
-     * que regenerar un PDF perdido (E-10) le cambiaba la fecha a un documento
-     * que ya se había entregado. Mismo formato que antes: AAAA-MM-DD HH:MM.
+     * si la orden ya se emitió (`ot_capturadas.emitida_en`). En la primera
+     * emisión, `emitir()` fija un solo instante y lo pasa aquí y a `emitida_en`
+     * (así el original y toda regeneración dicen lo mismo); la hora de ahora
+     * queda solo para quien llame sin fila (vistas previas, pruebas). Hasta el
+     * 28-sep-2026 era siempre la de ahora, así que regenerar un PDF perdido
+     * (E-10) le cambiaba la fecha a un documento que ya se había entregado.
+     * Mismo formato que antes: AAAA-MM-DD HH:MM.
      */
     public static function fechaEmision(?string $emitidaEn): string
     {

@@ -104,6 +104,17 @@ $REGENERAR = [
     203 => ['ot' => 'OT-9152-G002EC-10355352-UIO', 'aviso' => '10355352'],
 ];
 
+/* Lo que la copia cambia además de la franja y la fecha, dicho en la bitácora.
+   La OT-9125 se emitió el 24-sep a las 10:15, antes de T2.28.2 (D-G): su PDF
+   imprimía en «Correo de Jefe de Operaciones Local» el buzón de zona de
+   INDUSTEC, que no es el contacto de Grupo KFC. La copia dice lo que dice toda
+   OT emitida desde ese día. El original, con esa línea, queda en el respaldo. */
+$NOTAS = [
+    166 => 'La línea «Correo de Jefe de Operaciones Local» dice «sin configurar»: el original (emitido antes de '
+         . 'T2.28.2, D-G) imprimía ahí jefezona-uio@industec.me, el buzón de zona de INDUSTEC, no el contacto de KFC. '
+         . 'El original sigue en el respaldo.',
+];
+
 /* --- Opciones -------------------------------------------------------------- */
 $modo = 'SIMULACRO';
 $muestra = null;
@@ -131,6 +142,11 @@ if (!method_exists(Emision::class, 'fechaAtencion') || !method_exists(Emision::c
     salir('el nucleo/Emision.php de este sitio es el anterior al 28-sep-2026 (sin fechaAtencion/fechaEmision): '
         . 'despliega primero el de la rama', 3);
 }
+/* Solo en el sitio del piloto: en producción no hay serie 9000 que regenerar,
+   y el modo es lo que separa un sitio del otro (revisión del 28-sep-2026). */
+if (Emision::modo() !== 'PRUEBA') {
+    salir('este sitio está en modo ' . Emision::modo() . ': la consola es solo para el sitio del piloto (modo PRUEBA)', 3);
+}
 $indexadorNuevo = str_contains((string) @file_get_contents($APP . '/archivo_indexar_cli.php'), 'Emision::fechaAtencion(');
 
 $HOME = rtrim((string) (getenv('HOME') ?: (function_exists('posix_getpwuid') ? (posix_getpwuid(posix_geteuid())['dir'] ?? '') : '')), '/');
@@ -143,7 +159,11 @@ echo "PDF en:   " . Emision::dirPdf() . "\n";
 echo "respaldo: $DIR_RESP" . (is_dir($DIR_RESP) ? ' (ya existe)' : ' (todavía no existe)') . "\n";
 echo "índice nocturno (archivo_indexar_cli.php) con la fecha corregida: " . ($indexadorNuevo ? 'sí' : 'NO — es el anterior') . "\n";
 
-/* --- 1. El conjunto: las 14, y ninguna otra del piloto hasta el 27-sep ------ */
+/* --- 1. El conjunto: las del pedido, y ninguna otra del piloto hasta el 27-sep
+   Entran a la comparación las emitidas hasta HASTA_PEDIDO y, de cualquier
+   fecha, las que la lista nombra: así, si Andrés suma una posterior (p. ej. la
+   captura 204, emitida el 28-sep), basta con añadir su línea a $REGENERAR
+   (revisión del 28-sep-2026: antes también había que mover HASTA_PEDIDO). */
 $delPiloto = Db::todos(
     'SELECT captura_id, id_industec, emitida_en FROM ot_capturadas
       WHERE id_industec IS NOT NULL AND ' . Emision::sqlEsDePrueba('id_industec') . '
@@ -152,18 +172,20 @@ $delPiloto = Db::todos(
 $hastaPedido = [];
 $fuera = [];
 foreach ($delPiloto as $f) {
-    if ((string) $f['emitida_en'] <= HASTA_PEDIDO) { $hastaPedido[(int) $f['captura_id']] = (string) $f['id_industec']; }
-    elseif (!isset($REGENERAR[(int) $f['captura_id']])) { $fuera[] = $f; }
+    $k = (int) $f['captura_id'];
+    if ((string) $f['emitida_en'] <= HASTA_PEDIDO || isset($REGENERAR[$k])) { $hastaPedido[$k] = (string) $f['id_industec']; }
+    else { $fuera[] = $f; }
 }
 $esperado = array_map(fn($r) => $r['ot'], $REGENERAR);
+$N = count($REGENERAR);
 ksort($hastaPedido);
 if ($hastaPedido !== $esperado) {
-    echo "\nLas OT del piloto emitidas hasta el 27-sep no son las 14 del pedido:\n";
+    echo "\nLas OT del piloto emitidas hasta el 27-sep (más las que nombra la lista) no son las $N del pedido:\n";
     foreach (array_diff_assoc($esperado, $hastaPedido) as $k => $v) { echo "  falta o cambió   captura $k: $v\n"; }
     foreach (array_diff_assoc($hastaPedido, $esperado) as $k => $v) { echo "  no está en el pedido  captura $k: $v\n"; }
-    salir('el conjunto de 14 no cuadra');
+    salir("el conjunto de $N no cuadra");
 }
-echo "\nconjunto: las 14 del pedido son exactamente las OT del piloto emitidas hasta el 27-sep ✓\n";
+echo "\nconjunto: las $N del pedido son exactamente las OT del piloto emitidas hasta el 27-sep (y las que nombra la lista) ✓\n";
 if ($fuera) {
     echo "fuera del pedido (NO se tocan; con la franja hasta que Andrés decida):\n";
     foreach ($fuera as $f) {
@@ -247,6 +269,18 @@ foreach ($REGENERAR as $cid => $r) {
                          $marca ? "#{$marca['id']}" : 'sin fila', $regen ? substr($regen, 0, 12) . '…' : 'NULL',
                          $shaDisco === $orig ? '= la original' : ($shaDisco === $regen ? '= la regenerada' : 'distinta de las dos'),
                          $yaCorregida ? 'puesta' : 'sin poner'));
+            /* El único corte que deja esto a medias: el proceso murió entre el
+               rename del PDF nuevo y el commit (SSH caído, memoria). La base se
+               revirtió sola al cerrarse la conexión; en disco quedó el PDF nuevo
+               sin su fila. El remedio es el original del respaldo, y se dice cuál
+               (revisión del 28-sep-2026). No se repone solo: un PDF en disco que
+               nadie registró no se pisa sin que alguien lo mire. */
+            $resp = $DIR_RESP . '/' . $ot . '.pdf';
+            if ($marca === null && $regen === null && $shaDisco !== null && $shaDisco !== $orig
+                && is_file($resp) && hash_file('sha256', $resp) === $orig) {
+                $mal("parece una corrida cortada entre el reemplazo del PDF y el commit. Remedio: "
+                     . "cp -p $resp $ruta && echo '$orig  $ruta' | sha256sum -c   (y otra vez el simulacro)");
+            }
         }
     }
 
@@ -323,6 +357,7 @@ foreach ($plan as $cid => $p) {
         printf("   Archivo         fecha %s · huella %s\n", corto((string) $p['arch']['fecha_atencion']),
                (string) $p['arch']['sha256'] === $p['sha_disco'] ? '= la del disco' : 'DISTINTA de la del disco');
     }
+    if (isset($NOTAS[$cid])) { echo "   nota            {$NOTAS[$cid]}\n"; }
     foreach ($p['por_que'] as $m) { echo "   ✗ $m\n"; }
 }
 echo "\n" . sprintf('PENDIENTE %d · HECHA %d · HECHA (falta el Archivo) %d · INCONSISTENTE %d',
@@ -472,7 +507,8 @@ foreach ($plan as $cid => $p) {
         if ($n !== 1) { throw new RuntimeException("ot_archivo tocó $n filas, no 1"); }
         $detalle = 'PDF regenerado sin la franja «' . FRANJA . '», como copia interna: mismo número, datos, fotos, firma '
                  . 'y fecha de emisión (' . $c['emitida_en'] . '); ' . PEDIDO . '.'
-                 . ($f !== null ? " Fecha de atención corregida {$f['antes']} → {$f['nueva']}: no coincidía con el inicio y el fin de la visita." : '');
+                 . ($f !== null ? " Fecha de atención corregida {$f['antes']} → {$f['nueva']}: no coincidía con el inicio y el fin de la visita." : '')
+                 . (isset($NOTAS[$cid]) ? ' ' . $NOTAS[$cid] : '');
         Db::ejecutar(
             "INSERT INTO bitacora (usuario_id, usuario, accion, entidad, referencia, estado_antes, estado_despues,
                                    exito, detalle, datos, ip, equipo)
@@ -489,6 +525,7 @@ foreach ($plan as $cid => $p) {
                  'fecha_atencion'   => $f === null ? null : ['antes' => $f['antes'], 'despues' => $f['nueva'],
                                                              'inicio' => $f['inicio'], 'fin' => $f['fin']],
                  'respaldo'         => '~/' . SUBDIR . '/' . $ot . '.pdf',
+                 'nota'             => $NOTAS[$cid] ?? null,
              ], JSON_UNESCAPED_UNICODE)]
         );
         if (!rename($tmp, $p['ruta'])) { throw new RuntimeException('no se pudo reemplazar el PDF'); }

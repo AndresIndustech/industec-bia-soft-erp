@@ -136,11 +136,21 @@ afirmar('y no la hora de la regeneración', str_contains($hReg, 'generado autom�
 $hPrim = Emision::html($c, $orden, $id);
 afirmar('html() de la primera emisión: la de ahora',
         str_contains($hPrim, 'generado automáticamente el ' . $antes) || str_contains($hPrim, 'generado automáticamente el ' . date('Y-m-d H:i')), true);
-// emitir() lee la fila con emitida_en antes de regenerar un PDF perdido (E-10):
-// ese mismo $c es el que recibe html().
-afirmar('emitir() le pasa a pdf() la fila leída, con su emitida_en',
-        (bool) preg_match('/\$pdf = self::pdf\(\$c, \$orden, \$id\);/', $src)
-        && str_contains($src, "Db::uno('SELECT * FROM ot_capturadas WHERE captura_id = ?', [\$capturaId])"), true);
+// emitir() fija UN instante para la emisión y lo usa en el PDF y en la columna
+// (revisión del 28-sep-2026): antes el PDF tomaba date() antes de dompdf y la
+// columna NOW() después, y si el render cruzaba un minuto la copia discrepaba.
+afirmar('emitir(): un solo instante, la emitida_en leída bajo el candado o la de ahora',
+        str_contains($src, "\$emitidaEn = (\$fila['emitida_en'] ?? null) !== null ? (string) \$fila['emitida_en'] : date('Y-m-d H:i:s');"), true);
+afirmar('emitir(): ese instante es el que recibe el PDF',
+        str_contains($src, "\$pdf = self::pdf(['emitida_en' => \$emitidaEn] + \$c, \$orden, \$id);"), true);
+afirmar('emitir(): y el que se graba (COALESCE con ?, ya no NOW())',
+        str_contains($src, 'SET emitida_en = COALESCE(emitida_en, ?)') && !str_contains($src, 'COALESCE(emitida_en, NOW())'), true);
+afirmar('emitir(): el parámetro va primero, en el orden del UPDATE',
+        str_contains($src, "[\$emitidaEn, \$huella, \$regen"), true);
+// La unión de arrays deja la emitida_en fijada por encima de la de la fila.
+$fijada = '2026-09-28 21:07:59';
+afirmar('html() con el instante fijado: «generado automáticamente el 2026-09-28 21:07»',
+        str_contains(Emision::html(['emitida_en' => $fijada] + $c, $orden, $id), 'generado automáticamente el 2026-09-28 21:07'), true);
 
 echo "\n=== 6. La consola de regeneración ===\n";
 $con = (string) file_get_contents(__DIR__ . '/servidor/regenerar_pdf_piloto_cli.php');
@@ -162,6 +172,15 @@ afirmar('comprueba que el inicio y el fin caen el día nuevo', str_contains($con
 afirmar('la corrección con JSON_INSERT (no reescribe la carga del técnico)', str_contains($con, "JSON_INSERT(carga, '\$.correccion_admin'"), true);
 afirmar('pdf_sha256 no se toca: solo pdf_sha256_regen', !preg_match('/SET\s+pdf_sha256\s*=/', $con) && str_contains($con, 'SET pdf_sha256_regen = ?'), true);
 afirmar('simulacro por omisión', str_contains($con, "\$modo = 'SIMULACRO';"), true);
+// Revisión del 28-sep-2026.
+afirmar('solo corre en modo PRUEBA (el sitio del piloto), salida 3 si no',
+        (bool) preg_match("/if \(Emision::modo\(\) !== 'PRUEBA'\) \{\s*salir\([^;]+, 3\);/", $con), true);
+afirmar('una captura que la lista nombra entra al conjunto sea cual sea su fecha (sumar la 204 = una línea)',
+        str_contains($con, "(string) \$f['emitida_en'] <= HASTA_PEDIDO || isset(\$REGENERAR[\$k])"), true);
+afirmar('una corrida cortada entre rename y commit se reconoce y dice el remedio (el original del respaldo)',
+        str_contains($con, 'parece una corrida cortada entre el reemplazo del PDF y el commit') && str_contains($con, 'sha256sum -c'), true);
+afirmar('la OT-9125 lleva su nota (la línea del jefe de operaciones, D-G) a la bitácora',
+        (bool) preg_match('/\$NOTAS = \[\s*166 => /', $con) && str_contains($con, "'nota'             => \$NOTAS[\$cid] ?? null"), true);
 
 @unlink($cfg);
 echo "\n$total comprobaciones · $fallos fallas\n";
