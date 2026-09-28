@@ -494,12 +494,12 @@ $desdeF = $fDias !== '' ? date('Y-m-d', strtotime('-' . (int) $fDias . ' days'))
    iguales. Solo se calcula si hace falta: son tres consultas más. */
 $fGrupo = (string) ($_GET['grupo'] ?? '');
 if (!in_array($fGrupo, ['abiertas', 'espera_informe', 'total', 'deshabilitados'], true)) { $fGrupo = ''; }
-$informesG = null;
-$clasifG   = [];
-if ($fGrupo !== '' || $fDiasAsig !== '') {
-    $informesG = Casos::informesPorAviso($gestion);
-    $clasifG   = Casos::clasificar($todos, $gestion, $informesG);
-}
+/* Las fuentes de OT se leen UNA vez por carga (tres consultas): las usan el
+   filtro `?grupo=` y, desde el 27-sep-2026, el resumen y la tabla por zona
+   de esta pantalla, que salen de `Casos::tarjetasPorZona()` —la misma
+   función que la tarjeta del panel— y no de contadores propios. */
+$informesG = Casos::informesPorAviso($gestion);
+$clasifG   = ($fGrupo !== '' || $fDiasAsig !== '') ? Casos::clasificar($todos, $gestion, $informesG) : [];
 // Sin la fuente que decide el grupo no se lista «a ojo»: se dice (I-7).
 $grupoNoDisponible = $fGrupo !== '' && (
     (in_array($fGrupo, ['abiertas', 'espera_informe'], true) && !$informesG['ot_disponible'])
@@ -568,21 +568,14 @@ usort($vistos, function ($a, $b) use ($ordenAlerta, $ordenPrio, $porAviso) {
     return ($b['fecha_creacion'] ?? '') <=> ($a['fecha_creacion'] ?? '');   // mas nuevo arriba
 });
 
-/* ---- Contadores, siempre sobre el alcance completo, no sobre el filtro --- */
-$nAlerta  = count(array_filter($todos, fn($c) => ($c['estado_alerta'] ?? '') === 'CON_ALERTA'));
-$nVencido = count(array_filter($todos, fn($c) => ($c['fecha_estimada'] ?? '') !== '' && $c['fecha_estimada'] < $hoy));
-$nHoy     = count(array_filter($todos, fn($c) => ($c['fecha_estimada'] ?? '') === $hoy));
-/* Los recien llegados. Es el numero que de verdad sirve para repartir trabajo.
-   El de "pasados de fecha" da 911 de 918 y NO es un atraso: SAP compromete casi
-   siempre para el dia siguiente, la ventana del buzon es de 90 dias, y el correo
-   no avisa cuando KFC cierra un caso. Puesto como cifra grande hacia leer una
-   catastrofe que no existe, asi que se muestra abajo y con su advertencia. */
-$desde7 = date('Y-m-d', strtotime('-7 days'));
-$desde1 = date('Y-m-d', strtotime('-1 day'));
-$nSemana = count(array_filter($todos, fn($c) => ($c['fecha_creacion'] ?? '') >= $desde7));
-$nAyer   = count(array_filter($todos, fn($c) => ($c['fecha_creacion'] ?? '') >= $desde1));
-$nSinZona = count(array_filter($todos, fn($c) => empty($c['zona'])));
-$nAtend   = count(array_filter($todos, fn($c) => isset($porAviso[$c['aviso'] ?? ''])));
+/* ---- Contadores, siempre sobre el alcance completo, no sobre el filtro ---
+   El 27-sep-2026 la administradora pidió un buzón simple: se retiraron los
+   cuadros «llegaron ayer y hoy», «fuera del área», «con fecha SAP hoy», «con
+   OT INDUSTEC», «en la ventana de 90 días» y sus explicaciones, y con ellos
+   sus contadores. Lo que queda sale de UNA función, `Casos::tarjetasPorZona()`,
+   que es la que cuenta la tarjeta «Por zona» del panel y la que filtra
+   `?grupo=`: así cada cifra es exactamente las filas de su enlace. */
+$tz = Casos::tarjetasPorZona($todos, $gestion, $informesG, $hoy, $zonaAlc !== null ? [$zonaAlc] : []);
 /* Lo unico que de verdad hay que repartir: llego y nadie lo ha tocado. */
 $nSinAsignar = count(array_filter($todos, fn($c) =>
     (($gestion[$c['aviso'] ?? '']['estado'] ?? 'NUEVO') === 'NUEVO')
@@ -593,8 +586,6 @@ foreach ($todos as $c) {
     $k = Ui::estadoVista($gk['estado'] ?? null, $gk);
     $porGestion[$k] = ($porGestion[$k] ?? 0) + 1;
 }
-$nCerrIn  = count(array_filter($todos, fn($c) =>
-    ($porAviso[$c['aviso'] ?? '']['estado_industec'] ?? '') === 'CERRADA'));
 $porZona  = [];
 foreach ($todos as $c) { $z = (string) ($c['zona'] ?? ''); $porZona[$z] = ($porZona[$z] ?? 0) + 1; }
 ksort($porZona);
@@ -688,48 +679,74 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
         </div>
       <?php endif; ?>
 
-      <div class="tiles">
-        <div class="tile vence"><div class="n"><?= $nAyer ?></div><div class="t">Llegaron ayer y hoy</div></div>
-        <div class="tile"><div class="n"><?= $nSemana ?></div><div class="t"><?= e(Vocabulario::titulo('ORDENES_NUEVAS_7D')) ?></div></div>
-        <div class="tile <?= $nAlerta ? 'alerta' : '' ?>">
-          <div class="n"><?= $nAlerta ?></div><div class="t"><?= e(Vocabulario::titulo('OTRO_TRABAJO_POR_DECIDIR')) ?></div></div>
-        <div class="tile"><div class="n"><?= $nHoy ?></div><div class="t"><?= e(Vocabulario::titulo('FECHA_SAP_HOY')) ?></div></div>
-        <?php /* Cuenta las órdenes con alguna OT INDUSTEC, y de ellas las que ya
-                 tienen la de cierre. No es el estado ATENDIDO: por eso no se
-                 dice «atendidos» ni «cerrados». */ ?>
-        <div class="tile atend"><div class="n"><?= $nAtend ?></div>
-          <div class="t">Con OT INDUSTEC<?= $nCerrIn ? ' &middot; ' . $nCerrIn . ' de cierre' : '' ?></div></div>
-        <div class="tile"><div class="n"><?= count($todos) ?></div><div class="t">En la ventana de 90 días</div></div>
-        <?php if ($nSinZona): ?>
-          <div class="tile"><div class="n"><?= $nSinZona ?></div><div class="t">Sin zona resuelta</div></div>
-        <?php endif; ?>
-      </div>
-
       <?php /* =====================================================================
-         LA LINEA DE ESTADOS.
-         Es el ciclo de vida real de un caso, dibujado y con su cifra. Sirve
-         para dos cosas a la vez: filtrar de un clic, y —sobre todo— que
-         cualquiera entienda de un vistazo POR DONDE va el trabajo y qué falta
-         para cerrarlo. El cierre es de dos manos y eso no se deduce de una
-         tabla: el sistema marca ATENDIDO al ver la orden, y la administración
-         confirma aparte que además lo cerró en SAP.
+         LO QUE LA ADMINISTRADORA QUIERE VER AQUÍ (pedido del 27-sep-2026), y nada más:
+           1. el resumen general, con los términos de su registro SAP/KFC;
+           2. cuántas órdenes se generaron en la semana;
+           3. cuántas se generaron por zona, con lo abierto y lo cerrado.
+         Las cifras salen de `Casos::tarjetasPorZona()` —la misma función que
+         la tarjeta «Por zona» del panel y que el filtro `?grupo=` de esta
+         pantalla—, así que cada número es exactamente las filas de su enlace,
+         y los rótulos salen del diccionario (VOCABULARIO.md §8): A ESPERA DE
+         INFORME TÉCNICO es la orden sin ninguna OT INDUSTEC emitida (lo que
+         KFC llama ABIERTO · SIN GESTIÓN); ÓRDENES ABIERTAS, la que ya tiene
+         su OT INDUSTEC de evaluación y le falta la de cierre, siempre con las
+         que esperan repuesto (TRATAMIENTO · INFORME TÉCNICO); y cerrada
+         nunca va sola: atendida, por cerrar en SAP, o cerrada en SAP.
+         Los cuadros que había aquí («llegaron ayer y hoy», «fuera del área»,
+         «con fecha SAP hoy», «con OT INDUSTEC», «en la ventana de 90 días») y
+         sus explicaciones se retiraron a pedido de ella: las órdenes fuera del
+         área siguen al alcance por el filtro «Alerta» de abajo, y la fecha
+         comprometida en SAP sigue en cada fila.
          ===================================================================== */ ?>
       <?php
-      /* La descripción de cada paso es la ayuda del diccionario, la misma
-         que ven los demás roles: antes había aquí otra redacción a mano
-         («llegó del correo, sin técnico», «el equipo quedó trabado»). */
-      $PASOS = ['NUEVO', 'ASIGNADO', 'ESPERA_REPUESTO', 'ATENDIDO', 'RESUELTO'];
+      /** Una cifra con su enlace. null = no se pudo calcular: «no disponible»,
+       *  nunca 0 (I-7), igual que en la tarjeta del panel. */
+      $cifraB = static function (?int $v, ?string $url = null): string {
+          if ($v === null) { return '<span class="zona-nd">no disponible</span>'; }
+          return $v > 0 && $url !== null ? '<a href="' . e($url) . '"><b>' . $v . '</b></a>' : '<b>' . $v . '</b>';
+      };
+      /** Un cuadro del resumen: enlace si hay cifra; «no disponible» si falta la fuente. */
+      $cuadroB = static function (string $clave, ?int $v, string $url, string $pie = '', string $tono = ''): string {
+          $t = '<div class="n">' . ($v === null ? '<span class="zona-nd">no disponible</span>' : (int) $v) . '</div>'
+             . '<div class="t">' . e(Vocabulario::titulo($clave)) . '</div>'
+             . ($pie !== '' && $v !== null ? '<div class="pie">' . $pie . '</div>' : '');
+          $cl = 'tile' . ($tono !== '' && $v ? ' ' . $tono : '');
+          return $v === null
+              ? '<div class="' . $cl . '" title="' . e(Vocabulario::ayuda($clave)) . '">' . $t . '</div>'
+              : '<a class="' . $cl . '" href="' . e($url) . '" title="' . e(Vocabulario::ayuda($clave)) . '">' . $t . '</a>';
+      };
+      /** El rótulo de una zona desde el diccionario («ZONA CUENCA-LOJA», nunca
+       *  CNLJ); un código que el diccionario no conoce se muestra tal cual (I-7). */
+      $tituloZonaB = static function (string $z): string {
+          try { return Vocabulario::titulo(Vocabulario::deEstado($z, 'zona')); } catch (VocabularioError $ex) { return $z; }
+      };
+      $otOk = (bool) $tz['ot_disponible'];
+      // Las sublíneas del conjunto salen de las de cada zona (null si falta la fuente).
+      $sumaZ = static fn(string $k): ?int => $otOk ? array_sum(array_map(fn($t) => (int) $t[$k], $tz['zonas'])) : null;
+      $subSinAsignar = $sumaZ('sin_asignar');
+      $subRepuesto   = $sumaZ('abiertas_espera_repuesto');
+      $desde7 = date('Y-m-d', strtotime('-6 days'));   // hoy más los seis días anteriores, como el panel
+      $TZ = Vocabulario::todo()['tarjeta_zona'];
       ?>
-      <nav class="linea" aria-label="Estados de la orden">
-        <?php foreach ($PASOS as $k): ?>
-          <a href="?est=<?= $k ?>" class="<?= $fEst === $k ? 'on' : '' ?>">
-            <div class="paso-n" data-n="<?= (int) ($porGestion[$k] ?? 0) ?>">0</div>
-            <div class="paso-t"><?= e(Ui::etiquetaEstado($k)) ?></div>
-            <div class="paso-d"><?= e(Ui::ayudaEstado($k)) ?></div>
-          </a>
-        <?php endforeach; ?>
-      </nav>
+      <h2 style="margin:0 0 8px">Resumen general
+        <span class="zona-ayuda" tabindex="0" title="<?= e($TZ['ayuda_comun']) ?>" aria-label="<?= e($TZ['ayuda_comun']) ?>" style="font-weight:400;color:var(--muted);cursor:help;font-size:14px">ⓘ</span>
+      </h2>
+      <div class="tiles">
+        <?= $cuadroB('ESPERA_INFORME', $tz['espera_informe'], '?grupo=espera_informe',
+                     $subSinAsignar !== null ? 'de ellas, ' . $subSinAsignar . ' ' . e(Vocabulario::t('SIN_ASIGNAR', $subSinAsignar)) : '', 'ambar') ?>
+        <?= $cuadroB('ABIERTA', $tz['abiertas'], '?grupo=abiertas',
+                     $subRepuesto !== null ? 'de ellas, ' . $subRepuesto . ' ' . e(Vocabulario::t('ESPERA_REPUESTO', $subRepuesto)) : '', 'azul') ?>
+        <?= $cuadroB('TOTAL_ABIERTAS', $tz['total'], '?grupo=total',
+                     e(Vocabulario::titulo('ABIERTA')) . ' + ' . e(Vocabulario::titulo('ESPERA_INFORME'))) ?>
+        <?= $cuadroB('ATENDIDA', $tz['atendidas'], '?est=ATENDIDO', 'fuera del total', 'viol') ?>
+        <?= $cuadroB('CERRADA_SAP', $tz['cerradas_sap'], '?est=RESUELTO', 'fuera del total', 'verde') ?>
+      </div>
       <?php
+      /* Los estados que no están en el resumen siguen al alcance de un clic:
+         en revisión (dentro del total), no nos compete, cerradas sin atención
+         y regularizadas. Se cuentan por el estado de vista, orden por orden,
+         igual que su enlace `?est=`. */
       $aparte = [];
       foreach (['EN_REVISION', 'NO_COMPETE', 'CERRADO_SIN_ATENCION', 'REGULARIZADO'] as $k) {
           if (!empty($porGestion[$k])) { $aparte[$k] = $porGestion[$k]; }
@@ -737,7 +754,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
       ?>
       <?php if ($aparte): ?>
         <p class="sub" style="margin:-8px 0 16px">
-          Fuera de esa línea:
+          También en el buzón:
           <?php foreach ($aparte as $k => $cn): ?>
             <a href="?est=<?= $k ?>" style="text-decoration:none">
               <span class="est est-<?= e(strtolower($k)) ?>"><?= (int) $cn ?> <?= e(Ui::etiquetaEstado($k)) ?></span>
@@ -746,43 +763,94 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
         </p>
       <?php endif; ?>
 
-      <?php /* La cifra de vencidos va aqui abajo y con su explicacion, no como
-               numero grande: 911 de 918 no es un atraso, es como funciona SAP. */ ?>
-      <?php if ($nAtend): ?>
-        <div class="nota-regular" style="margin-bottom:14px">
-          <b><?= $nAtend ?> de estas órdenes ya tienen OT INDUSTEC</b><?php if ($nCerrIn): ?>,
-          y <b><?= $nCerrIn ?></b> tienen ya su OT INDUSTEC de cierre<?php endif; ?>.
-          Se sabe porque la OT INDUSTEC de cada visita llega a este mismo buzón.
-          <p style="margin:6px 0 0">
-            <b>Atendida no es lo mismo que cerrada en SAP.</b> «Atendida, por
-            cerrar en SAP» significa que INDUSTEC terminó su parte y emitió su OT
-            INDUSTEC de cierre; KFC cierra la orden en SAP por su lado y de eso
-            el correo no avisa. Sirve para no volver a asignar algo que ya se hizo.
-          </p>
+      <?php /* 2. Las órdenes que KFC generó en la semana: hoy más los seis días
+               anteriores, por `fecha_creacion` del catálogo. El enlace lista
+               esas mismas órdenes (`?dias=6` es «creadas desde hace 6 días»). */ ?>
+      <div class="tiles" style="grid-template-columns:minmax(0,360px)">
+        <?php
+        $pieSemana = 'creadas del ' . e($desde7) . ' al ' . e($hoy);
+        if ($zonaAlc === null) {
+            $partes = [];
+            foreach (['UIO', 'LARB', 'CNLJ'] as $zk) { $partes[] = e($tituloZonaB($zk)) . ' ' . (int) $tz['zonas'][$zk]['nuevas_7d']; }
+            $pieSemana .= ' · ' . implode(' · ', $partes);
+        }
+        ?>
+        <?= $cuadroB('ORDENES_NUEVAS_7D', $tz['nuevas_7d'], '?dias=6', $pieSemana) ?>
+      </div>
+
+      <?php /* 3. Por zona: cuántas órdenes generó KFC en cada zona (todas las de
+               la ventana de 90 días, en cualquier estado) y, de ellas, lo
+               abierto y lo cerrado con los rótulos de la tarjeta. La fila del
+               total suma solo las tres zonas, como el RESUMEN de Isabel; OTRA
+               y «sin zona» tienen su fila aparte solo si traen algo. El jefe
+               de zona ve una sola fila, la suya; el técnico no ve la tabla
+               (su buzón son sus órdenes, no una zona). */ ?>
+      <?php if ($u['rol'] !== 'TECNICO'): ?>
+        <?php
+        $filasZona = Casos::zonasVisibles($tz, $zonaAlc);
+        if ($zonaAlc === null && ($tz['zonas']['']['en_buzon'] ?? 0) > 0) { $filasZona[] = ''; }
+        $colsZona = [
+            // [clave del rótulo, campo de tarjetasPorZona, resto del enlace]
+            ['ESPERA_INFORME', 'espera_informe', 'grupo=espera_informe'],
+            ['ABIERTA',        'abiertas',       'grupo=abiertas'],
+            ['TOTAL_ABIERTAS', 'total',          'grupo=total'],
+            ['ATENDIDA',       'atendidas',      'est=ATENDIDO'],
+            ['CERRADA_SAP',    'cerradas_sap',   'est=RESUELTO'],
+        ];
+        ?>
+        <h2 style="margin:8px 0 8px">Por zona</h2>
+        <div class="tabla-wrap" style="margin-bottom:16px">
+          <table class="por-zona">
+            <thead><tr>
+              <th>Zona</th>
+              <th title="Todas las órdenes de la zona en la ventana de 90 días del correo, en cualquier estado"><?= e(Vocabulario::titulo('ORDEN')) ?> <span class="desc">generadas, 90 días</span></th>
+              <?php foreach ($colsZona as [$ck]): ?>
+                <th title="<?= e(Vocabulario::ayuda($ck)) ?>"><?= e(Vocabulario::titulo($ck)) ?></th>
+              <?php endforeach; ?>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($filasZona as $z): ?>
+              <?php $t = $tz['zonas'][$z]; $qz = $z === '' ? 'SIN' : $z; $buz = 'casos.php?zona=' . rawurlencode($qz); ?>
+              <tr data-zona="<?= e($qz) ?>">
+                <td><?= Ui::zona($z ?: null) ?></td>
+                <td><?= $cifraB($t['en_buzon'], $buz) ?></td>
+                <?php foreach ($colsZona as [, $campo, $resto]): ?>
+                  <td><?= $cifraB($t[$campo], $buz . '&' . $resto) ?></td>
+                <?php endforeach; ?>
+              </tr>
+            <?php endforeach; ?>
+            <?php if ($zonaAlc === null): ?>
+              <tr data-zona="TOTAL" style="font-weight:700">
+                <td>TOTAL (<?= e($tituloZonaB('UIO')) ?> + <?= e($tituloZonaB('LARB')) ?> + <?= e($tituloZonaB('CNLJ')) ?>)</td>
+                <td><?= $cifraB($tz['tres_zonas']['en_buzon']) ?></td>
+                <?php foreach ($colsZona as [, $campo]): ?>
+                  <td><?= $cifraB($tz['tres_zonas'][$campo]) ?></td>
+                <?php endforeach; ?>
+              </tr>
+            <?php endif; ?>
+            </tbody>
+          </table>
         </div>
-      <?php endif; ?>
-
-      <p class="sub" style="margin:-6px 0 16px">
-        <?php /* Dice lo mismo que la ficha del técnico (mis.php): la fecha figura
-                 «atrasado», pero eso solo no quiere decir que INDUSTEC vaya tarde. */ ?>
-        <b><?= $nVencido ?></b> tienen la fecha comprometida en SAP ya cumplida y la
-        fecha figura «<?= e(Vocabulario::t('ATRASADO')) ?>», pero <b>eso no quiere decir que
-        INDUSTEC vaya tarde</b>: SAP casi siempre compromete para el día siguiente, la ventana son 90 días, y el correo no
-        avisa cuando KFC cierra. Buena parte de esas ya están cerradas en SAP.
-        Para saber cuáles siguen abiertas en SAP hace falta el export de SAP.
-      </p>
-
-      <?php if ($nAlerta): ?>
-        <div class="nota-regular" style="margin-bottom:14px">
-          <b>Las alertas no deciden nada.</b> Marcan órdenes que <i>parecen</i> no
-          corresponder a INDUSTEC —trabajo de infraestructura, local fuera del
-          contrato— para que las encuentres rápido.
-          <?php if ($u['rol'] === 'JEFE_ZONA'): ?>
-            Si ves una así, la mandas a revisión y la administración la resuelve.
-          <?php else: ?>
-            La resolución es tuya: el sistema no cierra ni rechaza ninguna orden.
+        <?php
+        // Lo que queda fuera de la fila TOTAL (solo las tres zonas): OTRA y «sin
+        // zona», para que la fila cuadre con el cuadro del resumen, que las incluye.
+        $fueraTres = [];
+        foreach ($filasZona as $z) {
+            if (!in_array($z, ['UIO', 'LARB', 'CNLJ'], true) && ($tz['zonas'][$z]['total'] ?? 0) > 0) {
+                $fueraTres[] = e($tituloZonaB($z)) . ' ' . (int) $tz['zonas'][$z]['total'];
+            }
+        }
+        ?>
+        <p class="sub" style="margin:-6px 0 16px">
+          Cuenta las órdenes de los últimos 90 días del buzón; no es la cifra de SAP.
+          <?php if ($zonaAlc === null && $fueraTres): ?>
+            <?= e(Vocabulario::titulo('TOTAL_ABIERTAS')) ?> del buzón: <b><?= (int) $tz['total'] ?></b>
+            = <?= (int) $tz['tres_zonas']['total'] ?> de las tres zonas + <?= implode(' + ', $fueraTres) ?>.
           <?php endif; ?>
-        </div>
+          <?php if (!$otOk): ?>
+            <?= e(Vocabulario::titulo('ABIERTA')) ?> y <?= e(Vocabulario::titulo('ESPERA_INFORME')) ?>: no disponible, porque falta una fuente de OT INDUSTEC.
+          <?php endif; ?>
+        </p>
       <?php endif; ?>
 
       <form class="filtros" method="get">

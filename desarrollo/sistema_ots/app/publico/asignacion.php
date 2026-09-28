@@ -131,9 +131,29 @@ if ($zonaAlc !== null) {
 }
 
 $totalSinAsignar = count($sinAsignarTodo);
-$totalLibres   = count(array_filter($carga, fn($c) => $c['abiertos'] === 0));
-$totalCargados = count(array_filter($carga, fn($c) => $c['abiertos'] >= 8));
-$totalEnManos  = array_sum(array_map(fn($c) => $c['abiertos'], $carga));
+
+/* Las otras dos cifras de arriba (pedido de la administradora, 27-sep-2026):
+   «a espera de informe técnico» —la orden abierta sin ninguna OT INDUSTEC
+   emitida, esté sin asignar o asignada— y «a espera de repuesto». Salen de
+   `Casos::tarjetasPorZona()`, la MISMA función que cuenta la tarjeta del
+   panel y el resumen del buzón, sobre el mismo universo (`enAlcance()`), así
+   que Asignación, el buzón y el panel no pueden decir números distintos y cada
+   cifra es exactamente las filas de su enlace. Antes aquí había «sin órdenes
+   asignadas» (técnicos libres), «con 8 o más» (técnicos cargados) y
+   «asignadas y a espera de repuesto» (lo que el equipo tiene entre manos):
+   ella no los usa y se retiraron; la carga de cada técnico sigue abajo,
+   persona por persona. */
+$informes = Casos::informesPorAviso($gestion);
+$tz = Casos::tarjetasPorZona($mios, $gestion, $informes, date('Y-m-d'), $zonaAlc !== null ? [$zonaAlc] : []);
+/** Un cuadro de cifra: enlace si hay cifra; «no disponible» si falta la fuente (I-7), nunca 0. */
+$cuadro = static function (string $clave, ?int $v, string $url, string $tono = ''): string {
+    $t = '<div class="n">' . ($v === null ? '<span class="zona-nd">no disponible</span>' : (int) $v) . '</div>'
+       . '<div class="t">' . e(Vocabulario::titulo($clave)) . '</div>';
+    $cl = 'tile' . ($tono !== '' && $v ? ' ' . $tono : '');
+    return $v === null
+        ? '<div class="' . $cl . '" title="' . e(Vocabulario::ayuda($clave)) . '">' . $t . '</div>'
+        : '<a class="' . $cl . '" href="' . e($url) . '" title="' . e(Vocabulario::ayuda($clave)) . '">' . $t . '</a>';
+};
 
 require_once __DIR__ . '/nucleo/Ui.php';
 
@@ -170,38 +190,23 @@ Ui::cabecera($u, 'asignacion.php',
     </p>
   <?php endif; ?>
 
-  <?php /* Las cuatro cifras del conjunto, para no perder el total de vista
+  <?php /* Las tres cifras del conjunto, para no perder el total de vista
            cuando hay varias zonas. Con una sola a la vista (el jefe, o el
            admin filtrando) se omiten: repetirían, número por número, las del
-           bloque de esa zona, que es lo que se veía en la captura del 13-sep. */ ?>
+           bloque de esa zona, que es lo que se veía en la captura del 13-sep.
+           «Sin asignar» es la cifra general que pidió la administradora, sin
+           desglose: Casos::sinAsignar() cuenta NUEVO y EN_REVISION (esta con o
+           sin técnico) de TODAS las zonas, OTRA y «sin zona» incluidas; que no
+           calce con el «sin asignar» del panel (solo lo que no tiene técnico)
+           es una diferencia de lógica pendiente de Andrés. */ ?>
   <?php if (count($zonasMostrar) > 1): ?>
   <div class="tiles">
-    <div class="tile <?= $totalSinAsignar ? 'ambar' : 'verde' ?>">
+    <div class="tile <?= $totalSinAsignar ? 'ambar' : 'verde' ?>" title="<?= e(Vocabulario::ayuda('SIN_ASIGNAR')) ?>">
       <div class="n"><?= $totalSinAsignar ?></div>
       <div class="t"><?= e(Vocabulario::titulo('SIN_ASIGNAR')) ?></div>
-      <?php /* Casos::sinAsignar() cuenta NUEVO y EN_REVISION (esta con o sin técnico) de
-               TODAS las zonas, OTRA y «sin zona» incluidas: el pie dice eso, no «tres». Que
-               la cifra no calce con el «sin asignar» del panel (que cuenta solo lo que no
-               tiene técnico) es una diferencia de lógica pendiente de Andrés. */ ?>
-      <div class="pie"><?= $zonaAlc === null && $fz === '' ? 'en todas las zonas' : 'sin técnico o ' . e(Vocabulario::t('EN_REVISION')) ?></div>
     </div>
-    <div class="tile <?= $totalLibres ? 'verde' : '' ?>">
-      <div class="n"><?= $totalLibres ?></div>
-      <div class="t">Sin órdenes asignadas</div>
-      <div class="pie">de <?= count($carga) ?> en el equipo</div>
-    </div>
-    <div class="tile <?= $totalCargados ? 'ambar' : '' ?>">
-      <div class="n"><?= $totalCargados ?></div>
-      <div class="t">Con 8 o más</div>
-      <div class="pie">piénsalo antes de darle otra</div>
-    </div>
-    <div class="tile azul">
-      <div class="n"><?= $totalEnManos ?></div>
-      <?php /* Suma ASIGNADO + ESPERA_REPUESTO (Casos::ABIERTOS_TECNICO): el título lo
-               dice entero, porque «Asignadas» a secas es solo ASIGNADO en el buzón. */ ?>
-      <div class="t"><?= e(Vocabulario::titulo('ASIGNADA') . ' y ' . Vocabulario::t('ESPERA_REPUESTO')) ?></div>
-      <div class="pie">de todo el equipo</div>
-    </div>
+    <?= $cuadro('ESPERA_INFORME', $tz['espera_informe'], 'casos.php?grupo=espera_informe', 'azul') ?>
+    <?= $cuadro('ESPERA_REPUESTO', $tz['espera_repuesto'], 'casos.php?est=ESPERA_REPUESTO', 'vence') ?>
   </div>
   <?php endif; ?>
 
@@ -209,10 +214,11 @@ Ui::cabecera($u, 'asignacion.php',
     <?php
     $zc = $porZonaCarga[$z] ?? [];
     $zs = $porZonaSin[$z] ?? [];
-    $zLibres   = count(array_filter($zc, fn($c) => $c['abiertos'] === 0));
-    $zCargados = count(array_filter($zc, fn($c) => $c['abiertos'] >= 8));
-    $zEnManos  = array_sum(array_map(fn($c) => $c['abiertos'], $zc));
     $zTope     = max(1, ...array_map(fn($c) => $c['abiertos'], $zc ?: [['abiertos' => 0]]));
+    // Las cifras de la zona, de la misma función que las del conjunto; el
+    // enlace deja delante exactamente esas órdenes (`zona=SIN` es «sin zona»).
+    $tzz  = $tz['zonas'][$z] ?? ['espera_informe' => $tz['ot_disponible'] ? 0 : null, 'espera_repuesto' => 0];
+    $buzZ = 'casos.php?zona=' . rawurlencode($z === '' ? 'SIN' : $z) . '&';
     $cl = strtolower($z ?: 'otra');
     $idZona = $z ?: 'SIN';
     // Con una sola zona a la vista (jefe, o admin filtrando) el bloque va
@@ -225,27 +231,15 @@ Ui::cabecera($u, 'asignacion.php',
         <h2><?= Ui::zona($z ?: null) ?> <span class="cuenta"><?= count($zc) ?> técnico<?= count($zc) === 1 ? '' : 's' ?></span></h2>
       </summary>
 
+      <?php /* Las mismas tres cifras que ve la administración, para el jefe
+               de zona en su zona (pedido del 27-sep-2026). */ ?>
       <div class="tiles">
-        <div class="tile <?= $zs ? 'ambar' : 'verde' ?>">
+        <div class="tile <?= $zs ? 'ambar' : 'verde' ?>" title="<?= e(Vocabulario::ayuda('SIN_ASIGNAR')) ?>">
           <div class="n"><?= count($zs) ?></div>
           <div class="t"><?= e(Vocabulario::titulo('SIN_ASIGNAR')) ?></div>
-          <div class="pie">sin técnico o <?= e(Vocabulario::t('EN_REVISION')) ?></div>
         </div>
-        <div class="tile <?= $zLibres ? 'verde' : '' ?>">
-          <div class="n"><?= $zLibres ?></div>
-          <div class="t">Sin órdenes asignadas</div>
-          <div class="pie">de <?= count($zc) ?> en el equipo</div>
-        </div>
-        <div class="tile <?= $zCargados ? 'ambar' : '' ?>">
-          <div class="n"><?= $zCargados ?></div>
-          <div class="t">Con 8 o más</div>
-          <div class="pie">piénsalo antes de darle otra</div>
-        </div>
-        <div class="tile azul">
-          <div class="n"><?= $zEnManos ?></div>
-          <div class="t"><?= e(Vocabulario::titulo('ASIGNADA') . ' y ' . Vocabulario::t('ESPERA_REPUESTO')) ?></div>
-          <div class="pie">de los técnicos de la zona</div>
-        </div>
+        <?= $cuadro('ESPERA_INFORME', $tzz['espera_informe'], $buzZ . 'grupo=espera_informe', 'azul') ?>
+        <?= $cuadro('ESPERA_REPUESTO', $tzz['espera_repuesto'], $buzZ . 'est=ESPERA_REPUESTO', 'vence') ?>
       </div>
 
       <h3 id="sin-asignar-<?= e($idZona) ?>" style="margin:14px 0 6px"><?= e(Vocabulario::titulo('SIN_ASIGNAR')) ?> (<?= count($zs) ?>)</h3>
