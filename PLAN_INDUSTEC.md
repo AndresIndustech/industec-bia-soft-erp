@@ -1628,6 +1628,8 @@ Inventario de **32 hallazgos, 10 críticos**: contraseña SMTP en texto plano en
 
 **Decisión del cliente: se difieren.** El sistema lleva un año así y unas semanas más no cambian el cuadro; se cierran en bloque en el corte al dominio definitivo. Se respeta, con una salvedad por escrito: **la contraseña SMTP viajó sin cifrar a esta estación** al descargar el sistema, así que su rotación conviene que sea el primer paso de ese corte, no el último. El inventario queda como lista de verificación.
 
+**Ratificado el 2026-09-28 por Andrés, en el comité de gerencia** («No por el momento, pero actualízalo dentro del plan que estamos manejando con INDUSTEC»): los cuatro parches que el comité propuso aplicar ya en el servidor de INDUSTEC en Hostinger —borrar el `phpinfo.php` público, bloquear la creación de OTs en blanco por `GET` en `submit.php`, revisar los logs de acceso y actualizar WordPress— **no se aplican ahora**. Quedan como pendiente explícito del plan (§10 y paso 5 de T2.16), **condicionados a la aprobación de César**. Riesgo que se asume mientras tanto, por escrito: si en los logs apareciera un acceso indebido a los PDF o a la base, INDUSTECH actúa como encargado del tratamiento y la LOPDP le da **2 días** para avisarle al responsable (INDUSTEC), que es quien notifica a la SPDP (`SISTEMA_COMPLETO.md` §5b); por eso, de los cuatro, la revisión de logs es el primero que conviene autorizar. Se reabre en cuanto César lo apruebe o al llegar el corte, lo que ocurra primero. Ninguna conversación los aplica «de paso».
+
 ---
 
 ## 9. Riesgos
@@ -1635,7 +1637,7 @@ Inventario de **32 hallazgos, 10 críticos**: contraseña SMTP en texto plano en
 | Riesgo | Mitigación |
 |---|---|
 | **Borrado accidental de material de la empresa** | El más serio del proyecto. Invariante I-2 (copiar → verificar, **nunca borrar** el origen en Drive — T1.8 quedó cancelada, no solo pospuesta) y la Puerta T1.3. El Drive es de solo lectura indefinida; `D:\RESPALDOS` es el almacenamiento definitivo |
-| **Límites de Claude Pro** | Riesgo declarado en la cotización. Lo repetitivo es código determinista, no IA — razón de fondo de §0 |
+| **Límites de Claude Pro** | Riesgo declarado en la cotización. Lo repetitivo es código determinista, no IA — razón de fondo de §0. **Decisión de Andrés del 2026-09-28 (comité de gerencia):** «solamente vamos a terminar estos últimos arreglos hoy y mañana se continúa desde su propia cuenta» — el 2026-09-28 se cierran los últimos arreglos desde la cuenta de Andrés y **desde el 2026-09-29 el trabajo de INDUSTEC se continúa desde la cuenta de Claude propia de César/INDUSTEC**, no desde el plan Pro de Andrés. Las Consumer Terms de Anthropic no permiten compartir la cuenta ni el uso desatendido sin API: toda automatización desatendida de F1–F2 que llame a Claude corre sobre la cuenta o la API key del cliente, nunca sobre la de Andrés |
 | **Calidad de la información base** | La Fase 1 la sanea y el auditor la vigila; la capacitación refuerza el criterio de llenado |
 | **Drive se llena** | Consolidación a `D:\RESPALDOS` y luego TrueNAS |
 | Tocar producción rompe la operación | No se toca en Fase 1. En Fase 2, zona por zona con 48 h de verificación |
@@ -1657,6 +1659,7 @@ Inventario de **32 hallazgos, 10 críticos**: contraseña SMTP en texto plano en
 | 10-20 correos de muestra de avisos SAP | Parser de ingesta |
 | **Decisiones sobre los casos de Nivel 3** | Se entregan en el manifiesto; no bloquean el resto |
 | Confirmación del stack a instalar (I-1) | T1.4 |
+| **Aprobación de César para los 4 parches de seguridad de Hostinger** (`phpinfo.php` público, OTs en blanco por `GET` en `submit.php`, revisión de logs de acceso, WordPress) — diferidos otra vez por Andrés el 2026-09-28, ver §8 | Nada técnico hoy; el riesgo LOPDP corre mientras tanto. Se aplican con el paso 5 de T2.16, o antes si César los aprueba |
 
 ---
 
