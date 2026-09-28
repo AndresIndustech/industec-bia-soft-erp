@@ -1828,6 +1828,18 @@ python verificar_seguridad.py   # 28 · 0
 > Las 14 OT que la app emitió del 24 al 27-sep (OT-9125…OT-9152) **nunca llegaron a
 > Grupo KFC**. B.IA sigue en modo PRUEBA; lo que vale es el formulario de siempre.
 >
+> 0. **El PDF sin la franja y los 14 del piloto regenerados (decisiones A–E de
+>    Andrés del 28-sep, noche): construido y probado, sin desplegar** (`ESTADO.md`
+>    **§1x**). El simulacro contra la base real da 14 PENDIENTE · 0 INCONSISTENTE.
+>    Con autorización de Andrés, en este orden: desplegar `nucleo/Emision.php`,
+>    `archivo_indexar_cli.php`, `vocabulario.json`, `vocabulario_publico.json`,
+>    `ui.js` y `sw.js` (v25); subir a `~/respaldos/` `regenerar_pdf_piloto_cli.php`,
+>    `limpiar_pruebas.php` y `deshacer_prueba.php`; simulacro → `--respaldar` →
+>    copia local verificada por `SHA256SUMS` → `--ejecutar` → simulacro (14 HECHA)
+>    → `comparar_pdf_regenerados.py` (respaldo contra lo vivo). Antes, dos
+>    respuestas de Andrés: ¿la OT-9001 de CNLJ (captura 204, emitida el 28-sep a
+>    las 17:30) también sin franja?, y ¿acepta que la OT-9125 regenerada diga
+>    «sin configurar» donde la original decía el buzón de zona (D-G)?
 > 1. **Los técnicos emiten por producción, con la hoja del piloto**, las OT que
 >    faltan (ftipan, ajumbo; kchimbo como jefe de zona). **9 avisos no tienen
 >    ninguna OT de producción:** 10354744, 10355280, 10355352, 10355361,
