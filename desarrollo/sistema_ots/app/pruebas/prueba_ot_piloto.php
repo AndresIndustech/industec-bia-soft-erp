@@ -349,7 +349,8 @@ afirmar('ENVIO_EMITIDA ya no afirma que el correo salió siempre',
         str_contains(Vocabulario::ayuda('ENVIO_EMITIDA'), 'la del piloto (serie 9000) no sale a nadie'), true);
 $pub = json_decode((string) file_get_contents(__DIR__ . '/../publico/vocabulario_publico.json'), true);
 afirmar('la copia pública trae OT_PILOTO (la usan app.js y cola.js)', ($pub['conceptos']['OT_PILOTO']['titulo'] ?? null), 'OT INDUSTEC del piloto');
-afirmar('sw.js subió de versión', (bool) preg_match("/const VERSION = 'ot-industec-v24'/", $src('sw.js')), true);
+// v25 (28-sep-2026, noche): la ayuda de OT_PILOTO ya no nombra la franja del PDF.
+afirmar('sw.js subió de versión', (bool) preg_match("/const VERSION = 'ot-industec-v25'/", $src('sw.js')), true);
 
 printf("\n%d comprobaciones · %d fallos\n", $total, $fallos);
 exit($fallos === 0 ? 0 : 1);

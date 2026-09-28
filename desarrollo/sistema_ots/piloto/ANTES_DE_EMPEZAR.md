@@ -67,9 +67,11 @@ Las órdenes nuevas entran al `Buzón de órdenes` porque la estación vigila el
 
 ## 7. Ningún correo sale del sitio de pruebas
 
-`nucleo/config.php` del servidor tiene `emision_modo = PRUEBA`: la OT INDUSTEC recibe su número y su PDF, pero el correo al local queda **RETENIDO** en la cola. Así se prueba todo sin que a un local de KFC le llegue una OT INDUSTEC de ensayo.
+`nucleo/config.php` del servidor tiene `emision_modo = PRUEBA`: la OT INDUSTEC recibe su número de la serie 9000 y su PDF, pero el correo al local queda **RETENIDO** en la cola. Así se prueba todo sin que a un local de KFC le llegue una OT INDUSTEC de ensayo.
 
-**Comprobación:** en el servidor, `php verificar_esquema.php` dice TODO OK, y tras enviar una OT INDUSTEC de prueba la fila de `email_queue` queda en `RETENIDO`. **No cambiar `emision_modo` durante el piloto.**
+**El PDF ya no lleva la franja «DOCUMENTO DE PRUEBA»** (decisión de Andrés del 28-sep-2026: «de ahora en adelante ninguna orden salga con esa franja»), en ningún modo. Lo que avisa que una OT es del piloto ya no está en el documento sino alrededor de él: la caja naranja y las dos franjas del formulario del técnico, la marca «del piloto · no enviada a KFC» en el Archivo, el buzón, Repuestos y el historial, y el Archivo sin «Compartir». Esas marcas salen del **número** (serie ≥ 9000), no del modo. Los 14 PDF que la app emitió del 24 al 27-sep (OT-9125 a OT-9152) se regeneran sin la franja como **copia interna** con `regenerar_pdf_piloto_cli.php` (mismo número, datos, fotos, firma y fecha de emisión; 6 con la fecha de atención corregida).
+
+**Comprobación:** en el servidor, `php verificar_esquema.php` dice TODO OK, y tras enviar una OT INDUSTEC de prueba la fila de `email_queue` queda en `RETENIDO`, su número es ≥ 9000 y su PDF no dice «DOCUMENTO DE PRUEBA» (`verificar_emision.py`, comprobación 008). **No cambiar `emision_modo` durante el piloto.**
 
 ## 8. La app en el celular de cada técnico
 
@@ -109,7 +111,7 @@ Las de `capturas/` son del 13 de septiembre de 2026 y muestran los rótulos ante
 | 4 | Cuentas de UIO activas | 1 jefe + 5 técnicos + administración | ☐ |
 | 5 | Padrón y catálogos al día | buscador de locales con 100 locales | ☐ |
 | 6 | Buzón de SAP llegando | «Cómo va el buzón» con hora de hoy | ☐ |
-| 7 | Correo retenido | `emision_modo = PRUEBA`, fila RETENIDO | ☐ |
+| 7 | Correo retenido y PDF sin franja | `emision_modo = PRUEBA`, fila RETENIDO, número ≥ 9000, el PDF sin «DOCUMENTO DE PRUEBA» (desde el 28-sep-2026) | ☐ |
 | 8 | App instalada en cada celular | abre y llena una OT INDUSTEC sin señal | ☐ |
 | 9 | Saneamiento nocturno | `estado_nocturno.json` con `ok: true` | ☐ |
 | 9b | Capturas nuevas | tarjeta «Por zona» y pestañas con los términos nuevos | ☐ |

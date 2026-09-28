@@ -137,6 +137,7 @@ try {
         "SELECT c.id_industec, c.zona, c.local_codigo, c.cadena, c.aviso, c.modulo, c.emitida_en,
                 u.nombre AS tecnico,
                 JSON_UNQUOTE(JSON_EXTRACT(c.carga, '$.fecha_atencion')) AS fecha_atencion,
+                JSON_EXTRACT(c.carga, '$.correccion_admin') AS correccion,
                 JSON_UNQUOTE(JSON_EXTRACT(c.carga, '$.dia')) AS dia
            FROM ot_capturadas c JOIN usuarios u ON u.usuario_id = c.usuario_id
           WHERE c.id_industec IS NOT NULL AND c.estado IN ('EMITIDA','ENVIADA','NUMERADA','FALLIDA','PROCESADA')"
@@ -145,7 +146,17 @@ try {
         if (!preg_match(Emision::PATRON_OT, $ot)) { $cuenta['saltados']++; continue; }
         $n = partesDelNombre($ot);
         $loc = strtoupper((string) ($c['local_codigo'] ?? $n['local'] ?? ''));
-        $fecha = preg_match('/^\d{4}-\d{2}-\d{2}/', (string) $c['fecha_atencion'], $m) ? $m[0]
+        /* La fecha que vale la decide Emision::fechaAtencion(), la misma que
+           imprime el PDF: la corregida por la administración (carga.
+           correccion_admin, 28-sep-2026) si la hay; si no, la del técnico. Sin
+           esto, cada noche este índice devolvía a ot_archivo la fecha que se
+           corrigió. Del JSON solo se extraen las dos claves, no la carga
+           entera (trae la firma y puede pesar cientos de KB). */
+        $fechaVale = Emision::fechaAtencion([
+            'fecha_atencion'     => $c['fecha_atencion'],
+            Emision::CORRECCION  => json_decode((string) ($c['correccion'] ?? ''), true),
+        ]);
+        $fecha = preg_match('/^\d{4}-\d{2}-\d{2}/', $fechaVale, $m) ? $m[0]
                : (preg_match('/^\d{4}-\d{2}-\d{2}/', (string) $c['emitida_en'], $m2) ? $m2[0] : null);
         $deApp[$ot] = [
             'id_industec' => $ot, 'zona' => $c['zona'] ?: $n['zona'], 'local_codigo' => $loc ?: null,

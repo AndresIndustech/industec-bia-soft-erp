@@ -38,10 +38,33 @@ require_once __DIR__ . '/Destinatarios.php';   // T2.28.2: a quién va la cola y
  *
  *   - las series arrancan en 9000: una OT de prueba no puede llevar un número
  *     que exista o vaya a existir pronto en producción (UIO va por el 2.4xx);
- *   - el PDF lleva una franja «DOCUMENTO DE PRUEBA»;
  *   - el correo queda RETENIDO y no sale nunca. Producción manda cada orden al
  *     local, a Grupo KFC y al buzón de la administradora, que se lee de forma
  *     automática: un correo de prueba llegaría como una orden real.
+ *
+ * El PDF YA NO lleva la franja «DOCUMENTO DE PRUEBA» (decisión de Andrés del
+ * 28-sep-2026: «de ahora en adelante ninguna orden salga con esa franja»), en
+ * ningún modo. Lo que avisa ahora que la OT es del piloto no está en el
+ * documento sino alrededor de él, y se queda: la caja naranja y las dos franjas
+ * del formulario del técnico, la marca «del piloto · no enviada a KFC» en el
+ * Archivo, el buzón, Repuestos y el historial (`esDePrueba()`, por el número),
+ * y el Archivo sin «Compartir». La plantilla (`plantilla_ot.php`, contrato
+ * externo) conserva el bloque; `html()` le pasa `prueba = false` siempre.
+ *
+ * ============================================================================
+ * DOS DATOS QUE UNA REGENERACIÓN NO PUEDE CAMBIAR (28-sep-2026)
+ *
+ *   - La fecha de emisión: «Documento generado automáticamente el …» es
+ *     `emitida_en` cuando la orden ya se emitió (`fechaEmision()`). Antes era la
+ *     hora de la regeneración, y una copia de un PDF perdido parecía un
+ *     documento nuevo.
+ *   - La fecha de atención vale como la corrigió la administración, si la
+ *     corrigió (`fechaAtencion()`): la corrección va en la carga, en la clave
+ *     `correccion_admin` {fecha_atencion, antes, por, en, motivo}, al lado del
+ *     `fecha_atencion` que escribió el técnico, que no se toca. La leen de ahí
+ *     `html()` y `archivo_indexar_cli.php` —el índice que se rehace cada noche—
+ *     por la misma función: una sola regla, y ninguna de las dos rehace la
+ *     fecha vieja.
  *
  * AL PASAR A PRODUCCION hay que cargar a mano, con la emisión detenida, los
  * contadores reales (`counter_{zona}.txt` de cada módulo) en `correlativos`, y
@@ -494,12 +517,20 @@ final class Emision
         $logo = __DIR__ . '/logo-industec.png';
         $d = [
             'id'              => $id,
-            'prueba'          => self::modo() === 'PRUEBA',
+            /* Decisión de Andrés del 28-sep-2026: «de ahora en adelante ninguna
+               orden salga con esa franja». Ningún PDF lleva ya la franja
+               «DOCUMENTO DE PRUEBA», tampoco en modo PRUEBA. El modo sigue
+               rigiendo lo demás (serie 9000, correo RETENIDO) y lo que avisa
+               que la OT es del piloto está en la app y en las pantallas, no en
+               el documento. La clave se queda porque plantilla_ot.php la lee y
+               no se toca (contrato externo). */
+            'prueba'          => false,
             'logo'            => is_file($logo) ? 'data:image/png;base64,' . base64_encode((string) file_get_contents($logo)) : '',
             'aviso'           => (string) ($c['aviso'] ?? ''),
             'modulo'          => (string) ($c['modulo'] ?? ''),
             'dia'             => $orden['dia_intervencion'] ?? null,
-            'fecha'           => $orden['fecha_atencion'] ?? '',
+            // La corregida por la administración, si la hay (28-sep-2026).
+            'fecha'           => self::fechaAtencion($orden),
             'cliente'         => (string) ($local['cadena'] ?? ($c['cadena'] ?? '')),
             'local'           => trim($codLocal . ' · ' . ($local['nombre'] ?? ''), ' ·'),
             'tecnico'         => (string) ($orden['tecnico'] ?? ''),
@@ -525,11 +556,58 @@ final class Emision
             'fotos'           => $fotos,
             'fotos_esperadas' => count((array) ($orden['fotos'] ?? [])),
             'firma'           => self::firmaValida((string) ($orden['firma_png'] ?? '')),
-            'emitida'         => date('Y-m-d H:i'),
+            // La de la emisión original, si ya se emitió: regenerar no la mueve.
+            'emitida'         => self::fechaEmision(isset($c['emitida_en']) ? (string) $c['emitida_en'] : null),
         ];
         ob_start();
         include __DIR__ . '/plantilla_ot.php';
         return (string) ob_get_clean();
+    }
+
+    /** La clave de la carga donde la administración deja una corrección. */
+    public const CORRECCION = 'correccion_admin';
+
+    /**
+     * La fecha de atención que vale: la que corrigió la administración, si la
+     * corrigió; si no, la que registró el técnico.
+     *
+     * El 28-sep-2026 Andrés pidió corregir la fecha de 6 OT del piloto que no
+     * coincidía con el inicio y el fin de la visita (el técnico la emitió días
+     * después y dejó la fecha del día). La corrección no pisa el registro: va en
+     * `carga.correccion_admin` {fecha_atencion, antes, por, en, motivo}, y
+     * `carga.fecha_atencion` queda como la escribió el técnico. Esta función es
+     * la ÚNICA que decide cuál vale: la usan `html()` —así cualquier
+     * regeneración del PDF la conserva— y `archivo_indexar_cli.php`, que rehace
+     * `ot_archivo.fecha_atencion` cada noche y, sin esto, devolvería la vieja.
+     *
+     * Una corrección que no sea una fecha AAAA-MM-DD válida no cuenta: se usa la
+     * del técnico, no se inventa otra.
+     */
+    public static function fechaAtencion(array $orden): string
+    {
+        $corr = $orden[self::CORRECCION] ?? null;
+        $f = is_array($corr) ? ($corr['fecha_atencion'] ?? null) : null;
+        if (is_string($f) && preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $f, $m)
+            && checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
+            return $f;
+        }
+        return (string) ($orden['fecha_atencion'] ?? '');
+    }
+
+    /**
+     * «Documento generado automáticamente el …»: la hora de la emisión original
+     * si la orden ya se emitió (`ot_capturadas.emitida_en`), y la de ahora solo
+     * en la primera emisión. Hasta el 28-sep-2026 era siempre la de ahora, así
+     * que regenerar un PDF perdido (E-10) le cambiaba la fecha a un documento
+     * que ya se había entregado. Mismo formato que antes: AAAA-MM-DD HH:MM.
+     */
+    public static function fechaEmision(?string $emitidaEn): string
+    {
+        if ($emitidaEn !== null
+            && preg_match('/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/', trim($emitidaEn), $m)) {
+            return $m[1] . ' ' . $m[2];
+        }
+        return date('Y-m-d H:i');
     }
 
     /** La firma, solo si de verdad es una imagen PNG de tamaño razonable: va dentro del PDF. */

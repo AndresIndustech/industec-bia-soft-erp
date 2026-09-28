@@ -168,7 +168,7 @@
      del cliente. */
   // <vocabulario:RESPALDO> Generado desde vocabulario.json por app/herramientas/generar_vocabulario.php. No se edita a mano.
   var RESPALDO = {
-    "version": "2026-09-28.1",
+    "version": "2026-09-28.2",
     "conceptos": {
       "ORDEN": {"termino":"orden","plural":"órdenes","titulo":"Órdenes","ayuda":"El trabajo que pide Grupo KFC, identificado por su aviso SAP; es lo que se cuenta en todos los tableros."},
       "AVISO_SAP": {"termino":"aviso SAP","plural":"avisos SAP","titulo":"Aviso SAP","ayuda":"El número que SAP le da a la orden de KFC (10… u 0000…); solo identifica la orden, no es un estado."},
@@ -177,7 +177,7 @@
       "OT_EVALUACION": {"termino":"OT INDUSTEC de evaluación","plural":"OT INDUSTEC de evaluación","titulo":"OT INDUSTEC de evaluación","ayuda":"OT INDUSTEC emitida con «Estado de OT: Abierta»: hubo visita y falta el cierre."},
       "OT_CIERRE": {"termino":"OT INDUSTEC de cierre","plural":"OT INDUSTEC de cierre","titulo":"OT INDUSTEC de cierre","ayuda":"OT INDUSTEC emitida con «Estado de OT: Cerrada»: INDUSTEC dio el trabajo por terminado."},
       "OT_NO_EMITIDA": {"termino":"OT INDUSTEC no emitida","plural":"OT INDUSTEC no emitidas","titulo":"OT INDUSTEC no emitida","ayuda":"Se numeró o se capturó, pero no salió el PDF ni el correo (NUMERADA o FALLIDA): no cuenta como OT emitida."},
-      "OT_PILOTO": {"termino":"OT INDUSTEC del piloto","plural":"OT INDUSTEC del piloto","titulo":"OT INDUSTEC del piloto","corto":"del piloto · no enviada a KFC","ayuda":"OT INDUSTEC que emitió la app durante el piloto (serie 9000, con la franja «DOCUMENTO DE PRUEBA»): no llegó a Grupo KFC ni al local y no deja la orden atendida; la que vale es la que el técnico emite por el formulario de siempre."},
+      "OT_PILOTO": {"termino":"OT INDUSTEC del piloto","plural":"OT INDUSTEC del piloto","titulo":"OT INDUSTEC del piloto","corto":"del piloto · no enviada a KFC","ayuda":"OT INDUSTEC que emitió la app durante el piloto (serie 9000): no llegó a Grupo KFC ni al local y no deja la orden atendida; la que vale es la que el técnico emite por el formulario de siempre."},
       "ENVIO_OT": {"termino":"envío de la OT INDUSTEC","plural":"envíos de OT INDUSTEC","titulo":"Envío de la OT","ayuda":"El camino de una OT INDUSTEC desde el celular del técnico hasta el PDF y el correo: en cola, detenida en el celular, recibida en la oficina, emitida o rechazada al enviar."},
       "ENVIO_EN_COLA": {"termino":"en cola","plural":"en cola","titulo":"En cola","ayuda":"La OT INDUSTEC está guardada en el celular y sale sola en cuanto hay señal; no hace falta hacer nada."},
       "ENVIO_DETENIDA": {"termino":"detenida en el celular","plural":"detenidas en el celular","titulo":"Detenida en el celular","ayuda":"La OT INDUSTEC sigue guardada en el celular pero no puede salir sola: falta volver a entrar, la llenó otro usuario o esa cuenta no tiene permiso para enviarla."},

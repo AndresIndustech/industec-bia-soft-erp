@@ -208,13 +208,22 @@ def main():
            '$c = Db::uno("SELECT * FROM ot_capturadas WHERE id_industec = ?", [$in["ot"]]); '
            '$h = Emision::html($c, json_decode($c["carga"], true), $c["id_industec"]); '
            'echo json_encode(["prueba" => str_contains($h, "DOCUMENTO DE PRUEBA"), '
+           '"emitida_en" => $c["emitida_en"], '
+           '"emision" => str_contains($h, "generado automáticamente el " . Emision::fechaEmision($c["emitida_en"])), '
            '"admin" => str_contains($h, "Administrador de Prueba"), '
            '"correo" => str_contains($h, "' + CORREO_PRUEBA + '"), '
            '"fotos" => substr_count($h, "data:image/jpeg;base64,"), "firma" => str_contains($h, "alt=\\"Firma\\""), '
            '"estado" => str_contains($h, "Operativo"), "marca" => str_contains($h, "MarcaPrueba"), '
            '"satisf" => str_contains($h, "9/10"), "tiempo" => str_contains($h, "1h 45m")]);')
     h = json.loads(ssh(f"cd {D} && php -r '{php}'", json.dumps({"ot": ot})))
-    anotar("008", "lleva la franja «DOCUMENTO DE PRUEBA»", h.get("prueba") is True, h)
+    # Hasta el 28-sep-2026 aquí se exigía la franja. Decisión de Andrés de ese
+    # día: «de ahora en adelante ninguna orden salga con esa franja», tampoco en
+    # modo PRUEBA (Emision::html() pasa prueba = false). Ahora se exige que NO
+    # esté, y que la fecha de emisión sea la de emitida_en: regenerar el PDF no
+    # la mueve.
+    anotar("008", "NO lleva la franja «DOCUMENTO DE PRUEBA» (decisión del 28-sep-2026)", h.get("prueba") is False, h)
+    anotar("008", "«Documento generado automáticamente el …» es emitida_en, no la hora de hoy",
+           h.get("emision") is True, h.get("emitida_en"))
     anotar("008", "las dos fotos, la firma y quién firmó", h.get("fotos") == 2 and h.get("firma") and h.get("admin"), h)
     anotar("correo", "el PDF imprime el correo del local que escribió el técnico", h.get("correo") is True, h)
     anotar("008", "el estado y la marca del equipo, la satisfacción y el tiempo de atención",
@@ -266,7 +275,10 @@ def main():
     print("\n== el historial del técnico ==")
     st, _, c = sa.pedir("mis.php?t=atendidas")
     anotar("008", "mis.php muestra el número y el enlace a su PDF", st == 200 and ot in c and f"pdf.php?ot={ot}" in c, st)
-    anotar("008", "y dice que es de prueba", "es de prueba: no se envió a nadie" in c, "")
+    # Desde el 28-sep-2026 la marca es la del vocabulario (OT_PILOTO, «corto»):
+    # «del piloto · no enviada a KFC». El texto viejo «es de prueba: no se envió
+    # a nadie» ya no existe (lo retiró la versión 2026-09-28.1).
+    anotar("008", "y dice que es del piloto, no enviada a KFC", "del piloto · no enviada a KFC" in c, "")
 
     for se in s.values():
         se.pedir("salir.php")

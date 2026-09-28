@@ -1,6 +1,6 @@
 # Vocabulario único de B.IA Soft ERP
 
-**Versión del diccionario:** `2026-09-28.1` · **Fuente única:** `app/publico/vocabulario.json` · **Fecha:** 28 de septiembre de 2026
+**Versión del diccionario:** `2026-09-28.2` · **Fuente única:** `app/publico/vocabulario.json` · **Fecha:** 28 de septiembre de 2026
 
 Este documento es para Andrés, para Isabel y para quien programe. La fuente es el JSON: si este documento y el JSON no coinciden, **manda el JSON**. La tabla de conceptos de la §4 se generó desde el JSON.
 
@@ -128,6 +128,10 @@ Este documento es para Andrés, para Isabel y para quien programe. La fuente es 
 - **Qué hace y qué no:** no deja la orden atendida (queda a espera de informe técnico; si nadie la había asignado, queda asignada a quien fue), no es «de cierre», no termina solicitudes, no cuenta como OT emitida en la tarjeta «Por zona» ni en los reportes, y no se comparte desde el Archivo. **Sí** puede abrir una solicitud de repuesto: es trabajo interno y es lo que el piloto prueba. Cuando llega la OT de producción del mismo aviso, reemplaza a la del piloto como OT INDUSTEC de cierre (antes el `COALESCE` la dejaba para siempre); el estado que puso una persona no se toca.
 - **`ENVIO_EMITIDA`**: la ayuda ya no afirma que el correo salió en todos los casos; dice que la del piloto no sale a nadie.
 - **Sin cambio:** la franja «DOCUMENTO DE PRUEBA» del PDF (`plantilla_ot.php`), el asunto y el cuerpo del correo y los valores de `ot_capturadas.estado` (el recibo sigue diciendo `EMITIDA`, que `cola.js` usa para soltar la orden del celular; lo nuevo es `prueba: true`).
+
+**Versión `2026-09-28.2`: el PDF sin la franja (28-sep-2026, noche, decisión de Andrés).** «De ahora en adelante ninguna orden salga con esa franja»: el PDF de la OT INDUSTEC ya no dice «DOCUMENTO DE PRUEBA», en ningún modo. `Emision::html()` le pasa `prueba = false` a la plantilla siempre; `plantilla_ot.php` (contrato) no se toca y conserva el bloque. El modo PRUEBA sigue rigiendo la serie 9000 y el correo RETENIDO, y lo que avisa que la OT es del piloto queda **fuera del documento**: la caja naranja y las franjas del formulario, el chip «del piloto · no enviada a KFC» y el Archivo sin «Compartir». Los 14 PDF del piloto (OT-9125 a OT-9152) se regeneran sin la franja como copia interna (`regenerar_pdf_piloto_cli.php`).
+- **`OT_PILOTO`**: la ayuda ya no dice «con la franja «DOCUMENTO DE PRUEBA»»; queda «OT INDUSTEC que emitió la app durante el piloto (serie 9000): no llegó a Grupo KFC…». Ningún término, título ni `corto` cambia. `sw.js` v25 para que el celular tome el `ui.js` y el `vocabulario_publico.json` nuevos.
+- Lo de la versión .1 que decía «sin cambio: la franja del PDF» quedó superado por esta.
 
 ---
 

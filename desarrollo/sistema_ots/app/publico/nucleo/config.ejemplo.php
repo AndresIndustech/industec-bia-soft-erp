@@ -17,8 +17,11 @@ return [
     'sync_secreto' => 'PEGA_AQUI_EL_SECRETO_DE_64_CARACTERES',
 
     /* --- La emisión (la 008 y la 009). Todas opcionales; sin ellas la app corre
-     *     en modo PRUEBA: serie 9000+, franja «DOCUMENTO DE PRUEBA» y correo
-     *     RETENIDO (nunca sale). Solo el corte a producción las completa (T2.16). */
+     *     en modo PRUEBA: serie 9000+ y correo RETENIDO (nunca sale). Solo el
+     *     corte a producción las completa (T2.16). Desde el 28-sep-2026 el PDF
+     *     ya NO lleva la franja «DOCUMENTO DE PRUEBA» en ningún modo (decisión
+     *     de Andrés): la OT del piloto se reconoce por el número y la marcan la
+     *     app y las pantallas, no el documento. */
     // 'emision_modo'    => 'PRUEBA',                  // 'PRODUCCION' solo con correlativos cargados y correos definidos
     // 'correo_fijos'    => ['reclutamiento@…', '…'],  // van en TODAS las órdenes emitidas
     // 'correo_por_zona' => ['UIO' => [], 'LARB' => [], 'CNLJ' => [], 'OTRA' => []],
