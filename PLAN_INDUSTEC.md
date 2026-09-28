@@ -1996,13 +1996,14 @@ Esc o «No» devuelven a la nota sin perder lo escrito; las otras siete acciones
 no cambian. Se comprueba con `node prueba_dialogo_seguro.mjs` (Edge sin
 ventana) → **23 · 0**, más `prueba_contratos.mjs` 57 · 0. Cifras en
 `ESTADO.md` **§1u**.
-**Lo que falta para que llegue a la gente:** (1) commit en una rama
-`pc/doble-enter-cerrado-sap-2026-09-27` y push, **con aprobación de Andrés**;
-(2) desplegar `casos.php` a darkviolet con `t2_10_desplegar.py` y comprobar
-lo que entrega la web (curl + SHA contra el archivo local); (3) que alguien
-lo pruebe **con sesión de administración** en un caso del arnés, no en uno
-real; (4) que la estación fusione la rama en `master`. Nada de esto se hizo:
-Andrés pidió el cambio, no el despliegue.
+**Lo que falta para que llegue a la gente:** (1) ✅ commit `190eea3` en
+`pc/doble-enter-cerrado-sap-2026-09-27`, empujada, autorizado por Andrés el
+2026-09-27; (2) ✅ desplegado a darkviolet el mismo día (cifras en
+`ESTADO.md` §1u); (3) que alguien lo pruebe **con sesión de administración**
+en un caso del arnés, no en uno real; (4) que la estación fusione la rama en
+`master`. Ojo al desplegar desde el PC: el venv de `desarrollo/agentes` apunta
+al Python de la estación; `t2_10_desplegar.py` solo usa la biblioteca
+estándar y corre con el `python` del sistema.
 
 | Autónomo | Requiere aprobación | Prohibido |
 |---|---|---|

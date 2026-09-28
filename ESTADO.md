@@ -862,7 +862,13 @@ la que dejó T2.23.
 
 ## 1u. Doble Enter = Confirmar, con pantalla de seguridad, en «Marcar como cerrada en SAP» (2026-09-27, fuera del plan, pedido de Andrés)
 
-**En el árbol de trabajo del PC de Andrés, sin commit y sin desplegar** (lo que falta, en `PLAN_INDUSTEC.md` §11b, acción **R**).
+**Commit `190eea3` en la rama `pc/doble-enter-cerrado-sap-2026-09-27` (empujada a GitHub) y desplegado a darkviolet el
+2026-09-27 con autorización de Andrés** (`t2_10_desplegar.py casos.php` → `1 de 1 archivos`; SHA-256 del archivo en el
+servidor `7d7a352f…bdb6`, idéntico al local; `php -l` sobre el archivo desplegado sin errores). Antes de subir se comprobó
+que lo vivo era exactamente el `casos.php` del 26-sep (`HEAD~1`, idéntico salvo CRLF). Ojo: la línea «la web entrega
+exactamente lo que se subió» del desplegador **no cubre `.php`** (solo compara `.js/.css/.html`), así que la prueba de la
+web es el SHA en disco más el 302 al login que da la URL sin sesión. **Pendiente: fusión en `master` desde la estación**
+y que alguien lo mire con sesión de administración (`PLAN_INDUSTEC.md` §11b, acción **R**).
 Andrés pidió que en el diálogo «Marcar como cerrada en SAP · NNNN» un doble Enter haga Confirmar, y que
 antes de confirmar aparezca «¿Está seguro?» por si el doble Enter fue involuntario.
 
