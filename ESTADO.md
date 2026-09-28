@@ -861,7 +861,107 @@ la que dejó T2.23.
 
 ---
 
-## 1x. El PDF sin la franja «DOCUMENTO DE PRUEBA», y los 14 del piloto regenerados como copia interna (2026-09-28, noche, decisiones A–E de Andrés, 🔨 CONSTRUIDO, sin desplegar ni ejecutar)
+## 1y. Los 14 PDF del piloto, sin la franja y con la fecha corregida en 6: desplegado y EJECUTADO en darkviolet (2026-09-28, noche, decisiones A–E de Andrés, ✅)
+
+**Conclusión.** Desde las 23:20 UTC del 28-sep (18:20 en Ecuador) ninguna OT sale con la franja «DOCUMENTO DE PRUEBA», tampoco en el sitio del piloto. Los 14 PDF de las capturas 166, 171, 176 y 193-203 (OT-9125…OT-9152) están regenerados sin ella, como copia interna: el mismo número, los mismos datos, las mismas fotos y firma, y la fecha de emisión original. En 6 de ellos la fecha de atención quedó corregida en el PDF y en el Archivo, y el registro del técnico sigue intacto. El índice del Archivo se corrió como lo corre el robot cada noche y la corrección se conserva. Queda **una OT del piloto con franja, la OT-9001-K061EC-10346775-CNLJ (captura 204)**. La emitió ftipan a las 17:30 de hoy, antes de este despliegue, y espera la decisión de Andrés (ver «Abierto», abajo).
+
+**Revisión adversarial antes de desplegar** (6 hallazgos MENORES; commit `b6c1cc7`):
+1. La frase «sumar la 204 es una línea» era falsa, porque la guarda del conjunto solo miraba las emitidas hasta el 27-sep. **Corregido:** ahora entra al conjunto toda captura que nombre `$REGENERAR`, sea cual sea su fecha. Además, ya ejecutada la regeneración, apareció otro tope: `--respaldar` abortaba si `SHA256SUMS` no era idéntico, así que sumar la 204 tampoco era una línea. **Corregido también:** `SHA256SUMS` suma lo nuevo y comprueba lo que ya estaba sin tocarlo; `filas_antes.json` no se reescribe nunca, y las filas de una captura sumada van a `filas_antes_<fecha>.json`. Se probó en el servidor, sobre una **copia** del respaldo en `~/regen_test_20260928/` (borrada después), con la 204 añadida:
+   - simulacro: «las 15 del pedido … ✓», PENDIENTE 1 · HECHA 14;
+   - `--respaldar`: 15 en `SHA256SUMS` y 15 OK en `sha256sum -c`, `filas_antes.json` con la misma huella `1caea957…` y la 204 sola en `filas_antes_20260928_183259.json`;
+   - segunda corrida: «0 nuevos … ya tomadas».
+
+   El respaldo real no se tocó: 16 archivos, 14 OK. La bitácora tampoco: siguió en #8221.
+2. Si el proceso moría entre el `rename` del PDF nuevo y el `commit`, la captura quedaba INCONSISTENTE y no había remedio. **Mitigado:** el simulacro reconoce ese caso y dice el remedio exacto: `cp -p` del original del respaldo y `sha256sum -c`. No lo repone solo, porque un PDF que nadie registró no se pisa sin mirarlo.
+3. En la primera emisión, el PDF tomaba `date()` antes de dompdf y `emitida_en` tomaba `NOW()` después. Si el render cruzaba un cambio de minuto, toda regeneración discrepaba en «generado automáticamente el». **Corregido en `Emision::emitir()`:** hay un solo instante (`$emitidaEn`), que va al PDF y a `COALESCE(emitida_en, ?)`. Si la orden ya estaba emitida, se usa la `emitida_en` leída bajo el candado. El `UPDATE` nuevo se validó contra MariaDB con `EXPLAIN`, que no escribe.
+4. Al retrasar la fecha de las 6 también se corre hacia atrás el corte `desde` de `Reconciliar::atenciones()` y de `Casos::marcarDocumentos`. **No requiere código; queda anotado:** si llega por el buzón una OT de producción de esos avisos fechada entre la fecha nueva y la vieja, ahora reemplazaría a la del piloto como `ot_cierre`. Con la visita real en la fecha nueva, eso es lo correcto. Hoy ninguno de los 6 avisos tiene OT de producción en `ot_archivo`.
+5. La consola no comprobaba el sitio. **Corregido:** sale con código 3 si `Emision::modo()` no es PRUEBA.
+6. En el servidor, los archivos subidos desde el checkout de Windows quedan con CRLF, así que su sha256 crudo no es el del blob de git. **Documentado:** la comprobación previa se hizo contra las dos formas del blob, LF y CRLF (script `precheck_b.py` del scratchpad). `t2_10_desplegar.py` compara contra el archivo del disco local, que es lo que sube, así que no le afecta.
+
+Pruebas locales tras la revisión:
+- `prueba_pdf_sin_franja` **56·0** (antes 48), `prueba_ot_piloto` 118·0, vocabulario 156·0, claves 788·0, lista negra 0.
+- `panel_zona` 91·0, `cifras_estado` 143·0, `48h` 125·0, despacho 20·0, destinatarios 22·0, continuidad 42·0, `casos_prueba` 7·0, validación 37 OK.
+- contratos 57·0, gráficos 62·0, diálogo 23·0, barra OK, `prueba_franja_piloto.mjs` 20·0.
+- `php -l` sin errores (8.3 local y 8.2 del servidor).
+
+**Despliegue** (desde `b6c1cc7`, con `t2_10_desplegar.py`). Antes de subir se comprobó que los seis archivos vivos eran exactamente los de `4240a67`: `archivo_indexar_cli.php` coincidía en LF y los otros cinco en CRLF, así que nadie había desplegado encima. Se guardó copia viva en el scratchpad `ot10356500/rollback_2026-09-28b/`, con `SHA256SUMS`.
+
+| Archivo | sha256 vivo = rama (`b6c1cc7`) | sha256 anterior (rollback) |
+|---|---|---|
+| `nucleo/Emision.php` | `bb9cc856259100da267b1fa37a0b8394fd2a3f33a97250bde9687700d1231ca3` | `afbf535fab9e176ec4ddb8d73023c78766c75046939d5a50ae1b2de167ddede2` |
+| `archivo_indexar_cli.php` | `c5d8eed13fb93ca1d8ea1bd88830eae8c652e288efc23ff1c6ba7b95b5a8ff3f` | `28f67c47a284ca59ab1f156491e005f7e7585266f1a3d350cc45d0ddc7be5a14` |
+| `vocabulario.json` | `0a5cc71fdde13e5f79b99badb94d90aa238f6baddf2454c9387fa6207fd17d15` | `f8b1befe5e2d5e6d3738640fed8ed5ecea16d086a24373cf4aac6268f589ef13` |
+| `vocabulario_publico.json` | `54f09c6046aec04edaff24ebcdd3191220ac24a3562f2beb269ffb0644e9d8a6` | `73506d0a9e6ca32620340b87b1f14cf9a1c041bb0b7f9396476cb0f83c4bb8d1` |
+| `ui.js` | `ba500cb4c8dabe707dfc063adb9f0de42f963d1a1158837e0546d2260fb247c5` | `a9a29d12e5cad3ed271d4f81cd891992725be45ebd418843b032ea3f11f0c730` |
+| `sw.js` (**v25**) | `db67ff3ffb13873bcefcb8e2fb919b82d1a68ccf7207645f3d7814d77db3023e` | `ac805496f45f00910107b63df199cba6eb8ef87a7bd10f956413120d8432a4f1` |
+
+Comprobaciones después de subir:
+- `php -l` sin errores en el servidor.
+- `tarjeta_cli.php ADMIN` y `JEFE_ZONA:UIO`: **34·0** cada una.
+- `nucleo/config.php` intacto: 855 B, mtime 2026-09-09 18:02:18 UTC, sha256 `75b3da7b…`, igual antes y después.
+- `error_log` sin líneas nuevas: 734 líneas, mtime 19:35 UTC, igual antes y después.
+- La web entrega lo subido.
+
+En `~/respaldos/` (modo 600, sha256 verificado contra la rama):
+- `regenerar_pdf_piloto_cli.php`: primero `deeb0c46…`, que fue la versión que corrió. Después se subió `de42550180f794416af05f2b2a373045ae3f1e359659b631295d35e50143540c`, que es la misma más el respaldo que suma; con ella, el simulacro da HECHA 14.
+- `limpiar_pruebas.php` `3f301049…`
+- `deshacer_prueba.php` `48f35241…`
+
+Las dos versiones viejas, del 24-sep, quedaron copiadas en `rollback_2026-09-28b/respaldos/`.
+
+**Ejecución** (desde `ot/`, con la salida literal en el scratchpad `ot10356500/regen_*.txt`):
+1. **Simulacro** a las 18:22:02 EC: **PENDIENTE 14 · INCONSISTENTE 0**. Las huellas son las mismas del simulacro de §1x. Fuera del pedido, solo la captura 204.
+2. **`--respaldar`**: los 14 originales, `SHA256SUMS` y `filas_antes.json` (sha256 `1caea957…`) en `~/respaldos/pdf_piloto_con_franja_20260928/`, que es la carpeta 700. `sha256sum -c` dio 14 OK en el servidor. La copia local está en el scratchpad `ot10356500/pdf_con_franja/`, también con 14 OK.
+3. **`--ejecutar`**: **14 regeneradas ✓**, a las 18:22:40–43 EC, con la bitácora **#8206–#8219** (`REGENERAR_PDF`, usuario `regenerar_pdf_piloto_cli`, equipo `consola`, «pedido de Andrés del 28-sep-2026» en las 14). En las 6, `estado_antes → estado_despues` es la fecha vieja y la nueva. La 9125 lleva además la nota de la línea del jefe de operaciones.
+4. **Segundo simulacro** a las 18:24:55 EC, después de la pasada `--solo-pdf` del índice (y antes de la `--catalogo`): **PENDIENTE 0 · HECHA 14 · INCONSISTENTE 0**, «Nada que hacer: las 14 ya están regeneradas». En el Archivo, la fecha es la corregida y la huella es la del disco en las 14.
+
+**El índice nocturno no pisa la corrección, comprobado corriéndolo.** El robot corre dos pasadas cada noche, según la bitácora `INDEXAR_ARCHIVO` del 25 al 28-sep:
+- 03:4x: `--catalogo ~/respaldos/archivo_ot.json` y enseguida `--solo-pdf` (lo lanza `t2_19`).
+- 05:1x: otra vez `--catalogo`.
+
+Las dos pasan por la fuente (b), que en la línea ~139 relee la carga de las filas APP, **incluso en `--solo-pdf`**: `$deApp` se arma siempre y es la base del upsert de (a). Se corrieron las dos, en el mismo orden:
+- `--solo-pdf`: 45 s.
+- `--catalogo`: 30 s.
+
+Antes se tomó una huella por fila de las 7.858 filas de `ot_archivo` (las 15 columnas), ya con la corrección escrita. **Después de las dos pasadas: 0 filas cambiadas.** Hay 13 filas nuevas: la de la OT-9001 de la captura 204 y 12 del buzón y de la gestión llegadas desde las 05:18. Las 6 fechas corregidas siguieron igual en ambas pasadas.
+
+⚠ **Ojo con el orden:** `--solo-pdf` a solas deja el índice en el estado intermedio que el robot produce cada madrugada entre las 03:4x y las 05:1x. Pasa `origen` de HISTORICO a CORREO en unas 7.600 filas, porque el upsert de (a) solo respeta APP. Aquí ese estado duró unos 3 minutos (23:24:48 a ~23:27 UTC), hasta la pasada `--catalogo`. Es un comportamiento anterior a este trabajo, que no se tocó.
+
+**Los PDF, comprobados contra el documento y la base.** Los 14 se bajaron a `ot10356500/pdf_regenerados/`; sus huellas son iguales a las del servidor. Con PyMuPDF, en los 14:
+- «DOCUMENTO DE PRUEBA»: 0 veces.
+- «Fecha de Atención»: la que vale, es decir la corregida en 166/171/198/200/201/202 y la del técnico en las otras 8.
+- «Documento generado automáticamente el …»: igual a `emitida_en` al minuto.
+- Huella en disco = `pdf_sha256_regen` = `ot_archivo.sha256`, y los bytes = `ot_archivo.bytes`.
+- `pdf_sha256` = la huella del original respaldado.
+
+Resultado: **14 de 14 OK**. `carga.fecha_atencion` sigue siendo la del técnico en las 6, y `carga.correccion_admin` trae {fecha_atencion, antes, por, en, motivo}.
+
+`comparar_pdf_regenerados.py pdf_con_franja pdf_regenerados` con las 6 `--fecha`:
+- Sin `--permitir` da **salida 1**, y solo por la línea conocida de la 9125: «Jefe de Operaciones Local: [jefezona-uio@industec.me]» → «[sin configurar]».
+- Con `--permitir` de esa línea da **0 diferencias no permitidas, salida 0**.
+- Los 13 restantes salen «igual salvo la franja» y, en las 6, la fecha, con las mismas imágenes por página.
+
+**Rollback exacto** (si hubiera que volver atrás):
+1. Código: subir por nombre, con `t2_10_desplegar.py`, los seis archivos de `rollback_2026-09-28b/`. Son `4240a67` y sus huellas están en su `SHA256SUMS`.
+2. Los PDF: `cp -p ~/respaldos/pdf_piloto_con_franja_20260928/OT-91*.pdf <ot>/ordenes_pdf/` y `sha256sum -c`. Los PDF traen de vuelta la franja.
+3. La base, por captura, con `filas_antes.json`:
+   - `UPDATE ot_capturadas SET pdf_sha256_regen = NULL, carga = JSON_REMOVE(carga, '$.correccion_admin') WHERE captura_id IN (…)`.
+   - `ot_archivo` con los `sha256`, `bytes` y `fecha_atencion` de ese archivo.
+4. La bitácora se deja: es el registro de lo que pasó.
+5. Los tres PHP de `~/respaldos/` tienen sus versiones viejas en `rollback_2026-09-28b/respaldos/`.
+
+**Abierto para Andrés:**
+- **(a) La OT-9001-K061EC-10346775-CNLJ (captura 204)**, de CNLJ, sigue con la franja. Su fecha, su inicio y su fin son coherentes (2026-08-25, de 08:00 a 08:30). Incluirla ya es, de verdad, añadir una línea a `$REGENERAR` (`204 => ['ot' => 'OT-9001-K061EC-10346775-CNLJ', 'aviso' => '10346775'],`), subir la consola y correr simulacro, `--respaldar`, copiar al PC y `--ejecutar`. Las 14 salen HECHA y no se tocan. El simulacro y `--respaldar` ya se probaron así sobre una copia; `--ejecutar` todavía no.
+- **(b) La OT-9125** quedó regenerada con «sin configurar» en la línea del jefe de operaciones: es el error D-G que se corrigió el 24-sep, y es lo que dice toda OT emitida desde ese día. No hay una tercera opción sin tocar código: o esta copia, o el original, que trae la franja y está en el respaldo.
+
+**Lo que NO se comprobó:**
+- Las pantallas con sesión: el Archivo abriendo los PDF nuevos por `pdf.php`. Se comprobó el disco, la base y el texto de los documentos, no la web con un usuario.
+- El `emitir()` nuevo en una primera emisión real contra MariaDB: solo con `EXPLAIN` y la prueba unitaria. La próxima OT que emita un técnico lo ejercita. Conviene mirar que su `emitida_en` y su «generado automáticamente el» coincidan al minuto.
+- `verificar_emision.py`: necesita el arnés `preparar_prueba.php`.
+- Los celulares toman la v25 del `sw.js` al cerrar y abrir la app con señal. Solo cambió el texto de ayuda de OT_PILOTO.
+- MariaDB reescribió el texto crudo de la carga de las 6 (los separadores del JSON); el contenido no cambió. El crudo original está en `filas_antes.json`.
+
+## 1x. El PDF sin la franja «DOCUMENTO DE PRUEBA», y los 14 del piloto regenerados como copia interna (2026-09-28, noche, decisiones A–E de Andrés, 🔨 construido; ✅ desplegado y ejecutado el mismo día: ver §1y)
 
 **Por qué.** Tras el despliegue de §1w Andrés decidió: (A) «de ahora en adelante ninguna orden salga con esa franja» —el PDF ya no la lleva en ningún modo; se quedan la caja naranja, las franjas del formulario, el chip «del piloto · no enviada a KFC» y el Archivo sin «Compartir», y el modo PRUEBA sigue rigiendo la serie 9000 y el correo RETENIDO—; (B) los 14 PDF del piloto (capturas 166, 171, 176, 193-203; OT-9125…OT-9152) se regeneran sin franja como **copia interna**, con la fecha de emisión original; (C) en 6 se corrige la fecha de atención (166→18-sep, 171→17-sep, 198→24-sep, 200→17-sep, 201→24-sep, 202→24-sep), no en 193, 195 ni 176; (D) bitácora REGENERAR_PDF por OT, `pdf_sha256` intacta y `pdf_sha256_regen` la nueva, `ot_archivo` al día; (E) respaldo antes.
 
@@ -3095,7 +3195,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| **El PDF de la OT INDUSTEC sin la franja «DOCUMENTO DE PRUEBA», y los 14 del piloto regenerados como copia interna (6 con la fecha de atención corregida)** (decisiones A–E de Andrés del 28-sep-2026, tras el despliegue de §1w) | 🔨 **Construida y probada; simulacro contra la base real 14 PENDIENTE · 0 INCONSISTENTE (§1x). Falta desplegar y ejecutar, con autorización** — Steven, desde el PC de Andrés, en el worktree `_wt_ot_piloto_2026-09-28` (rama `pc/ot-piloto-no-cierra-2026-09-28`). Todavía **sin desplegar y sin escribir en la base** | 2026-09-28 | `nucleo/Emision.php`, `archivo_indexar_cli.php`, la consola nueva `regenerar_pdf_piloto_cli.php`, `vocabulario.json` (+ lo que regenera) y `sw.js` v25, `verificar_emision.py`, pruebas y documentación del piloto. Cuando se ejecute: `ordenes_pdf/` de los 14, `ot_capturadas` (carga y `pdf_sha256_regen`), `ot_archivo` y la bitácora de darkviolet |
+| ~~El PDF de la OT INDUSTEC sin la franja «DOCUMENTO DE PRUEBA», y los 14 del piloto regenerados como copia interna (6 con la fecha de atención corregida)~~ (decisiones A–E de Andrés del 28-sep-2026) | ✅ **Desplegada y ejecutada en darkviolet el 2026-09-28** (18:20–18:27 EC): 14 HECHA · 0 INCONSISTENTE, índice nocturno corrido sin pisar la corrección — Steven, worktree `_wt_ot_piloto_2026-09-28` (rama `pc/ot-piloto-no-cierra-2026-09-28`, empujada). Cifras, rollback y lo abierto (captura 204; línea de la OT-9125) en **§1y** | 2026-09-28 | Ya no bloquea nada. Lo que tocó: `nucleo/Emision.php`, `archivo_indexar_cli.php`, `vocabulario*.json`, `ui.js`, `sw.js` v25; los 14 de `ordenes_pdf/`, `ot_capturadas` (carga.correccion_admin en 6, `pdf_sha256_regen` en 14), `ot_archivo` y la bitácora #8206–#8219 |
 | ~~Cuadro «En qué estado están» con las cuatro cifras de la administradora, + gestión del repuesto y marcas de la novedad (migración 022)~~ (pedido de Isabel del 27-sep-2026, fuera del plan) | ✅ **Hecha y DESPLEGADA en darkviolet el 2026-09-28** (rama `pc/panel-estados-administradora-2026-09-27`, sin empujar a GitHub) — Steven, desde el PC de Andrés, en un worktree aparte (`_wt_panel_estados_2026-09-27`) para no cruzarse con la conversación que edita `casos.php` | 2026-09-27 | `panel.php`, `Casos.php` (función nueva), `vocabulario.json` (+4 conceptos, v2026-09-27.1) y lo que regenera, `sw.js` v22, `tarjeta_cli.php`, `verificar_cifras.py`, `VOCABULARIO.md`. No toca la base ni el árbol canónico. Detalle, cifras y preguntas en **§1u** |
 | ~~Buzón simplificado y cifras de Asignación~~ (pedido de Isabel, fuera del plan) | ✅ **Desplegada el 2026-09-28 a las 08:13 UTC**, pisada en `casos.php` y `nucleo/Casos.php` por el despliegue del panel (08:16) y **repuesta a las ~19:30 UTC** por el de la OT del piloto (`4240a67`, que contiene las dos ramas; §1w) — rama `pc/buzon-simplificado-2026-09-27` en GitHub | 2026-09-27 | Solo `casos.php`, `asignacion.php`, `nucleo/Casos.php` (tres claves nuevas en `tarjetasPorZona()`), `prueba_panel_zona.php` (85·0) y una frase en las dos hojas del piloto. No toca la base, el árbol canónico ni `vocabulario.json`. Detalle, cifras y comando de despliegue en **§1v**. Conviven con dos cambios sin confirmar de otras conversaciones (§1u en el árbol principal y el worktree `_wt_panel_estados_2026-09-27`): fusionar de uno en uno |
 | ~~Vocabulario SAP en todo el sistema~~ (pedido de la administradora, fuera del plan) | ✅ **Terminada y desplegada en darkviolet el 2026-09-26** — ramas `pc/vocabulario-sap-2026-09-24` y `pc/vocabulario-sobre-vivo-2026-09-26` | 2026-09-24 | Solo texto visible, `vocabulario.json` y la tarjeta «Por zona»; no tocó la base ni el árbol canónico. Falta que la **estación empuje T2.28.3/T2.28.6** y fusione estas ramas en `master`, y que alguien vea las pantallas con sesión. Detalle, cifras y cómo se revierte en **§1t** |
