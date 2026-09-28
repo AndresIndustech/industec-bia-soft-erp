@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-24.6",
+  "version": "2026-09-27.1",
   "conceptos": {
     "ORDEN": {"termino":"orden","plural":"órdenes","titulo":"Órdenes","ayuda":"El trabajo que pide Grupo KFC, identificado por su aviso SAP; es lo que se cuenta en todos los tableros."},
     "AVISO_SAP": {"termino":"aviso SAP","plural":"avisos SAP","titulo":"Aviso SAP","ayuda":"El número que SAP le da a la orden de KFC (10… u 0000…); solo identifica la orden, no es un estado."},
@@ -29,6 +29,10 @@
     "SIN_REGULARIZAR": {"termino":"cerrada sin atención, sin regularizar ante KFC","plural":"cerradas sin atención, sin regularizar ante KFC","titulo":"Sin regularizar","ayuda":"Orden cerrada sin atención que la administración todavía no ha explicado ante KFC."},
     "REGULARIZADA": {"termino":"regularizada","plural":"regularizadas","titulo":"Regularizadas","ayuda":"Se cerró sin atención y la administración ya lo explicó ante KFC."},
     "CERRADA_SIN_OK": {"termino":"cerrada por falta de OK","plural":"cerradas por falta de OK","titulo":"Cerradas por falta de OK","ayuda":"La administración cerró la orden sin ejecutarla porque Operaciones de KFC no dio el OK."},
+    "CREADA_NO_COMPETE": {"termino":"creada y no nos compete","plural":"creadas y no nos competen","titulo":"Creadas que no nos competen","ayuda":"Orden que Grupo KFC creó en la ventana de 90 días del correo y que la administración resolvió que no es trabajo de INDUSTEC."},
+    "EN_GESTION_TECNICA": {"termino":"asignada, en gestión técnica","plural":"asignadas, en gestión técnica","titulo":"Asignadas · en gestión técnica","ayuda":"Orden que ya tiene técnico y que INDUSTEC todavía no termina; las que esperan repuesto van aparte."},
+    "ATENDIDA_CERRADA": {"termino":"atendida, cerrada por INDUSTEC","plural":"atendidas, cerradas por INDUSTEC","titulo":"Atendidas · cerradas por INDUSTEC","ayuda":"INDUSTEC terminó su parte: con OT INDUSTEC de cierre, ya cerrada en SAP o por cerrar en SAP; no cuenta las cerradas sin atención."},
+    "GESTION_PROVEEDORES_KFC": {"termino":"a espera de repuesto, en gestión de proveedores de KFC","plural":"a espera de repuesto, en gestión de proveedores de KFC","titulo":"A espera de repuesto · gestión proveedores KFC","ayuda":"Orden cuyo trabajo depende de un repuesto, un taller, una garantía o una baja que Grupo KFC gestiona con sus proveedores."},
     "ABIERTA": {"termino":"abierta","plural":"abiertas","titulo":"ÓRDENES ABIERTAS","ayuda":"Orden que ya tiene OT INDUSTEC de evaluación emitida (hubo visita) y le falta la de cierre; incluye siempre las que están a espera de repuesto."},
     "ESPERA_INFORME": {"termino":"a espera de informe técnico","plural":"a espera de informe técnico","titulo":"ÓRDENES A ESPERA DE INFORME TÉCNICO","ayuda":"Orden abierta que todavía no tiene ninguna OT INDUSTEC emitida: está sin asignar o asignada sin visita reportada."},
     "TOTAL_ABIERTAS": {"termino":"total de órdenes abiertas","plural":"total de órdenes abiertas","titulo":"TOTAL DE ÓRDENES ABIERTAS","ayuda":"Todas las órdenes que INDUSTEC aún no termina (ÓRDENES ABIERTAS + ÓRDENES A ESPERA DE INFORME TÉCNICO); es la vista del buzón de B.IA, no la cifra de SAP."},

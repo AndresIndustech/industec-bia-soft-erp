@@ -64,6 +64,15 @@ foreach ($enCat as $a => $_) {
     }
 }
 $ref['TOTAL_ABIERTAS'] = count($raices);
+// El cuadro «En qué estado están» (27-sep-2026): conteo por estado DE VISTA, orden por
+// orden, escrito aquí y no con Casos::CIFRAS_ESTADO, para que la comparación no sea tautológica.
+$ref['VISTA'] = [];
+foreach ($enCat as $a => $_) {
+    $f = $filas[(string) $a] ?? ['estado' => 'NUEVO', 'regularizado_en' => null];
+    $v = strtoupper((string) $f['estado']);
+    if ($v === 'CERRADO_SIN_ATENCION' && !empty($f['regularizado_en'])) { $v = 'REGULARIZADO'; }
+    $ref['VISTA'][$v] = ($ref['VISTA'][$v] ?? 0) + 1;
+}
 $conc = 0; $una = 0; $curso = 0;
 foreach (Casos::atenciones() as $a => $x) {
     if (!isset($enCat[(string) $a])) { continue; }
@@ -153,7 +162,9 @@ sin_zona = int(msz.group(1)) if msz else 0
 ok("panel: Σ tarjetas (con OTRA) + sin zona = cuadro TOTAL",
    cuadro is not None and sum(v or 0 for v in tot_zona.values()) + sin_zona == cuadro,
    [sum(v or 0 for v in tot_zona.values()), sin_zona, cuadro])
-m = re.search(r"data-titulo=\"En qué estado están\".*?data-datos='([^']*)'", h, re.S)
+# Desde el 27-sep-2026 el gráfico de barras se titula «Todos los estados»; «En qué estado
+# están» es el cuadro de las cuatro cifras de la administradora, que va justo encima.
+m = re.search(r"data-titulo=\"Todos los estados\".*?data-datos='([^']*)'", h, re.S)
 barras = {b["e"]: b for b in json.loads(html.unescape(m.group(1)))} if m else {}
 # Las barras se rotulan con Ui::etiquetaEstado() desde el diccionario (24-sep-2026):
 # la prueba busca el rótulo vigente por su clave y no escribe la palabra. Con el
@@ -166,6 +177,26 @@ ok(f"panel: sin barra roja «{ref['ETQ_CSA']}» cuando no falta regularizar", re
 tarea_sr = re.search(r'<span class="num"[^>]*>\d+</span>\s*cerradas? sin atención, sin regularizar ante KFC', h)
 ok("panel: la tarea «sin regularizar» aparece solo si hay", (ref["CSA_SIN"] > 0) == bool(tarea_sr))
 ok("panel: «Órdenes nuevas en 7 días»", "Órdenes nuevas en 7 días" in h)
+
+# El cuadro «En qué estado están» (27-sep-2026): cuatro cifras, cada una = la referencia por
+# estado de vista, y las de un solo estado enlazan a casos.php?est= con tantas filas.
+V = ref["VISTA"]
+cuadro = {}
+seg = h[h.find("<h2>En qué estado están</h2>"):]
+seg = seg[:seg.find("viz-grid")] if "viz-grid" in seg else seg
+for mt in re.finditer(r'<(?:a|div) class="tile[^"]*"(?: href="([^"]*)")?[^>]*>\s*<div class="n" data-n="(\d+)">', seg):
+    cuadro[mt.group(1) or f"sin enlace {len(cuadro)}"] = int(mt.group(2))
+ok("panel: el cuadro «En qué estado están» tiene cuatro cifras", len(cuadro) == 4, cuadro)
+ok("panel: creadas que no nos competen = NO_COMPETE", cuadro.get("casos.php?est=NO_COMPETE") == V.get("NO_COMPETE", 0), [cuadro.get("casos.php?est=NO_COMPETE"), V.get("NO_COMPETE", 0)])
+ok("panel: asignadas, en gestión técnica = ASIGNADO", cuadro.get("casos.php?est=ASIGNADO") == V.get("ASIGNADO", 0), [cuadro.get("casos.php?est=ASIGNADO"), V.get("ASIGNADO", 0)])
+ok("panel: a espera de repuesto (gestión proveedores KFC) = ESPERA_REPUESTO", cuadro.get("casos.php?est=ESPERA_REPUESTO") == V.get("ESPERA_REPUESTO", 0), [cuadro.get("casos.php?est=ESPERA_REPUESTO"), V.get("ESPERA_REPUESTO", 0)])
+sin_enlace = [v for k, v in cuadro.items() if k.startswith("sin enlace")]
+ok("panel: atendidas, cerradas por INDUSTEC = ATENDIDO + RESUELTO", sin_enlace == [V.get("ATENDIDO", 0) + V.get("RESUELTO", 0)], [sin_enlace, V.get("ATENDIDO", 0), V.get("RESUELTO", 0)])
+ok("panel: ya no está la tarjeta vieja «A espera de repuesto» del buzón", "est=ESPERA_REPUESTO&amp;grupo=total" not in h)
+for est in ("NO_COMPETE", "ASIGNADO", "ESPERA_REPUESTO", "ATENDIDO", "RESUELTO"):
+    he = pagina("casos.php", f"['est' => '{est}']")
+    mc = re.search(r'<b id="cuenta-casos"[^>]*>(\d+)</b>', he)
+    ok(f"casos.php?est={est}: filas = la referencia por estado de vista", mc is not None and int(mc.group(1)) == V.get(est, 0), [mc.group(1) if mc else None, V.get(est, 0)])
 
 # Cada cifra de la tarjeta = las filas de su enlace (misma función en los dos lados).
 for zona, cl in (("UIO", "uio"), ("LARB", "larb"), ("CNLJ", "cnlj")):

@@ -1,6 +1,6 @@
 {
-  "version": "2026-09-24.6",
-  "fecha": "2026-09-24",
+  "version": "2026-09-27.1",
+  "fecha": "2026-09-27",
   "descripcion": "Diccionario único de B.IA Soft ERP: un concepto, un término, para todos los roles y todas las superficies (pantallas, app del técnico, PDF, Excel, PPT, correos, tablero de gerencia y hojas del piloto). Lo leen nucleo/Vocabulario.php, UI.T() de ui.js y termino() de agentes/scripts/comun.py. La especificación está en desarrollo/sistema_ots/VOCABULARIO.md.",
   "reglas": {
     "claves": "Las claves de concepto están en MAYÚSCULAS y no cambian nunca: el texto se cambia aquí, el código solo conoce la clave.",
@@ -225,6 +225,30 @@
       "roles": ["ADM", "JZ", "TEC", "KFC", "GER"],
       "reservado": true,
       "notas": "Término de Isabel («OT CERRADA por falta de OK»). RESERVADO: el estado nuevo CERRADO_SIN_OK (migración del ENUM y transición) es tarea posterior; hoy ningún estado de la base apunta aquí."
+    },
+    "CREADA_NO_COMPETE": {
+      "termino": "creada y no nos compete", "plural": "creadas y no nos competen", "titulo": "Creadas que no nos competen",
+      "ayuda": "Orden que Grupo KFC creó en la ventana de 90 días del correo y que la administración resolvió que no es trabajo de INDUSTEC.",
+      "roles": ["ADM", "JZ"],
+      "notas": "Cifra del cuadro «En qué estado están» del inicio (pedido de la administradora, 27-sep-2026: «cuántos casos se crearon y no nos competían»). Derivado: estado NO_COMPETE, contado orden por orden sobre el catálogo de 90 días (Casos::CIFRAS_ESTADO); su enlace es casos.php?est=NO_COMPETE."
+    },
+    "EN_GESTION_TECNICA": {
+      "termino": "asignada, en gestión técnica", "plural": "asignadas, en gestión técnica", "titulo": "Asignadas · en gestión técnica",
+      "ayuda": "Orden que ya tiene técnico y que INDUSTEC todavía no termina; las que esperan repuesto van aparte.",
+      "roles": ["ADM", "JZ"],
+      "notas": "Cifra del cuadro «En qué estado están» del inicio. Derivado: estado ASIGNADO solamente — no EN_REVISION (está en manos de la administración) ni ESPERA_REPUESTO (es GESTION_PROVEEDORES_KFC). «en gestión técnica» es término de la administradora (27-sep-2026)."
+    },
+    "ATENDIDA_CERRADA": {
+      "termino": "atendida, cerrada por INDUSTEC", "plural": "atendidas, cerradas por INDUSTEC", "titulo": "Atendidas · cerradas por INDUSTEC",
+      "ayuda": "INDUSTEC terminó su parte: con OT INDUSTEC de cierre, ya cerrada en SAP o por cerrar en SAP; no cuenta las cerradas sin atención.",
+      "roles": ["ADM", "JZ"],
+      "notas": "Cifra del cuadro «En qué estado están» del inicio. Derivado: ATENDIDO + RESUELTO. La administradora dice «atendido (cerrado)» (27-sep-2026); como «cerrada» nunca va sola (§5), se dice «cerrada por INDUSTEC». Pendiente de que Andrés confirme que RESUELTO entra (hoy sí: la cerrada en SAP también fue atendida, porque RESUELTO solo se alcanza desde ATENDIDO)."
+    },
+    "GESTION_PROVEEDORES_KFC": {
+      "termino": "a espera de repuesto, en gestión de proveedores de KFC", "plural": "a espera de repuesto, en gestión de proveedores de KFC", "titulo": "A espera de repuesto · gestión proveedores KFC",
+      "ayuda": "Orden cuyo trabajo depende de un repuesto, un taller, una garantía o una baja que Grupo KFC gestiona con sus proveedores.",
+      "roles": ["ADM", "JZ"],
+      "notas": "Cifra del cuadro «En qué estado están» del inicio. Derivado: estado ESPERA_REPUESTO, contado orden por orden (la sublínea «de ellas, a espera de repuesto» de la tarjeta cuenta una vez por cadena de continuidad, así que puede ser menor). «gestión proveedores KFC» es término de la administradora (27-sep-2026); «repuesto» en singular como en ESPERA_REPUESTO."
     },
 
     "ABIERTA": {

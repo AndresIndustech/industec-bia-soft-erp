@@ -1153,6 +1153,69 @@ final class Casos
         ];
     }
 
+    /* =====================================================================
+       EL CUADRO «EN QUÉ ESTADO ESTÁN» DEL INICIO (27-sep-2026)
+
+       La administradora pidió ver en primer plano lo que ella usa: cuántas
+       órdenes se crearon y no nos competían, cuántas están asignadas (en
+       gestión técnica), cuántas atendidas (cerradas) y cuántas a espera de
+       repuesto (gestión de proveedores de KFC). Antes esas cuatro cifras
+       estaban repartidas en una barra por estado con nueve rótulos, y las dos
+       que ella junta (atendida por cerrar en SAP + cerrada en SAP) salían
+       separadas.
+
+       Qué estado de la base suma a cada cifra es UNA tabla, aquí, y la leen
+       el panel, la prueba sintética y tarjeta_cli.php. Se cuenta orden por
+       orden sobre el catálogo de 90 días —el mismo universo que lista
+       `casos.php?est=`, para que la cifra sea las filas de su enlace— y por el
+       estado DE VISTA (`Ui::estadoVista()`), así una cerrada sin atención ya
+       regularizada cuenta como REGULARIZADO y no como alarma.
+
+       Por qué cada cifra suma lo que suma:
+         CREADA_NO_COMPETE        NO_COMPETE. La administración resolvió que no
+                                  era trabajo de INDUSTEC.
+         EN_GESTION_TECNICA       ASIGNADO solamente. EN_REVISION está en manos
+                                  de la administración, no del técnico, y
+                                  ESPERA_REPUESTO es la cuarta cifra.
+         ATENDIDA_CERRADA         ATENDIDO + RESUELTO. RESUELTO solo se alcanza
+                                  desde ATENDIDO (TRANSICIONES), así que toda
+                                  cerrada en SAP fue atendida. Las cerradas
+                                  SIN atención (regularizadas o no) quedan
+                                  fuera a propósito: son lo contrario.
+         GESTION_PROVEEDORES_KFC  ESPERA_REPUESTO. Orden por orden, no una vez
+                                  por cadena como la sublínea de la tarjeta.
+       ===================================================================== */
+    public const CIFRAS_ESTADO = [
+        'CREADA_NO_COMPETE'       => ['NO_COMPETE'],
+        'EN_GESTION_TECNICA'      => ['ASIGNADO'],
+        'ATENDIDA_CERRADA'        => ['ATENDIDO', 'RESUELTO'],
+        'GESTION_PROVEEDORES_KFC' => ['ESPERA_REPUESTO'],
+    ];
+
+    /**
+     * Las cuatro cifras del cuadro y, de paso, el conteo por estado de vista
+     * que dibuja el gráfico de abajo: ['cifras' => [clave => n],
+     * 'por_estado' => [estado de vista => n]]. Un mismo recorrido para los dos,
+     * para que el cuadro y el gráfico no puedan decir números distintos.
+     */
+    public static function cifrasEstado(array $casos, array $gestion): array
+    {
+        require_once __DIR__ . '/Ui.php';
+        $porEstado = [];
+        foreach ($casos as $c) {
+            $g = $gestion[(string) ($c['aviso'] ?? '')] ?? null;
+            $vista = Ui::estadoVista($g['estado'] ?? null, $g);
+            $porEstado[$vista] = ($porEstado[$vista] ?? 0) + 1;
+        }
+        $cifras = [];
+        foreach (self::CIFRAS_ESTADO as $clave => $estados) {
+            $n = 0;
+            foreach ($estados as $e) { $n += $porEstado[$e] ?? 0; }
+            $cifras[$clave] = $n;
+        }
+        return ['cifras' => $cifras, 'por_estado' => $porEstado];
+    }
+
     /**
      * Etiqueta legible del estado.
      *

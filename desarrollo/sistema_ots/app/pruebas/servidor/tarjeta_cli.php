@@ -105,5 +105,25 @@ echo "\nestados en el alcance (conteo directo): " . json_encode($porEstado, JSON
 echo "abiertos por estado (sin cadenas de continuidad): $indep  ·  TOTAL de la tarjeta: {$tz['total']}\n";
 $chk('TOTAL de la tarjeta ≤ abiertos por estado (la tarjeta cuenta una vez cada cadena de continuidad)', (int) $tz['total'] <= $indep, "{$tz['total']} ≤ $indep");
 
+// ---- el cuadro «En qué estado están» (27-sep-2026): las cuatro cifras de la administradora ----
+// Contra un conteo directo por estado DE VISTA hecho aquí mismo (no contra Casos::CIFRAS_ESTADO,
+// sería tautológico). Solo agregados: ni un aviso.
+$ce = Casos::cifrasEstado($casos, $gestion);
+$vista = [];
+foreach ($casos as $c) {
+    $g = $gestion[(string) ($c['aviso'] ?? '')] ?? null;
+    $e = strtoupper((string) ($g['estado'] ?? 'NUEVO'));
+    if ($e === 'CERRADO_SIN_ATENCION' && !empty($g['regularizado_en'])) { $e = 'REGULARIZADO'; }
+    $vista[$e] = ($vista[$e] ?? 0) + 1;
+}
+echo "\ncuadro «En qué estado están»: " . json_encode($ce['cifras'], JSON_UNESCAPED_UNICODE) . "\n";
+$chk('creadas que no nos competen = NO_COMPETE', $ce['cifras']['CREADA_NO_COMPETE'] === ($vista['NO_COMPETE'] ?? 0), (string) $ce['cifras']['CREADA_NO_COMPETE']);
+$chk('asignadas, en gestión técnica = ASIGNADO', $ce['cifras']['EN_GESTION_TECNICA'] === ($vista['ASIGNADO'] ?? 0), (string) $ce['cifras']['EN_GESTION_TECNICA']);
+$chk('atendidas, cerradas por INDUSTEC = ATENDIDO + RESUELTO', $ce['cifras']['ATENDIDA_CERRADA'] === ($vista['ATENDIDO'] ?? 0) + ($vista['RESUELTO'] ?? 0), "{$ce['cifras']['ATENDIDA_CERRADA']} = " . ($vista['ATENDIDO'] ?? 0) . ' + ' . ($vista['RESUELTO'] ?? 0));
+$chk('a espera de repuesto (gestión proveedores KFC) = ESPERA_REPUESTO, orden por orden', $ce['cifras']['GESTION_PROVEEDORES_KFC'] === ($vista['ESPERA_REPUESTO'] ?? 0), (string) $ce['cifras']['GESTION_PROVEEDORES_KFC']);
+$chk('«de ellas, a espera de repuesto» de la tarjeta ≤ la cifra del cuadro (una por cadena vs. una por orden)', (int) $tz['espera_repuesto'] <= $ce['cifras']['GESTION_PROVEEDORES_KFC'], "{$tz['espera_repuesto']} ≤ {$ce['cifras']['GESTION_PROVEEDORES_KFC']}");
+$chk('por_estado del gráfico suma las órdenes en alcance', array_sum($ce['por_estado']) === count($casos), array_sum($ce['por_estado']) . ' vs ' . count($casos));
+$chk('las regularizadas no cuentan como cerradas sin atención', ($ce['por_estado']['CERRADO_SIN_ATENCION'] ?? 0) === ($vista['CERRADO_SIN_ATENCION'] ?? 0));
+
 echo "\n" . $ok . ' comprobaciones · ' . $mal . " fallos\n";
 exit($mal === 0 ? 0 : 1);

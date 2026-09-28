@@ -953,6 +953,57 @@ SAP, que van al pie); ¿el remitente del correo de la OT («INDUSTEC · Órdenes
 tiempo del preventivo debe contar las «atrasadas por marcar»? Trampas que costaron tiempo: comparar con el servidor
 ignorando CRLF/LF (local CRLF, servidor LF), y `lstrip("./")` se come el punto de `.htaccess`.
 
+## 1u. El cuadro «En qué estado están» del inicio, con las cuatro cifras de la administradora (2026-09-27, fuera del plan, pedido de Isabel)
+
+**Rama `pc/panel-estados-administradora-2026-09-27`** (a partir de `pc/vocabulario-sobre-vivo-2026-09-26`, lo desplegado en
+darkviolet el 26-sep), **sin desplegar y sin empujar**: el despliegue lo autoriza Andrés.
+
+**Pedido (27-sep-2026).** Isabel: «en las estadísticas, que se muestre información que ella usa más como: cuántos casos se
+crearon y no nos competían, cuántos casos están asignados (en gestión técnica), atendido (cerrado), a espera de repuestos
+(gestión proveedores KFC)». El panel «En qué estado están» era una barra por estado con nueve rótulos, con las «atendidas»
+partidas en dos (por cerrar en SAP / cerradas en SAP) y sin la palabra «gestión» por ningún lado.
+
+**Qué quedó hecho.** Encima de los gráficos del inicio, un cuadro de cuatro tarjetas con los rótulos del diccionario
+(`vocabulario.json` v2026-09-27.1: cuatro conceptos derivados nuevos, ningún término existente cambió), para la administración
+y para el jefe de zona (sobre su zona). Qué estado de la base suma a cada cifra está en **una sola tabla**,
+`Casos::CIFRAS_ESTADO`, que leen el panel, la prueba sintética y `tarjeta_cli.php`; se cuenta orden por orden sobre el
+catálogo de 90 días del correo, por el estado de vista (una cerrada sin atención ya regularizada no cuenta como alarma):
+
+| Tarjeta | Suma | Enlace |
+|---|---|---|
+| **Creadas que no nos competen** | NO_COMPETE | `casos.php?est=NO_COMPETE` |
+| **Asignadas · en gestión técnica** | solo ASIGNADO (no EN_REVISION, que está en manos de la administración; no ESPERA_REPUESTO, que es la cuarta) | `casos.php?est=ASIGNADO` |
+| **Atendidas · cerradas por INDUSTEC** | ATENDIDO + RESUELTO (RESUELTO solo se alcanza desde ATENDIDO; las cerradas *sin* atención quedan fuera) | el pie desglosa «N atendidas, por cerrar en SAP · N cerradas en SAP», cada parte con su `?est=` |
+| **A espera de repuesto · gestión proveedores KFC** | ESPERA_REPUESTO, orden por orden | `casos.php?est=ESPERA_REPUESTO` |
+
+Cada cifra de un solo estado es exactamente las filas de su enlace (el buzón filtra con la misma `Ui::estadoVista()`). Los
+otros estados (sin asignar, en revisión, cerradas sin atención, regularizadas) siguen debajo en el gráfico de barras —ahora
+«Todos los estados»— y en su «Ver los números». La tarjeta «A espera de repuesto» de «Cómo va el buzón» se retiró: es la
+cuarta cifra del cuadro. `sw.js` pasa a **v22**. Como «cerrada» nunca va sola (VOCABULARIO §5), «atendido (cerrado)» se
+rotula «cerradas por INDUSTEC». Detalle en `VOCABULARIO.md` (versión `2026-09-27.1`, §4, §8.8 y §11 preguntas 6-8).
+
+**Verificación (local, PHP 8.3.35 del PC; sin servidor):**
+
+```
+prueba_cifras_estado.php (nueva, base sintética de 20 órdenes con los 9 estados): 77 · 0
+prueba_vocabulario 154·0 · prueba_claves_vocabulario 749·0 · prueba_lista_negra 0 hallazgos en 154 archivos · prueba_panel_zona 70·0
+generar_vocabulario.php --comprobar: todas las listas coinciden · prueba_contratos.mjs 57·0 · prueba_graficos.mjs 62·0
+php -l: todo publico/, nucleo/, pruebas/ sin errores · node --check ui.js sw.js · py_compile verificar_cifras.py
+render sin base (Db falsa en el scratchpad, mismas 20 órdenes) como ADMIN: 4 tarjetas 2 · 4 · 5 (2 + 3) · 3, sin Warning/Notice;
+     como JEFE_ZONA UIO: 1 · 1 · 2 · 1, solo su zona; el gráfico «Todos los estados» suma las mismas 20
+```
+
+**Lo que NO se comprobó:** nada contra darkviolet ni contra la base real. `tarjeta_cli.php` (7 comprobaciones nuevas contra el
+conteo directo por estado) y `verificar_cifras.py` (10 nuevas: las cuatro tarjetas contra la referencia SQL por estado de vista y
+`casos.php?est=` para los cinco estados) están escritos pero **sin correr**: el primero necesita la base, el segundo crea huella
+en la bitácora. Nadie ha visto el cuadro en un navegador con sesión. Al desplegar: `panel.php`, `nucleo/Casos.php`,
+`vocabulario.json`, `vocabulario_publico.json`, `ui.js`, `sw.js` (6 archivos), y correr `tarjeta_cli.php ADMIN` en el servidor.
+
+**Preguntas para Andrés** (ninguna bloquea; la 1 solo cambia el número grande): (1) ¿«atendido (cerrado)» = ATENDIDO +
+RESUELTO, o solo las ya cerradas en SAP? (2) ¿«asignados (en gestión técnica)» = solo ASIGNADO, sin EN_REVISION? (3) Isabel dice
+«a espera de repuestos» (plural) y «gestión proveedores KFC»; se mantuvo «a espera de repuesto» (singular, como `ESPERA_REPUESTO`)
+con el calificativo: ¿se deja o se cambia el término en todo el sistema?
+
 ## 1s. T2.28 · Lo que se midió para planificar las observaciones de INDUSTEC (2026-09-22/23, solo lectura)
 
 **No se construyó nada: es la medición que sostiene el plan.** La especificación,
@@ -2765,6 +2816,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
+| ~~Cuadro «En qué estado están» con las cuatro cifras de la administradora~~ (pedido de Isabel del 27-sep-2026, fuera del plan) | ✅ **Hecha en la rama `pc/panel-estados-administradora-2026-09-27` el 2026-09-27, SIN desplegar ni empujar** — Steven, desde el PC de Andrés, en un worktree aparte (`_wt_panel_estados_2026-09-27`) para no cruzarse con la conversación que edita `casos.php` | 2026-09-27 | `panel.php`, `Casos.php` (función nueva), `vocabulario.json` (+4 conceptos, v2026-09-27.1) y lo que regenera, `sw.js` v22, `tarjeta_cli.php`, `verificar_cifras.py`, `VOCABULARIO.md`. No toca la base ni el árbol canónico. Detalle, cifras y preguntas en **§1u** |
 | ~~Vocabulario SAP en todo el sistema~~ (pedido de la administradora, fuera del plan) | ✅ **Terminada y desplegada en darkviolet el 2026-09-26** — ramas `pc/vocabulario-sap-2026-09-24` y `pc/vocabulario-sobre-vivo-2026-09-26` | 2026-09-24 | Solo texto visible, `vocabulario.json` y la tarjeta «Por zona»; no tocó la base ni el árbol canónico. Falta que la **estación empuje T2.28.3/T2.28.6** y fusione estas ramas en `master`, y que alguien vea las pantallas con sesión. Detalle, cifras y cómo se revierte en **§1t** |
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
 | ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó, se detuvo a propósito una vez (error nº 44) y se relanzó. ✅ **T2.28.2, el módulo de correos, construido, desplegado y verificado el 2026-09-24** (013 aplicada, `TODO OK`; `correos.php`; `Destinatarios::resolver()`; el tope y el cupo por hora del despachador — `§1s-undecies`). **Pendiente, de aprobación:** `correos_sembrar_cli.php --ejecutar` (el simulacro ya da 3/3 contra el maestro). De T2.28.3 ya está lo que cubrió el arreglo urgente; sigue T2.28.6 en el carril. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b puntos 7 y 8 |

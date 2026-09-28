@@ -35,7 +35,7 @@
      v4 -> v5 (2026-09-11, T2.13, la 008): la app sube las fotos y la firma y
      recibe el numero de la orden. Con el armazon viejo el celular seguiria
      mandando la orden sin ellas. */
-const VERSION = 'ot-industec-v21';  // v21: un solo vocabulario para todos los roles — vocabulario_publico.json precargado y UI.T en ui.js; cubre los textos de app.js, cola.js, offline.js, guia.js, reglas.js, ui.js, index.html y cronograma.js (vocabulario 2026-09-24.6, 26-sep-2026)
+const VERSION = 'ot-industec-v22';  // v22: cuadro «En qué estado están» del inicio con las cuatro cifras de la administradora (vocabulario 2026-09-27.1, 27-sep-2026); v21: un solo vocabulario para todos los roles
 // v20: ficha del equipo -marca, modelo y serie que se quedan, casilla «sin placa» (T2.28.6, 2026-09-24)
 // v19: correo del jefe de operaciones ya no es un campo fijo; «también se enviará a» (T2.28.3, 2026-09-24)
 // v18: el buscador del equipo ya no borra lo que se escribe (2026-09-24)

@@ -1,6 +1,6 @@
 # Vocabulario único de B.IA Soft ERP
 
-**Versión del diccionario:** `2026-09-24.6` · **Fuente única:** `app/publico/vocabulario.json` · **Fecha:** 24 de septiembre de 2026
+**Versión del diccionario:** `2026-09-27.1` · **Fuente única:** `app/publico/vocabulario.json` · **Fecha:** 27 de septiembre de 2026
 
 Este documento es para Andrés, para Isabel y para quien programe. La fuente es el JSON: si este documento y el JSON no coinciden, **manda el JSON**. La tabla de conceptos de la §4 se generó desde el JSON.
 
@@ -111,6 +111,13 @@ Este documento es para Andrés, para Isabel y para quien programe. La fuente es 
 - **Textos sueltos** (sin cambio en el diccionario): «Notificación interna» de la oficina → «Recordatorio de la oficina» (no llega a la pestaña «Notificaciones»); el técnico dice «Insistir por esta solicitud» en las dos pantallas; «Hay N advertencias para revisar» (no «avisos»); «Máximo 7 equipos por OT INDUSTEC»; el aviso de permiso de la cola habla de «OT INDUSTEC»; el rol en «Mis órdenes» sale de `Ui::ROL` (el jefe de zona ya no aparece como «Técnico»); el globo de «Mis órdenes» cuenta asignadas + a espera de repuesto, como dice su ayuda; el cuadro de Asignación que sumaba las dos se titula «Asignadas y a espera de repuesto»; «en el total de órdenes abiertas» en los dos textos del panel que contaban el universo completo; los últimos «esperando» en prosa; el código de zona crudo del formulario pasa a su nombre; `catalogos.php` ya manda `estatus_clave` (§10.2).
 - **Queda para Andrés (lógica, no texto):** Asignación cuenta «sin asignar» con `Casos::sinAsignar()` (NUEVO y **todo** EN_REVISION, con o sin técnico y con o sin OT), y el panel y el buzón cuentan «sin técnico» (NUEVO o EN_REVISION **sin** `asignado_a`). Con los mismos datos, la administración puede leer 4 en el panel y 5 en Asignación. Mientras se decide, Asignación dice lo que cuenta: «sin técnico o en revisión», «en todas las zonas» (OTRA y sin zona incluidas) y ya no rotula esa lista «a espera de informe técnico».
 
+**Versión `2026-09-27.1`: el cuadro «En qué estado están» del inicio (27-sep-2026, pedido de la administradora).** Ella pidió ver en las estadísticas lo que usa: «cuántos casos se crearon y no nos competían, cuántos están asignados (en gestión técnica), atendido (cerrado), a espera de repuestos (gestión proveedores KFC)». Antes esas cifras estaban repartidas en la barra por estado, con nueve rótulos y las «atendidas» partidas en dos. Ningún término existente cambió; se agregan **cuatro conceptos derivados** (sin estado propio en la base, como `ASIGNADA_3D`), con qué estado suma a cada uno en `Casos::CIFRAS_ESTADO` — una sola tabla que leen el panel, `prueba_cifras_estado.php` (77·0) y `tarjeta_cli.php`:
+- `CREADA_NO_COMPETE` «Creadas que no nos competen» = NO_COMPETE.
+- `EN_GESTION_TECNICA` «Asignadas · en gestión técnica» = **solo ASIGNADO** (EN_REVISION está en manos de la administración, no del técnico; ESPERA_REPUESTO es la cuarta cifra).
+- `ATENDIDA_CERRADA` «Atendidas · cerradas por INDUSTEC» = **ATENDIDO + RESUELTO**. Como «cerrada» nunca va sola (§5), no se copia «(cerrado)» tal cual: se dice «cerrada por INDUSTEC», y el pie desglosa «N atendidas, por cerrar en SAP · N cerradas en SAP», cada parte con su enlace. Las cerradas **sin** atención (regularizadas o no) quedan fuera a propósito.
+- `GESTION_PROVEEDORES_KFC` «A espera de repuesto · gestión proveedores KFC» = ESPERA_REPUESTO, **orden por orden** (la sublínea «de ellas, a espera de repuesto» de la tarjeta cuenta una vez por cadena de continuidad, así que puede ser menor). «repuesto» en singular, como en `ESPERA_REPUESTO`.
+- Se cuenta sobre el catálogo de 90 días del buzón, por el estado de vista (`Ui::estadoVista()`), y cada cifra de un solo estado es las filas de `casos.php?est=`. El gráfico de barras sigue debajo con los nueve estados y su «Ver los números», ahora titulado «Todos los estados». La tarjeta «A espera de repuesto» de «Cómo va el buzón» se retira: es la cuarta cifra del cuadro. Los ven ADM y JZ (el jefe de zona, sobre su zona). `sw.js` pasa a v22. Preguntas para Andrés en §11 (6 a 8).
+
 ---
 
 ## 2. Reglas del diccionario
@@ -188,6 +195,10 @@ Cancelado queda fuera de la leyenda. FERIADO todavía no existe en B.IA.
 | `SIN_REGULARIZAR` | cerrada sin atención, sin regularizar ante KFC / cerradas sin atención, sin regularizar ante KFC | Sin regularizar | — | ADM JZ TEC | «cerrados sin atención, sin regularizar ante KFC» |
 | `REGULARIZADA` | regularizada / regularizadas | Regularizadas | caso:REGULARIZADO | ADM JZ TEC KFC GER | «regularizado» |
 | `CERRADA_SIN_OK` | cerrada por falta de OK / cerradas por falta de OK | Cerradas por falta de OK | — | ADM JZ TEC KFC GER | **RESERVADO** (sin estado todavía) |
+| `CREADA_NO_COMPETE` | creada y no nos compete / creadas y no nos competen | Creadas que no nos competen | — (= NO_COMPETE, `Casos::CIFRAS_ESTADO`) | ADM JZ | cuadro «En qué estado están» del inicio (27-sep-2026) |
+| `EN_GESTION_TECNICA` | asignada, en gestión técnica / asignadas, en gestión técnica | Asignadas · en gestión técnica | — (= ASIGNADO) | ADM JZ | cuadro «En qué estado están» del inicio (27-sep-2026) |
+| `ATENDIDA_CERRADA` | atendida, cerrada por INDUSTEC / atendidas, cerradas por INDUSTEC | Atendidas · cerradas por INDUSTEC | — (= ATENDIDO + RESUELTO) | ADM JZ | cuadro «En qué estado están» del inicio (27-sep-2026); «atendido (cerrado)» de la administradora |
+| `GESTION_PROVEEDORES_KFC` | a espera de repuesto, en gestión de proveedores de KFC | A espera de repuesto · gestión proveedores KFC | — (= ESPERA_REPUESTO, orden por orden) | ADM JZ | cuadro «En qué estado están» del inicio (27-sep-2026); tarjeta «A espera de repuesto» de «Cómo va el buzón» |
 
 #### Conjuntos de la tarjeta y del tablero
 
@@ -536,6 +547,7 @@ Qué le cambia a Isabel en las cifras que ya conoce: §8.9.
   - «Esperando un equipo» → «A espera de repuesto».
   - «Llegaron en los últimos 7 días» → «Órdenes nuevas en 7 días».
   - «Comprometidos para hoy» → «Con fecha SAP hoy».
+  - Desde el 27-sep-2026, encima de los gráficos va el cuadro **«En qué estado están»** con las cuatro cifras de la administradora (`CREADA_NO_COMPETE`, `EN_GESTION_TECNICA`, `ATENDIDA_CERRADA`, `GESTION_PROVEEDORES_KFC`; versión `2026-09-27.1`), y la tarjeta «A espera de repuesto» de «Cómo va el buzón» pasa a ser la cuarta cifra. El gráfico de barras de los nueve estados se titula «Todos los estados».
 - **Buzón** (`casos.php`):
   - el título pasa a «Órdenes»;
   - la columna y el filtro «Atención» pasan a «OT INDUSTEC: sin OT / con OT de evaluación / con OT de cierre», que ahora también mira `ot_capturadas`;
@@ -763,6 +775,9 @@ Ninguna bloquea la etapa E1. Van en una sola conversación, con sus propias cifr
 3. Semáforo: el verde se rotula desde la versión `.6` «Repuesto en seguimiento», porque hoy junta órdenes cuya acción la debe INDUSTEC (solicitud por validar, por registrar en SAP, en taller de INDUSTEC, sin solicitud) con las ya despachadas. ¿Quiere que el verde se parta por quién debe la acción (despachado → KFC; por validar o registrar → amarillo, INDUSTEC)? Es un cambio de lógica en `Reportes::calcular()` y lo decide Andrés con ella. Y el rojo, ¿por días desde que llegó la orden (como se calcula hoy) o desde su último movimiento?
 4. ¿Qué significa su «SIN CORREO»?
 5. ¿Usa «OPERATIVO CON NOVEDAD»? Los jefes escriben «HABILITADO CON NOVEDAD».
+6. **Cuadro «En qué estado están» (27-sep-2026), para Andrés:** «Atendido (cerrado)» se cuenta como ATENDIDO + RESUELTO (atendidas por cerrar en SAP + cerradas en SAP), porque RESUELTO solo se alcanza desde ATENDIDO. ¿O quería solo las **ya cerradas en SAP**? El pie del cuadro muestra las dos partes con su enlace, así que la decisión solo cambia el número grande.
+7. «Asignados (en gestión técnica)» se cuenta como **solo ASIGNADO**: no las EN_REVISION (en manos de la administración) ni las a espera de repuesto (cuarta cifra). ¿Correcto?
+8. Ella escribe «a espera de repuestos» (plural) y «gestión proveedores KFC»; el diccionario mantiene «a espera de repuesto» (singular, como `ESPERA_REPUESTO`) y agrega «· gestión proveedores KFC» como calificativo. ¿Se deja así o se cambia el término en todo el sistema?
 
 ## 12. Tareas posteriores (no son de esta etapa)
 

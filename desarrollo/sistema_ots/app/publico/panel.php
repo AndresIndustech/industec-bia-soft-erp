@@ -99,7 +99,11 @@ $n = ['total' => count($casos), 'alerta_vieja' => 0, 'hoy' => 0, 'semana' => 0, 
 // 'OTRA' entra al mismo mapa que UIO/LARB/CNLJ (ASG-21): antes una orden
 // derivada a OTRA no sumaba en ningún contador y el panel la perdía de vista.
 $porZona = ['UIO' => 0, 'LARB' => 0, 'CNLJ' => 0, 'OTRA' => 0];
-$porEstado = [];
+// Las cuatro cifras del cuadro «En qué estado están» y el conteo por estado de
+// vista del gráfico, de UNA función (`Casos::cifrasEstado()`): qué estado suma
+// a cada cifra está en `Casos::CIFRAS_ESTADO`, no aquí.
+$cifrasEst = Casos::cifrasEstado($casos, $gestion);
+$porEstado = $cifrasEst['por_estado'];
 // Hoy más los seis días anteriores: con '-7 days' y un «>=» entraban OCHO días
 // de órdenes en un número que dice «7 días».
 $desde7 = date('Y-m-d', strtotime('-6 days'));
@@ -108,11 +112,6 @@ foreach ($casos as $c) {
     $aviso  = (string) ($c['aviso'] ?? '');
     $g      = $gestion[$aviso] ?? null;
     $estado = $g['estado'] ?? 'NUEVO';
-    // El gráfico cuenta por el estado de vista: una cerrada sin atención ya
-    // regularizada se ve neutra. El 2026-09-22 eran 644 de 884, todas
-    // regularizadas, pintadas de rojo en la barra más grande del inicio.
-    $vista = Ui::estadoVista($estado, $g);
-    $porEstado[$vista] = ($porEstado[$vista] ?? 0) + 1;
 
     $z = (string) ($c['zona'] ?? '');
     if (isset($porZona[$z])) { $porZona[$z]++; } elseif ($z === '') { $n['sin_zona']++; }
@@ -633,10 +632,6 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
     <div class="tile"><div class="n" data-n="<?= $n['hoy'] ?>">0</div>
       <div class="t"><?= $e(Vocabulario::titulo('FECHA_SAP_HOY')) ?></div>
       <div class="pie">Fecha estimada de SAP hoy, en el <?= $e(Vocabulario::t('TOTAL_ABIERTAS')) ?></div></div>
-    <?php /* Sale de la misma función que la tarjeta: son las «de ellas, a
-             espera de repuesto» de la fila ÓRDENES ABIERTAS, sumadas. */ ?>
-    <a class="tile <?= $tz['espera_repuesto'] ? 'vence' : '' ?>" href="casos.php?est=ESPERA_REPUESTO&amp;grupo=total"><div class="n" data-n="<?= (int) $tz['espera_repuesto'] ?>">0</div>
-      <div class="t"><?= $e(Vocabulario::titulo('ESPERA_REPUESTO')) ?></div></a>
     <?php /* Antes decía «Vivos en 90 días» (884 el 2026-09-22, incluidas 766
              ya cerradas o regularizadas) y después «Siguen abiertos», que
              contaba también las ATENDIDO. Ahora es el TOTAL DE ÓRDENES
@@ -656,6 +651,59 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
         <div class="t"><?= $e(Vocabulario::titulo('SIN_ZONA')) ?></div>
         <div class="pie">El nombre de SAP no calza con el maestro</div></a>
     <?php endif; ?>
+  </div>
+
+  <?php
+  /* =====================================================================
+     EN QUÉ ESTADO ESTÁN — las cuatro cifras que la administradora usa
+     (pedido del 27-sep-2026): creadas que no nos competen, asignadas (en
+     gestión técnica), atendidas (cerradas) y a espera de repuesto (gestión
+     de proveedores de KFC). Antes vivían repartidas en la barra por estado,
+     con nueve rótulos y las «atendidas» partidas en dos. Los rótulos son del
+     diccionario; qué estado suma a cada una, de `Casos::CIFRAS_ESTADO`.
+     Cada cifra es las filas de su enlace: una cifra de un solo estado enlaza
+     a `casos.php?est=`; la que junta dos (atendidas) enlaza cada parte desde
+     el pie, porque el buzón filtra un estado a la vez. Los demás estados
+     siguen abajo, en el gráfico y en su «Ver los números».
+     ===================================================================== */
+  $tonoCifra = ['CREADA_NO_COMPETE' => '', 'EN_GESTION_TECNICA' => 'azul',
+                'ATENDIDA_CERRADA' => 'atend', 'GESTION_PROVEEDORES_KFC' => 'vence'];
+  ?>
+  <h2>En qué estado están</h2>
+  <p class="sub" style="margin:-6px 0 10px">
+    Las <?= $n['total'] ?> <?= $e(Vocabulario::t('ORDEN', $n['total'])) ?> de la ventana de 90 días del correo,
+    una por una, por el estado que decidió una persona o dedujo la reconciliación — no el de SAP.
+  </p>
+  <div class="tiles">
+    <?php foreach (Casos::CIFRAS_ESTADO as $clave => $estados):
+        $valor = (int) $cifrasEst['cifras'][$clave];
+        $tono  = $valor > 0 ? $tonoCifra[$clave] : '';
+        $unico = count($estados) === 1;
+    ?>
+      <?php if ($unico): ?>
+        <a class="tile <?= $tono ?>" href="casos.php?est=<?= $e($estados[0]) ?>" title="<?= $e(Vocabulario::ayuda($clave)) ?>">
+      <?php else: ?>
+        <div class="tile <?= $tono ?>" title="<?= $e(Vocabulario::ayuda($clave)) ?>">
+      <?php endif; ?>
+          <div class="n" data-n="<?= $valor ?>">0</div>
+          <div class="t"><?= $e(Vocabulario::titulo($clave)) ?></div>
+          <?php if ($unico): ?>
+            <div class="pie"><?= $e(Vocabulario::ayuda($clave)) ?></div>
+          <?php else: ?>
+            <?php /* El desglose, cada parte con su enlace: la suma de las partes
+                     es la cifra, y cada parte es las filas de su enlace. */ ?>
+            <div class="pie"><?php
+              $partes = [];
+              foreach ($estados as $est) {
+                  $k = (int) ($cifrasEst['por_estado'][$est] ?? 0);
+                  $partes[] = '<a href="casos.php?est=' . $e($est) . '">' . $k . ' '
+                            . $e(Vocabulario::t(Vocabulario::deEstado($est), $k)) . '</a>';
+              }
+              echo implode(' · ', $partes);
+            ?></div>
+          <?php endif; ?>
+      <?= $unico ? '</a>' : '</div>' ?>
+    <?php endforeach; ?>
   </div>
 
   <?php if ($zonaAlc === null): ?>
@@ -688,8 +736,8 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
               data-centro="<?= $e(Vocabulario::t('ORDEN', 2)) ?>"
               data-datos='<?= $e(json_encode($datosZona, JSON_UNESCAPED_UNICODE)) ?>'></figure>
       <figure class="viz" data-viz="barras"
-              data-titulo="En qué estado están"
-              data-sub="El estado que decidió una persona o dedujo la reconciliación, no el de SAP"
+              data-titulo="Todos los estados"
+              data-sub="Los mismos <?= $n['total'] ?> del cuadro de arriba, estado por estado; el detalle está en «Ver los números»"
               data-ancho-etiqueta="140"
               data-datos='<?= $e(json_encode($datosEstado, JSON_UNESCAPED_UNICODE)) ?>'></figure>
     </div>
