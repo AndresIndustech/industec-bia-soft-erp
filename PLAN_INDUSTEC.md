@@ -1835,10 +1835,9 @@ python verificar_seguridad.py   # 28 · 0
 >    fecha de atención corregida en `carga.correccion_admin` (el registro del técnico
 >    intacto); respaldo en `~/respaldos/pdf_piloto_con_franja_20260928/` y en el
 >    scratchpad; el índice nocturno se corrió (`--solo-pdf` + `--catalogo`) y la
->    corrección sobrevive (0 filas cambiadas). **Dos respuestas de Andrés siguen
->    abiertas:** ¿la OT-9001 de CNLJ (captura 204, emitida el 28-sep a las 17:30,
->    antes del despliegue) también sin franja? —es añadir una línea a `$REGENERAR` y
->    correr `--respaldar` y `--ejecutar`—; y la OT-9125 regenerada dice «sin
+>    corrección sobrevive (0 filas cambiadas). La OT-9001 de CNLJ (captura 204,
+>    emitida el 28-sep a las 17:30, antes del despliegue) también quedó sin franja el
+>    28-sep a las 18:41 (15 HECHA; ESTADO §1y). **Sigue abierto:** la OT-9125 regenerada dice «sin
 >    configurar» donde la original decía el buzón de zona (D-G): se deja así o se
 >    repone el original, que trae la franja. Pendiente de ver: la próxima OT que
 >    emita un técnico estrena el instante único de emisión (`emitida_en` y «generado

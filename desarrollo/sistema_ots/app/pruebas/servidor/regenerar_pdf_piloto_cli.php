@@ -102,6 +102,10 @@ $REGENERAR = [
     201 => ['ot' => 'OT-9150-R009EC-10356734-UIO', 'aviso' => '10356734', 'fecha' => ['2026-09-26', '2026-09-24']],
     202 => ['ot' => 'OT-9151-R014EC-10356794-UIO', 'aviso' => '10356794', 'fecha' => ['2026-09-27', '2026-09-24']],
     203 => ['ot' => 'OT-9152-G002EC-10355352-UIO', 'aviso' => '10355352'],
+    // La 15.ª: ftipan la emitió el 28-sep a las 17:30, antes de desplegar el PDF
+    // sin franja. Andrés: «de ahora en adelante ninguna orden salga con esa franja».
+    // Su fecha de atención (25-ago) cuadra con el inicio y el fin: no se corrige.
+    204 => ['ot' => 'OT-9001-K061EC-10346775-CNLJ', 'aviso' => '10346775'],
 ];
 
 /* Lo que la copia cambia además de la franja y la fecha, dicho en la bitácora.
