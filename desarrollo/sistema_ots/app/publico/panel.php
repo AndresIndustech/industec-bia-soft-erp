@@ -5,6 +5,7 @@ require_once __DIR__ . '/nucleo/Pendientes.php';
 require_once __DIR__ . '/nucleo/Reconciliar.php';
 require_once __DIR__ . '/nucleo/Ui.php';
 require_once __DIR__ . '/nucleo/Vocabulario.php';
+require_once __DIR__ . '/nucleo/Novedades.php';
 
 /**
  * panel.php — Lo primero que se ve al entrar.
@@ -687,7 +688,21 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
       <?php endif; ?>
           <div class="n" data-n="<?= $valor ?>">0</div>
           <div class="t"><?= $e(Vocabulario::titulo($clave)) ?></div>
-          <?php if ($unico): ?>
+          <?php if ($clave === 'GESTION_PROVEEDORES_KFC'): ?>
+            <?php /* El desglose por paso de la gestión de KFC (022), cada uno con
+                     su enlace; «sin precisar» es lo que todavía no se anotó, y se
+                     dice en vez de esconderse. Solo los pasos con órdenes. */ ?>
+            <div class="pie"><?php
+              $partes = [];
+              foreach ($cifrasEst['repuesto_gestion'] as $paso => $k) {
+                  if ($k === 0) { continue; }
+                  $cl = Casos::REPUESTO_GESTION[$paso] ?? 'REP_SIN_PRECISAR';
+                  $partes[] = '<a href="casos.php?est=ESPERA_REPUESTO&amp;rep=' . ($paso === 'SIN_PRECISAR' ? 'SIN' : $e($paso)) . '" title="'
+                            . $e(Vocabulario::ayuda($cl)) . '">' . $k . ' ' . $e(Vocabulario::t($cl)) . '</a>';
+              }
+              echo $partes ? implode(' · ', $partes) : $e(Vocabulario::ayuda($clave));
+            ?></div>
+          <?php elseif ($unico): ?>
             <div class="pie"><?= $e(Vocabulario::ayuda($clave)) ?></div>
           <?php else: ?>
             <?php /* El desglose, cada parte con su enlace: la suma de las partes
@@ -705,6 +720,29 @@ Ui::cabecera($u, 'panel.php', $cuentas, ['titulo' => 'Inicio']);
       <?= $unico ? '</a>' : '</div>' ?>
     <?php endforeach; ?>
   </div>
+
+  <?php
+  /* La fila «Novedades»: las cuatro marcas con que la administradora identifica
+     una novedad (022), sobre las novedades vivas de su alcance. Si la 022 no
+     está aplicada, `marcas` es null y se dice «no disponible» (I-7). */
+  $contNov = Novedades::disponible() ? Novedades::contadores() : null;
+  ?>
+  <?php if ($contNov !== null): ?>
+    <h3 style="margin:14px 0 6px;font-size:14px"><?= $e(Vocabulario::titulo('NOVEDAD')) ?> · identificadas</h3>
+    <?php if (!is_array($contNov['marcas'])): ?>
+      <p class="sub" style="margin:0 0 10px">No disponible: la migración <span class="mono">022</span> (marcas de la novedad) no está aplicada.</p>
+    <?php else: ?>
+      <div class="tiles">
+        <?php foreach (Novedades::MARCAS as $mk => $clave): ?>
+          <a class="tile <?= ($contNov['marcas'][$mk] ?? 0) > 0 && $mk === 'RIESGO_ALTO' ? 'alerta' : '' ?>"
+             href="novedades_visita.php?g=vivas&amp;marca=<?= $e($mk) ?>" title="<?= $e(Vocabulario::ayuda($clave)) ?>">
+            <div class="n" data-n="<?= (int) ($contNov['marcas'][$mk] ?? 0) ?>">0</div>
+            <div class="t"><?= $e(Vocabulario::titulo($clave)) ?></div>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  <?php endif; ?>
 
   <?php if ($zonaAlc === null): ?>
     <?php

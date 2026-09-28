@@ -388,6 +388,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           ? ': autorizado como otro trabajo.' : ': no autorizado como otro trabajo.');
             }
 
+        } elseif ($accion === 'repuesto_gestion' && Auth::puede('casos.repuesto_gestion')) {
+            /* En qué punto de la gestión de KFC está el repuesto (022, pedido de
+             * la administradora del 27-sep-2026). Es un dato aparte del estado,
+             * como «otros trabajos»: la orden sigue a espera de repuesto; esto
+             * dice en qué manos está la pieza. Solo sobre ESPERA_REPUESTO: en
+             * otro estado no hay repuesto que gestionar. Vacío = sin precisar. */
+            $paso = strtoupper(trim((string) ($_POST['gestion'] ?? '')));
+            if ($antes !== 'ESPERA_REPUESTO') {
+                Auth::bitacora('DENEGADO', 'caso', $aviso, "gestión del repuesto desde $antes",
+                               $antes, null, ['accion' => $accion], false);
+                $error = 'Solo una orden ' . Vocabulario::t('ESPERA_REPUESTO') . ' tiene un repuesto que gestionar.';
+            } elseif ($paso !== '' && !isset(Casos::REPUESTO_GESTION[$paso])) {
+                $error = 'Paso de la gestión no válido.';
+            } else {
+                $pasoAntes = strtoupper((string) ($gest0[$aviso]['repuesto_gestion'] ?? ''));
+                Db::ejecutar(
+                    'UPDATE casos_gestion
+                        SET repuesto_gestion = ?, repuesto_gestion_por = ?, repuesto_gestion_en = NOW()
+                      WHERE aviso = ?',
+                    [$paso === '' ? null : $paso, $u['usuario_id'], $aviso]
+                );
+                $rot = fn(string $p) => $p === '' ? Vocabulario::t('REP_SIN_PRECISAR') : Vocabulario::t(Casos::REPUESTO_GESTION[$p] ?? 'REP_SIN_PRECISAR');
+                Auth::bitacora('REPUESTO_GESTION', 'caso', $aviso, $rot($paso),
+                               $antes, $antes,
+                               ['gestion' => $paso ?: null, 'antes' => $pasoAntes ?: null,
+                                'zona' => $caso['zona'] ?? null]);
+                $aviso_ok = 'Orden ' . $aviso . ': ' . $rot($paso) . '.';
+            }
+
         } elseif ($error === null) {
             Auth::bitacora('DENEGADO', 'caso', $aviso, "accion=$accion sin permiso",
                            $antes, null, ['accion' => $accion], false);
@@ -485,6 +514,11 @@ if (!in_array($fOtro, ['por_decidir', 'AUTORIZADO', 'NO_AUTORIZADO'], true)) { $
 // «Sin zona» no es una zona más: es la ausencia de una (ASG-21). El buzón no
 // podía filtrarla porque `zona=` vacío no filtra nada.
 $fDiasAsig = (string) ($_GET['dias_asignado'] ?? '');    // asignadas hace N+ días, a espera de informe técnico (ASG-15)
+// En qué punto de la gestión de KFC está el repuesto (022): uno de los cuatro
+// pasos, o `sin` = a espera de repuesto sin precisar. El cuadro del inicio
+// enlaza aquí con `?est=ESPERA_REPUESTO&rep=`.
+$fRep = strtoupper((string) ($_GET['rep'] ?? ''));
+if ($fRep !== '' && $fRep !== 'SIN' && !isset(Casos::REPUESTO_GESTION[$fRep])) { $fRep = ''; }
 $desdeF = $fDias !== '' ? date('Y-m-d', strtotime('-' . (int) $fDias . ' days')) : null;
 
 /* El filtro de la tarjeta por zona del panel: `?grupo=abiertas |
@@ -505,11 +539,16 @@ $grupoNoDisponible = $fGrupo !== '' && (
     (in_array($fGrupo, ['abiertas', 'espera_informe'], true) && !$informesG['ot_disponible'])
     || ($fGrupo === 'deshabilitados' && !$informesG['equipo_disponible']));
 
-$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $fEst, $fDiasAsig, $fOtro, $porAviso, $gestion, $fGrupo, $clasifG, $informesG) {
+$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $fEst, $fDiasAsig, $fOtro, $fRep, $porAviso, $gestion, $fGrupo, $clasifG, $informesG) {
     $g = $gestion[$c['aviso'] ?? ''] ?? null;
     // Por el estado de vista: «sin atender» lista solo lo que falta regularizar,
     // que es a lo que manda el enlace del panel; lo ya explicado va aparte.
     if ($fEst !== '' && Ui::estadoVista($g['estado'] ?? null, $g) !== $fEst) { return false; }
+    if ($fRep !== '') {
+        if (($g['estado'] ?? '') !== 'ESPERA_REPUESTO') { return false; }
+        $paso = strtoupper((string) ($g['repuesto_gestion'] ?? ''));
+        if ($fRep === 'SIN' ? isset(Casos::REPUESTO_GESTION[$paso]) : $paso !== $fRep) { return false; }
+    }
     if ($fOtro === 'por_decidir' && !Casos::otroTrabajoPorDecidir($c, $g)) { return false; }
     if ($fOtro !== '' && $fOtro !== 'por_decidir' && ($g['otro_trabajo'] ?? null) !== $fOtro) { return false; }
     if ($fAtn !== '') {
@@ -616,6 +655,8 @@ $ACCIONES = [
      'Le manda al técnico un recordatorio sobre una orden que ya tiene asignada. No le cambia el estado: es una notificación, no una transición.'],
     ['Otros trabajos',     'casos.veredicto',
      'Solo la administración. Para una orden fuera del área: si hubo acuerdo con KFC, la autoriza como «otro trabajo» con el acuerdo escrito, y se reporta aparte como extra. Si no, la resolución «no nos compete» la cierra y se le pide a KFC que la derive.'],
+    ['Gestión del repuesto', 'casos.repuesto_gestion',
+     'Para una orden a espera de repuesto: en qué punto de la gestión de KFC está la pieza (proveedores nacionales, bodega KFC, jefes técnicos de mantenimiento KFC o aprobación para despacho), como se registra en SAP. No cambia el estado de la orden; se ve en el cuadro del inicio.'],
 ];
 
 $ROL = ['SUPERADMIN' => 'Superadministrador', 'ADMIN' => 'Administración',
@@ -836,6 +877,19 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
           </select>
         </div>
         <div class="campo">
+          <?php /* En qué punto de la gestión de KFC está el repuesto (022). Solo
+                   tiene sentido con las órdenes a espera de repuesto: elegir un
+                   paso ya las filtra a ellas. */ ?>
+          <label for="f-rep">Gestión del repuesto</label>
+          <select id="f-rep" name="rep">
+            <option value="">Cualquiera</option>
+            <?php foreach (Casos::REPUESTO_GESTION as $k => $clave): ?>
+              <option value="<?= e($k) ?>" <?= $fRep === $k ? 'selected' : '' ?>><?= e(Vocabulario::titulo($clave)) ?></option>
+            <?php endforeach; ?>
+            <option value="SIN" <?= $fRep === 'SIN' ? 'selected' : '' ?>><?= e(ucfirst(Vocabulario::t('ESPERA_REPUESTO'))) ?>, <?= e(Vocabulario::t('REP_SIN_PRECISAR')) ?></option>
+          </select>
+        </div>
+        <div class="campo">
           <?php /* Qué OT INDUSTEC tiene la orden, con los nombres del diccionario:
                    «Atención», «Sin atender», «Atendidos, en curso» y «Con orden
                    de cierre» nombraban otras cosas en otras pantallas. */ ?>
@@ -872,7 +926,7 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
           <label>&nbsp;</label>
           <button class="btn primary" type="submit" style="height:38px">Filtrar</button>
         </div>
-        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn || $fEst || $fDiasAsig !== '' || $fOtro !== '' || $fGrupo !== ''): ?>
+        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn || $fEst || $fDiasAsig !== '' || $fOtro !== '' || $fGrupo !== '' || $fRep !== ''): ?>
           <div class="campo">
             <label>&nbsp;</label>
             <a class="btn" href="casos.php" style="height:38px;display:flex;align-items:center">Limpiar</a>
@@ -1073,6 +1127,13 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
                   <?php if (Auth::puede('casos.veredicto') && (Casos::fueraDeArea($c) || !empty($g['otro_trabajo']))): ?>
                     <button class="btn" type="button" data-accion="otro_trabajo">Otro trabajo</button>
                   <?php endif; ?>
+
+                  <?php /* En qué punto de la gestión de KFC está el repuesto
+                           (022): solo sobre una orden a espera de repuesto. */ ?>
+                  <?php if ($est === 'ESPERA_REPUESTO' && Auth::puede('casos.repuesto_gestion')): ?>
+                    <button class="btn" type="button" data-accion="repuesto_gestion"
+                            data-rep="<?= e((string) ($g['repuesto_gestion'] ?? '')) ?>">Gestión del repuesto</button>
+                  <?php endif; ?>
                 </div>
 
                 <?php if ($g): ?>
@@ -1080,6 +1141,12 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
                     <?= Ui::estado(Ui::estadoVista($est, $g)) ?>
                     <?php if (!empty($g['tecnico_nombre'])): ?>
                       · <?= e($g['tecnico_nombre']) ?><?= $g['tecnico_auto'] ? ' (de la OT INDUSTEC)' : '' ?>
+                    <?php endif; ?>
+                    <?php if ($est === 'ESPERA_REPUESTO'): ?>
+                      <?php $pasoRep = strtoupper((string) ($g['repuesto_gestion'] ?? '')); ?>
+                      · <span title="<?= e(Vocabulario::ayuda(Casos::REPUESTO_GESTION[$pasoRep] ?? 'REP_SIN_PRECISAR')) ?>"
+                              style="color:<?= isset(Casos::REPUESTO_GESTION[$pasoRep]) ? '#9a3412' : 'var(--muted)' ?>"><?=
+                          e(Vocabulario::t(Casos::REPUESTO_GESTION[$pasoRep] ?? 'REP_SIN_PRECISAR')) ?></span>
                     <?php endif; ?>
                   </span>
                   <?php /* El informe con el que se atendió, junto al botón que lo
@@ -1266,6 +1333,18 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
       </select>
     </div>
 
+    <?php /* En qué punto de la gestión de KFC está el repuesto (022). Los
+             rótulos son los del registro SAP de la administradora. */ ?>
+    <div id="acc-rep" hidden>
+      <label for="acc-rp">Gestión del repuesto</label>
+      <select name="gestion" id="acc-rp">
+        <option value=""><?= e(ucfirst(Vocabulario::t('REP_SIN_PRECISAR'))) ?></option>
+        <?php foreach (Casos::REPUESTO_GESTION as $k => $clave): ?>
+          <option value="<?= e($k) ?>" title="<?= e(Vocabulario::ayuda($clave)) ?>"><?= e(Vocabulario::titulo($clave)) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+
     <div id="acc-motivo" hidden>
       <label for="acc-mt" id="acc-mt-label">Motivo</label>
       <textarea name="motivo" id="acc-mt" rows="3"
@@ -1304,7 +1383,9 @@ var ACC = {
   regularizar: { t:'Marcar como regularizada',   a:'Se cerró sin atención. Esto la deja explicada ante KFC y deja de contar como tarea tuya; la orden sigue constando como cerrada sin atención.',
                  campos:['motivo'], ok:'Regularizar', motivo:'Qué se hizo (opcional)' },
   otro_trabajo: { t:'Otros trabajos',           a:'Un trabajo fuera del área de INDUSTEC hecho por acuerdo con KFC se autoriza aquí: se cuenta y se reporta aparte, como extra, y la orden sigue su flujo normal. Si no hubo acuerdo, lo que corresponde es la resolución «no nos compete».',
-                  campos:['otro','motivo'], ok:'Guardar', motivo:'El acuerdo con KFC (o por qué no se autoriza)' }
+                  campos:['otro','motivo'], ok:'Guardar', motivo:'El acuerdo con KFC (o por qué no se autoriza)' },
+  repuesto_gestion: { t:'Gestión del repuesto',  a:'En qué punto de la gestión de KFC está el repuesto, como lo registras en SAP. No cambia el estado: la orden sigue a espera de repuesto.',
+                      campos:['rep'], ok:'Guardar' }
 };
 /* Los técnicos asignables, para reconstruir el <select> según la zona del
    caso que se abrió: solo los suyos, y los de otras zonas aparte y aparte
@@ -1363,9 +1444,10 @@ function abrir(accion, aviso, zona) {
   document.getElementById('acc-titulo').textContent = c.t + ' · ' + aviso;
   document.getElementById('acc-ayuda').textContent  = c.a;
   document.getElementById('acc-ok').textContent     = c.ok;
-  ['tecnico','zona','veredicto','otro','motivo','texto'].forEach(function (k) {
+  ['tecnico','zona','veredicto','otro','rep','motivo','texto'].forEach(function (k) {
     document.getElementById('acc-' + k).hidden = c.campos.indexOf(k) === -1;
   });
+  document.getElementById('acc-rp').value = '';
   document.getElementById('acc-confirmo-zona-wrap').hidden = true;
   document.getElementById('acc-confirmo-zona').checked = false;
   var mt = document.getElementById('acc-mt');
@@ -1392,6 +1474,8 @@ document.getElementById('tabla-casos').addEventListener('click', function (ev) {
   var fila = b.closest('[data-aviso]');
   if (!fila) { return; }
   abrir(b.dataset.accion, fila.dataset.aviso, fila.dataset.zona);
+  // El paso actual del repuesto viene en el botón: el diálogo se abre en él.
+  if (b.dataset.accion === 'repuesto_gestion') { document.getElementById('acc-rp').value = b.dataset.rep || ''; }
 });
 </script>
 

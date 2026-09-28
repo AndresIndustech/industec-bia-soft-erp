@@ -999,6 +999,27 @@ conteo directo por estado) y `verificar_cifras.py` (10 nuevas: las cuatro tarjet
 en la bitácora. Nadie ha visto el cuadro en un navegador con sesión. Al desplegar: `panel.php`, `nucleo/Casos.php`,
 `vocabulario.json`, `vocabulario_publico.json`, `ui.js`, `sw.js` (6 archivos), y correr `tarjeta_cli.php ADMIN` en el servidor.
 
+**AMPLIACIÓN A MEDIAS (27-sep-2026, commit WIP por corte de créditos).** Isabel precisó los pasos SAP del repuesto (PENDIENTE
+GESTIÓN PROVEEDORES NACIONALES · BODEGA KFC · JEFES TEC. DE MANTENIMIENTO KFC · APROBACIÓN PARA DESPACHO) y cuatro
+identificaciones «en novedades» (PROVEEDOR EXTERNO · POR DECIDIR, QUITAR O MEJORAR · RIESGO ALTO, DERIVAR RESPONSABLE ·
+YA TIENE AVISO EN SAP, MANT. CONSTRUCTIVO INDUSTEC). **Corrección al coordinador:** las cuatro identificaciones son marcas de
+la **novedad** (módulo `novedades_visita.php`, que ya tiene riesgo, responsable propuesto y aviso SAP), no marcas de la orden.
+**Hecho, en código, sin probar en navegador ni contra base:** `sql/022_gestion_repuesto_y_marcas_novedad.sql` (columna
+`casos_gestion.repuesto_gestion` + `_por/_en`, tabla `novedad_marcas`, permiso `casos.repuesto_gestion` a ADM/JZ);
+`vocabulario.json` v2026-09-27.2 (+9 conceptos `REP_*` y `MARCA_*`, regenerado; `sw.js` v23); `Casos::REPUESTO_GESTION` y el
+desglose `repuesto_gestion` en `cifrasEstado()`; `Novedades::MARCAS/VIVAS/marcas()/marcar()`, contadores con `marcas` y
+grupo `vivas` + filtro `marca`; `casos.php` acción `repuesto_gestion` (diálogo, botón, filtro `?rep=`, dato en la fila);
+`novedades_visita.php` acción `identificar` (diálogo con casillas, chips, filtros rápidos por marca); `panel.php` pie de la
+cuarta cifra desglosado por paso y fila «Novedades · identificadas»; `verificar_esquema.php` bloque 022. `php -l` limpio en
+los seis PHP; `prueba_vocabulario` 154·0, `prueba_claves_vocabulario` 760·0, `prueba_lista_negra` 0, `prueba_panel_zona` 70·0.
+**Roja:** `prueba_cifras_estado.php` 77·1 — la comprobación «con cero órdenes: cuatro ceros y ningún estado» compara contra el
+retorno viejo; ahora `cifrasEstado()` devuelve además `repuesto_gestion`: hay que actualizar el esperado (trivial).
+**Falta:** extender `prueba_cifras_estado.php` (desglose por paso, claves `REP_*`/`MARCA_*` en el diccionario) y
+`prueba_panel_zona.php`; render con la Db falsa de panel/casos/novedades; `tarjeta_cli.php` y `verificar_cifras.py` para el
+desglose; `VOCABULARIO.md` (versión .2, §4, §11); revisar a mano `novedades_visita.php` y `casos.php` (editados por script,
+no leídos después); preguntas 5-7 para Andrés: ¿el paso del repuesto va en la orden (como quedó) o en la solicitud
+(`pendientes`)?; ¿las marcas son de la novedad (como quedó) y no de la orden?; ¿«POR DECIDIR» lo decide KFC (así se rotuló)?
+
 **Preguntas para Andrés** (ninguna bloquea; la 1 solo cambia el número grande): (1) ¿«atendido (cerrado)» = ATENDIDO +
 RESUELTO, o solo las ya cerradas en SAP? (2) ¿«asignados (en gestión técnica)» = solo ASIGNADO, sin EN_REVISION? (3) Isabel dice
 «a espera de repuestos» (plural) y «gestión proveedores KFC»; se mantuvo «a espera de repuesto» (singular, como `ESPERA_REPUESTO`)

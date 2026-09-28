@@ -96,11 +96,14 @@ $mas020 = (int) $db->query("SELECT COUNT(*) FROM permisos WHERE codigo = 'automa
 $mas021 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE archivo LIKE '%021_jefe_atiende.sql'")->fetchColumn() > 0 ? 1 : 0;
 $hay013 = $hayTabla('correo_destinatarios');
 $mas013 = $hay013 ? 1 : 0;
+// La 022 suma 1 a SUPERADMIN, ADMIN y JEFE_ZONA: `casos.repuesto_gestion`. Se
+// reconoce por el libro, como la 021, para que el chequeo pueda fallar.
+$mas022 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE archivo LIKE '%022_gestion_repuesto_y_marcas_novedad.sql'")->fetchColumn() > 0 ? 1 : 0;
 // La 014 (T2.28.6) no suma permisos nuevos: la ficha del equipo la escribe
 // envio.php con el mismo permiso ots.crear que ya usa cualquier orden.
 $esperado = $hay009
-    ? ['SUPERADMIN' => 39 + $mas012 + $mas020 + $mas013, 'ADMIN' => 38 + $mas012 + $mas020 + $mas013,
-       'JEFE_ZONA' => 26 + $mas012 + $mas021, 'TECNICO' => 13 + $mas012]
+    ? ['SUPERADMIN' => 39 + $mas012 + $mas020 + $mas013 + $mas022, 'ADMIN' => 38 + $mas012 + $mas020 + $mas013 + $mas022,
+       'JEFE_ZONA' => 26 + $mas012 + $mas021 + $mas022, 'TECNICO' => 13 + $mas012]
     : ($hay007
         ? ['SUPERADMIN' => 26, 'ADMIN' => 25, 'JEFE_ZONA' => 17, 'TECNICO' => 9]
         : ['SUPERADMIN' => 19, 'ADMIN' => 18, 'JEFE_ZONA' => 11, 'TECNICO' => 5]);
@@ -304,6 +307,27 @@ if ($hay009) {
            . (int) $db->query("SELECT COUNT(*) FROM equipos_ficha_cambios WHERE campo = 'serie'")->fetchColumn()
            . ")\n";
     }
+}
+
+// La 022: la gestión del repuesto por orden y las marcas de la novedad
+// (pedido de la administradora del 27-sep-2026). Solo si está anotada.
+if ($mas022) {
+    echo "\nmigracion 022\n";
+    $colsG = array_column($db->query('SHOW COLUMNS FROM casos_gestion')->fetchAll(), 'Field');
+    foreach (['repuesto_gestion', 'repuesto_gestion_por', 'repuesto_gestion_en'] as $c) {
+        comprobar("casos_gestion.$c", in_array($c, $colsG, true) ? 'si' : 'no', 'si');
+    }
+    comprobar('tabla novedad_marcas', $hayTabla('novedad_marcas') ? 'si' : 'no', 'si');
+    if ($hayTabla('novedad_marcas')) {
+        $pk = array_column($db->query("SHOW KEYS FROM novedad_marcas WHERE Key_name='PRIMARY'")->fetchAll(), 'Column_name');
+        comprobar('novedad_marcas: PK (novedad_id, marca)', implode(',', $pk), 'novedad_id,marca');
+        // Prueba negativa: la migración no marca nada por su cuenta; solo se informa.
+        echo '  (marcas hoy: ' . (int) $db->query('SELECT COUNT(*) FROM novedad_marcas')->fetchColumn()
+           . ' · órdenes con gestión del repuesto: '
+           . (int) $db->query('SELECT COUNT(*) FROM casos_gestion WHERE repuesto_gestion IS NOT NULL')->fetchColumn() . ")\n";
+    }
+    comprobar('casos.repuesto_gestion en 3 roles',
+              (int) $db->query("SELECT COUNT(*) FROM rol_permisos WHERE permiso = 'casos.repuesto_gestion'")->fetchColumn(), 3);
 }
 
 echo "\n" . ($ok ? 'TODO OK' : 'HAY FALLAS') . "\n";

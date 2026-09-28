@@ -61,6 +61,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             (string) ($_POST['nota'] ?? ''),
             (string) ($_POST['aviso_sap'] ?? '')
         );
+    } elseif ($accion === 'identificar') {
+        // Las marcas (022): lo que viene marcado es el conjunto nuevo.
+        [$ok, $msg] = Novedades::marcar(
+            (int) ($_POST['novedad_id'] ?? 0),
+            array_map('strval', (array) ($_POST['marcas'] ?? [])),
+            (string) ($_POST['aviso_sap'] ?? '')
+        );
     } elseif ($accion === 'reportar') {
         [$ok, $msg] = Novedades::reportar([
             'descripcion' => $_POST['descripcion'] ?? '',
@@ -84,8 +91,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $grupo = (string) ($_GET['g'] ?? 'pendientes');
 $tipo  = (string) ($_GET['tipo'] ?? '');
 $q     = trim((string) ($_GET['q'] ?? ''));
-$lista = Novedades::lista(['grupo' => $grupo, 'tipo' => $tipo, 'q' => $q]);
+// Por marca (022): el cuadro del inicio enlaza con `?g=vivas&marca=`.
+$marca = strtoupper((string) ($_GET['marca'] ?? ''));
+if (!isset(Novedades::MARCAS[$marca])) { $marca = ''; }
+$lista = Novedades::lista(['grupo' => $grupo, 'tipo' => $tipo, 'q' => $q, 'marca' => $marca]);
 $cont  = Novedades::contadores();
+$marcasDe = Novedades::marcas(array_column($lista, 'novedad_id'));
 
 Auth::bitacora('CONSULTAR', 'novedades', $grupo, 'visibles=' . count($lista));
 
@@ -117,6 +128,10 @@ $FILTROS = [
     'resueltas'   => [$rotConDestino,                             null,                ''],
     'descartadas' => [Vocabulario::titulo('NOVEDAD_DESCARTADA'),  null,                ''],
 ];
+if ($marca !== '' && $grupo === 'vivas') {
+    // Lo que se está mirando, como un filtro más: «vivas» no es una pestaña.
+    $FILTROS = ['vivas' => [Vocabulario::titulo(Novedades::MARCAS[$marca]), $cont['marcas'][$marca] ?? null, 'ambar']] + $FILTROS;
+}
 
 Ui::cabecera($u, 'novedades_visita.php',
     ['novedades' => $cont['pendientes'] > 0
@@ -183,9 +198,23 @@ Ui::cabecera($u, 'novedades_visita.php',
       </div>
     <?php endif; ?>
 
+    <?php if (!$esTecnico && is_array($cont['marcas'])): ?>
+      <?php /* Las cuatro marcas de la administradora (022), sobre las novedades
+               vivas: es la fila «Novedades» del cuadro del inicio. */ ?>
+      <div class="filtros-rapidos" style="margin-bottom:6px">
+        <span class="sub" style="align-self:center;margin-right:4px">Identificadas:</span>
+        <?php foreach (Novedades::MARCAS as $k => $clave): ?>
+          <a class="fr <?= $marca === $k ? 'on' : '' ?>" href="?g=vivas&amp;marca=<?= $e($k) ?>" title="<?= $e(Vocabulario::ayuda($clave)) ?>">
+            <?= $e(Vocabulario::titulo($clave)) ?>
+            <span class="n"><?= (int) ($cont['marcas'][$k] ?? 0) ?></span>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+
     <div class="filtros-rapidos">
       <?php foreach ($FILTROS as $k => [$et, $n, $tono]): ?>
-        <a class="fr <?= $grupo === $k ? 'on' : '' ?> <?= $e($tono) ?>" href="?g=<?= $k ?>">
+        <a class="fr <?= $grupo === $k ? 'on' : '' ?> <?= $e($tono) ?>" href="?g=<?= $k ?><?= $k === 'vivas' && $marca !== '' ? '&amp;marca=' . $e($marca) : '' ?>">
           <?= $e($et) ?>
           <?php if ($n): ?><span class="n"><?= (int) $n ?></span><?php endif; ?>
         </a>
@@ -266,6 +295,16 @@ Ui::cabecera($u, 'novedades_visita.php',
             </span>
           </div>
 
+          <?php $marcasN = $marcasDe[(int) $n['novedad_id']] ?? []; ?>
+          <?php if ($marcasN): ?>
+            <p class="sub" style="margin-top:9px;display:flex;gap:6px;flex-wrap:wrap">
+              <?php foreach ($marcasN as $mk): ?>
+                <span class="chip" style="background:var(--warn-bg);color:var(--warn);border-color:var(--warn-bd)"
+                      title="<?= $e(Vocabulario::ayuda(Novedades::MARCAS[$mk] ?? 'NOVEDAD')) ?>"><?= $e(Vocabulario::titulo(Novedades::MARCAS[$mk] ?? 'NOVEDAD')) ?></span>
+              <?php endforeach; ?>
+            </p>
+          <?php endif; ?>
+
           <?php if (!empty($n['aviso_sap'])): ?>
             <p class="sub" style="margin-top:9px">
               <?= $e(Vocabulario::titulo('AVISO_SAP')) ?>: <b class="mono"><?= $e($n['aviso_sap']) ?></b>
@@ -281,6 +320,9 @@ Ui::cabecera($u, 'novedades_visita.php',
               <button class="btn primary sm" type="button" onclick="resolver(<?= (int) $n['novedad_id'] ?>, '<?= $e($n['estado']) ?>')">
                 Resolver
               </button>
+              <?php if (is_array($cont['marcas'])): ?>
+                <button class="btn sm" type="button" data-identificar="<?= (int) $n['novedad_id'] ?>" data-marcas="<?= $e(implode(' ', $marcasN)) ?>">Identificar</button>
+              <?php endif; ?>
             </div>
           <?php elseif ($puedeResolver && in_array($n['estado'], ['DERIVADA_SAP', 'ASUMIDA_INDUSTEC'], true)): ?>
             <?php /* P-15: una novedad con aviso SAP o asumida se da por
@@ -289,6 +331,9 @@ Ui::cabecera($u, 'novedades_visita.php',
               <button class="btn sm" type="button" onclick="resolver(<?= (int) $n['novedad_id'] ?>, '<?= $e($n['estado']) ?>')">
                 Darla por resuelta o corregir
               </button>
+              <?php if (is_array($cont['marcas'])): ?>
+                <button class="btn sm" type="button" data-identificar="<?= (int) $n['novedad_id'] ?>" data-marcas="<?= $e(implode(' ', $marcasN)) ?>">Identificar</button>
+              <?php endif; ?>
             </div>
           <?php elseif ($abierta && $esTecnico): ?>
             <p class="sub" style="margin-top:9px"><?= $e(Vocabulario::titulo('NOVEDAD_POR_DECIDIR')) ?>: la resuelve tu jefe de zona o la administración.</p>
@@ -352,6 +397,40 @@ Ui::cabecera($u, 'novedades_visita.php',
         placeholder="Qué se resolvió y por qué. Obligatorio si se descarta."></textarea>
     </div>
 
+    <div class="row" style="margin-top:14px;gap:8px">
+      <button class="btn primary" type="submit">Guardar</button>
+      <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+
+<?php /* Identificar (022): las cuatro marcas de la administradora. Casillas,
+         porque una novedad puede llevar varias; lo que queda marcado es el
+         conjunto nuevo. No cambia el estado. */ ?>
+<dialog id="dlgIdentificar">
+  <form method="post">
+    <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+    <input type="hidden" name="accion" value="identificar">
+    <input type="hidden" name="novedad_id" id="i-id">
+    <h2>Identificar la novedad</h2>
+    <p class="sub" style="margin:0 0 14px">
+      Marca lo que aplica; puede ser más de una. No cambia el estado de la
+      novedad: para eso está «Resolver».
+    </p>
+    <div class="opciones" style="margin-bottom:14px">
+      <?php foreach (Novedades::MARCAS as $k => $clave): ?>
+        <label class="opcion" style="display:flex;gap:8px;align-items:flex-start">
+          <input type="checkbox" name="marcas[]" value="<?= $e($k) ?>" data-marca="<?= $e($k) ?>" style="margin-top:3px">
+          <span><span class="t"><?= $e(Vocabulario::titulo($clave)) ?></span>
+          <span class="d" style="display:block"><?= $e(Vocabulario::ayuda($clave)) ?></span></span>
+        </label>
+      <?php endforeach; ?>
+    </div>
+    <div style="margin-bottom:12px">
+      <label for="i-aviso">Número de aviso SAP (opcional)</label>
+      <input type="text" id="i-aviso" name="aviso_sap" inputmode="numeric"
+             placeholder="Si ya tiene aviso en SAP y conoces el número">
+    </div>
     <div class="row" style="margin-top:14px;gap:8px">
       <button class="btn primary" type="submit">Guardar</button>
       <button class="btn" type="button" onclick="this.closest('dialog').close()">Cancelar</button>
@@ -442,6 +521,17 @@ function resolver(id, desde) {
   document.getElementById('r-nota').required = false;
   document.getElementById('dlgResolver').showModal();
 }
+// Identificar (022): un solo listener; el botón trae el id y las marcas que ya tiene.
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('[data-identificar]');
+  if (!b) { return; }
+  var d = document.getElementById('dlgIdentificar');
+  document.getElementById('i-id').value = b.dataset.identificar;
+  var puestas = (b.dataset.marcas || '').split(' ');
+  d.querySelectorAll('input[data-marca]').forEach(function (c) { c.checked = puestas.indexOf(c.dataset.marca) !== -1; });
+  document.getElementById('i-aviso').value = '';
+  d.showModal();
+});
 function reportar() {
   var d = document.getElementById('dlgReportar');
   if (d) { d.showModal(); document.getElementById('n-local').focus(); }

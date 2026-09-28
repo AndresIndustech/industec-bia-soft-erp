@@ -1193,6 +1193,20 @@ final class Casos
     ];
 
     /**
+     * En qué punto de la gestión de KFC está el repuesto: los cuatro pasos que
+     * la administradora registra en SAP (ampliación del 27-sep-2026), valor de
+     * `casos_gestion.repuesto_gestion` (022) => concepto del diccionario.
+     * NULL es «sin precisar» (REP_SIN_PRECISAR) y no se inventa: al aplicar la
+     * 022 todas las órdenes a espera de repuesto empiezan ahí.
+     */
+    public const REPUESTO_GESTION = [
+        'PROVEEDORES_NACIONALES' => 'REP_PROVEEDORES_NACIONALES',
+        'BODEGA_KFC'             => 'REP_BODEGA_KFC',
+        'JEFES_TEC_KFC'          => 'REP_JEFES_TEC_KFC',
+        'APROBACION_DESPACHO'    => 'REP_APROBACION_DESPACHO',
+    ];
+
+    /**
      * Las cuatro cifras del cuadro y, de paso, el conteo por estado de vista
      * que dibuja el gráfico de abajo: ['cifras' => [clave => n],
      * 'por_estado' => [estado de vista => n]]. Un mismo recorrido para los dos,
@@ -1213,7 +1227,17 @@ final class Casos
             foreach ($estados as $e) { $n += $porEstado[$e] ?? 0; }
             $cifras[$clave] = $n;
         }
-        return ['cifras' => $cifras, 'por_estado' => $porEstado];
+        // El desglose de la cuarta cifra por paso de la gestión de KFC. Un
+        // valor que la base no conoce cuenta como sin precisar, y se dice: no
+        // se pierde una orden por un ENUM que se amplíe antes que este mapa.
+        $rep = array_fill_keys(array_keys(self::REPUESTO_GESTION), 0) + ['SIN_PRECISAR' => 0];
+        foreach ($casos as $c) {
+            $g = $gestion[(string) ($c['aviso'] ?? '')] ?? null;
+            if (strtoupper((string) ($g['estado'] ?? '')) !== 'ESPERA_REPUESTO') { continue; }
+            $paso = strtoupper(trim((string) ($g['repuesto_gestion'] ?? '')));
+            $rep[isset(self::REPUESTO_GESTION[$paso]) ? $paso : 'SIN_PRECISAR']++;
+        }
+        return ['cifras' => $cifras, 'por_estado' => $porEstado, 'repuesto_gestion' => $rep];
     }
 
     /**

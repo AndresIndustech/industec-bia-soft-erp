@@ -1,5 +1,5 @@
 {
-  "version": "2026-09-27.1",
+  "version": "2026-09-27.2",
   "fecha": "2026-09-27",
   "descripcion": "Diccionario único de B.IA Soft ERP: un concepto, un término, para todos los roles y todas las superficies (pantallas, app del técnico, PDF, Excel, PPT, correos, tablero de gerencia y hojas del piloto). Lo leen nucleo/Vocabulario.php, UI.T() de ui.js y termino() de agentes/scripts/comun.py. La especificación está en desarrollo/sistema_ots/VOCABULARIO.md.",
   "reglas": {
@@ -248,7 +248,61 @@
       "termino": "a espera de repuesto, en gestión de proveedores de KFC", "plural": "a espera de repuesto, en gestión de proveedores de KFC", "titulo": "A espera de repuesto · gestión proveedores KFC",
       "ayuda": "Orden cuyo trabajo depende de un repuesto, un taller, una garantía o una baja que Grupo KFC gestiona con sus proveedores.",
       "roles": ["ADM", "JZ"],
-      "notas": "Cifra del cuadro «En qué estado están» del inicio. Derivado: estado ESPERA_REPUESTO, contado orden por orden (la sublínea «de ellas, a espera de repuesto» de la tarjeta cuenta una vez por cadena de continuidad, así que puede ser menor). «gestión proveedores KFC» es término de la administradora (27-sep-2026); «repuesto» en singular como en ESPERA_REPUESTO."
+      "notas": "Cifra del cuadro «En qué estado están» del inicio. Derivado: estado ESPERA_REPUESTO, contado orden por orden (la sublínea «de ellas, a espera de repuesto» de la tarjeta cuenta una vez por cadena de continuidad, así que puede ser menor). «gestión proveedores KFC» es término de la administradora (27-sep-2026); «repuesto» en singular como en ESPERA_REPUESTO. Se desglosa por REP_* (casos_gestion.repuesto_gestion, migración 022)."
+    },
+    "REP_PROVEEDORES_NACIONALES": {
+      "termino": "pendiente gestión proveedores nacionales", "plural": "pendiente gestión proveedores nacionales", "titulo": "PENDIENTE GESTIÓN PROVEEDORES NACIONALES",
+      "ayuda": "El repuesto está en manos de los proveedores nacionales de Grupo KFC.",
+      "roles": ["ADM", "JZ"],
+      "notas": "Registro SAP de la administradora (27-sep-2026), por eso el título va en mayúsculas. Valor PROVEEDORES_NACIONALES de casos_gestion.repuesto_gestion (022): en qué punto de la gestión de KFC está el repuesto de una orden a espera de repuesto. Lo pone la administración o el jefe de zona; el técnico no."
+    },
+    "REP_BODEGA_KFC": {
+      "termino": "pendiente gestión bodega KFC", "plural": "pendiente gestión bodega KFC", "titulo": "PENDIENTE GESTIÓN BODEGA KFC",
+      "ayuda": "El repuesto está en gestión de la bodega de Grupo KFC.",
+      "roles": ["ADM", "JZ"],
+      "notas": "Registro SAP de la administradora (27-sep-2026). Valor BODEGA_KFC de casos_gestion.repuesto_gestion (022)."
+    },
+    "REP_JEFES_TEC_KFC": {
+      "termino": "pendiente gestión jefes técnicos de mantenimiento KFC", "plural": "pendiente gestión jefes técnicos de mantenimiento KFC", "titulo": "PENDIENTE GESTIÓN JEFES TEC. DE MANTENIMIENTO KFC",
+      "ayuda": "El repuesto depende de los jefes técnicos de mantenimiento de Grupo KFC.",
+      "roles": ["ADM", "JZ"],
+      "notas": "Registro SAP de la administradora (27-sep-2026), con su abreviatura «TEC.». Valor JEFES_TEC_KFC de casos_gestion.repuesto_gestion (022)."
+    },
+    "REP_APROBACION_DESPACHO": {
+      "termino": "pendiente aprobación para despacho", "plural": "pendiente aprobación para despacho", "titulo": "PENDIENTE APROBACIÓN PARA DESPACHO",
+      "ayuda": "El repuesto ya está; falta que Grupo KFC apruebe el despacho al local.",
+      "roles": ["ADM", "JZ"],
+      "notas": "Registro SAP de la administradora (27-sep-2026). Valor APROBACION_DESPACHO de casos_gestion.repuesto_gestion (022). Cuando KFC despacha, la solicitud pasa a REPUESTO_DESPACHADO; este dato es de la orden y no de la solicitud."
+    },
+    "REP_SIN_PRECISAR": {
+      "termino": "sin precisar la gestión", "plural": "sin precisar la gestión", "titulo": "Sin precisar",
+      "ayuda": "Orden a espera de repuesto a la que todavía no se le anotó en qué punto de la gestión de KFC está.",
+      "roles": ["ADM", "JZ"],
+      "notas": "Derivado: ESPERA_REPUESTO con repuesto_gestion NULL. Es lo que ven todas las órdenes al aplicar la 022: el dato se llena a mano, orden por orden, y no se inventa (I-7)."
+    },
+    "MARCA_PROVEEDOR_EXTERNO": {
+      "termino": "proveedor externo", "plural": "proveedor externo", "titulo": "Proveedor externo",
+      "ayuda": "La novedad la atiende un proveedor externo a INDUSTEC; si tiene orden, sigue abierta en SAP con ese proveedor.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "notas": "Marca de la novedad (novedad_marcas, 022), pedido de la administradora del 27-sep-2026: «PROVEEDOR EXTERNO (NO SON DE INDUSTEC)». No es NO_COMPETE, que es la resolución de una orden. Las marcas las ponen la administración o el jefe de zona (novedades.gestionar); el técnico las ve en su novedad."
+    },
+    "MARCA_POR_DECIDIR_KFC": {
+      "termino": "por decidir de KFC: quitar o mejorar", "plural": "por decidir de KFC: quitar o mejorar", "titulo": "Por decidir de KFC · quitar o mejorar",
+      "ayuda": "Grupo KFC tiene que decidir si el equipo o la instalación se quita o se mejora.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "notas": "Marca de la novedad (022): «POR DECIDIR, QUITAR O MEJORAR». «decidir» es solo de KFC (versión .6), por eso se dice quién decide."
+    },
+    "MARCA_RIESGO_ALTO": {
+      "termino": "riesgo alto, derivar responsable", "plural": "riesgo alto, derivar responsable", "titulo": "Riesgo alto · derivar responsable",
+      "ayuda": "Riesgo alto: hay que derivarla al responsable que corresponda en Grupo KFC.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "notas": "Marca de la novedad (022): «RIESGO ALTO (DERIVAR RESPONSABLE)». Es la identificación de la administración; el campo `riesgo` de la novedad sigue siendo la propuesta del técnico."
+    },
+    "MARCA_AVISO_SAP": {
+      "termino": "ya tiene aviso en SAP, mantenimiento constructivo INDUSTEC", "plural": "ya tiene aviso en SAP, mantenimiento constructivo INDUSTEC", "titulo": "Ya tiene aviso en SAP · mant. constructivo INDUSTEC",
+      "ayuda": "La novedad ya tiene un aviso en SAP como mantenimiento constructivo de INDUSTEC; si se conoce el número, se anota.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "notas": "Marca de la novedad (022): «YA TIENE AVISO EN SAP (MANT. CONSTRUCTIVO INDUSTEC)». Es una marca manual; no cambia el estado de la novedad (NOVEDAD_CON_AVISO es el estado formal) ni consulta SAP, que el servidor no conoce."
     },
 
     "ABIERTA": {

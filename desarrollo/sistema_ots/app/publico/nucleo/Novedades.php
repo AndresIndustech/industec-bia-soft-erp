@@ -83,6 +83,97 @@ final class Novedades
     public const RIESGOS = ['ALTO' => 'Alto', 'MEDIO' => 'Medio', 'BAJO' => 'Bajo'];
     public const PENDIENTES = ['REPORTADA', 'EN_REVISION'];
 
+    /**
+     * Las marcas con que la administración o el jefe de zona IDENTIFICAN una
+     * novedad (pedido de la administradora del 27-sep-2026, tabla
+     * `novedad_marcas` de la 022): valor de la base => concepto del
+     * diccionario. Son aparte del estado y del riesgo que propuso el técnico:
+     * una novedad puede llevar varias (riesgo alto Y proveedor externo), y
+     * marcarla no la mueve de estado. «Vivas» para contarlas: todas menos las
+     * descartadas y las resueltas, porque una con aviso SAP sigue siendo algo
+     * que ella lleva ante KFC.
+     */
+    public const MARCAS = [
+        'PROVEEDOR_EXTERNO' => 'MARCA_PROVEEDOR_EXTERNO',
+        'POR_DECIDIR_KFC'   => 'MARCA_POR_DECIDIR_KFC',
+        'RIESGO_ALTO'       => 'MARCA_RIESGO_ALTO',
+        'AVISO_SAP'         => 'MARCA_AVISO_SAP',
+    ];
+    public const VIVAS = ['REPORTADA', 'EN_REVISION', 'DERIVADA_SAP', 'ASUMIDA_INDUSTEC'];
+
+    /** ¿Está aplicada la 022? Sin la tabla, las marcas no existen y se dice. */
+    public static function marcasDisponibles(): bool
+    {
+        static $hay = null;
+        if ($hay !== null) { return $hay; }
+        try { Db::todos('SELECT 1 FROM novedad_marcas LIMIT 1'); return $hay = true; }
+        catch (Throwable $e) { return $hay = false; }
+    }
+
+    /** Las marcas de cada novedad: [novedad_id => ['RIESGO_ALTO', …]]. */
+    public static function marcas(array $ids): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if (!$ids || !self::marcasDisponibles()) { return []; }
+        $out = [];
+        $filas = Db::todos('SELECT novedad_id, marca FROM novedad_marcas WHERE novedad_id IN ('
+                           . implode(',', array_fill(0, count($ids), '?')) . ') ORDER BY marca', $ids);
+        foreach ($filas as $f) { $out[(int) $f['novedad_id']][] = (string) $f['marca']; }
+        return $out;
+    }
+
+    /**
+     * Fija el conjunto de marcas de una novedad (lo que viene reemplaza lo que
+     * había: quitar una casilla es quitar la marca) y, si llega, el número de
+     * aviso SAP, que no pisa uno ya anotado salvo que se escriba otro.
+     * No cambia el estado. Queda en la bitácora con antes y después.
+     */
+    public static function marcar(int $id, array $marcas, string $avisoSap = ''): array
+    {
+        if (!Ui::puedeModulo('novedades.gestionar', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA'], Auth::actual())) {
+            Auth::bitacora('DENEGADO', 'novedad', (string) $id, 'identificar sin permiso', null, null, [], false);
+            return [false, 'No tienes permiso para identificar novedades.'];
+        }
+        if (!self::marcasDisponibles()) {
+            return [false, 'Las marcas de la novedad todavía no están en la base (migración 022 sin aplicar).'];
+        }
+        $marcas = array_values(array_unique(array_map(fn($m) => strtoupper(trim((string) $m)), $marcas)));
+        foreach ($marcas as $m) {
+            if (!isset(self::MARCAS[$m])) { return [false, 'Marca no válida.']; }
+        }
+        [$donde, $par] = self::alcance();
+        array_unshift($par, $id);
+        $n = Db::uno("SELECT n.* FROM novedades n WHERE n.novedad_id = ? AND ($donde)", $par);
+        if (!$n) {
+            Auth::bitacora('DENEGADO', 'novedad', (string) $id, 'identificar fuera de alcance o inexistente', null, null, [], false);
+            return [false, 'Esa novedad no existe o no está en tu alcance.'];
+        }
+        if (!in_array((string) $n['estado'], self::VIVAS, true)) {
+            return [false, 'Una novedad ' . self::etiquetaEstado((string) $n['estado']) . ' ya no se identifica.'];
+        }
+        $antes = self::marcas([$id])[$id] ?? [];
+        sort($antes); sort($marcas);
+        $avisoSap = mb_substr(trim($avisoSap), 0, 20);
+        if ($antes === $marcas && $avisoSap === '') {
+            return [false, 'No cambió nada: las mismas marcas y sin aviso nuevo.'];
+        }
+        $uid = (int) Auth::actual()['usuario_id'];
+        Db::ejecutar('DELETE FROM novedad_marcas WHERE novedad_id = ?', [$id]);
+        foreach ($marcas as $m) {
+            Db::ejecutar('INSERT INTO novedad_marcas (novedad_id, marca, puesta_por) VALUES (?, ?, ?)', [$id, $m, $uid]);
+        }
+        if ($avisoSap !== '') {
+            Db::ejecutar('UPDATE novedades SET aviso_sap = ? WHERE novedad_id = ?', [$avisoSap, $id]);
+        }
+        $rot = fn(array $ms) => $ms ? implode(', ', array_map(fn($m) => Vocabulario::t(self::MARCAS[$m]), $ms)) : 'ninguna';
+        Auth::bitacora('NOVEDAD_IDENTIFICA', 'novedad', (string) $id,
+                       $rot($marcas) . ($avisoSap !== '' ? ' · aviso ' . $avisoSap : ''),
+                       $rot($antes), $rot($marcas),
+                       ['antes' => $antes, 'despues' => $marcas, 'aviso_sap' => $avisoSap ?: null,
+                        'estado' => $n['estado'], 'zona' => $n['zona']]);
+        return [true, 'Novedad identificada: ' . $rot($marcas) . '.'];
+    }
+
     /** A dónde puede ir cada estado (P-15). Desde lo pendiente, a cualquiera;
      *  una novedad ya derivada o asumida solo puede darse por resuelta o
      *  corregir su aviso (quedándose donde está); nunca vuelve a REPORTADA,
@@ -137,6 +228,9 @@ final class Novedades
         $g = (string) ($f['grupo'] ?? 'pendientes');
         if ($g === 'pendientes') {
             $donde .= " AND n.estado IN ('" . implode("','", self::PENDIENTES) . "')";
+        } elseif ($g === 'vivas') {
+            // Todas menos descartadas y resueltas: el universo de las marcas.
+            $donde .= " AND n.estado IN ('" . implode("','", self::VIVAS) . "')";
         } elseif ($g === 'resueltas') {
             $donde .= " AND n.estado IN ('DERIVADA_SAP','ASUMIDA_INDUSTEC','RESUELTA')";
         } elseif ($g === 'descartadas') {
@@ -155,6 +249,12 @@ final class Novedades
             $donde .= ' AND (n.descripcion LIKE ? OR n.local_codigo LIKE ? OR n.equipo_desc LIKE ?)';
             $like = '%' . $f['q'] . '%';
             $par[] = $like; $par[] = $like; $par[] = $like;
+        }
+        // Por marca (022). Sin la tabla, el filtro no encuentra nada y no rompe.
+        if (!empty($f['marca']) && isset(self::MARCAS[$f['marca']])) {
+            if (!self::marcasDisponibles()) { return []; }
+            $donde .= ' AND EXISTS (SELECT 1 FROM novedad_marcas m WHERE m.novedad_id = n.novedad_id AND m.marca = ?)';
+            $par[] = $f['marca'];
         }
 
         return Db::todos(
@@ -359,7 +459,7 @@ final class Novedades
 
     public static function contadores(): array
     {
-        $cero = ['pendientes' => 0, 'alto' => 0, 'ajenas' => 0, 'con_aviso' => 0];
+        $cero = ['pendientes' => 0, 'alto' => 0, 'ajenas' => 0, 'con_aviso' => 0, 'marcas' => null];
         if (!self::disponible()) { return $cero; }
         [$donde, $par] = self::alcance();
         $p = "'" . implode("','", self::PENDIENTES) . "'";
@@ -370,7 +470,19 @@ final class Novedades
                     SUM(n.aviso_sap IS NOT NULL)                             AS con_aviso
                FROM novedades n WHERE $donde", $par
         );
-        foreach ($cero as $k => $_) { $cero[$k] = (int) ($f[$k] ?? 0); }
+        foreach ($cero as $k => $_) { if ($k !== 'marcas') { $cero[$k] = (int) ($f[$k] ?? 0); } }
+        // Las marcas, sobre las novedades vivas del alcance. null = la 022 no
+        // está aplicada: el panel dice «no disponible», no un cero (I-7).
+        if (self::marcasDisponibles()) {
+            $v = "'" . implode("','", self::VIVAS) . "'";
+            $m = Db::todos(
+                "SELECT m.marca, COUNT(*) AS n
+                   FROM novedad_marcas m JOIN novedades n ON n.novedad_id = m.novedad_id
+                  WHERE n.estado IN ($v) AND $donde GROUP BY m.marca", $par
+            );
+            $cero['marcas'] = array_fill_keys(array_keys(self::MARCAS), 0);
+            foreach ($m as $f) { if (isset($cero['marcas'][$f['marca']])) { $cero['marcas'][$f['marca']] = (int) $f['n']; } }
+        }
         return $cero;
     }
 
