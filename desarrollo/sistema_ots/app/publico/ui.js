@@ -316,6 +316,15 @@
   }
   function concepto(clave) {
     var c = Object.prototype.hasOwnProperty.call(VOC.conceptos, clave) ? VOC.conceptos[clave] : null;
+    /* Un vocabulario_publico.json MÁS VIEJO que este ui.js —el del trabajador
+       de servicio anterior o una copia del CDN (error nº 13)— no trae las
+       claves nuevas. Se toman del respaldo embebido, que es de la misma
+       versión que este archivo: sin esto, UI.T.titulo('OT_PILOTO') lanzaba en
+       medio de la carga del formulario y lo dejaba sin combos (revisión del
+       28-sep-2026). Una clave que no está en ninguno de los dos sigue lanzando. */
+    if (!c && VOC !== RESPALDO && Object.prototype.hasOwnProperty.call(RESPALDO.conceptos, clave)) {
+      c = RESPALDO.conceptos[clave];
+    }
     if (!c) { throw vocError('la clave «' + clave + '» no existe en vocabulario.json'); }
     return c;
   }

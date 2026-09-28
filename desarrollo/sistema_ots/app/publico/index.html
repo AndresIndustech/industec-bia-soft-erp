@@ -420,6 +420,14 @@
       <div class="validacion" id="panelValidacion"></div>
 
       <div class="footer">
+        <!-- La misma advertencia del piloto, junto al botón: la franja de arriba
+             se pierde al bajar por el formulario (revisión del 28-sep-2026). -->
+        <div id="franjaPilotoEnviar" hidden style="margin-bottom:8px">
+          <div class="aviso warn" role="note">
+            <span class="ic" aria-hidden="true">!</span>
+            <div class="cuerpo" id="franjaPilotoEnviarTxt"></div>
+          </div>
+        </div>
         <button class="btn primary" id="submitBtn" type="submit" style="width:100%;padding:12px">Revisar y enviar</button>
         <p class="pendientes" id="pendientes"></p>
       </div>

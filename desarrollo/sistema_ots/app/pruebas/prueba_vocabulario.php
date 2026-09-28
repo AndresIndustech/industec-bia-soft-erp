@@ -297,7 +297,15 @@ function cargar(fetch) {
   const UI2 = cargar(() => Promise.resolve({ ok: true, json: () => Promise.resolve(otro) }));
   const UI3 = cargar(() => Promise.resolve({ ok: true, json: () => Promise.resolve({ version: 'X' }) }));
   const UI4 = cargar(() => Promise.reject(new Error('sin red')));
+  // Un vocabulario_publico.json MÁS VIEJO que ui.js (caché del CDN o del
+  // trabajador de servicio anterior): le falta una clave que el respaldo sí
+  // trae. Se acepta, y la clave que falta sale del respaldo (28-sep-2026).
+  const viejo = JSON.parse(JSON.stringify(dic)); viejo.version = 'VERSION-VIEJA';
+  const quitada = Object.keys(viejo.conceptos).pop(); delete viejo.conceptos[quitada];
+  const UI5 = cargar(() => Promise.resolve({ ok: true, json: () => Promise.resolve(viejo) }));
   await new Promise((r) => setTimeout(r, 20));
+  out.viejo = { version: UI5.T.version(), titulo: atrapa(() => UI5.T.titulo(quitada)) === null ? UI5.T.titulo(quitada) : null,
+                esperado: dic.conceptos[quitada].titulo, inexistente: atrapa(() => UI5.T('NO_EXISTE_XYZ')) };
   out.conFetch = UI2.T.version();
   out.fetchAMedias = UI3.T.version();
   out.sinRed = UI4.T.version();
@@ -322,6 +330,10 @@ if (is_array($n)) {
     afirmar('cuando llega vocabulario.json, reemplaza al respaldo', $n['conFetch'] === 'VERSION-DE-PRUEBA');
     afirmar('un JSON a medias no reemplaza al respaldo', $n['fetchAMedias'] === $version);
     afirmar('sin red se queda el respaldo, sin error', $n['sinRed'] === $version);
+    afirmar('un JSON viejo sin una clave nueva: se acepta y la clave sale del respaldo',
+            ($n['viejo']['version'] ?? null) === 'VERSION-VIEJA'
+            && ($n['viejo']['titulo'] ?? null) === ($n['viejo']['esperado'] ?? false), json_encode($n['viejo'] ?? null));
+    afirmar('  … y una clave que no está en ninguno de los dos sigue lanzando', is_string($n['viejo']['inexistente'] ?? null));
 }
 
 echo "\n=== 5c. termino() (comun.py) contesta lo mismo que PHP ===\n";

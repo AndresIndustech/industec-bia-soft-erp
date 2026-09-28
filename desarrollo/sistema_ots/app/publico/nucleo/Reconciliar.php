@@ -81,9 +81,19 @@ final class Reconciliar
         }
 
         $actuales = [];
-        foreach (Db::todos('SELECT aviso, estado, asignado_a, ot_cierre FROM casos_gestion') as $g) {
+        foreach (Db::todos('SELECT aviso, estado, asignado_a, ot_cierre, atendido_en FROM casos_gestion') as $g) {
             $actuales[$g['aviso']] = $g;
         }
+        // La fecha de la visita de cada OT del piloto, para no reemplazarla por
+        // una OT de producción de OTRA visita (anterior). Sin la 009 no hay
+        // Archivo y vale la fecha en que se atendió la orden.
+        $visitaPiloto = [];
+        try {
+            foreach (Db::todos('SELECT id_industec, fecha_atencion FROM ot_archivo WHERE '
+                               . Emision::sqlEsDePrueba('id_industec')) as $r) {
+                $visitaPiloto[strtoupper(trim((string) $r['id_industec']))] = $r['fecha_atencion'];
+            }
+        } catch (Throwable $e) { /* sin ot_archivo: queda atendido_en */ }
 
         $atendidos = $sinTecnico = 0;
         foreach ($atenciones as $aviso => $a) {
@@ -92,19 +102,34 @@ final class Reconciliar
             // La OT de cierre que llegó por el correo. Una del piloto no cuenta
             // (Emision::esDePrueba): su correo queda RETENIDO y no debería estar
             // aquí, pero si llega no atiende la orden (decisión del 28-sep-2026).
-            $ot = null;
-            $fecha = null;
-            foreach ($a['ots'] ?? [] as $o) {
-                if (($o['estado_ot'] ?? '') === 'Cerrada' && !Emision::esDePrueba((string) ($o['ot'] ?? ''))) {
-                    $ot = $o['ot']; $fecha = $o['fecha'];
-                }
-            }
             // La que había era del piloto: la de producción la reemplaza. Hasta
             // el 28-sep-2026 el COALESCE la dejaba para siempre, y la
             // administradora veía como «OT INDUSTEC de cierre» un número que
-            // Grupo KFC nunca recibió (aviso 10356500 y once más).
+            // Grupo KFC nunca recibió (aviso 10356500 y once más). Pero solo
+            // una de ESA visita o posterior: el 10339233 tenía, además de la
+            // del piloto del 26-sep, la OT-1523 del 6 de julio, de otro
+            // trabajo. Es el mismo corte de `Casos::marcarDocumentos()`, que
+            // dice en el buzón cuál vale (revisión del 28-sep-2026).
             $cierrePiloto = trim((string) ($actuales[$aviso]['ot_cierre'] ?? ''));
-            $reemplazaPiloto = $ot !== null && $cierrePiloto !== '' && Emision::esDePrueba($cierrePiloto);
+            $conPiloto = $cierrePiloto !== '' && Emision::esDePrueba($cierrePiloto);
+            $desde = $conPiloto
+                ? self::visitaDelPiloto($visitaPiloto[strtoupper($cierrePiloto)] ?? null,
+                                        $actuales[$aviso]['atendido_en'] ?? null)
+                : null;
+
+            $ot = null;
+            $fecha = null;
+            foreach ($a['ots'] ?? [] as $o) {
+                if (($o['estado_ot'] ?? '') !== 'Cerrada' || Emision::esDePrueba((string) ($o['ot'] ?? ''))) { continue; }
+                if ($conPiloto && !self::esDeEsaVisita($o['fecha'] ?? null, $desde)) { continue; }
+                $ot = $o['ot']; $fecha = $o['fecha'];
+            }
+            $reemplazaPiloto = $ot !== null && $conPiloto;
+            // Con una del piloto de cierre y ninguna de producción de esa
+            // visita, la orden se queda como está: a espera de la OT INDUSTEC
+            // del formulario de siempre. Sin esto, `estado_industec` CERRADA
+            // por una OT vieja la pasaba a ATENDIDO conservando la del piloto.
+            if ($conPiloto && !$reemplazaPiloto) { continue; }
 
             if ($estadoAntes !== null && in_array($estadoAntes, self::INTOCABLES, true)) {
                 // Ya lo resolvió una persona: el estado no se toca. Lo único que
@@ -191,6 +216,29 @@ final class Reconciliar
             if ($cerrada) { $atendidos++; }
         }
         return ['atendidos' => $atendidos, 'sin_tecnico' => $sinTecnico];
+    }
+
+    /**
+     * Desde qué día cuenta la visita de una OT del piloto: la fecha de
+     * atención del Archivo si está (la OT-9144 se atendió el 10-sep y se
+     * emitió el 26), si no la fecha en que la orden quedó atendida. null si no
+     * hay ninguna: entonces no se afirma que otra OT sea de esa visita (I-7).
+     */
+    public static function visitaDelPiloto(?string $fechaAtencion, ?string $atendidoEn): ?string
+    {
+        foreach ([$fechaAtencion, $atendidoEn] as $f) {
+            if ($f !== null && preg_match('/^\d{4}-\d{2}-\d{2}/', trim($f), $m)) { return $m[0]; }
+        }
+        return null;
+    }
+
+    /** ¿Una OT con esta fecha es de la visita del piloto o posterior? Sin fecha, no. */
+    public static function esDeEsaVisita(?string $fechaOt, ?string $desde): bool
+    {
+        if ($desde === null || $fechaOt === null || !preg_match('/^\d{4}-\d{2}-\d{2}/', trim($fechaOt), $m)) {
+            return false;
+        }
+        return $m[0] >= $desde;
     }
 
     /**

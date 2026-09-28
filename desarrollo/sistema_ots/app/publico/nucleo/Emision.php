@@ -89,10 +89,17 @@ final class Emision
      */
     public static function esDePrueba(?string $id): bool
     {
-        if (!preg_match('/^OT-0*(\d{1,7})-/', strtoupper(trim((string) $id)), $m)) {
+        // trim solo de espacios y sin tope de cifras: exactamente lo que hace
+        // `sqlEsDePrueba()` con TRIM() y su REGEXP. Hasta la revisión del
+        // 28-sep-2026 el PHP cortaba en 7 cifras y quitaba tabuladores, y el
+        // SQL no: un `OT-10356500-…` (el aviso en el lugar del número) o un
+        // espacio al inicio se clasificaba distinto en el Archivo que en el
+        // buzón. El largo va primero para que un número de 19+ cifras no
+        // desborde el (int).
+        if (!preg_match('/^OT-0*(\d+)-/', strtoupper(trim((string) $id, ' ')), $m)) {
             return false;
         }
-        return (int) $m[1] >= self::SERIE_PRUEBA;
+        return strlen($m[1]) > 18 || (int) $m[1] >= self::SERIE_PRUEBA;
     }
 
     /**
@@ -103,11 +110,13 @@ final class Emision
      * expresión está escrita para SERIE_PRUEBA = 9000 (cuatro cifras desde el
      * 9, o cinco o más); `prueba_ot_piloto.php` falla si la constante cambia
      * sin cambiar esto. Devuelve NULL con una columna NULL: quien la use pone
-     * antes su `IS NOT NULL`.
+     * antes su `IS NOT NULL`. UPPER(TRIM()) por lo mismo que el PHP: las
+     * columnas son `_ci` hoy (28-sep-2026), pero el criterio no puede depender
+     * de la colación de una tabla que alguien cree mañana.
      */
     public static function sqlEsDePrueba(string $columna): string
     {
-        return "($columna REGEXP '^OT-0*(9[0-9]{3}|[1-9][0-9]{4,})-')";
+        return "(UPPER(TRIM($columna)) REGEXP '^OT-0*(9[0-9]{3}|[1-9][0-9]{4,})-')";
     }
 
     /** Donde quedan los PDF. Los sirve pdf.php, con sesión y alcance. */
@@ -155,7 +164,8 @@ final class Emision
      */
     public static function reservar(string $serie): int
     {
-        if (self::modo() === 'PRUEBA') {
+        $modo = self::modo();
+        if ($modo === 'PRUEBA') {
             Db::ejecutar('INSERT INTO correlativos (serie, ultimo, nota) VALUES (?, ?, ?)
                           ON DUPLICATE KEY UPDATE serie = serie',
                          [$serie, self::SERIE_PRUEBA,
@@ -165,7 +175,44 @@ final class Emision
                          [$serie]) !== 1) {
             throw new RuntimeException("la serie $serie no tiene contador: hay que cargarle el de producción");
         }
-        return (int) Db::uno('SELECT LAST_INSERT_ID() AS n')['n'];
+        $n = (int) Db::uno('SELECT LAST_INSERT_ID() AS n')['n'];
+        // Se lanza DENTRO de la transacción de emitir(): el rollBack devuelve
+        // el contador y la OT queda FALLIDA con este motivo, para reintentar.
+        $error = self::errorDeSerie($serie, $n, $modo);
+        if ($error !== null) { throw new RuntimeException($error); }
+        return $n;
+    }
+
+    /**
+     * ¿El número reservado contradice el modo? Todo el criterio del piloto es
+     * el NÚMERO (esDePrueba: 9000 o más), así que el número y el modo tienen
+     * que decir lo mismo, o la OT se clasifica al revés sin que nada falle:
+     *
+     *   - PRODUCCION con un número de la serie de pruebas. El día del corte, si
+     *     no se carga a mano el contador real en `correlativos`, CORRECTIVO:UIO
+     *     sigue en 9152 y la primera OT que SÍ llega a Grupo KFC saldría como
+     *     OT-9153: el sistema la trataría como del piloto (no atiende la
+     *     orden, no se comparte, no cuenta en las cifras) y el técnico vería
+     *     «NO llegó a Grupo KFC» sobre una que llegó. Revisión del 28-sep-2026.
+     *   - PRUEBA con un número de producción: una fila de `correlativos` que
+     *     alguien cargó antes de cambiar el modo. La OT no sale a nadie, pero
+     *     con un número de producción el sistema la daría por válida.
+     *
+     * null si el número vale; si no, el motivo que queda en la captura.
+     * Pura, para probarla sin base (`prueba_ot_piloto.php`).
+     */
+    public static function errorDeSerie(string $serie, int $n, string $modo): ?string
+    {
+        $dePrueba = $n >= self::SERIE_PRUEBA;
+        if ($modo === 'PRODUCCION' && $dePrueba) {
+            return "la serie $serie va en el $n, que es de la numeración de pruebas (" . self::SERIE_PRUEBA
+                 . ' en adelante): hay que cargarle el contador de producción antes de emitir';
+        }
+        if ($modo !== 'PRODUCCION' && !$dePrueba) {
+            return "la serie $serie va en el $n en el sitio de pruebas: un número por debajo de "
+                 . self::SERIE_PRUEBA . ' se confundiría con una OT INDUSTEC de producción';
+        }
+        return null;
     }
 
     /** El nombre canónico de la orden (PLAN, invariantes): OT-{n:4}-{LOCAL}[-{AVISO}][-D{día}]-{ZONA}. */

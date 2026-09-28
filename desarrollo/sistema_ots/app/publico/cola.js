@@ -405,7 +405,11 @@
                puede estar ya en otra pantalla cuando la cola la manda, y un
                «emitida» corto fue lo que le hizo creer que llegó a Grupo KFC.
                Va el texto entero de envio.php, en naranja y largo. */
-            UI.toast(UI.T.titulo('OT_PILOTO') + '. ' + (fila.recibo.que_sigue
+            // Con texto fijo si el diccionario no trae la clave: una excepción
+            // aquí rechazaba la promesa con la fila ya ENVIADA y sin aviso.
+            var tituloP = 'OT INDUSTEC del piloto';
+            try { tituloP = UI.T.titulo('OT_PILOTO'); } catch (err) { /* vale el texto fijo */ }
+            UI.toast(tituloP + '. ' + (fila.recibo.que_sigue
                        || ((id || UI.T('OT_INDUSTEC')) + ' NO llegó a Grupo KFC: emítela también por el formulario de siempre.')),
                      'warn', { vida: 20000 });
           } else {

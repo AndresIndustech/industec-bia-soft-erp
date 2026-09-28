@@ -381,7 +381,12 @@ final class Reportes
             foreach (Db::todos($q . ' GROUP BY reportada_por', $p) as $r) { $novedades[(int) $r['reportada_por']] = (int) $r['n']; }
         }
         try {
-            $q = "SELECT usuario_id, COUNT(*) n FROM ot_capturadas c WHERE c.estado IN ('EMITIDA','ENVIADA','PROCESADA')";
+            // Sin las del piloto (serie 9000): no llegaron a Grupo KFC, y el
+            // Archivo y el buzón ya no las cuentan como emitidas. Contarlas aquí
+            // le daba a cada técnico de UIO OT que el resto del sistema marca
+            // «no enviada a KFC» (revisión del 28-sep-2026).
+            $q = "SELECT usuario_id, COUNT(*) n FROM ot_capturadas c WHERE c.estado IN ('EMITIDA','ENVIADA','PROCESADA')
+                     AND NOT COALESCE(" . Emision::sqlEsDePrueba('c.id_industec') . ", 0)";
             $p = [];
             if ($zona !== null) { $q .= ' AND c.zona = ?'; $p[] = $zona; }
             if ($mes !== null)  { $q .= ' AND DATE_FORMAT(COALESCE(c.emitida_en, c.recibida_en), "%Y-%m") = ?'; $p[] = $mes; }

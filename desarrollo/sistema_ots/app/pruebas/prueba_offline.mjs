@@ -7,6 +7,7 @@
    sigue teniendo internet. La primera versión de esta prueba daba "funciona sin
    conexión" cuando en realidad el servidor seguía respondiendo. */
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const [carpeta, puertoArg] = process.argv.slice(2);
 const puerto = parseInt(puertoArg, 10) || 8099;
@@ -17,7 +18,11 @@ const cdp = 9600 + Math.floor(Math.random() * 90);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const stop = setTimeout(() => { console.error('timeout'); process.exit(1); }, 120000);
 
-const servidor = spawn(PHP, ['-S', `127.0.0.1:${puerto}`, '-t', carpeta], { stdio: 'ignore' });
+/* Sin sesión, catalogos.php contesta 401 y la app se va al ingreso: la prueba
+   terminaba mirando login.php (28-sep-2026). El router de la prueba de la franja
+   contesta yo.php y catalogos.php con datos sintéticos, sin tocar ninguna base. */
+const ROUTER = fileURLToPath(new URL('./router_franja_piloto.php', import.meta.url));
+const servidor = spawn(PHP, ['-S', `127.0.0.1:${puerto}`, '-t', carpeta, ROUTER], { stdio: 'ignore' });
 await sleep(1500);
 
 const chrome = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-sandbox',
@@ -40,8 +45,9 @@ try {
   }
   ws = new WebSocket(t.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.addEventListener('open', r, { once: true }); ws.addEventListener('error', () => j(new Error('ws')), { once: true }); });
-  ws.addEventListener('message', e => {
-    const m = JSON.parse(e.data);
+  ws.addEventListener('message', async e => {
+    // En Node, e.data puede llegar como Blob: «"[object Object]" is not valid JSON».
+    const m = JSON.parse(typeof e.data === 'string' ? e.data : await e.data.text());
     if (m.id && pend.has(m.id)) { const { res, rej } = pend.get(m.id); pend.delete(m.id); m.error ? rej(new Error(m.error.message)) : res(m.result); }
   });
   await send('Page.enable'); await send('Runtime.enable');
@@ -75,7 +81,11 @@ try {
   const o = JSON.parse(await ev(`JSON.stringify({
     titulo: document.title,
     Reglas: typeof window.Reglas,
-    tecnicos: (document.querySelector('#tecSesion')||{}).length ?? -1,
+    // Quién es el técnico, sin señal: lo trae yo.php desde la caché. Antes se
+    // contaban las opciones de un <select id="tecSesion"> que desde H-16 es
+    // un campo oculto, así que la prueba fallaba siempre (-1).
+    tecnico: ((document.querySelector('#yoNombre')||{}).textContent||'').trim(),
+    tecSesion: (document.querySelector('#tecSesion')||{}).value || '',
     locales: (document.querySelector('#pendientes')||{}).textContent||'',
     canvas: !!document.querySelector('#signature'),
     marca: window.__datosDesdeCache || null,
@@ -83,13 +93,13 @@ try {
   })`) || '{}');
   console.log('   titulo           :', o.titulo || '(en blanco)');
   console.log('   Reglas cargado   :', o.Reglas);
-  console.log('   opciones tecnico :', o.tecnicos);
+  console.log('   tecnico (yo.php) :', o.tecnico || '(no se sabe)', '· id', o.tecSesion || '(vacío)');
   console.log('   canvas de firma  :', o.canvas ? 'SI' : 'NO');
   console.log('   pie              :', (o.locales || '').slice(0, 85) || '(vacio)');
   console.log('   datos desde cache:', o.marca || 'no');
   console.log('   franja de aviso  :', o.franja || '(no aparece)');
 
-  const ok = o.Reglas === 'object' && o.tecnicos > 1 && o.canvas && !vivo;
+  const ok = o.Reglas === 'object' && o.tecnico === 'Prueba Franja' && o.tecSesion === '900' && o.canvas && !vivo;
   const avisa = !!o.franja;
   console.log('\n' + (ok ? 'FUNCIONA SIN CONEXION' : 'NO funciona sin conexion'));
   console.log(avisa ? 'Y AVISA de que los datos son guardados' : 'PERO NO AVISA de que los datos son viejos');

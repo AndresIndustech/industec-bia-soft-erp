@@ -601,8 +601,10 @@ final class Casos
      *     como `ot_cierre` (las doce anteriores al arreglo).
      *   - `vale`: en un aviso que tiene alguna del piloto, la OT de producción
      *     que la reemplaza y que la administradora registra en SAP: entre las
-     *     de producción con fecha IGUAL O POSTERIOR a la del piloto, la de
-     *     cierre si llegó, si no la primera. Las anteriores son de otra visita
+     *     de producción con fecha IGUAL O POSTERIOR a la del piloto, la
+     *     última DE CIERRE. Si solo hay de evaluación, ninguna vale y la
+     *     primera lleva `posterior` (llegó; falta la de cierre). Las
+     *     anteriores son de otra visita
      *     —el 28-sep, el aviso 10339233 tenía la OT-9142 del 26-sep y la
      *     OT-1523 del 6 de julio, abierta y de otro trabajo—, y una sin fecha
      *     no se afirma (I-7). Si no hay ninguna, no vale ninguna y se dice.
@@ -611,7 +613,7 @@ final class Casos
      * número con el local sin «EC», y se queda el nombre cuyo PDF está.
      *
      * @param string[] $avisos los avisos que se van a pintar
-     * @return array<string,array<int,array{ot:string,fecha:?string,cierre:bool,pdf:bool,prueba:bool,vale:bool}>>
+     * @return array<string,array<int,array{ot:string,fecha:?string,cierre:bool,pdf:bool,prueba:bool,vale:bool,posterior:bool}>>
      */
     public static function documentos(array $avisos, array $gestion, array $aten): array
     {
@@ -699,25 +701,36 @@ final class Casos
                 // Una OT del piloto no es «de cierre»: no llegó a Grupo KFC.
                 if ($f['prueba']) { $f['cierre'] = false; }
                 $f['vale'] = false;
+                $f['posterior'] = false;
                 $lista[] = $f;
             }
             usort($lista, static fn($x, $y) => [(string) $x['fecha'], $x['ot']] <=> [(string) $y['fecha'], $y['ot']]);
 
             // Cuál vale, solo donde hay alguna del piloto: de las de producción
-            // desde la fecha de la del piloto, la de cierre si llegó; si no, la
-            // primera. La lista ya va por fecha.
+            // desde la fecha de la del piloto, la ÚLTIMA DE CIERRE (la misma que
+            // `Reconciliar::atenciones()` deja como ot_cierre). Si solo
+            // llegaron de evaluación (o sin dato del estado), ninguna vale: la
+            // primera queda marcada `posterior`, para decir que llegó pero que
+            // no consta como de cierre (revisión del 28-sep-2026: ofrecerle a
+            // la administradora una de evaluación como «la que registras en
+            // SAP» la llevaba a cerrar la orden con el trabajo abierto). La
+            // lista ya va por fecha.
             $desde = null;
             foreach ($lista as $f) {
                 if ($f['prueba'] && $f['fecha'] !== null && ($desde === null || $f['fecha'] < $desde)) { $desde = $f['fecha']; }
             }
             if (in_array(true, array_column($lista, 'prueba'), true)) {
-                $cual = null;
+                $cual = $primera = null;
                 foreach ($lista as $i => $f) {
                     if ($f['prueba'] || $f['fecha'] === null || ($desde !== null && $f['fecha'] < $desde)) { continue; }
-                    if ($f['cierre']) { $cual = $i; break; }
-                    $cual ??= $i;
+                    if ($f['cierre']) { $cual = $i; continue; }
+                    $primera ??= $i;
                 }
-                if ($cual !== null) { $lista[$cual]['vale'] = true; }
+                if ($cual !== null) {
+                    $lista[$cual]['vale'] = true;
+                } elseif ($primera !== null) {
+                    $lista[$primera]['posterior'] = true;
+                }
             }
             $out[$aviso] = $lista;
         }
@@ -732,6 +745,17 @@ final class Casos
     public static function otQueVale(array $docsDelAviso): ?string
     {
         foreach ($docsDelAviso as $d) { if (!empty($d['vale'])) { return (string) $d['ot']; } }
+        return null;
+    }
+
+    /**
+     * La OT de producción que llegó DESPUÉS de la del piloto pero no consta
+     * como de cierre (de evaluación, o sin estado): null si no hay, o si ya
+     * llegó la que vale. La pantalla dice que llegó y que falta la de cierre.
+     */
+    public static function otPosteriorSinCierre(array $docsDelAviso): ?string
+    {
+        foreach ($docsDelAviso as $d) { if (!empty($d['posterior'])) { return (string) $d['ot']; } }
         return null;
     }
 
@@ -906,8 +930,17 @@ final class Casos
             $k = self::claveAviso($r['aviso'] ?? '');
             if ($k === '') { continue; }
             $nodo($k);
-            if (Emision::esDePrueba((string) ($r['id_industec'] ?? ''))) { $idx[$k]['piloto'] = true; continue; }
             $est = strtoupper((string) ($r['estado'] ?? ''));
+            if (Emision::esDePrueba((string) ($r['id_industec'] ?? ''))) {
+                $idx[$k]['piloto'] = true;
+                // Del piloto y trabada (NUMERADA/FALLIDA): no cuenta como
+                // emitida, pero la alerta «OT INDUSTEC no emitida» se mantiene.
+                // Revisión del 28-sep-2026: con el `continue` antes, una del
+                // piloto con el PDF caído dejaba a la administradora sin saber
+                // que la emisión del técnico se trabó.
+                if (in_array($est, self::CAPTURA_NO_EMITIDA, true)) { $idx[$k]['no_emitida'] = true; }
+                continue;
+            }
             if (in_array($est, self::CAPTURA_NO_EMITIDA, true)) {
                 $idx[$k]['no_emitida'] = true;
                 continue;
@@ -1203,7 +1236,7 @@ final class Casos
             'deshabilitados' => 0, 'vencidas' => 0, 'operativos' => 0, 'sin_dato' => 0,
             'en_revision' => 0, 'atendidas' => 0, 'sin_regularizar' => 0,
             'sin_tecnico' => 0, 'asignadas_3d_por_estado' => 0, 'espera_repuesto' => 0,
-            'cerradas_sap' => 0, 'en_buzon' => 0, 'nuevas_7d' => 0,
+            'cerradas_sap' => 0, 'cerradas_sap_piloto' => 0, 'en_buzon' => 0, 'nuevas_7d' => 0,
         ];
         // Las tres zonas tienen tarjeta aunque estén en cero (y la del jefe de
         // zona, que llega en `$zonasFijas`): una zona sin órdenes se ve en 0,
@@ -1226,6 +1259,15 @@ final class Casos
             if ($estado === 'EN_REVISION') { $t['en_revision']++; }
             if ($estado === 'CERRADO_SIN_ATENCION' && empty($g['regularizado_en'])) { $t['sin_regularizar']++; }
             if ($estado === 'RESUELTO')    { $t['cerradas_sap']++; }
+            // De ellas, las cerradas en SAP con una OT INDUSTEC del piloto como
+            // OT de cierre: SAP las da por cerradas con un número que Grupo KFC
+            // nunca recibió (doce el 28-sep-2026). El estado lo puso Isabel y no
+            // se toca; la cifra le dice cuáles revisar, y deja de contarlas
+            // sola cuando la OT de producción reemplaza a la del piloto
+            // (atenderPorOrden / Reconciliar). Revisión del 28-sep-2026.
+            if ($estado === 'RESUELTO' && Emision::esDePrueba((string) ($g['ot_cierre'] ?? ''))) {
+                $t['cerradas_sap_piloto']++;
+            }
             // Toda orden de la zona, esté en el estado que esté: es la columna
             // «Órdenes» de la tabla por zona del buzón, y cada una de las
             // demás cifras de la zona es un subconjunto de esta.
@@ -1750,14 +1792,17 @@ final class Casos
             // Una OT del piloto no atiende la orden enlazada (28-sep-2026):
             // KFC no la tiene. Se busca la de producción, y si no hay, ninguna.
             if (Emision::esDePrueba($ot)) { $ot = ''; }
-            if ($ot === '' && !empty($aten[$cual]['ots'])) {
-                $ot = trim((string) ($aten[$cual]['ots'][0]['ot'] ?? ''));
+            // La primera del correo que no sea del piloto (antes solo se miraba
+            // la primera, y si era del piloto el aviso quedaba sin ninguna).
+            foreach ($ot === '' ? ($aten[$cual]['ots'] ?? []) : [] as $o) {
+                $cand = trim((string) ($o['ot'] ?? ''));
+                if ($cand !== '' && !Emision::esDePrueba($cand)) { $ot = $cand; break; }
             }
-            if (Emision::esDePrueba($ot)) { $ot = ''; }
             if ($ot !== '') { break; }
         }
 
         $antes = (string) ($gestion[$aviso]['estado'] ?? 'NUEVO');
+        $pilotoDestino = Emision::sqlEsDePrueba('ot_cierre');
         Db::ejecutar(
             "UPDATE casos_gestion
                 SET continua_de   = ?,
@@ -1767,8 +1812,10 @@ final class Casos
                     continua_nota = ?,
                     /* Con una OT INDUSTEC que ya cubre el trabajo, la orden
                        queda ATENDIDO y con ella como cierre. Sin OT, el estado
-                       no se toca: la orden sigue en el total de las que faltan. */
-                    ot_cierre     = IF(? <> '', COALESCE(ot_cierre, ?), ot_cierre),
+                       no se toca: la orden sigue en el total de las que faltan.
+                       Una ot_cierre del piloto en la orden enlazada no se
+                       conserva: la de producción la reemplaza (28-sep-2026). */
+                    ot_cierre     = IF(? <> '', IF(ot_cierre IS NULL OR $pilotoDestino, ?, ot_cierre), ot_cierre),
                     atendido_en   = IF(? <> '', COALESCE(atendido_en, NOW()), atendido_en),
                     estado        = CASE
                         WHEN ? = '' THEN estado

@@ -433,15 +433,31 @@
      KFC. Mientras `yo.php` diga PRUEBA, encima del formulario queda una franja
      que no se cierra. Sale también sin señal: yo.php va en la caché. */
   function pintarFranjaPiloto() {
-    var f = document.getElementById('franjaPiloto');
-    if (!f) return;
     var enPrueba = !!(YO && YO.emision_modo === 'PRUEBA');
-    if (enPrueba) {
-      document.getElementById('franjaPilotoTxt').innerHTML = '<b>' + esc(UI.T.titulo('OT_PILOTO')) + '.</b> '
+    /* Va en la cadena que arma el formulario (pintarYo): si algo de aquí
+       lanzara, los combos de local y aviso no se inicializaban. El título sale
+       del diccionario y, si no está, un texto fijo. */
+    var titulo = 'OT INDUSTEC del piloto';
+    try { titulo = UI.T.titulo('OT_PILOTO'); } catch (e) { /* vale el texto fijo */ }
+    var textos = {
+      // Arriba del formulario: no se cierra.
+      franjaPiloto: '<b>' + esc(titulo) + '.</b> '
         + 'Lo que emitas aquí NO llega a Grupo KFC ni al local. '
-        + 'Emite cada OT INDUSTEC también por el formulario de siempre: la que vale es esa.';
-    }
-    f.hidden = !enPrueba;
+        + 'Emite cada OT INDUSTEC también por el formulario de siempre: solo esa llega a Grupo KFC y es la que vale.',
+      // Junto al botón de enviar: la franja de arriba se pierde al bajar por
+      // el formulario, y aquí es donde el técnico decide (revisión 28-sep-2026).
+      franjaPilotoEnviar: '<b>' + esc(titulo) + ':</b> NO llega a Grupo KFC. '
+        + 'Emítela también por el formulario de siempre.'
+    };
+    Object.keys(textos).forEach(function (id) {
+      var f = document.getElementById(id);
+      if (!f) return;
+      if (enPrueba) {
+        var txt = document.getElementById(id + 'Txt');
+        if (txt) txt.innerHTML = textos[id];
+      }
+      f.hidden = !enPrueba;
+    });
   }
 
   function pintarYo() {
@@ -1940,7 +1956,9 @@
            porque el PDF sí salió: eso solo decide qué se suelta del celular. */
         $('#rEstado').className = 'aviso warn';
         if (ic) ic.textContent = '!';
-        $('#rEstadoTxt').innerHTML = '<b>' + esc(UI.T.titulo('OT_PILOTO') + '.') + '</b> ' + esc(r.que_sigue);
+        var tituloP = 'OT INDUSTEC del piloto';
+        try { tituloP = UI.T.titulo('OT_PILOTO'); } catch (err) { /* vale el texto fijo */ }
+        $('#rEstadoTxt').innerHTML = '<b>' + esc(tituloP + '.') + '</b> ' + esc(r.que_sigue);
       } else {
         $('#rEstado').className = 'aviso ' + (emitida ? 'ok' : 'info');
         if (ic) ic.textContent = '✓';

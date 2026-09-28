@@ -631,8 +631,12 @@ $prueba = Emision::modo() === 'PRUEBA';
    9000. Decisión de Andrés del 28-sep-2026, tras el aviso 10356500: mientras
    dure el piloto, esta OT NO llega a Grupo KFC, así que no atiende la orden ni
    termina ninguna solicitud. El caso queda a espera de informe técnico hasta
-   que llegue la OT INDUSTEC del formulario de siempre. */
-$piloto = !empty($em['id_industec']) ? Emision::esDePrueba((string) $em['id_industec']) : $prueba;
+   que llegue la OT INDUSTEC del formulario de siempre.
+   En modo PRUEBA es del piloto siempre (su correo queda RETENIDO: no llega a
+   nadie, sea cual sea el número); después del corte, lo dice el número (el
+   reintento de una OT-9xxx sigue siendo del piloto). Emision::reservar() ya no
+   deja que el número y el modo se contradigan (revisión del 28-sep-2026). */
+$piloto = $prueba || (!empty($em['id_industec']) && Emision::esDePrueba((string) $em['id_industec']));
 if ($em['error'] !== null) {
     Auth::bitacora('EMISION_FALLIDA', 'ot', $uuid, mb_substr((string) $em['error'], 0, 150),
                    null, null, ['captura_id' => $fila['captura_id'] ?? null], false);
@@ -754,14 +758,15 @@ responder(200, [
         'que_sigue'   => $piloto
             ? ($em['id_industec']
                 ? $em['id_industec'] . ' es del piloto: NO llegó a Grupo KFC ni al local. '
-                  . 'Emítela hoy también por el formulario de siempre; la que vale es esa.'
+                  . 'Emítela hoy también por el formulario de siempre: solo esa llega a Grupo KFC y es la que vale.'
                   . ($em['pdf'] ? '' : ' (Su PDF se reintenta desde el servidor cada 10 minutos.)')
                 : 'Quedó guardada, pero es del piloto: NO llega a Grupo KFC ni al local. '
-                  . 'Emítela hoy también por el formulario de siempre; la que vale es esa.')
+                  . 'Emítela hoy también por el formulario de siempre: solo esa llega a Grupo KFC y es la que vale.')
             : ($em['pdf']
-            ? $em['id_industec'] . ' emitida: el PDF está en tu historial. '
-              . ($prueba ? 'Es el sistema en pruebas: el correo no se envió a nadie.'
-                         : 'El correo al local sale de la cola.')
+            // Aquí nunca se está en PRUEBA: eso siempre es $piloto (arriba). La
+            // coletilla «Es el sistema en pruebas: el correo no se envió a
+            // nadie.» se retiró: era todo lo que avisaba del piloto (OT_PILOTO).
+            ? $em['id_industec'] . ' emitida: el PDF está en tu historial. El correo al local sale de la cola.'
             : ($em['id_industec']
                 ? 'La OT INDUSTEC quedó guardada con el número ' . $em['id_industec']
                   . '. El PDF no se pudo generar todavía: se reintenta desde el servidor cada 10 minutos.'

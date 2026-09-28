@@ -462,7 +462,7 @@ if (isset($_GET['ver'])) {
                        técnico tiene que emitir la de esta orden por el
                        formulario de siempre; si no se le dice aquí, la da por
                        hecha como pasó con las doce del 26 y 27-sep. */ ?>
-              <div class="meta" style="color:#9a3412"><?= $e(Vocabulario::corto('OT_PILOTO')) ?>: emítela también por el formulario de siempre; la que vale es esa.</div>
+              <div class="meta" style="color:#9a3412"><?= $e(Vocabulario::corto('OT_PILOTO')) ?>: emítela también por el formulario de siempre: solo esa llega a Grupo KFC y es la que vale.</div>
             <?php endif; ?>
             <div class="meta"><?= $e(substr((string) ($g['atendido_en'] ?? ''), 0, 10)) ?> ·
               <?= $e(Casos::etiquetaEstado($est)) ?></div></div>
@@ -1102,7 +1102,7 @@ if (!$lista && !$verCapturas):
                 PDF no cargado al archivo todavía
               <?php endif; ?>
               <?php if ($capPiloto): ?>
-                <br><span style="color:#9a3412">NO llegó a Grupo KFC ni al local. Emítela también por el formulario de siempre; la que vale es esa.</span>
+                <br><span style="color:#9a3412">NO llegó a Grupo KFC ni al local. Emítela también por el formulario de siempre: solo esa llega a Grupo KFC y es la que vale.</span>
               <?php endif; ?>
             <?php elseif (!empty($k['emision_error'])): ?>
               El PDF no se pudo generar todavía: se reintenta desde el servidor cada 10 minutos.

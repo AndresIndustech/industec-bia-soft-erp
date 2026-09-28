@@ -522,6 +522,10 @@ $fDiasAsig = (string) ($_GET['dias_asignado'] ?? '');    // asignadas hace N+ d�
 // pasos, o `sin` = a espera de repuesto sin precisar. El cuadro del inicio
 // enlaza aquí con `?est=ESPERA_REPUESTO&rep=`.
 $fRep = strtoupper((string) ($_GET['rep'] ?? ''));
+// Las cerradas en SAP con una OT INDUSTEC del piloto como OT de cierre (28-sep-
+// 2026): el aviso del resumen enlaza aquí con `?est=RESUELTO&piloto=1`. Mismo
+// criterio que la cifra (`cerradas_sap_piloto` de Casos::tarjetasPorZona()).
+$fPiloto = (string) ($_GET['piloto'] ?? '') === '1';
 if ($fRep !== '' && $fRep !== 'SIN' && !isset(Casos::REPUESTO_GESTION[$fRep])) { $fRep = ''; }
 $desdeF = $fDias !== '' ? date('Y-m-d', strtotime('-' . (int) $fDias . ' days')) : null;
 
@@ -543,7 +547,7 @@ $grupoNoDisponible = $fGrupo !== '' && (
     (in_array($fGrupo, ['abiertas', 'espera_informe'], true) && !$informesG['ot_disponible'])
     || ($fGrupo === 'deshabilitados' && !$informesG['equipo_disponible']));
 
-$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $fEst, $fDiasAsig, $fOtro, $fRep, $porAviso, $gestion, $fGrupo, $clasifG, $informesG) {
+$vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, $fPrio, $fTexto, $fVence, $hoy, $desdeF, $fAtn, $fEst, $fDiasAsig, $fOtro, $fRep, $fPiloto, $porAviso, $gestion, $fGrupo, $clasifG, $informesG) {
     $g = $gestion[$c['aviso'] ?? ''] ?? null;
     // Por el estado de vista: «sin atender» lista solo lo que falta regularizar,
     // que es a lo que manda el enlace del panel; lo ya explicado va aparte.
@@ -553,6 +557,7 @@ $vistos = array_values(array_filter($todos, function ($c) use ($fZona, $fAlert, 
         $paso = strtoupper((string) ($g['repuesto_gestion'] ?? ''));
         if ($fRep === 'SIN' ? isset(Casos::REPUESTO_GESTION[$paso]) : $paso !== $fRep) { return false; }
     }
+    if ($fPiloto && !(($g['estado'] ?? '') === 'RESUELTO' && Emision::esDePrueba((string) ($g['ot_cierre'] ?? '')))) { return false; }
     if ($fOtro === 'por_decidir' && !Casos::otroTrabajoPorDecidir($c, $g)) { return false; }
     if ($fOtro !== '' && $fOtro !== 'por_decidir' && ($g['otro_trabajo'] ?? null) !== $fOtro) { return false; }
     if ($fAtn !== '') {
@@ -788,6 +793,26 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
         <?= $cuadroB('CERRADA_SAP', $tz['cerradas_sap'], '?est=RESUELTO', 'fuera del total', 'verde') ?>
       </div>
       <?php
+      /* Las cerradas en SAP con una OT INDUSTEC del piloto como OT de cierre
+         (decisión de Andrés del 28-sep-2026). Doce se cerraron así el 26 al
+         28-sep: SAP las da por terminadas con un número que Grupo KFC nunca
+         recibió. El estado lo puso la administradora y no se cambia; este
+         aviso le dice cuáles revisar y desaparece solo cuando la OT de
+         producción reemplaza a la del piloto como OT de cierre. */
+      $pilotoSap = array_sum(array_map(static fn($t) => (int) ($t['cerradas_sap_piloto'] ?? 0), $tz['zonas']));
+      ?>
+      <?php if ($pilotoSap > 0): ?>
+        <div class="aviso warn" role="note" data-cifra="cerradas_sap_piloto" style="margin:-4px 0 16px">
+          <span class="ic" aria-hidden="true">!</span>
+          <div class="cuerpo">
+            <b><?= $pilotoSap ?> <?= e(Vocabulario::t('CERRADA_SAP', $pilotoSap)) ?> con una <?= e(Vocabulario::t('OT_PILOTO')) ?></b>
+            como <?= e(Vocabulario::t('OT_CIERRE')) ?>: Grupo KFC no la recibió. Revísalas en SAP y registra la
+            <?= e(Vocabulario::t('OT_CIERRE')) ?> del formulario de siempre cuando llegue.
+            <a href="?est=RESUELTO&amp;piloto=1">Ver cuáles</a>
+          </div>
+        </div>
+      <?php endif; ?>
+      <?php
       /* Los estados que no están en el resumen siguen al alcance de un clic:
          en revisión (dentro del total), no nos compete, cerradas sin atención
          y regularizadas. Se cuentan por el estado de vista, orden por orden,
@@ -998,7 +1023,8 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
           <label>&nbsp;</label>
           <button class="btn primary" type="submit" style="height:38px">Filtrar</button>
         </div>
-        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn || $fEst || $fDiasAsig !== '' || $fOtro !== '' || $fGrupo !== '' || $fRep !== ''): ?>
+        <?php if ($fPiloto): ?><input type="hidden" name="piloto" value="1"><?php endif; ?>
+        <?php if ($fZona || $fAlert || $fPrio || $fTexto || $fVence || $fDias !== '' || $fAtn || $fEst || $fDiasAsig !== '' || $fOtro !== '' || $fGrupo !== '' || $fRep !== '' || $fPiloto): ?>
           <div class="campo">
             <label>&nbsp;</label>
             <a class="btn" href="casos.php" style="height:38px;display:flex;align-items:center">Limpiar</a>
@@ -1006,6 +1032,13 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
         <?php endif; ?>
       </form>
 
+      <?php if ($fPiloto): ?>
+        <p class="sub" style="margin:0 0 6px">
+          Filtro: <b><?= e(Vocabulario::titulo('CERRADA_SAP')) ?> con una <?= e(Vocabulario::t('OT_PILOTO')) ?></b>
+          como <?= e(Vocabulario::t('OT_CIERRE')) ?>.
+          <a href="casos.php">Quitar</a>
+        </p>
+      <?php endif; ?>
       <?php if ($fGrupo !== ''):
         // El rótulo de la fila de la tarjeta de la que se vino, del diccionario.
         $rotGrupo = Vocabulario::titulo(['abiertas' => 'ABIERTA', 'espera_informe' => 'ESPERA_INFORME',
@@ -1253,11 +1286,17 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
                                27-sep-2026, antes del arreglo): Grupo KFC no la
                                tiene. Es el número que la administradora copia a
                                SAP, así que aquí se dice cuál registrar. */
-                            $vale = Casos::otQueVale($docs[(string) ($c['aviso'] ?? '')] ?? []); ?>
+                            $docsAv = $docs[(string) ($c['aviso'] ?? '')] ?? [];
+                            $vale = Casos::otQueVale($docsAv);
+                            /* Solo una de CIERRE vale para registrar en SAP. Si
+                               llegó una de evaluación, se nombra y se dice que
+                               falta la de cierre (revisión del 28-sep-2026). */
+                            $sinCierre = $vale === null ? Casos::otPosteriorSinCierre($docsAv) : null; ?>
                       <span class="desc" style="color:#9a3412">
                         <b><?= e(Vocabulario::corto('OT_PILOTO')) ?>.</b>
-                        Registra en SAP la OT INDUSTEC del formulario de siempre<?php if ($vale !== null): ?>:
-                          <b class="mono"><?= e($vale) ?></b>.<?php else: ?>; todavía no llega: pídesela al técnico.<?php endif; ?>
+                        Registra en SAP la OT INDUSTEC de cierre del formulario de siempre<?php if ($vale !== null): ?>:
+                          <b class="mono"><?= e($vale) ?></b>.<?php elseif ($sinCierre !== null): ?>. Llegó la
+                          <b class="mono"><?= e($sinCierre) ?></b>, pero no consta como de cierre (de evaluación o sin estado): no la registres todavía; falta la de cierre.<?php else: ?>; todavía no llega: pídesela al técnico.<?php endif; ?>
                       </span>
                     <?php endif; ?>
                   <?php endif; ?>

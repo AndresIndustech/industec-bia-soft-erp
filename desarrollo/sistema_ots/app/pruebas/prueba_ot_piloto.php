@@ -26,6 +26,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../publico/nucleo/Casos.php';
 require_once __DIR__ . '/../publico/nucleo/Pendientes.php';
 require_once __DIR__ . '/../publico/nucleo/Vocabulario.php';
+require_once __DIR__ . '/../publico/nucleo/Reconciliar.php';
 
 $fallos = 0;
 $total  = 0;
@@ -54,6 +55,9 @@ $casosId = [
     'OT-09147-G013EC-10356500-UIO'  => true,    // con cero a la izquierda
     'ot-9147-g013ec-10356500-uio'   => true,    // en minúsculas
     '  OT-9147-G013EC-10356500-UIO ' => true,   // con espacios
+    "\tOT-9147-G013EC-10356500-UIO" => false,  // un tabulador: ni TRIM() de MariaDB ni el PHP lo quitan
+    'OT-10356500-G013EC-UIO'        => true,    // ocho cifras (el aviso en el lugar del número): el SQL ya lo decía
+    'OT-99999999999999999999-X-UIO' => true,    // veinte cifras: no desborda el (int)
     'OT-8999-G013EC-10356500-UIO'   => false,   // el último antes de la serie
     'OT-2621-K061EC-10351229-CNLJ'  => false,   // el más alto de producción al 28-sep
     'OT-1911-G013-10355811-UIO'     => false,   // producción, nombre del correo
@@ -74,17 +78,41 @@ afirmar('SERIE_PRUEBA sigue en 9000 (la expresión SQL está escrita para ese va
 preg_match("/REGEXP '([^']+)'/", Emision::sqlEsDePrueba('x'), $m);
 $pcre = '/' . str_replace('/', '\/', $m[1] ?? '') . '/i';
 $discrepan = [];
-foreach (array_merge(range(0, 12000), [99999, 100000]) as $n) {
+foreach (array_merge(range(0, 12000), [99999, 100000, 1234567, 12345678, 10356500, 999999999]) as $n) {
     foreach ([(string) $n, str_pad((string) $n, 4, '0', STR_PAD_LEFT), '0' . $n] as $num) {
         $id = "OT-$num-G013EC-10356500-UIO";
         if ((bool) preg_match($pcre, $id) !== Emision::esDePrueba($id)) { $discrepan[] = $id; }
     }
 }
 foreach (array_keys($casosId) as $id) {
-    if ((bool) preg_match($pcre, strtoupper(trim((string) $id))) !== Emision::esDePrueba((string) $id)) { $discrepan[] = $id; }
+    // UPPER(TRIM()) de MariaDB: TRIM quita solo espacios.
+    if ((bool) preg_match($pcre, strtoupper(trim((string) $id, ' '))) !== Emision::esDePrueba((string) $id)) { $discrepan[] = $id; }
 }
-afirmar('sqlEsDePrueba() y esDePrueba() coinciden del 0 al 12000 (con y sin ceros)', array_slice($discrepan, 0, 5), []);
-afirmar('sqlEsDePrueba() pone la columna que se le pide', str_starts_with(Emision::sqlEsDePrueba('g.ot_cierre'), '(g.ot_cierre REGEXP'), true);
+afirmar('sqlEsDePrueba() y esDePrueba() coinciden del 0 al 12000, con 7 a 9 cifras, y los casos de arriba', array_slice($discrepan, 0, 5), []);
+afirmar('sqlEsDePrueba() pone la columna que se le pide, con UPPER(TRIM())',
+        str_starts_with(Emision::sqlEsDePrueba('g.ot_cierre'), '(UPPER(TRIM(g.ot_cierre)) REGEXP'), true);
+
+/* El número y el modo no pueden contradecirse (revisión del 28-sep-2026): si el
+   día del corte nadie carga el contador real, la primera OT de producción
+   saldría OT-9153 y todo el sistema la trataría como del piloto. */
+echo "\n=== 1b. Emision::errorDeSerie(): el número y el modo dicen lo mismo ===\n";
+afirmar('PRODUCCION con 9153 (contador de pruebas sin cambiar) → error',
+        is_string(Emision::errorDeSerie('CORRECTIVO:UIO', 9153, 'PRODUCCION')), true);
+afirmar('PRODUCCION con 9000 → error', is_string(Emision::errorDeSerie('CORRECTIVO:UIO', 9000, 'PRODUCCION')), true);
+afirmar('PRODUCCION con 1925 → vale', Emision::errorDeSerie('CORRECTIVO:UIO', 1925, 'PRODUCCION'), null);
+afirmar('PRODUCCION con 8999 → vale', Emision::errorDeSerie('CORRECTIVO:UIO', 8999, 'PRODUCCION'), null);
+afirmar('PRUEBA con 9153 → vale', Emision::errorDeSerie('CORRECTIVO:UIO', 9153, 'PRUEBA'), null);
+afirmar('PRUEBA con 9001 (serie nueva) → vale', Emision::errorDeSerie('PREVENTIVO:LARB', 9001, 'PRUEBA'), null);
+afirmar('PRUEBA con 1925 (contador de producción cargado antes del corte) → error',
+        is_string(Emision::errorDeSerie('CORRECTIVO:UIO', 1925, 'PRUEBA')), true);
+afirmar('el error nombra la serie y pide el contador de producción',
+        str_contains((string) Emision::errorDeSerie('CORRECTIVO:UIO', 9153, 'PRODUCCION'), 'CORRECTIVO:UIO')
+        && str_contains((string) Emision::errorDeSerie('CORRECTIVO:UIO', 9153, 'PRODUCCION'), 'contador de producción'), true);
+$emi = (string) file_get_contents(__DIR__ . '/../publico/nucleo/Emision.php');
+$res = substr($emi, (int) strpos($emi, 'public static function reservar'));
+$res = substr($res, 0, (int) strpos($res, 'public static function errorDeSerie'));
+afirmar('reservar() lanza con errorDeSerie() antes de devolver el número (dentro de la transacción de emitir)',
+        (bool) preg_match('/\$error = self::errorDeSerie\(\$serie, \$n, \$modo\);\s*if \(\$error !== null\) \{ throw new RuntimeException\(\$error\); \}\s*return \$n;/', $res), true);
 
 /* -------------------------------------------------------------------------
    2. La OT del piloto no cuenta como emitida (indiceInformes / grupoOrden).
@@ -103,6 +131,7 @@ $orden('91000005', ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 22]);        
 $orden('91000006', ['estado' => 'ASIGNADO', 'asignado_a' => 22]);                                      // solo la fila APP del piloto en el Archivo
 $orden('91000007', ['estado' => 'ASIGNADO', 'asignado_a' => 22]);                                      // producción por el correo
 $orden('91000008', ['estado' => 'ASIGNADO', 'asignado_a' => 22]);                                      // captura sin id_industec (como antes)
+$orden('91000009', ['estado' => 'ASIGNADO', 'asignado_a' => 22]);                                      // del piloto con el PDF caído (FALLIDA)
 
 $aten = ['91000007' => ['ots' => [['ot' => 'OT-1940-G021-91000007-UIO', 'estado_ot' => 'Cerrada', 'estado_equipo' => 'Operativo', 'fecha' => '2026-09-27']]]];
 $capturadas = [
@@ -113,6 +142,8 @@ $capturadas = [
     ['aviso' => '91000005', 'id_industec' => 'OT-9131-R001EC-91000005-UIO', 'estado' => 'EMITIDA', 'emitida_en' => '2026-09-24 11:00:00',
      'equipos' => json_encode([['estado' => 'Deshabilitado']])],
     ['aviso' => '91000008', 'estado' => 'EMITIDA', 'emitida_en' => '2026-09-20 10:00:00', 'equipos' => json_encode([['estado' => 'Operativo']])],
+    ['aviso' => '91000009', 'id_industec' => 'OT-9153-G013EC-91000009-UIO', 'estado' => 'FALLIDA', 'emitida_en' => null,
+     'equipos' => json_encode([['estado' => 'Operativo']])],
 ];
 $archivo = [
     ['aviso' => '91000004', 'id_industec' => 'OT-1930-R002EC-91000004-UIO', 'fecha_atencion' => '2026-09-27'],
@@ -136,11 +167,20 @@ afirmar('  … y la OT del piloto sigue sin contar como emitida', Casos::tieneOT
 afirmar('solo la fila APP del piloto en el Archivo → a espera de informe técnico', $grupo('91000006'), 'ESPERA_INFORME');
 afirmar('OT de producción por el correo → órdenes abiertas (como siempre)', $grupo('91000007'), 'ABIERTA');
 afirmar('captura sin id_industec (filas de antes) se lee como antes: emitida', $grupo('91000008'), 'ABIERTA');
+afirmar('del piloto y FALLIDA → a espera de informe técnico', $grupo('91000009'), 'ESPERA_INFORME');
+afirmar('  … con la marca del piloto', Casos::tienePiloto('91000009', $inf), true);
 
 $tz = Casos::tarjetasPorZona($casos, $gestion, $inf, '2026-09-28');
-afirmar('UIO: a espera de informe técnico = 91000001, 91000003, 91000006', $tz['zonas']['UIO']['espera_informe'], 3);
+afirmar('UIO: a espera de informe técnico = 91000001, 91000003, 91000006, 91000009', $tz['zonas']['UIO']['espera_informe'], 4);
+afirmar('UIO: «con OT INDUSTEC no emitida» cuenta la del piloto trabada (91000009)', $tz['zonas']['UIO']['ot_no_emitida'], 1);
 afirmar('UIO: órdenes abiertas = 91000004, 91000005, 91000007, 91000008', $tz['zonas']['UIO']['abiertas'], 4);
 afirmar('UIO: cerradas en SAP (la RESUELTO del piloto se queda) = 1', $tz['zonas']['UIO']['cerradas_sap'], 1);
+afirmar('UIO: de ellas, cerradas en SAP con OT del piloto = 1 (91000002)', $tz['zonas']['UIO']['cerradas_sap_piloto'], 1);
+$gestion2 = $gestion;
+$gestion2['91000002']['ot_cierre'] = 'OT-1941-R002EC-91000002-UIO';   // llegó la de producción y la reemplazó
+$tz2 = Casos::tarjetasPorZona($casos, $gestion2, Casos::indiceInformes($gestion2, $aten, $capturadas, $archivo, $pendientes), '2026-09-28');
+afirmar('  … y deja de contarla sola cuando la de producción la reemplaza', $tz2['zonas']['UIO']['cerradas_sap_piloto'], 0);
+afirmar('  … sin cambiar las cerradas en SAP', $tz2['zonas']['UIO']['cerradas_sap'], 1);
 
 /* -------------------------------------------------------------------------
    3. Los documentos del aviso: la marca, cuál vale y el mismo informe dos veces.
@@ -173,6 +213,17 @@ $docs = Casos::marcarDocumentos([
         'OT-9142-R002EC-91000014-UIO' => ['ot' => 'OT-9142-R002EC-91000014-UIO', 'fecha' => '2026-09-26', 'cierre' => true],
         'OT-1523-R002-91000014-UIO'   => ['ot' => 'OT-1523-R002-91000014-UIO', 'fecha' => '2026-07-06', 'cierre' => false],
     ],
+    // Revisión del 28-sep-2026: después del piloto llegó solo una de evaluación.
+    '91000015' => [
+        'OT-9146-G021EC-91000015-UIO' => ['ot' => 'OT-9146-G021EC-91000015-UIO', 'fecha' => '2026-09-26', 'cierre' => true],
+        'OT-1955-G021-91000015-UIO'   => ['ot' => 'OT-1955-G021-91000015-UIO', 'fecha' => '2026-09-29', 'cierre' => false],
+    ],
+    // Dos de cierre después del piloto: vale la última, la que deja Reconciliar.
+    '91000016' => [
+        'OT-9149-R007EC-91000016-UIO' => ['ot' => 'OT-9149-R007EC-91000016-UIO', 'fecha' => '2026-09-26', 'cierre' => true],
+        'OT-1956-R007-91000016-UIO'   => ['ot' => 'OT-1956-R007-91000016-UIO', 'fecha' => '2026-09-29', 'cierre' => true],
+        'OT-1970-R007-91000016-UIO'   => ['ot' => 'OT-1970-R007-91000016-UIO', 'fecha' => '2026-10-02', 'cierre' => true],
+    ],
 ], $hayPdf);
 $d10 = $docs['91000010'];
 afirmar('el mismo informe por el correo y del árbol es UN documento (quedan 2 de 3)', count($d10), 2);
@@ -195,6 +246,26 @@ afirmar('piloto + evaluación y cierre posteriores: vale la de cierre posterior,
 afirmar('solo una de producción ANTERIOR (otra visita): no vale ninguna (caso 10339233)',
         Casos::otQueVale($docs['91000014']), null);
 afirmar('  … aunque sí hay de producción en el aviso', Casos::hayDeProduccion($docs['91000014']), true);
+afirmar('  … ni es «posterior» (es de otra visita)', Casos::otPosteriorSinCierre($docs['91000014']), null);
+afirmar('solo una de EVALUACIÓN después del piloto: no vale ninguna (no se registra en SAP)',
+        Casos::otQueVale($docs['91000015']), null);
+afirmar('  … pero se nombra la que llegó, para decir que falta la de cierre',
+        Casos::otPosteriorSinCierre($docs['91000015']), 'OT-1955-G021-91000015-UIO');
+afirmar('dos de cierre después del piloto: vale la ÚLTIMA (la misma que deja Reconciliar)',
+        Casos::otQueVale($docs['91000016']), 'OT-1970-R007-91000016-UIO');
+afirmar('  … y ninguna queda como «posterior sin cierre»', Casos::otPosteriorSinCierre($docs['91000016']), null);
+afirmar('con la que vale, no hay «posterior sin cierre» (91000013)', Casos::otPosteriorSinCierre($docs['91000013']), null);
+
+echo "\n=== 3b. Reconciliar: la de producción reemplaza a la del piloto solo si es de esa visita ===\n";
+afirmar('la visita del piloto: la fecha de atención del Archivo manda (OT-9144: atendida el 10-sep, emitida el 26)',
+        Reconciliar::visitaDelPiloto('2026-09-10', '2026-09-26 13:29:03'), '2026-09-10');
+afirmar('  … sin Archivo, la fecha en que quedó atendida', Reconciliar::visitaDelPiloto(null, '2026-09-26 13:00:03'), '2026-09-26');
+afirmar('  … sin ninguna, null (no se afirma)', Reconciliar::visitaDelPiloto(null, null), null);
+afirmar('OT del 6-jul contra piloto del 26-sep (10339233): de otra visita', Reconciliar::esDeEsaVisita('2026-07-06', '2026-09-26'), false);
+afirmar('OT del mismo día: de esa visita', Reconciliar::esDeEsaVisita('2026-09-26 17:40:00', '2026-09-26'), true);
+afirmar('OT posterior: de esa visita', Reconciliar::esDeEsaVisita('2026-09-29', '2026-09-26'), true);
+afirmar('OT sin fecha: no se afirma', Reconciliar::esDeEsaVisita(null, '2026-09-26'), false);
+afirmar('piloto sin fecha: no se afirma', Reconciliar::esDeEsaVisita('2026-09-29', null), false);
 
 /* -------------------------------------------------------------------------
    4. Lo que depende de MariaDB: qué SQL arman (la semántica se prueba en el
@@ -215,7 +286,11 @@ afirmar('atenderPorOrden: deja dicho qué OT del piloto reemplazó', str_contain
 
 $rec = $src('nucleo/Reconciliar.php');
 afirmar('Reconciliar: la OT del piloto del correo no cuenta como cierre',
-        str_contains($rec, "=== 'Cerrada' && !Emision::esDePrueba("), true);
+        str_contains($rec, "!== 'Cerrada' || Emision::esDePrueba("), true);
+afirmar('Reconciliar: con una del piloto, solo cuenta una de producción de esa visita o posterior',
+        str_contains($rec, "if (\$conPiloto && !self::esDeEsaVisita(\$o['fecha'] ?? null, \$desde)) { continue; }"), true);
+afirmar('Reconciliar: sin una de esa visita, la orden con cierre del piloto no se toca (no pasa a ATENDIDO por una OT vieja)',
+        str_contains($rec, 'if ($conPiloto && !$reemplazaPiloto) { continue; }'), true);
 afirmar('Reconciliar: en una orden intocable (RESUELTO) solo cambia el número, no el estado',
         str_contains($rec, "'UPDATE casos_gestion SET ot_cierre = ? WHERE aviso = ? AND ot_cierre = ?'"), true);
 
@@ -234,8 +309,30 @@ afirmar('envio.php: la del piloto sí puede ABRIR la solicitud (Pendientes::abri
         (bool) preg_match('/\[\$ok, \$msg, \$idPen\] = Pendientes::abrir\(/', $env) && !str_contains($env, '!$piloto) {' . "\n" . '                [$ok'), true);
 afirmar("envio.php: el recibo conserva 'estado' EMITIDA y agrega 'prueba'",
         str_contains($env, "'estado'      => \$em['pdf'] ? 'EMITIDA' : 'RECIBIDA',") && str_contains($env, "'prueba'      => \$piloto,"), true);
-afirmar('envio.php: que_sigue pide emitirla también por el formulario de siempre',
-        str_contains($env, 'Emítela hoy también por el formulario de siempre; la que vale es esa.'), true);
+afirmar('envio.php: que_sigue pide emitirla también por el formulario de siempre, con el referente explícito',
+        str_contains($env, 'Emítela hoy también por el formulario de siempre: solo esa llega a Grupo KFC y es la que vale.'), true);
+afirmar('envio.php: en modo PRUEBA es del piloto siempre, sea cual sea el número',
+        str_contains($env, "\$piloto = \$prueba || (!empty(\$em['id_industec']) && Emision::esDePrueba("), true);
+afirmar('envio.php: se retiró la coletilla «Es el sistema en pruebas» (la del piloto la reemplaza)',
+        str_contains($env, "'Es el sistema en pruebas"), false);
+foreach (['app.js', 'mis.php', 'envio.php'] as $f) {
+    afirmar("$f: ya no dice «la que vale es esa» (se leía como el número del piloto)", str_contains($src($f), 'la que vale es esa'), false);
+}
+afirmar('Casos::enlazar: recorre todas las OT del correo, no solo la primera',
+        str_contains($casosPhp, "foreach (\$ot === '' ? (\$aten[\$cual]['ots'] ?? []) : [] as \$o)"), true);
+afirmar('Casos::enlazar: una ot_cierre del piloto en la orden enlazada se reemplaza',
+        str_contains($casosPhp, 'IF(ot_cierre IS NULL OR $pilotoDestino, ?, ot_cierre)'), true);
+afirmar('Reportes: el rendimiento por técnico no cuenta las OT del piloto',
+        str_contains($src('nucleo/Reportes.php'), "Emision::sqlEsDePrueba('c.id_industec')"), true);
+afirmar('casos.php: aviso «cerradas en SAP con una OT del piloto» y su filtro',
+        str_contains($src('casos.php'), 'data-cifra="cerradas_sap_piloto"') && str_contains($src('casos.php'), '?est=RESUELTO&amp;piloto=1'), true);
+afirmar('casos.php: si solo llegó una de evaluación, se dice que falta la de cierre',
+        str_contains($src('casos.php'), 'Casos::otPosteriorSinCierre($docsAv)'), true);
+afirmar('index.html: la advertencia también junto al botón de enviar', str_contains($src('index.html'), 'id="franjaPilotoEnviar"'), true);
+afirmar('app.js: la franja no puede tumbar la carga del formulario (try/catch del título)',
+        str_contains($src('app.js'), "try { titulo = UI.T.titulo('OT_PILOTO'); } catch (e)"), true);
+afirmar('cola.js: el aviso de la cola no rechaza la promesa si falta la clave',
+        str_contains($src('cola.js'), "try { tituloP = UI.T.titulo('OT_PILOTO'); } catch (err)"), true);
 
 $ord = $src('ordenes.php');
 afirmar('ordenes.php: el servidor no comparte una OT del piloto (el POST se fabrica a mano)',
