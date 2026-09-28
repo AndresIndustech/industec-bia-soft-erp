@@ -66,6 +66,50 @@ final class Emision
         return ((Db::config()['emision_modo'] ?? '') === 'PRODUCCION') ? 'PRODUCCION' : 'PRUEBA';
     }
 
+    /**
+     * ¿Es una OT INDUSTEC del piloto? Por el NÚMERO: la serie arranca en
+     * SERIE_PRUEBA (9000) solo en modo PRUEBA, y la de producción va por el
+     * 2.6xx en la zona más adelantada (CNLJ, 28-sep-2026). Medido ese día: de
+     * 299 OT del correo y 7.545 del histórico, ninguna pasa de 2.621; las 14
+     * que emitió la app son las 14 de la serie 9000.
+     *
+     * Por qué el número y no el modo ni la bitácora: el 24 al 27-sep-2026 los
+     * técnicos de UIO tomaron 14 OT del piloto (OT-9125 a OT-9152) por reales,
+     * ninguna llegó a Grupo KFC, y la del aviso 10356500 dejó una solicitud de
+     * repuesto colgando de un documento que KFC nunca vio. Lo que la vuelve
+     * inválida es haber salido de la serie de pruebas, y eso lo lleva el propio
+     * nombre en TODAS las fuentes —ot_capturadas, ot_archivo, casos_gestion.
+     * ot_cierre, atenciones.json—, sin consultar nada. El modo cambia el día del
+     * corte; una OT-9147 sigue siendo del piloto después. La bitácora (EMISION,
+     * datos.modo) dice lo mismo, pero solo para lo emitido desde el 21-sep y a
+     * costa de una consulta por documento.
+     *
+     * Los nombres que no empiezan por un número (`OT-Cajun-10280653-CNLJ-023`,
+     * el segundo patrón de la empresa) no son del piloto.
+     */
+    public static function esDePrueba(?string $id): bool
+    {
+        if (!preg_match('/^OT-0*(\d{1,7})-/', strtoupper(trim((string) $id)), $m)) {
+            return false;
+        }
+        return (int) $m[1] >= self::SERIE_PRUEBA;
+    }
+
+    /**
+     * El mismo criterio de `esDePrueba()`, para una columna dentro de un SQL.
+     *
+     * REGEXP y no CAST: en un UPDATE con modo estricto, `CAST('Cajun' AS
+     * UNSIGNED)` aborta la sentencia con el error 1292 en vez de dar 0. La
+     * expresión está escrita para SERIE_PRUEBA = 9000 (cuatro cifras desde el
+     * 9, o cinco o más); `prueba_ot_piloto.php` falla si la constante cambia
+     * sin cambiar esto. Devuelve NULL con una columna NULL: quien la use pone
+     * antes su `IS NOT NULL`.
+     */
+    public static function sqlEsDePrueba(string $columna): string
+    {
+        return "($columna REGEXP '^OT-0*(9[0-9]{3}|[1-9][0-9]{4,})-')";
+    }
+
     /** Donde quedan los PDF. Los sirve pdf.php, con sesión y alcance. */
     public static function dirPdf(): string
     {

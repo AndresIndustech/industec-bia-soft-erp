@@ -400,11 +400,21 @@
         // botón «Ver PDF») en vez del texto fijo de siempre.
         global.dispatchEvent(new CustomEvent('orden-emitida', { detail: { uuid: fila.uuid, recibo: fila.recibo } }));
         if (global.UI) {
-          // El número OT-NNNN ya dice qué es; detrás va el paso del envío con
-          // su término del diccionario (ENVIO_EMITIDA / ENVIO_RECIBIDA).
-          UI.toast(id ? (emitida ? id + ' ' + UI.T('ENVIO_EMITIDA') + ': el PDF está en tu historial.'
-                                  : id + ' ' + UI.T('ENVIO_RECIBIDA') + ': el PDF se genera desde el servidor.')
-                      : UI.T('OT_INDUSTEC') + ' de ' + (fila.resumen.local || 'el local') + ' enviada.', 'ok');
+          if (fila.recibo && fila.recibo.prueba) {
+            /* La OT del piloto (28-sep-2026): nada de toast verde. El técnico
+               puede estar ya en otra pantalla cuando la cola la manda, y un
+               «emitida» corto fue lo que le hizo creer que llegó a Grupo KFC.
+               Va el texto entero de envio.php, en naranja y largo. */
+            UI.toast(UI.T.titulo('OT_PILOTO') + '. ' + (fila.recibo.que_sigue
+                       || ((id || UI.T('OT_INDUSTEC')) + ' NO llegó a Grupo KFC: emítela también por el formulario de siempre.')),
+                     'warn', { vida: 20000 });
+          } else {
+            // El número OT-NNNN ya dice qué es; detrás va el paso del envío con
+            // su término del diccionario (ENVIO_EMITIDA / ENVIO_RECIBIDA).
+            UI.toast(id ? (emitida ? id + ' ' + UI.T('ENVIO_EMITIDA') + ': el PDF está en tu historial.'
+                                    : id + ' ' + UI.T('ENVIO_RECIBIDA') + ': el PDF se genera desde el servidor.')
+                        : UI.T('OT_INDUSTEC') + ' de ' + (fila.resumen.local || 'el local') + ' enviada.', 'ok');
+          }
           if (anexos.length) { UI.toast(anexos.join(' '), 'warn', { vida: 12000 }); }
         }
       });

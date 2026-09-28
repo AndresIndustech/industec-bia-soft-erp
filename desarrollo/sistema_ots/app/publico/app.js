@@ -427,7 +427,25 @@
     return comunes.length >= Math.min(2, Math.min(ta.length, tb.length));
   }
 
+  /* La franja del piloto (28-sep-2026). Del 24 al 27-sep los técnicos de UIO
+     llenaron aquí 14 OT INDUSTEC que el sitio emitió en modo PRUEBA —serie
+     9000, correo retenido— y las tomaron por reales: ninguna llegó a Grupo
+     KFC. Mientras `yo.php` diga PRUEBA, encima del formulario queda una franja
+     que no se cierra. Sale también sin señal: yo.php va en la caché. */
+  function pintarFranjaPiloto() {
+    var f = document.getElementById('franjaPiloto');
+    if (!f) return;
+    var enPrueba = !!(YO && YO.emision_modo === 'PRUEBA');
+    if (enPrueba) {
+      document.getElementById('franjaPilotoTxt').innerHTML = '<b>' + esc(UI.T.titulo('OT_PILOTO')) + '.</b> '
+        + 'Lo que emitas aquí NO llega a Grupo KFC ni al local. '
+        + 'Emite cada OT INDUSTEC también por el formulario de siempre: la que vale es esa.';
+    }
+    f.hidden = !enPrueba;
+  }
+
   function pintarYo() {
+    pintarFranjaPiloto();
     var n = $('#yoNombre'), z = $('#yoZona'), nota = $('#yoNota');
     if (!n) return;
     if (!YO) {
@@ -1913,11 +1931,24 @@
     if (r.id_industec) { $('#rNombre').textContent = r.id_industec; }
     $('#rNnnnNota').hidden = !!r.id_industec;
     if (r.que_sigue) {
-      $('#rEstado').className = 'aviso ' + (emitida ? 'ok' : 'info');
-      // El paso del envío con su término (ENVIO_EMITIDA / ENVIO_RECIBIDA), el
-      // mismo que la cola y el historial de mis.php.
-      $('#rEstadoTxt').innerHTML = '<b>' + esc(UI.T('OT_INDUSTEC') + ' '
-        + UI.T(emitida ? 'ENVIO_EMITIDA' : 'ENVIO_RECIBIDA') + '.') + '</b> ' + esc(r.que_sigue);
+      var ic = $('#rEstado .ic');
+      if (r.prueba) {
+        /* La OT del piloto (28-sep-2026): caja naranja con «!», nunca el ✓
+           verde de «emitida». El técnico leía «OT INDUSTEC emitida» y daba el
+           trabajo por enviado a Grupo KFC; `que_sigue` le dice que la emita
+           también por el formulario de siempre. `estado` sigue en EMITIDA
+           porque el PDF sí salió: eso solo decide qué se suelta del celular. */
+        $('#rEstado').className = 'aviso warn';
+        if (ic) ic.textContent = '!';
+        $('#rEstadoTxt').innerHTML = '<b>' + esc(UI.T.titulo('OT_PILOTO') + '.') + '</b> ' + esc(r.que_sigue);
+      } else {
+        $('#rEstado').className = 'aviso ' + (emitida ? 'ok' : 'info');
+        if (ic) ic.textContent = '✓';
+        // El paso del envío con su término (ENVIO_EMITIDA / ENVIO_RECIBIDA), el
+        // mismo que la cola y el historial de mis.php.
+        $('#rEstadoTxt').innerHTML = '<b>' + esc(UI.T('OT_INDUSTEC') + ' '
+          + UI.T(emitida ? 'ENVIO_EMITIDA' : 'ENVIO_RECIBIDA') + '.') + '</b> ' + esc(r.que_sigue);
+      }
     }
     var verPdf = $('#rVerPdf');
     if (emitida && r.id_industec && verPdf) {
@@ -1934,6 +1965,9 @@
     $('#rTarea').hidden = !o.sin_aviso;
 
     $('#rEstado').className = 'aviso ' + (conSenal ? 'info' : 'warn');
+    // El «!» de la OT del piloto no se queda pegado en la siguiente OT.
+    var icR = $('#rEstado .ic');
+    if (icR) icR.textContent = '✓';
     var ot = esc(UI.T('OT_INDUSTEC'));
     $('#rEstadoTxt').innerHTML = conSenal
       ? '<b>' + ot + ' guardada y en camino.</b> Se está enviando ahora. Si la señal se corta, '

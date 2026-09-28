@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/Auth.php';
 require_once __DIR__ . '/Vocabulario.php';   // los textos que devuelve (bitácora, enlaces de continuidad)
+require_once __DIR__ . '/Emision.php';       // Emision::esDePrueba(): la OT del piloto no atiende nada (28-sep-2026)
 
 /**
  * Casos — de dónde salen los casos, y quién puede ver cuáles.
@@ -306,21 +307,42 @@ final class Casos
      *     lo había asignado ni derivado; un ATENDIDO no regresa (ASG-13).
      *
      * Lo que decidió una persona (asignado_por, derivado_en) no se pisa.
+     *
+     * LA OT DEL PILOTO NO ATIENDE (decisión de Andrés, 28-sep-2026). Una
+     * OT-9xxx no llegó a Grupo KFC: con ella la orden no está atendida, sigue a
+     * espera de informe técnico. Se trata SIEMPRE como «sin concluir», diga lo
+     * que diga el formulario: solo deja la orden ASIGNADA a quien fue, si nadie
+     * la había asignado. Eso es trabajo interno —la orden aparece en su bandeja
+     * y no cae en «cerrada sin atención» a los 7 días como si nadie hubiera
+     * ido— y nunca la OT de cierre: una orden ATENDIDO por una OT que KFC no
+     * tiene es exactamente lo que la administradora cerró en SAP el 28-sep.
+     *
+     * Y al revés: si la orden quedó con una OT del piloto como `ot_cierre`
+     * (las doce de antes del arreglo), la primera OT de producción que llega
+     * la REEMPLAZA —antes el COALESCE la dejaba para siempre—. El estado sigue
+     * la regla de siempre: un RESUELTO que puso una persona no se toca.
      */
     public static function atenderPorOrden(string $aviso, ?string $zona, string $idIndustec,
                                            bool $concluida, int $tecnicoId): void
     {
         $aviso = trim($aviso);
         if ($aviso === '') { return; }
+        $esPiloto = Emision::esDePrueba($idIndustec);
+        if ($esPiloto) { $concluida = false; }
         self::asegurar($aviso, $zona);
-        $antes = Db::uno('SELECT estado FROM casos_gestion WHERE aviso = ?', [$aviso]);
+        $antes = Db::uno('SELECT estado, ot_cierre FROM casos_gestion WHERE aviso = ?', [$aviso]);
         $estadoAntes = (string) ($antes['estado'] ?? 'NUEVO');
+        $cierreAntes = trim((string) ($antes['ot_cierre'] ?? ''));
+        $piloto = Emision::sqlEsDePrueba('ot_cierre');
 
         if ($concluida) {
+            // `atendido_en` va ANTES que `ot_cierre`: MariaDB evalúa el SET de
+            // izquierda a derecha, y la condición tiene que mirar la OT de
+            // cierre que había, no la que se acaba de escribir.
             Db::ejecutar(
                 "UPDATE casos_gestion
-                    SET ot_cierre    = COALESCE(ot_cierre, ?),
-                        atendido_en  = COALESCE(atendido_en, NOW()),
+                    SET atendido_en  = IF(ot_cierre IS NOT NULL AND $piloto, NOW(), COALESCE(atendido_en, NOW())),
+                        ot_cierre    = IF(ot_cierre IS NULL OR $piloto, ?, ot_cierre),
                         asignado_a   = IF(asignado_por IS NULL AND derivado_en IS NULL AND asignado_a IS NULL,
                                           ?, asignado_a),
                         tecnico_auto = IF(asignado_por IS NULL AND derivado_en IS NULL AND asignado_a IS NOT NULL
@@ -351,15 +373,26 @@ final class Casos
 
         $desp = Db::uno('SELECT estado FROM casos_gestion WHERE aviso = ?', [$aviso]);
         $estadoDesp = (string) ($desp['estado'] ?? $estadoAntes);
+        if ($concluida && $cierreAntes !== '' && Emision::esDePrueba($cierreAntes)) {
+            // Queda dicho qué número tenía antes: si la administradora registró
+            // en SAP el del piloto, aquí ve cuál lo reemplaza.
+            Auth::bitacora('OT_CIERRE_REEMPLAZA_PILOTO', 'caso', $aviso,
+                           Vocabulario::t('OT_CIERRE') . ' ' . $idIndustec . ' en lugar de ' . $cierreAntes
+                           . ' (' . Vocabulario::t('OT_PILOTO') . ')',
+                           $estadoAntes, $estadoDesp,
+                           ['ot' => $idIndustec, 'ot_piloto' => $cierreAntes, 'fuente' => 'OT INDUSTEC emitida desde la app']);
+        }
         if ($estadoDesp !== $estadoAntes) {
             // Mismo nombre de acción que la reconciliación, para que la bitácora
             // y minar.php cuenten las dos fuentes juntas; la fuente lo distingue.
             Auth::bitacora($concluida ? 'ATENDIDO_AUTO' : 'ASIGNADO_AUTO', 'caso', $aviso,
                            // Con las palabras del diccionario: «concluida» era la OT INDUSTEC
                            // de cierre y «sin concluir» la de evaluación (OT_CIERRE, OT_EVALUACION).
-                           ($concluida ? Vocabulario::t('OT_CIERRE') : Vocabulario::t('OT_EVALUACION')) . ' ' . $idIndustec,
+                           // La del piloto no es ninguna de las dos (OT_PILOTO).
+                           Vocabulario::t($esPiloto ? 'OT_PILOTO' : ($concluida ? 'OT_CIERRE' : 'OT_EVALUACION')) . ' ' . $idIndustec,
                            $estadoAntes, $estadoDesp,
-                           ['ot' => $idIndustec, 'fuente' => 'OT INDUSTEC emitida desde la app', 'tecnico' => $tecnicoId]);
+                           ['ot' => $idIndustec, 'fuente' => 'OT INDUSTEC emitida desde la app', 'tecnico' => $tecnicoId,
+                            'piloto' => $esPiloto]);
         } elseif ($concluida && $estadoAntes === 'ESPERA_REPUESTO') {
             Auth::bitacora('OT_CIERRE_CON_PENDIENTE', 'caso', $aviso,
                            Vocabulario::t('OT_CIERRE') . ' ' . $idIndustec . ' con la orden '
@@ -562,12 +595,26 @@ final class Casos
      * Si el PDF está en el servidor lo dice `Emision::existePdf()` en el
      * momento, no `ot_archivo.en_servidor`, que solo se refresca al indexar.
      *
+     * DESDE EL 28-SEP-2026, DOS MARCAS POR DOCUMENTO:
+     *   - `prueba`: es una OT INDUSTEC del piloto (Emision::esDePrueba). No
+     *     llegó a Grupo KFC: nunca es «de cierre» aunque la gestión la tenga
+     *     como `ot_cierre` (las doce anteriores al arreglo).
+     *   - `vale`: en un aviso que tiene alguna del piloto, la OT de producción
+     *     que la reemplaza y que la administradora registra en SAP: entre las
+     *     de producción con fecha IGUAL O POSTERIOR a la del piloto, la de
+     *     cierre si llegó, si no la primera. Las anteriores son de otra visita
+     *     —el 28-sep, el aviso 10339233 tenía la OT-9142 del 26-sep y la
+     *     OT-1523 del 6 de julio, abierta y de otro trabajo—, y una sin fecha
+     *     no se afirma (I-7). Si no hay ninguna, no vale ninguna y se dice.
+     * Y la misma OT de producción que llega dos veces —`OT-1911-G013-…` por el
+     * correo y `OT-1911-G013EC-…` del árbol— es UN documento: se junta por el
+     * número con el local sin «EC», y se queda el nombre cuyo PDF está.
+     *
      * @param string[] $avisos los avisos que se van a pintar
-     * @return array<string,array<int,array{ot:string,fecha:?string,cierre:bool,pdf:bool}>>
+     * @return array<string,array<int,array{ot:string,fecha:?string,cierre:bool,pdf:bool,prueba:bool,vale:bool}>>
      */
     public static function documentos(array $avisos, array $gestion, array $aten): array
     {
-        require_once __DIR__ . '/Emision.php';
         // El aviso llega con y sin ceros a la izquierda según la fuente
         // (`000010352936` en SAP, `10352936` en el nombre de la orden).
         $clave = static fn($a): string => ltrim(trim((string) $a), '0');
@@ -614,14 +661,85 @@ final class Casos
             }
         } catch (Throwable $e) { /* ot_capturadas llega con la 008 */ }
 
+        return self::marcarDocumentos($docs, [Emision::class, 'existePdf']);
+    }
+
+    /**
+     * Junta los dos nombres del mismo documento y pone las marcas `prueba` y
+     * `vale`. Aparte de `documentos()` y sin leer la base, para probarlo con
+     * datos sintéticos (`prueba_ot_piloto.php`); `$hayPdf` es
+     * `Emision::existePdf` en la pantalla y una función de prueba ahí.
+     *
+     * @param array<string,array<string,array{ot:string,fecha:?string,cierre:bool}>> $docs
+     * @return array<string,array<int,array{ot:string,fecha:?string,cierre:bool,pdf:bool,prueba:bool,vale:bool}>>
+     */
+    public static function marcarDocumentos(array $docs, callable $hayPdf): array
+    {
+        // `OT-1911-G013-10355811-UIO` (correo) y `OT-1911-G013EC-10355811-UIO`
+        // (árbol) son el mismo informe: el correlativo es de la zona, así que
+        // número + local sin «EC» + el resto lo identifican.
+        $mismo = static fn(string $ot): string => (string) preg_replace('/^(OT-\d+-[A-Z]{1,2}\d{2,4})EC(?=-)/', '$1', $ot);
         $out = [];
         foreach ($docs as $aviso => $porOt) {
+            $junto = [];
+            foreach ($porOt as $f) {
+                $f['pdf'] = (bool) $hayPdf($f['ot']);
+                $k = $mismo($f['ot']);
+                if (!isset($junto[$k])) { $junto[$k] = $f; continue; }
+                $j = $junto[$k];
+                // El nombre que se muestra es el que abre: el del PDF que está.
+                if (!$j['pdf'] && $f['pdf']) { $j['ot'] = $f['ot']; $j['pdf'] = true; }
+                if ($j['fecha'] === null || ($f['fecha'] !== null && $f['fecha'] < $j['fecha'])) { $j['fecha'] = $f['fecha']; }
+                $j['cierre'] = $j['cierre'] || $f['cierre'];
+                $junto[$k] = $j;
+            }
             $lista = [];
-            foreach ($porOt as $f) { $lista[] = $f + ['pdf' => Emision::existePdf($f['ot'])]; }
+            foreach ($junto as $f) {
+                $f['prueba'] = Emision::esDePrueba($f['ot']);
+                // Una OT del piloto no es «de cierre»: no llegó a Grupo KFC.
+                if ($f['prueba']) { $f['cierre'] = false; }
+                $f['vale'] = false;
+                $lista[] = $f;
+            }
             usort($lista, static fn($x, $y) => [(string) $x['fecha'], $x['ot']] <=> [(string) $y['fecha'], $y['ot']]);
+
+            // Cuál vale, solo donde hay alguna del piloto: de las de producción
+            // desde la fecha de la del piloto, la de cierre si llegó; si no, la
+            // primera. La lista ya va por fecha.
+            $desde = null;
+            foreach ($lista as $f) {
+                if ($f['prueba'] && $f['fecha'] !== null && ($desde === null || $f['fecha'] < $desde)) { $desde = $f['fecha']; }
+            }
+            if (in_array(true, array_column($lista, 'prueba'), true)) {
+                $cual = null;
+                foreach ($lista as $i => $f) {
+                    if ($f['prueba'] || $f['fecha'] === null || ($desde !== null && $f['fecha'] < $desde)) { continue; }
+                    if ($f['cierre']) { $cual = $i; break; }
+                    $cual ??= $i;
+                }
+                if ($cual !== null) { $lista[$cual]['vale'] = true; }
+            }
             $out[$aviso] = $lista;
         }
         return $out;
+    }
+
+    /**
+     * La OT INDUSTEC que vale para registrar en SAP, en un aviso que tiene
+     * alguna del piloto; null si todavía no llegó ninguna de producción (o si
+     * el aviso no tiene nada del piloto). Recibe la lista de `documentos()`.
+     */
+    public static function otQueVale(array $docsDelAviso): ?string
+    {
+        foreach ($docsDelAviso as $d) { if (!empty($d['vale'])) { return (string) $d['ot']; } }
+        return null;
+    }
+
+    /** ¿Alguno de estos documentos (de `documentos()`) es de producción? */
+    public static function hayDeProduccion(array $docsDelAviso): bool
+    {
+        foreach ($docsDelAviso as $d) { if (empty($d['prueba'])) { return true; } }
+        return false;
     }
 
     /* =====================================================================
@@ -695,7 +813,7 @@ final class Casos
             // Solo el arreglo de equipos de la carga: la carga entera trae el
             // formulario completo y aquí no hace falta.
             $capturadas = Db::todos(
-                "SELECT aviso, estado, emitida_en, JSON_EXTRACT(carga, '$.equipos') AS equipos
+                "SELECT aviso, id_industec, estado, emitida_en, JSON_EXTRACT(carga, '$.equipos') AS equipos
                    FROM ot_capturadas
                   WHERE aviso IS NOT NULL AND aviso <> ''
                     AND estado IN ('EMITIDA','ENVIADA','NUMERADA','FALLIDA','PROCESADA')");
@@ -703,7 +821,7 @@ final class Casos
 
         $archivo = null;
         try {
-            $archivo = Db::todos("SELECT aviso, fecha_atencion FROM ot_archivo
+            $archivo = Db::todos("SELECT aviso, id_industec, fecha_atencion FROM ot_archivo
                                    WHERE aviso IS NOT NULL AND aviso <> ''");
         } catch (Throwable $e) { $archivo = null; }         // sin la 009 no responde
 
@@ -733,9 +851,16 @@ final class Casos
     /**
      * El índice por aviso, a partir de lo que ya se leyó. Determinista.
      *
+     * LA OT DEL PILOTO NO CUENTA COMO EMITIDA (decisión de Andrés, 28-sep-2026).
+     * Una OT-9xxx (Emision::esDePrueba) no llegó a Grupo KFC: la orden sigue a
+     * espera de informe técnico. Deja la marca `piloto`, para que el buzón la
+     * muestre, y nada más: tampoco es evidencia del estado del equipo para las
+     * cifras. Una fila sin `id_industec` (las pruebas de antes) se lee como
+     * antes.
+     *
      * @param array|null $aten       atenciones.json → 'atenciones'; null = no respondió
-     * @param array|null $capturadas filas {aviso, estado, emitida_en, equipos(JSON)}; null = sin la 008
-     * @param array|null $archivo    filas {aviso, fecha_atencion}; null = sin la 009
+     * @param array|null $capturadas filas {aviso, id_industec?, estado, emitida_en, equipos(JSON)}; null = sin la 008
+     * @param array|null $archivo    filas {aviso, id_industec?, fecha_atencion}; null = sin la 009
      * @param array|null $pendientes filas {aviso, desde, vencido} de solicitudes en trámite
      *                               con el equipo deshabilitado; null = sin la 007
      * @return array{avisos:array, cadenas:array, fuentes:array, ot_disponible:bool,
@@ -746,26 +871,31 @@ final class Casos
     {
         $idx = [];
         $nodo = static function (string $k) use (&$idx): void {
-            $idx[$k] ??= ['emitida' => false, 'no_emitida' => false, 'equipo' => [], 'vencida' => false];
+            $idx[$k] ??= ['emitida' => false, 'no_emitida' => false, 'piloto' => false, 'equipo' => [], 'vencida' => false];
         };
 
         // La OT de cierre que dejó la app o la reconciliación: es de la propia
-        // gestión, que siempre responde.
+        // gestión, que siempre responde. Si es del piloto, solo la marca.
         foreach ($gestion as $aviso => $g) {
-            if (trim((string) ($g['ot_cierre'] ?? '')) !== '') {
+            $oc = trim((string) ($g['ot_cierre'] ?? ''));
+            if ($oc !== '') {
                 $k = self::claveAviso($aviso);
                 if ($k === '') { continue; }
                 $nodo($k);
+                if (Emision::esDePrueba($oc)) { $idx[$k]['piloto'] = true; continue; }
                 $idx[$k]['emitida'] = true;
             }
         }
-        // Lo que llegó por correo: cualquier OT, con cualquier estado_ot.
+        // Lo que llegó por correo: cualquier OT, con cualquier estado_ot. El
+        // correo de una OT del piloto nunca sale (queda RETENIDO), pero si
+        // alguna llegara aquí se lee igual que en las otras fuentes.
         foreach ($aten ?? [] as $aviso => $a) {
             $k = self::claveAviso($aviso);
             if ($k === '' || empty($a['ots'])) { continue; }
             $nodo($k);
-            $idx[$k]['emitida'] = true;
             foreach ($a['ots'] as $o) {
+                if (Emision::esDePrueba((string) ($o['ot'] ?? ''))) { $idx[$k]['piloto'] = true; continue; }
+                $idx[$k]['emitida'] = true;
                 $est = self::estadoEquipoDe($o['estado_equipo'] ?? null);
                 if ($est !== null) { $idx[$k]['equipo'][] = [$est, (string) ($o['fecha'] ?? '')]; }
             }
@@ -776,6 +906,7 @@ final class Casos
             $k = self::claveAviso($r['aviso'] ?? '');
             if ($k === '') { continue; }
             $nodo($k);
+            if (Emision::esDePrueba((string) ($r['id_industec'] ?? ''))) { $idx[$k]['piloto'] = true; continue; }
             $est = strtoupper((string) ($r['estado'] ?? ''));
             if (in_array($est, self::CAPTURA_NO_EMITIDA, true)) {
                 $idx[$k]['no_emitida'] = true;
@@ -800,6 +931,7 @@ final class Casos
             $k = self::claveAviso($r['aviso'] ?? '');
             if ($k === '') { continue; }
             $nodo($k);
+            if (Emision::esDePrueba((string) ($r['id_industec'] ?? ''))) { $idx[$k]['piloto'] = true; continue; }
             $idx[$k]['emitida'] = true;
         }
         // La solicitud en trámite con el equipo deshabilitado. Una con
@@ -853,11 +985,20 @@ final class Casos
         return $informes['cadenas'][$k]['avisos'] ?? [$k];
     }
 
-    /** ¿La cadena de esta orden tiene al menos una OT INDUSTEC emitida? */
+    /** ¿La cadena de esta orden tiene al menos una OT INDUSTEC emitida? (Las del piloto no cuentan.) */
     public static function tieneOT(string $aviso, array $informes): bool
     {
         foreach (self::avisosDeCadena($aviso, $informes) as $k) {
             if (!empty($informes['avisos'][$k]['emitida'])) { return true; }
+        }
+        return false;
+    }
+
+    /** ¿La cadena de esta orden tiene alguna OT INDUSTEC del piloto? Solo para mostrarla. */
+    public static function tienePiloto(string $aviso, array $informes): bool
+    {
+        foreach (self::avisosDeCadena($aviso, $informes) as $k) {
+            if (!empty($informes['avisos'][$k]['piloto'])) { return true; }
         }
         return false;
     }
@@ -1516,6 +1657,7 @@ final class Casos
             // leídos del correo (`atenciones.json`). Si no hay, se dice que no
             // hay: un caso sin orden también puede ser el origen del trabajo.
             $ot = trim((string) ($g['ot_cierre'] ?? ''));
+            if (Emision::esDePrueba($ot)) { $ot = ''; }      // la del piloto no cubre nada
             if ($ot === '' && !empty($aten[$otro]['ots'])) {
                 $ot = trim((string) ($aten[$otro]['ots'][0]['ot'] ?? ''));
             }
@@ -1605,9 +1747,13 @@ final class Casos
         $ot = '';
         foreach ([$raiz, $origen] as $cual) {
             $ot = trim((string) ($gestion[$cual]['ot_cierre'] ?? ''));
+            // Una OT del piloto no atiende la orden enlazada (28-sep-2026):
+            // KFC no la tiene. Se busca la de producción, y si no hay, ninguna.
+            if (Emision::esDePrueba($ot)) { $ot = ''; }
             if ($ot === '' && !empty($aten[$cual]['ots'])) {
                 $ot = trim((string) ($aten[$cual]['ots'][0]['ot'] ?? ''));
             }
+            if (Emision::esDePrueba($ot)) { $ot = ''; }
             if ($ot !== '') { break; }
         }
 

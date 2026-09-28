@@ -972,10 +972,12 @@ final class Pendientes
         if ((int) ($otros['c'] ?? 0) === 0) {
             // Si el caso ya tenía orden de cierre vuelve a ATENDIDO, no a la
             // bandeja como trabajo abierto: `abrir` lo pasa a ESPERA_REPUESTO
-            // también desde ATENDIDO.
+            // también desde ATENDIDO. Una OT del piloto como cierre no cuenta
+            // (28-sep-2026): Grupo KFC no la tiene, la orden vuelve a la bandeja.
+            $piloto = Emision::sqlEsDePrueba('ot_cierre');
             Db::ejecutar(
                 "UPDATE casos_gestion
-                    SET estado = CASE WHEN ot_cierre IS NOT NULL THEN 'ATENDIDO'
+                    SET estado = CASE WHEN ot_cierre IS NOT NULL AND NOT $piloto THEN 'ATENDIDO'
                                       WHEN asignado_a IS NULL THEN 'NUEVO'
                                       ELSE 'ASIGNADO' END
                   WHERE aviso = ? AND estado = 'ESPERA_REPUESTO'",
@@ -1001,6 +1003,11 @@ final class Pendientes
     public static function resolverPorOrden(string|array $aviso, ?string $activoFijo, string $idIndustec,
                                             int $usuarioId): int
     {
+        // Una OT del piloto no termina ninguna solicitud (decisión de Andrés,
+        // 28-sep-2026): Grupo KFC no la tiene. envio.php ya no llama aquí con
+        // una; la guarda se repite por si otra ruta lo hace, y va antes de
+        // tocar la base.
+        if (Emision::esDePrueba($idIndustec)) { return 0; }
         if (!self::disponible()) { return 0; }
 
         /* T2.25.3 — ACEPTA LA CADENA, NO UN SOLO AVISO.

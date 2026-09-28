@@ -146,6 +146,14 @@ if ($fZonaP !== '' && $lista) {
     }));
 }
 $hilos = Pendientes::notasDe(array_map(fn($p) => (int) $p['pendiente_id'], $lista));
+
+/* La OT INDUSTEC que respalda cada solicitud (28-sep-2026). La solicitud se
+   enlaza con su orden solo por el aviso, y la del aviso 10356500 nació de la
+   OT-9147, una OT del piloto que Grupo KFC nunca recibió: la administradora
+   la gestionaba sin saber que el documento que la respalda no vale. Sale de
+   `Casos::documentos()`, la misma lista del buzón, con la misma marca. */
+$docsPen = $lista ? Casos::documentos(array_map(fn($p) => (string) $p['aviso'], $lista),
+                                      Casos::gestion(), Casos::atenciones()) : [];
 $c48   = Pendientes::cumplimiento48();
 $sinAviso = $esTecnico ? [] : Pendientes::sinAviso();
 
@@ -447,6 +455,30 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
                 lo pidió <?= $e($p['abrio']) ?> el <?= $e(substr((string) $p['abierto_en'], 0, 10)) ?>
                 <?php if (!empty($p['activo_fijo']) && $p['equipo_desc']): ?>
                   · activo <span class="mono"><?= $e($p['activo_fijo']) ?></span>
+                <?php endif; ?>
+              </div>
+              <?php $dp = $docsPen[(string) $p['aviso']] ?? []; ?>
+              <div class="meta">
+                <?= $e(Vocabulario::titulo('OT_INDUSTEC')) ?>:
+                <?php if ($dp === []): ?>
+                  ninguna todavía
+                <?php endif; ?>
+                <?php foreach ($dp as $k => $d): ?>
+                  <?= $k > 0 ? '·' : '' ?>
+                  <?php if (Auth::puede('ots.pdf') && $d['pdf']): ?>
+                    <a class="mono" href="pdf.php?ot=<?= rawurlencode($d['ot']) ?>" target="_blank" rel="noopener"><?= $e($d['ot']) ?></a>
+                  <?php else: ?>
+                    <span class="mono"><?= $e($d['ot']) ?></span>
+                  <?php endif; ?>
+                  <?php if (!empty($d['prueba'])): ?>
+                    <span class="chip" style="background:#ffedd5;color:#9a3412;border-color:#fed7aa"
+                          title="<?= $e(Vocabulario::ayuda('OT_PILOTO')) ?>"><?= $e(Vocabulario::corto('OT_PILOTO')) ?></span>
+                  <?php elseif (!empty($d['vale'])): ?>
+                    <b>la que vale ante KFC</b>
+                  <?php endif; ?>
+                <?php endforeach; ?>
+                <?php if ($dp !== [] && !Casos::hayDeProduccion($dp)): ?>
+                  <span style="color:#9a3412">· falta la del formulario de siempre</span>
                 <?php endif; ?>
               </div>
             </div>

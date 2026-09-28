@@ -1,6 +1,6 @@
 {
-  "version": "2026-09-27.2",
-  "fecha": "2026-09-27",
+  "version": "2026-09-28.1",
+  "fecha": "2026-09-28",
   "descripcion": "Diccionario único de B.IA Soft ERP: un concepto, un término, para todos los roles y todas las superficies (pantallas, app del técnico, PDF, Excel, PPT, correos, tablero de gerencia y hojas del piloto). Lo leen nucleo/Vocabulario.php, UI.T() de ui.js y termino() de agentes/scripts/comun.py. La especificación está en desarrollo/sistema_ots/VOCABULARIO.md.",
   "reglas": {
     "claves": "Las claves de concepto están en MAYÚSCULAS y no cambian nunca: el texto se cambia aquí, el código solo conoce la clave.",
@@ -73,6 +73,14 @@
       "ayuda": "Se numeró o se capturó, pero no salió el PDF ni el correo (NUMERADA o FALLIDA): no cuenta como OT emitida.",
       "roles": ["ADM", "JZ", "TEC"]
     },
+    "OT_PILOTO": {
+      "termino": "OT INDUSTEC del piloto", "plural": "OT INDUSTEC del piloto", "titulo": "OT INDUSTEC del piloto",
+      "corto": "del piloto · no enviada a KFC",
+      "ayuda": "OT INDUSTEC que emitió la app durante el piloto (serie 9000, con la franja «DOCUMENTO DE PRUEBA»): no llegó a Grupo KFC ni al local y no deja la orden atendida; la que vale es la que el técnico emite por el formulario de siempre.",
+      "roles": ["ADM", "JZ", "TEC"],
+      "reemplaza": ["es de prueba: no se envió a nadie (historial del técnico)", "Es el sistema en pruebas: el correo no se envió a nadie. (resultado del formulario)"],
+      "notas": "Decisión de Andrés del 28-sep-2026, tras el aviso 10356500 (OT-9147): del 24 al 27-sep los técnicos de UIO tomaron por reales 14 OT del piloto y ninguna llegó a KFC. Se reconoce por el NÚMERO (Emision::esDePrueba, serie desde 9000), no por el modo: una OT-9147 sigue siendo del piloto después del corte. No atiende la orden (queda a espera de informe técnico), no es «de cierre», no termina solicitudes y no se comparte desde el Archivo; sí puede abrir una solicitud de repuesto. «corto» es el chip del Archivo, del buzón, de Repuestos y del historial del técnico; el formulario (app.js) la muestra en una caja naranja con este título, y la cola (cola.js) con un aviso largo. No cambia la franja «DOCUMENTO DE PRUEBA» del PDF (plantilla_ot.php, contrato) ni los valores de ot_capturadas.estado."
+    },
     "ENVIO_OT": {
       "termino": "envío de la OT INDUSTEC", "plural": "envíos de OT INDUSTEC", "titulo": "Envío de la OT",
       "ayuda": "El camino de una OT INDUSTEC desde el celular del técnico hasta el PDF y el correo: en cola, detenida en el celular, recibida en la oficina, emitida o rechazada al enviar.",
@@ -105,10 +113,10 @@
     },
     "ENVIO_EMITIDA": {
       "termino": "emitida", "plural": "emitidas", "titulo": "Emitida",
-      "ayuda": "La OT INDUSTEC ya tiene su número OT-NNNN y salieron su PDF y su correo a Grupo KFC.",
+      "ayuda": "La OT INDUSTEC ya tiene su número OT-NNNN y su PDF, y su correo sale a Grupo KFC y al local; la del piloto (serie 9000) no sale a nadie y no vale ante KFC.",
       "roles": ["ADM", "JZ", "TEC"],
       "reemplaza": ["procesada", "Orden emitida."],
-      "notas": "Valores EMITIDA, ENVIADA y PROCESADA de ot_capturadas.estado. «procesada» (mis.php, capturas del técnico) pasa a «emitida»; en app.js el resultado pasa a «OT INDUSTEC emitida.»."
+      "notas": "Valores EMITIDA, ENVIADA y PROCESADA de ot_capturadas.estado. «procesada» (mis.php, capturas del técnico) pasa a «emitida»; en app.js el resultado pasa a «OT INDUSTEC emitida.». Hasta el 28-sep-2026 la ayuda decía que «salieron su PDF y su correo a Grupo KFC» también en el piloto, donde el correo queda RETENIDO: una OT del piloto se muestra con OT_PILOTO, no con este término."
     },
     "ENVIO_RECHAZADA": {
       "termino": "rechazada al enviar", "plural": "rechazadas al enviar", "titulo": "Rechazada al enviar",

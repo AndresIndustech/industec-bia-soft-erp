@@ -453,9 +453,17 @@ if (isset($_GET['ver'])) {
 <?php if (!$abierto && !in_array($g['ot_cierre'] ?? null, array_column($a['ots'] ?? [], 'ot'), true)): ?>
   <div style="padding:14px 14px 0">
     <?php if (!empty($g['ot_cierre'])): ?>
-      <div class="rep atendido">
+      <?php $ocPiloto = Emision::esDePrueba((string) $g['ot_cierre']); ?>
+      <div class="rep <?= $ocPiloto ? '' : 'atendido' ?>">
         <div class="cab">
-          <div><div class="que"><?= $e(Vocabulario::titulo('OT_CIERRE')) ?> <?= $e($g['ot_cierre']) ?></div>
+          <div><div class="que"><?= $e(Vocabulario::titulo($ocPiloto ? 'OT_PILOTO' : 'OT_CIERRE')) ?> <?= $e($g['ot_cierre']) ?></div>
+            <?php if ($ocPiloto): ?>
+              <?php /* 28-sep-2026: la OT del piloto no llegó a Grupo KFC. El
+                       técnico tiene que emitir la de esta orden por el
+                       formulario de siempre; si no se le dice aquí, la da por
+                       hecha como pasó con las doce del 26 y 27-sep. */ ?>
+              <div class="meta" style="color:#9a3412"><?= $e(Vocabulario::corto('OT_PILOTO')) ?>: emítela también por el formulario de siempre; la que vale es esa.</div>
+            <?php endif; ?>
             <div class="meta"><?= $e(substr((string) ($g['atendido_en'] ?? ''), 0, 10)) ?> ·
               <?= $e(Casos::etiquetaEstado($est)) ?></div></div>
           <?php if (Auth::puede('ots.pdf') && Emision::existePdf((string) $g['ot_cierre'])): ?>
@@ -771,7 +779,8 @@ foreach ($misPend as $p) { $pendPorAviso[(string) $p['aviso']][] = $p; }
    008 cada una trae su número y su PDF; las de antes, o las que no se pudieron
    emitir, lo dicen. La tabla es de la misma migración que la de pendientes. */
 require_once __DIR__ . '/nucleo/Emision.php';
-$prueba = Emision::modo() === 'PRUEBA';
+// La OT del piloto se reconoce por su número (Emision::esDePrueba), no por el
+// modo del sitio: una OT-9147 sigue siendo del piloto después del corte.
 $capturas = [];
 // H-22: antes se cortaba en 60 sin decirlo. `?desde=<capturada_en>` es el
 // cursor de «Ver anteriores»; se pide una fila de más (61) para saber si hay
@@ -1060,13 +1069,22 @@ if (!$lista && !$verCapturas):
     <div style="padding:14px">
       <h2 style="font-size:14px;margin:0 0 10px;color:var(--ink)"><?= $e(Vocabulario::titulo('OT_INDUSTEC')) ?> que enviaste desde la app</h2>
       <?php foreach ($capturas as $k): ?>
-        <?php $avk = (string) ($k['aviso'] ?? ''); ?>
-        <div class="rep atendido" style="margin-bottom:10px">
+        <?php $avk = (string) ($k['aviso'] ?? '');
+              /* 28-sep-2026: la del piloto no dice «emitida» —el técnico la
+                 leía como enviada a KFC—, dice que no llegó. La tarjeta pierde
+                 el verde de trabajo terminado: todavía le falta emitirla por
+                 el formulario de siempre. */
+              $capPiloto = !empty($k['emitida_en']) && Emision::esDePrueba((string) ($k['id_industec'] ?? '')); ?>
+        <div class="rep <?= $capPiloto ? '' : 'atendido' ?>" style="margin-bottom:10px">
           <div class="cab">
             <div style="min-width:0">
               <div class="que"><?= $avk !== '' ? $e(Vocabulario::titulo('AVISO_SAP') . ' ' . $avk) : $e(Vocabulario::titulo('SIN_AVISO_SAP')) ?> · <?= $e($k['local_codigo'] ?? '—') ?></div>
               <div class="meta">llenada el <?= $e(substr((string) $k['capturada_en'], 0, 16)) ?> ·
-                <?= $e($ETIQ_CAP[$k['estado']] ?? strtolower((string) $k['estado'])) ?></div>
+                <?php if ($capPiloto): ?>
+                  <b style="color:#9a3412"><?= $e(Vocabulario::corto('OT_PILOTO')) ?></b>
+                <?php else: ?>
+                  <?= $e($ETIQ_CAP[$k['estado']] ?? strtolower((string) $k['estado'])) ?>
+                <?php endif; ?></div>
             </div>
             <?php if ($avk !== '' && isset($misAvisos[$avk])): ?>
               <a class="btn sm" href="?ver=<?= rawurlencode($avk) ?>">Ver la orden</a>
@@ -1079,10 +1097,12 @@ if (!$lista && !$verCapturas):
             <?php elseif (!empty($k['emitida_en'])): ?>
               <b><?= $e($k['id_industec']) ?></b> ·
               <?php if (Emision::existePdf((string) $k['id_industec'])): ?>
-                <a href="pdf.php?ot=<?= rawurlencode((string) $k['id_industec']) ?>" target="_blank" rel="noopener">Ver PDF</a><?=
-                  $prueba ? ' · es de prueba: no se envió a nadie' : '' ?>
+                <a href="pdf.php?ot=<?= rawurlencode((string) $k['id_industec']) ?>" target="_blank" rel="noopener">Ver PDF</a>
               <?php else: ?>
                 PDF no cargado al archivo todavía
+              <?php endif; ?>
+              <?php if ($capPiloto): ?>
+                <br><span style="color:#9a3412">NO llegó a Grupo KFC ni al local. Emítela también por el formulario de siempre; la que vale es esa.</span>
               <?php endif; ?>
             <?php elseif (!empty($k['emision_error'])): ?>
               El PDF no se pudo generar todavía: se reintenta desde el servidor cada 10 minutos.

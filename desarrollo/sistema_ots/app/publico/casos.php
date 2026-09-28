@@ -471,8 +471,12 @@ $todos = Casos::enAlcance($fuente['datos'] ?? [], $gestion);
 $docs = Casos::documentos(array_map(fn($c) => (string) ($c['aviso'] ?? ''), $todos), $gestion, $porAviso);
 foreach ($todos as $c) {
     $av = (string) ($c['aviso'] ?? '');
-    $conCierre = !empty($gestion[$av]['ot_cierre']);
-    if (!isset($porAviso[$av]) && ($conCierre || !empty($docs[$av]))) {
+    /* Una OT INDUSTEC del piloto no cuenta como atención (decisión de Andrés,
+       28-sep-2026): Grupo KFC no la tiene. La orden sigue «sin OT INDUSTEC» y
+       el documento del piloto se lista abajo con su marca. */
+    $oc0 = trim((string) ($gestion[$av]['ot_cierre'] ?? ''));
+    $conCierre = $oc0 !== '' && !Emision::esDePrueba($oc0);
+    if (!isset($porAviso[$av]) && ($conCierre || Casos::hayDeProduccion($docs[$av] ?? []))) {
         $porAviso[$av] = ['estado_industec' => $conCierre ? 'CERRADA' : 'EN_CURSO',
                           'ots' => [], 'tecnicos' => [], 'sin_identificar' => []];
     } elseif ($conCierre) {
@@ -1105,11 +1109,16 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
                   <span class="chip <?= $ats === 'CERRADA' ? 'cerrada' : 'curso' ?>">
                     con <?= e(Vocabulario::t($ats === 'CERRADA' ? 'OT_CIERRE' : 'OT_EVALUACION')) ?>
                   </span>
+                <?php endif; ?>
                   <?php foreach ($docs[$av0] ?? [] as $d): ?>
                     <?php /* El enlace solo si el PDF está en el servidor: armado a
                              ciegas caía en «El PDF de esa orden no está en el
                              servidor.» (00870b4). Todos los documentos del aviso,
-                             aunque sean dos nombres del mismo informe. */ ?>
+                             aunque sean dos nombres del mismo informe (desde el
+                             28-sep-2026 se juntan en uno). La del piloto se lista
+                             también cuando la orden sigue «sin OT INDUSTEC», con
+                             su marca: es lo que la administradora ve en el Archivo
+                             y en Repuestos, y aquí tiene que decir lo mismo. */ ?>
                     <span class="desc mono">
                       <?php if (Auth::puede('ots.pdf') && $d['pdf']): ?>
                         <a href="pdf.php?ot=<?= rawurlencode($d['ot']) ?>"
@@ -1119,11 +1128,18 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
                       <?php endif; ?>
                       <?= $d['fecha'] !== null ? '· ' . e($d['fecha']) : '' ?>
                       <?php if ($d['cierre']): ?><b>· de cierre</b><?php endif; ?>
+                      <?php if (!empty($d['prueba'])): ?>
+                        <span class="chip" style="background:#ffedd5;color:#9a3412;border-color:#fed7aa"
+                              title="<?= e(Vocabulario::ayuda('OT_PILOTO')) ?>"><?= e(Vocabulario::corto('OT_PILOTO')) ?></span>
+                      <?php elseif (!empty($d['vale'])): ?>
+                        <b>· la que vale ante KFC</b>
+                      <?php endif; ?>
                       <?php if (Auth::puede('ots.pdf') && !$d['pdf']): ?>
                         <span class="derivado">PDF no cargado al archivo todavía</span>
                       <?php endif; ?>
                     </span>
                   <?php endforeach; ?>
+                <?php if ($ats !== null): ?>
                   <?php if (!empty($a['tecnicos'])): ?>
                     <span class="desc"><?= e(implode(' · ', $a['tecnicos'])) ?></span>
                   <?php endif; ?>
@@ -1223,8 +1239,8 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
                            (pedido de Andrés, 2026-09-14). Solo administración:
                            es su mano del cierre de dos manos. */ ?>
                   <?php if (!empty($g['ot_cierre']) && Auth::puede('casos.veredicto')): ?>
-                    <?php $oc = (string) $g['ot_cierre']; ?>
-                    <span class="desc"><?= e(Vocabulario::t('OT_CIERRE')) ?>:
+                    <?php $oc = (string) $g['ot_cierre']; $ocPiloto = Emision::esDePrueba($oc); ?>
+                    <span class="desc"><?= e($ocPiloto ? Vocabulario::t('OT_PILOTO') : Vocabulario::t('OT_CIERRE')) ?>:
                       <?php if (Auth::puede('ots.pdf') && Emision::existePdf($oc)): ?>
                         <a class="mono" href="pdf.php?ot=<?= rawurlencode($oc) ?>" target="_blank" rel="noopener"><?= e($oc) ?></a>
                       <?php else: ?>
@@ -1232,6 +1248,18 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
                         <span class="derivado">PDF no cargado al archivo todavía</span>
                       <?php endif; ?>
                     </span>
+                    <?php if ($ocPiloto): ?>
+                      <?php /* La OT de cierre es del piloto (las doce del 26 y
+                               27-sep-2026, antes del arreglo): Grupo KFC no la
+                               tiene. Es el número que la administradora copia a
+                               SAP, así que aquí se dice cuál registrar. */
+                            $vale = Casos::otQueVale($docs[(string) ($c['aviso'] ?? '')] ?? []); ?>
+                      <span class="desc" style="color:#9a3412">
+                        <b><?= e(Vocabulario::corto('OT_PILOTO')) ?>.</b>
+                        Registra en SAP la OT INDUSTEC del formulario de siempre<?php if ($vale !== null): ?>:
+                          <b class="mono"><?= e($vale) ?></b>.<?php else: ?>; todavía no llega: pídesela al técnico.<?php endif; ?>
+                      </span>
+                    <?php endif; ?>
                   <?php endif; ?>
                   <?php if (!empty($g['revision_motivo']) && $est === 'EN_REVISION'): ?>
                     <span class="desc" style="color:#92400e"><?= e($g['revision_motivo']) ?></span>

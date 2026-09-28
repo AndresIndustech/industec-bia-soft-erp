@@ -24,6 +24,18 @@
       <p class="sub" id="subcabecera">Un solo formato — correctivo y preventivo</p>
     </div>
 
+    <!-- La franja del piloto (28-sep-2026). Del 24 al 27-sep los técnicos de
+         UIO tomaron por reales 14 OT que el sitio emitió en modo PRUEBA y que
+         nunca llegaron a Grupo KFC. app.js la muestra cuando yo.php dice
+         emision_modo = PRUEBA, y no se cierra. El envoltorio sin clase es el que
+         se esconde: `.aviso` fija display:flex y le ganaría a [hidden]. -->
+    <div id="franjaPiloto" hidden>
+      <div class="aviso warn" role="note">
+        <span class="ic" aria-hidden="true">!</span>
+        <div class="cuerpo" id="franjaPilotoTxt"></div>
+      </div>
+    </div>
+
     <form id="otForm" novalidate>
 
       <!-- ============ 1. QUE VAS A HACER ============

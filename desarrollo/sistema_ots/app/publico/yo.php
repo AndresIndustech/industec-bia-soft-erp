@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Auth.php';
+require_once __DIR__ . '/nucleo/Emision.php';   // el modo de emisión, para la franja del piloto (28-sep-2026)
 
 /**
  * yo.php — Quién está usando la aplicación.
@@ -62,4 +63,10 @@ echo json_encode([
         'pendiente' => Auth::puede('repuestos.pedir'),
         'novedad'   => Auth::puede('novedades.reportar'),
     ],
+    // PRUEBA o PRODUCCION. En PRUEBA el formulario pinta una franja fija: del
+    // 24 al 27-sep-2026 los técnicos de UIO tomaron por reales 14 OT del
+    // piloto que nunca llegaron a Grupo KFC. Va en la caché con lo demás, así
+    // que la franja sale también sin señal. No es control de nada: lo que
+    // decide si una OT es del piloto es su número (Emision::esDePrueba).
+    'emision_modo' => Emision::modo(),
 ], JSON_UNESCAPED_UNICODE);

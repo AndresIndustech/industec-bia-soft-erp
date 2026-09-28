@@ -62,8 +62,8 @@ $orden('90000004', 'UIO', ['estado' => 'ASIGNADO', 'asignado_a' => 7, 'asignado_
 $orden('90000005', 'UIO', ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 7, 'asignado_en' => '2026-09-18']);   // sin NINGÚN documento
 $orden('90000006', 'UIO', ['estado' => 'ASIGNADO', 'asignado_a' => 7, 'asignado_en' => '2026-09-23 08:00:00']); // solo captura NUMERADA
 $orden('90000016', 'UIO', ['estado' => 'ASIGNADO', 'asignado_a' => 7, 'asignado_en' => '2026-09-23 08:00:00']); // solo captura FALLIDA
-$orden('90000007', 'UIO', ['estado' => 'ATENDIDO', 'ot_cierre' => 'OT-9007-X-90000007-UIO']);  // al pie, fuera del total
-$orden('90000008', 'UIO', ['estado' => 'EN_REVISION', 'asignado_a' => 7, 'ot_cierre' => 'OT-9008-X-90000008-UIO']); // con OT, en revisión
+$orden('90000007', 'UIO', ['estado' => 'ATENDIDO', 'ot_cierre' => 'OT-1007-X-90000007-UIO']);  // al pie, fuera del total
+$orden('90000008', 'UIO', ['estado' => 'EN_REVISION', 'asignado_a' => 7, 'ot_cierre' => 'OT-1008-X-90000008-UIO']); // con OT, en revisión
 $orden('90000009', 'UIO', ['estado' => 'CERRADO_SIN_ATENCION']);                               // sin regularizar
 $orden('90000010', 'UIO', ['estado' => 'CERRADO_SIN_ATENCION', 'regularizado_en' => '2026-09-20 10:00:00']); // regularizada: en ningún lado
 $orden('90000011', 'UIO', ['estado' => 'NUEVO']);                                              // OT con firma no reconocida; Deshabilitado y después Operativo

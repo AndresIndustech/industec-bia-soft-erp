@@ -1,6 +1,6 @@
 # Vocabulario único de B.IA Soft ERP
 
-**Versión del diccionario:** `2026-09-27.2` · **Fuente única:** `app/publico/vocabulario.json` · **Fecha:** 27 de septiembre de 2026
+**Versión del diccionario:** `2026-09-28.1` · **Fuente única:** `app/publico/vocabulario.json` · **Fecha:** 28 de septiembre de 2026
 
 Este documento es para Andrés, para Isabel y para quien programe. La fuente es el JSON: si este documento y el JSON no coinciden, **manda el JSON**. La tabla de conceptos de la §4 se generó desde el JSON.
 
@@ -123,6 +123,12 @@ Este documento es para Andrés, para Isabel y para quien programe. La fuente es 
 - **`MARCA_PROVEEDOR_EXTERNO`, `MARCA_POR_DECIDIR_KFC`, `MARCA_RIESGO_ALTO`, `MARCA_AVISO_SAP`**: marcas de la **novedad** (tabla `novedad_marcas`, mapa `Novedades::MARCAS`), no de la orden: el módulo de novedades ya tenía riesgo, responsable propuesto y aviso SAP, y sus cuatro puntos son exactamente eso. Una novedad puede llevar varias; se ponen con «Identificar» en `novedades_visita.php` (permiso `novedades.gestionar`: administración y jefe de zona), no mueven el estado, y se cuentan sobre las novedades **vivas** (todas menos descartadas y resueltas) en la fila «Novedades · identificadas» del cuadro del inicio, con enlace `novedades_visita.php?g=vivas&marca=`. «POR DECIDIR» se rotula «por decidir de KFC: quitar o mejorar» porque «decidir» es solo de KFC (versión .6). «PROVEEDOR EXTERNO» no es `NO_COMPETE` (que es la orden) ni `NOVEDAD_OTRA_AREA` (que es el tipo). `MARCA_AVISO_SAP` es una marca manual, distinta del estado `NOVEDAD_CON_AVISO`.
 - Pruebas: `prueba_cifras_estado.php` (desglose, filtro, claves y lista negra, y que la 022 declare los mismos valores que los mapas) y `prueba_panel_zona.php` (el paso no mueve la tarjeta). Preguntas para Andrés en §11 (9 a 11).
 
+**Versión `2026-09-28.1`: la OT INDUSTEC del piloto (28-sep-2026, decisión de Andrés).** Del 24 al 27-sep los técnicos de UIO tomaron por reales 14 OT que emitió la app en el sitio de pruebas (OT-9125 a OT-9152): la app les decía «OT INDUSTEC emitida» con un ✓ verde, y la ayuda de `ENVIO_EMITIDA` afirmaba que su correo había salido a Grupo KFC. Ninguna llegó; doce órdenes quedaron atendidas con una de ellas como cierre y se marcaron cerradas en SAP, y la del aviso 10356500 (OT-9147) sostiene una solicitud de repuesto.
+- **Concepto nuevo `OT_PILOTO`**, «OT INDUSTEC del piloto», con `corto` «del piloto · no enviada a KFC» (el chip del Archivo, del buzón, de Repuestos y del historial del técnico). Se reconoce por el **número** (`Emision::esDePrueba()`: serie desde 9000), no por el modo, así que sigue valiendo después del corte.
+- **Qué hace y qué no:** no deja la orden atendida (queda a espera de informe técnico; si nadie la había asignado, queda asignada a quien fue), no es «de cierre», no termina solicitudes, no cuenta como OT emitida en la tarjeta «Por zona» ni en los reportes, y no se comparte desde el Archivo. **Sí** puede abrir una solicitud de repuesto: es trabajo interno y es lo que el piloto prueba. Cuando llega la OT de producción del mismo aviso, reemplaza a la del piloto como OT INDUSTEC de cierre (antes el `COALESCE` la dejaba para siempre); el estado que puso una persona no se toca.
+- **`ENVIO_EMITIDA`**: la ayuda ya no afirma que el correo salió en todos los casos; dice que la del piloto no sale a nadie.
+- **Sin cambio:** la franja «DOCUMENTO DE PRUEBA» del PDF (`plantilla_ot.php`), el asunto y el cuerpo del correo y los valores de `ot_capturadas.estado` (el recibo sigue diciendo `EMITIDA`, que `cola.js` usa para soltar la orden del celular; lo nuevo es `prueba: true`).
+
 ---
 
 ## 2. Reglas del diccionario
@@ -174,6 +180,7 @@ Cancelado queda fuera de la leyenda. FERIADO todavía no existe en B.IA.
 | `OT_EVALUACION` | OT INDUSTEC de evaluación | OT INDUSTEC de evaluación | estado_ot:ABIERTA | ADM JZ TEC KFC GER | «Correctivo (evaluación abierta)»; «Orden no concluida»; «orden X sin concluir» |
 | `OT_CIERRE` | OT INDUSTEC de cierre | OT INDUSTEC de cierre | estado_ot:CERRADA | ADM JZ TEC KFC GER | «orden de cierre»; «Orden de cierre (columna)»; «Con orden de cierre (filtro del buzón)»; «No hay PDF de cierre»; «CERRADAS SEMANA (hoja del STATUS generado)»; «cierre»; «Cierre INDUSTEC»; «con cierre»; «Correctivo cerrado»; «cerradas de la semana»; «orden X concluida»; «Orden concluida <ID INDUSTEC>»; «Orden concluida OT»; «informe sin técnico reconocido» |
 | `OT_NO_EMITIDA` | OT INDUSTEC no emitida / OT INDUSTEC no emitidas | OT INDUSTEC no emitida | — | ADM JZ TEC | — |
+| `OT_PILOTO` | OT INDUSTEC del piloto / OT INDUSTEC del piloto | OT INDUSTEC del piloto (corto: «del piloto · no enviada a KFC») | — | ADM JZ TEC | «es de prueba: no se envió a nadie (historial del técnico)»; «Es el sistema en pruebas: el correo no se envió a nadie. (resultado del formulario)» |
 | `ENVIO_OT` | envío de la OT INDUSTEC / envíos de OT INDUSTEC | Envío de la OT | — | ADM JZ TEC | «enviaste una orden (chip)» |
 | `ENVIO_EN_COLA` | en cola | En cola | — | ADM JZ TEC | «en espera (cola de envío de la OT INDUSTEC)»; «orden en cola»; «N órdenes guardadas, esperando señal»; «Enviando N órdenes…» |
 | `ENVIO_DETENIDA` | detenida en el celular / detenidas en el celular | Detenida en el celular | — | ADM JZ TEC | «N órdenes esperando que vuelvas a entrar» |
@@ -455,6 +462,8 @@ para cada orden o en U (una por cadena):
   si tieneOT(cadena(o))                 -> 'ABIERTA'
   si no                                 -> 'ESPERA_INFORME'
 ```
+
+`tieneOT` no cuenta la OT INDUSTEC del piloto (`OT_PILOTO`, serie 9000, desde el 28-sep-2026): en ninguna de sus cuatro fuentes —`ot_cierre`, `atenciones.json`, `ot_capturadas`, `ot_archivo`— una OT del piloto marca la orden como con OT emitida, ni es evidencia del estado del equipo. Deja la marca `piloto` en el índice (`Casos::tienePiloto()`), para que el buzón la muestre.
 
 Toda orden de U cae en exactamente un grupo. Una orden con OT de cierre cuyo estado todavía no pasó a ATENDIDO (por ejemplo, EN_REVISION con `ot_cierre`) se cuenta **por su estado**: sigue en el TOTAL, como ÓRDENES ABIERTAS, hasta que la reconciliación la mueva. Las definiciones se escriben por estado porque es lo que se calcula.
 

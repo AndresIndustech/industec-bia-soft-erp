@@ -4,6 +4,7 @@ require_once __DIR__ . '/nucleo/Emision.php';
 require_once __DIR__ . '/nucleo/Catalogo.php';
 require_once __DIR__ . '/pdf.php';        // solo para enlaceCompartido() y otValida()
 require_once __DIR__ . '/nucleo/Ui.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';   // el chip de la OT INDUSTEC del piloto (28-sep-2026)
 
 /**
  * ordenes.php — El Archivo: las órdenes de trabajo de todas las zonas.
@@ -36,6 +37,14 @@ require_once __DIR__ . '/nucleo/Ui.php';
  * compartió dentro de la firma, y queda en la bitácora como COMPARTIR_PDF.
  * El botón de WhatsApp abre `wa.me` con el mensaje escrito: manda **a quien lo
  * pulsa** a su propio WhatsApp; el servidor no envía nada por su cuenta.
+ *
+ * LA OT INDUSTEC DEL PILOTO (28-sep-2026)
+ * Las OT-9xxx que emitió la app en el sitio de pruebas están en el índice, pero
+ * no llegaron a Grupo KFC. Hasta ese día salían aquí con el chip «app» a secas
+ * y con «Compartir»: la administradora bajó la OT-9147 del aviso 10356500 como
+ * si fuera la del trabajo, y cualquiera podía mandarle a un local un documento
+ * que no vale. Ahora llevan el chip de OT_PILOTO y NO se comparten: ni el botón
+ * se pinta ni el servidor genera el enlace (el POST se fabrica a mano).
  */
 
 $u = Auth::exigir();
@@ -73,6 +82,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!Ui::puedeModulo('ots.compartir', ['SUPERADMIN', 'ADMIN', 'JEFE_ZONA', 'TECNICO'], $u)) {
             Auth::bitacora('DENEGADO', 'ot', $ot, 'compartir sin permiso', null, null, [], false);
             json(403, ['ok' => false, 'error' => 'No tienes permiso para compartir OT INDUSTEC.']);
+        }
+        if (Emision::esDePrueba($ot)) {
+            Auth::bitacora('DENEGADO', 'ot', $ot, 'compartir una OT INDUSTEC del piloto', null, null, [], false);
+            json(409, ['ok' => false, 'error' => $ot . ' es ' . Vocabulario::t('OT_PILOTO') . ': no llegó a Grupo KFC y no se comparte. '
+                                                . 'La que vale es la del formulario de siempre.']);
         }
         if (!Emision::existePdf($ot)) {
             json(404, ['ok' => false, 'error' => 'El PDF de esa OT INDUSTEC no está en el servidor: no hay qué compartir.']);
@@ -332,6 +346,7 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de OT INDUSTEC']);
           <?php
           $ot = (string) $f['id_industec'];
           $aqui = (int) $f['en_servidor'] === 1;
+          $piloto = Emision::esDePrueba($ot);
           ?>
           <tr data-b="<?= Ui::claveFila([$ot, (string) $f['aviso'], (string) $f['local_codigo'],
                                          (string) $f['local_nombre'], (string) $f['tecnico']]) ?>">
@@ -349,13 +364,18 @@ Ui::cabecera($u, 'ordenes.php', [], ['titulo' => 'Archivo de OT INDUSTEC']);
             <td data-th="Zona"><?= Ui::zona((string) $f['zona']) ?></td>
             <td data-th="Aviso SAP" class="mono"><?= e((string) ($f['aviso'] ?: '—')) ?></td>
             <td data-th="Técnico"><?= e((string) ($f['tecnico'] ?: '—')) ?></td>
-            <td data-th="Origen"><span class="chip"><?= e($ORIGEN[$f['origen']] ?? strtolower((string) $f['origen'])) ?></span></td>
+            <td data-th="Origen"><span class="chip"><?= e($ORIGEN[$f['origen']] ?? strtolower((string) $f['origen'])) ?></span>
+              <?php if ($piloto): ?>
+                <span class="chip" style="background:#ffedd5;color:#9a3412;border-color:#fed7aa"
+                      title="<?= e(Vocabulario::ayuda('OT_PILOTO')) ?>"><?= e(Vocabulario::corto('OT_PILOTO')) ?></span>
+              <?php endif; ?>
+            </td>
             <td data-th="Acciones">
               <?php if ($aqui): ?>
                 <div class="acc">
                   <a class="btn primary sm" href="pdf.php?ot=<?= rawurlencode($ot) ?>" target="_blank" rel="noopener">Ver</a>
                   <a class="btn sm" href="pdf.php?ot=<?= rawurlencode($ot) ?>&amp;dl=1">Descargar</a>
-                  <?php if ($puedeCompartir): ?>
+                  <?php if ($puedeCompartir && !$piloto): ?>
                     <button class="btn sm" type="button" data-ot="<?= e($ot) ?>" onclick="compartir(this)">Compartir</button>
                   <?php endif; ?>
                 </div>

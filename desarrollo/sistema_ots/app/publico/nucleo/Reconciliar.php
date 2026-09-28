@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/Db.php';
+require_once __DIR__ . '/Emision.php';   // Emision::esDePrueba(): la OT del piloto no atiende nada (28-sep-2026)
 
 /**
  * Reconciliar — lo que el sistema deduce solo, sin que nadie teclee.
@@ -80,23 +81,48 @@ final class Reconciliar
         }
 
         $actuales = [];
-        foreach (Db::todos('SELECT aviso, estado, asignado_a FROM casos_gestion') as $g) {
+        foreach (Db::todos('SELECT aviso, estado, asignado_a, ot_cierre FROM casos_gestion') as $g) {
             $actuales[$g['aviso']] = $g;
         }
 
         $atendidos = $sinTecnico = 0;
         foreach ($atenciones as $aviso => $a) {
             $estadoAntes = $actuales[$aviso]['estado'] ?? null;
-            if ($estadoAntes !== null && in_array($estadoAntes, self::INTOCABLES, true)) {
-                continue;                         // ya lo resolvió una persona
-            }
 
-            $cerrada = ($a['estado_industec'] ?? '') === 'CERRADA';
+            // La OT de cierre que llegó por el correo. Una del piloto no cuenta
+            // (Emision::esDePrueba): su correo queda RETENIDO y no debería estar
+            // aquí, pero si llega no atiende la orden (decisión del 28-sep-2026).
             $ot = null;
             $fecha = null;
             foreach ($a['ots'] ?? [] as $o) {
-                if (($o['estado_ot'] ?? '') === 'Cerrada') { $ot = $o['ot']; $fecha = $o['fecha']; }
+                if (($o['estado_ot'] ?? '') === 'Cerrada' && !Emision::esDePrueba((string) ($o['ot'] ?? ''))) {
+                    $ot = $o['ot']; $fecha = $o['fecha'];
+                }
             }
+            // La que había era del piloto: la de producción la reemplaza. Hasta
+            // el 28-sep-2026 el COALESCE la dejaba para siempre, y la
+            // administradora veía como «OT INDUSTEC de cierre» un número que
+            // Grupo KFC nunca recibió (aviso 10356500 y once más).
+            $cierrePiloto = trim((string) ($actuales[$aviso]['ot_cierre'] ?? ''));
+            $reemplazaPiloto = $ot !== null && $cierrePiloto !== '' && Emision::esDePrueba($cierrePiloto);
+
+            if ($estadoAntes !== null && in_array($estadoAntes, self::INTOCABLES, true)) {
+                // Ya lo resolvió una persona: el estado no se toca. Lo único que
+                // se corrige es el número, si el que tenía era del piloto.
+                if ($reemplazaPiloto) {
+                    $n = Db::ejecutar(
+                        'UPDATE casos_gestion SET ot_cierre = ? WHERE aviso = ? AND ot_cierre = ?',
+                        [$ot, $aviso, $cierrePiloto]
+                    );
+                    if ($n === 1) {
+                        self::anotar('OT_CIERRE_REEMPLAZA_PILOTO', (string) $aviso, $estadoAntes, $estadoAntes,
+                                     ['ot' => $ot, 'ot_piloto' => $cierrePiloto, 'fuente' => 'OT INDUSTEC del buzón']);
+                    }
+                }
+                continue;
+            }
+
+            $cerrada = ($a['estado_industec'] ?? '') === 'CERRADA';
 
             // El primer técnico identificado de la orden de cierre. Si firmaron
             // dos, se enlaza al primero y los demás quedan en el informe: la
@@ -146,6 +172,12 @@ final class Reconciliar
                  $idt, $idt === null ? 0 : 1]
             );
 
+            if ($reemplazaPiloto) {
+                // `COALESCE(VALUES(ot_cierre), ot_cierre)` ya puso la de
+                // producción: queda dicho cuál había.
+                self::anotar('OT_CIERRE_REEMPLAZA_PILOTO', (string) $aviso, $estadoAntes, $nuevo,
+                             ['ot' => $ot, 'ot_piloto' => $cierrePiloto, 'fuente' => 'OT INDUSTEC del buzón']);
+            }
             // El $nuevo de PHP puede no ser el que quedó en la fila (la línea
             // ATENDIDO->ASIGNADO de arriba lo frena): anotar 'ASIGNADO_AUTO'
             // ahí sería una transición que la base nunca hizo.

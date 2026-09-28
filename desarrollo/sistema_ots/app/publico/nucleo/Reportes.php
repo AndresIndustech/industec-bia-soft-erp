@@ -133,7 +133,8 @@ final class Reportes
                     'zona'          => (string) ($c['zona'] ?? ''),
                     'fecha'         => substr((string) ($c['fecha_creacion'] ?? ''), 0, 10),
                     'trabajo'       => (string) ($c['caso'] ?? ''),
-                    'ot'            => (string) ($g['ot_cierre'] ?? ''),
+                    // Una OT del piloto no va en un reporte a Grupo KFC: no la tiene.
+                    'ot'            => Emision::esDePrueba((string) ($g['ot_cierre'] ?? '')) ? '' : (string) ($g['ot_cierre'] ?? ''),
                     // Por el estado de VISTA, como el gráfico: una orden cerrada
                     // sin atención y ya regularizada se lee «regularizada» aquí
                     // también, no «cerrada sin atención».
@@ -456,7 +457,10 @@ final class Reportes
     private static function archivo(?string $zona, ?string $mes): ?array
     {
         try {
-            $donde = '1=1'; $par = [];
+            // Las OT del piloto (serie 9000) están en el índice para que el
+            // Archivo las muestre marcadas, pero no son OT INDUSTEC válidas: no
+            // se cuentan en un reporte (28-sep-2026).
+            $donde = 'NOT ' . Emision::sqlEsDePrueba('id_industec'); $par = [];
             if ($zona !== null) { $donde .= ' AND zona = ?'; $par[] = $zona; }
             $tot = Db::uno("SELECT COUNT(*) n, SUM(en_servidor) s FROM ot_archivo WHERE $donde", $par);
             $mesN = null;

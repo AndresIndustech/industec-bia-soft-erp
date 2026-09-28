@@ -68,8 +68,8 @@ $orden('91000006', 'UIO',  ['estado' => 'EN_REVISION', 'asignado_a' => 7]);
 $orden('91000007', 'UIO',  ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 7]);
 $orden('91000008', 'CNLJ', ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 9, 'repuesto_gestion' => 'bodega_kfc']);   // en minúsculas: cuenta igual
 $orden('91000009', 'LARB', ['estado' => 'ESPERA_REPUESTO', 'asignado_a' => 8, 'continua_de' => '91000007', 'repuesto_gestion' => 'BODEGA_KFC']); // cadena: cuenta por orden; con paso de la gestión
-$orden('91000010', 'UIO',  ['estado' => 'ATENDIDO', 'ot_cierre' => 'OT-9010-X-91000010-UIO']);
-$orden('91000011', 'LARB', ['estado' => 'ATENDIDO', 'ot_cierre' => 'OT-9011-X-91000011-LARB']);
+$orden('91000010', 'UIO',  ['estado' => 'ATENDIDO', 'ot_cierre' => 'OT-1010-X-91000010-UIO']);
+$orden('91000011', 'LARB', ['estado' => 'ATENDIDO', 'ot_cierre' => 'OT-1011-X-91000011-LARB']);
 $orden('91000012', 'UIO',  ['estado' => 'RESUELTO']);
 $orden('91000013', 'CNLJ', ['estado' => 'RESUELTO']);
 $orden('91000014', 'CNLJ', ['estado' => 'RESUELTO']);

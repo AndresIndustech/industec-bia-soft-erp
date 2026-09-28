@@ -626,6 +626,13 @@ Auth::bitacora('ENVIO_RECIBIDO', 'ot', $uuid,
    ------------------------------------------------------------------------- */
 $em = Emision::emitir((int) ($fila['captura_id'] ?? 0));
 $prueba = Emision::modo() === 'PRUEBA';
+/* ¿Es una OT INDUSTEC del piloto? Por su número (Emision::esDePrueba), y si
+   todavía no lo tiene, por el modo: en PRUEBA el que le toque será de la serie
+   9000. Decisión de Andrés del 28-sep-2026, tras el aviso 10356500: mientras
+   dure el piloto, esta OT NO llega a Grupo KFC, así que no atiende la orden ni
+   termina ninguna solicitud. El caso queda a espera de informe técnico hasta
+   que llegue la OT INDUSTEC del formulario de siempre. */
+$piloto = !empty($em['id_industec']) ? Emision::esDePrueba((string) $em['id_industec']) : $prueba;
 if ($em['error'] !== null) {
     Auth::bitacora('EMISION_FALLIDA', 'ot', $uuid, mb_substr((string) $em['error'], 0, 150),
                    null, null, ['captura_id' => $fila['captura_id'] ?? null], false);
@@ -641,6 +648,18 @@ if ($em['error'] !== null) {
    sin esperar a la reconciliación nocturna: es lo que la administradora ve
    como «a registrar en SAP» en tiempo real. Va ANTES de resolver el pendiente
    porque `Pendientes` decide ATENDIDO/ASIGNADO mirando si ya hay `ot_cierre`.
+
+   SALVO LA OT DEL PILOTO (28-sep-2026). El principio: el piloto puede ABRIR
+   trabajo interno —la solicitud de repuesto de arriba, que es justo lo que se
+   está probando, y dejarle la orden ASIGNADA a quien fue— pero nunca atiende
+   ni termina lo que depende de que Grupo KFC tenga la OT válida. El 26 y
+   27-sep doce órdenes quedaron ATENDIDO con una OT-91xx como cierre y la
+   administradora las marcó cerradas en SAP con un número que KFC nunca
+   recibió. Con una del piloto, `Casos::atenderPorOrden()` solo asigna (la
+   orden queda a espera de informe técnico, en la bandeja del técnico, y no
+   cae en «cerrada sin atención» a los 7 días como si nadie hubiera ido), no
+   arrastra la cadena, y `Pendientes::resolverPorOrden()` no se llama. Las dos
+   funciones repiten la guarda por su cuenta.
    ------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------
    Y ARRASTRA LA CADENA (T2.25.3). Cuando este caso es la continuación de otro
@@ -662,7 +681,7 @@ if ($aviso !== '') {
 }
 
 if ($em['error'] === null && $aviso !== '' && !empty($em['id_industec'])) {
-    foreach ($cadena as $unAviso) {
+    foreach (($piloto ? [$aviso] : $cadena) as $unAviso) {
         try {
             /* La zona del caso enlazado la pone `asegurar()` si le falta; la de
                la orden vale solo para el suyo. El resto de la regla es idéntico
@@ -676,7 +695,7 @@ if ($em['error'] === null && $aviso !== '' && !empty($em['id_industec'])) {
             error_log('envio.php: atenderPorOrden(' . $unAviso . '): ' . $ex->getMessage());
         }
     }
-    if (count($cadena) > 1) {
+    if (count($cadena) > 1 && !$piloto) {
         /* «atiende», no «cierra»: la orden enlazada queda atendida, por cerrar
            en SAP (VOCABULARIO.md, CONTINUIDAD). */
         $anexos[] = 'Esta OT INDUSTEC atiende también ' . (count($cadena) - 1) . ' '
@@ -692,7 +711,7 @@ if ($em['error'] === null && $aviso !== '' && !empty($em['id_industec'])) {
    viendo abierto porque nadie cerró el pendiente a mano. `Pendientes` (S3) es
    quien lo ofrece; hasta que exista, esta llamada es un no-op seguro.
    ------------------------------------------------------------------------- */
-if ($concluida && $aviso !== '' && method_exists('Pendientes', 'resolverPorOrden')) {
+if ($concluida && $aviso !== '' && !$piloto && method_exists('Pendientes', 'resolverPorOrden')) {
     try {
         /* Con la cadena, no con el aviso solo (T2.25.3): el repuesto que el
            técnico fue a instalar hoy quedó trabado en el aviso VIEJO, el que
@@ -724,17 +743,29 @@ responder(200, [
         'recibida'    => $fila['recibida_en'] ?? null,
         // Se dice exactamente en qué quedó: emitida con su número, o guardada
         // y sin PDF todavía. Nada de «enviada correctamente» a secas.
+        // `estado` sigue diciendo EMITIDA aunque sea del piloto: cola.js lo usa
+        // para soltar la orden y las fotos del celular, y el PDF sí salió.
+        // Lo que cambia es `prueba`, que pinta la caja naranja (app.js) y el
+        // aviso largo (cola.js) en vez del ✓ verde de «emitida».
         'estado'      => $em['pdf'] ? 'EMITIDA' : 'RECIBIDA',
+        'prueba'      => $piloto,
         'id_industec' => $em['id_industec'],
         'correo'      => $em['correo'],
-        'que_sigue'   => $em['pdf']
+        'que_sigue'   => $piloto
+            ? ($em['id_industec']
+                ? $em['id_industec'] . ' es del piloto: NO llegó a Grupo KFC ni al local. '
+                  . 'Emítela hoy también por el formulario de siempre; la que vale es esa.'
+                  . ($em['pdf'] ? '' : ' (Su PDF se reintenta desde el servidor cada 10 minutos.)')
+                : 'Quedó guardada, pero es del piloto: NO llega a Grupo KFC ni al local. '
+                  . 'Emítela hoy también por el formulario de siempre; la que vale es esa.')
+            : ($em['pdf']
             ? $em['id_industec'] . ' emitida: el PDF está en tu historial. '
               . ($prueba ? 'Es el sistema en pruebas: el correo no se envió a nadie.'
                          : 'El correo al local sale de la cola.')
             : ($em['id_industec']
                 ? 'La OT INDUSTEC quedó guardada con el número ' . $em['id_industec']
                   . '. El PDF no se pudo generar todavía: se reintenta desde el servidor cada 10 minutos.'
-                : 'La OT INDUSTEC quedó guardada. Todavía no se le pudo asignar número: se reintenta desde el servidor cada 10 minutos.'),
+                : 'La OT INDUSTEC quedó guardada. Todavía no se le pudo asignar número: se reintenta desde el servidor cada 10 minutos.')),
         // Qué pasó con la solicitud del equipo, las novedades y las observaciones.
         // Va aparte de la orden porque son hechos distintos con destinos distintos.
         'anexos'     => $anexos,
