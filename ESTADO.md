@@ -1050,6 +1050,42 @@ comprobaciones del desglose) y `verificar_cifras.py` (+desglose y `?rep=`) está
 `verificar_esquema.php` y `pruebas/servidor/tarjeta_cli.php` como herramientas); después `tarjeta_cli.php ADMIN` en el servidor.
 Sin la 022 aplicada, el código no rompe: el paso sale «sin precisar» y las marcas «no disponible».
 
+### Despliegue a darkviolet: HECHO el 2026-09-28 (autorizado por Andrés: «despliega todo»)
+
+**Antes de subir** se comparó por hash (LF normalizado) lo vivo contra `c53d4fd` (lo desplegado el 26-sep) y contra `d5b6cfe`:
+9 de los 10 archivos vivos eran iguales a la base. **`casos.php` vivo NO era la base**: era el commit `190eea3` («doble Enter
+confirma “Marcar como cerrada en SAP”», ramas `pc/doble-enter-cerrado-sap-2026-09-27` y `pc/buzon-simplificado-2026-09-27`), es
+decir, trabajo que sí está en git, desplegado desde el PC después del 26-sep. No se pisó: se hizo una **fusión a tres vías**
+(`git merge-file`, base `c53d4fd`, mío `d5b6cfe`, vivo `190eea3`), 0 conflictos, `php -l` limpio, lista negra 0 y claves
+760·0; el `casos.php` desplegado lleva las dos cosas (diálogo `#acc-seguro` y «Gestión del repuesto») y queda commiteado en
+esta rama. Copia de los 10 archivos vivos previos en el scratchpad del PC (`…/scratchpad/vivo_2026-09-28/`); además, lo que
+corría es reconstruible desde git: `c53d4fd` para 9 archivos y `190eea3` para `casos.php`. `~/respaldos/tarjeta_cli.php` no
+existía en el servidor (el del 26-sep no quedó): se subió el nuevo.
+
+**Migración 022**: `aplicar_sql.php ~/respaldos/022_gestion_repuesto_y_marcas_novedad.sql` → 4 sentencias (ALTER, CREATE,
+INSERT, INSERT) ok, anotada en `migraciones`. Respaldo de la base: `~/respaldos/darkviolet_bd_tras_022_20260928_081440.sql.gz`
+(917.631 bytes) — **tomado justo después de aplicar la 022**, no antes: el primer intento de `mysqldump` desde `php -r` no dejó
+archivo; como la 022 solo agrega columnas y una tabla vacía, el respaldo sirve igual para los datos, y la reversión de esquema
+está escrita en el propio `.sql`.
+
+```
+t2_10_desplegar.py: 10 de 10 archivos en el sitio de pruebas (los 2 del diccionario y los 2 nucleo/ primero) · «la web entrega exactamente lo que se subió»
+sha256 exacto local = servidor en los 10 · php -l con el PHP del servidor (8.2.33): 6 PHP sin errores
+verificar_esquema.php: permisos SUPERADMIN 43 · ADMIN 42 · JEFE_ZONA 29 (con la 022) OK · bloque «migracion 022» OK (marcas hoy: 0 · órdenes con gestión del repuesto: 0) · TODO OK
+web: vocabulario.json 403 · vocabulario_publico.json 200 (v2026-09-27.2, 117 conceptos, sin «Isabel» ni rutas) · nucleo/config.php 403 · sw.js sirve v23
+tarjeta_cli.php ADMIN: 34 comprobaciones · 0 fallos · cuadro {no nos competen 1 · en gestión técnica 107 · atendidas/cerradas 149 · a espera de repuesto 2}
+     gestión del repuesto: las 2 sin precisar (esperado: la 022 no inventa el paso) · JEFE_ZONA:UIO: 34 · 0, cuadro {0 · 46 · 37 · 2}
+error_log de la web tras el despliegue: 0 errores nuevos (las 2 líneas del día son de mi corrida de tarjeta_cli.php ANTES de subir Casos.php)
+```
+
+**NO se hizo, a propósito:** `verificar_cifras.py` ni ninguna batería `verificar_*.py` (crean datos y huella en la bitácora);
+ningún navegador con sesión —hace falta que Andrés o Isabel entren como administración y jefe de zona y prueben «Gestión del
+repuesto» en una orden a espera de repuesto e «Identificar» en una novedad—. Un celular con la app recibirá el `sw.js` v23 al
+abrirla. **Cómo se revierte:** subir por nombre los 9 archivos desde `c53d4fd` y `casos.php` desde `190eea3` (o la copia del
+scratchpad), borrar `~/respaldos/tarjeta_cli.php`, y para el esquema las cuatro sentencias de reversión de la cabecera del
+`022_…sql` (la columna y la tabla no tienen datos todavía). **Pendiente de fusión:** `pc/buzon-simplificado-2026-09-27` también
+parte de `190eea3`; cuando se despliegue habrá que fusionar su `casos.php` con este.
+
 **Preguntas para Andrés** (ninguna bloquea; la 1 solo cambia el número grande): (1) ¿«atendido (cerrado)» = ATENDIDO +
 RESUELTO, o solo las ya cerradas en SAP? (2) ¿«asignados (en gestión técnica)» = solo ASIGNADO, sin EN_REVISION? (3) Isabel dice
 «a espera de repuestos» (plural) y «gestión proveedores KFC»; se mantuvo «a espera de repuesto» (singular, como `ESPERA_REPUESTO`)
@@ -2867,7 +2903,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| ~~Cuadro «En qué estado están» con las cuatro cifras de la administradora, + gestión del repuesto y marcas de la novedad (migración 022)~~ (pedido de Isabel del 27-sep-2026, fuera del plan) | ✅ **Hecha en la rama `pc/panel-estados-administradora-2026-09-27` el 2026-09-27, SIN desplegar ni empujar** — Steven, desde el PC de Andrés, en un worktree aparte (`_wt_panel_estados_2026-09-27`) para no cruzarse con la conversación que edita `casos.php` | 2026-09-27 | `panel.php`, `Casos.php` (función nueva), `vocabulario.json` (+4 conceptos, v2026-09-27.1) y lo que regenera, `sw.js` v22, `tarjeta_cli.php`, `verificar_cifras.py`, `VOCABULARIO.md`. No toca la base ni el árbol canónico. Detalle, cifras y preguntas en **§1u** |
+| ~~Cuadro «En qué estado están» con las cuatro cifras de la administradora, + gestión del repuesto y marcas de la novedad (migración 022)~~ (pedido de Isabel del 27-sep-2026, fuera del plan) | ✅ **Hecha y DESPLEGADA en darkviolet el 2026-09-28** (rama `pc/panel-estados-administradora-2026-09-27`, sin empujar a GitHub) — Steven, desde el PC de Andrés, en un worktree aparte (`_wt_panel_estados_2026-09-27`) para no cruzarse con la conversación que edita `casos.php` | 2026-09-27 | `panel.php`, `Casos.php` (función nueva), `vocabulario.json` (+4 conceptos, v2026-09-27.1) y lo que regenera, `sw.js` v22, `tarjeta_cli.php`, `verificar_cifras.py`, `VOCABULARIO.md`. No toca la base ni el árbol canónico. Detalle, cifras y preguntas en **§1u** |
 | ~~Vocabulario SAP en todo el sistema~~ (pedido de la administradora, fuera del plan) | ✅ **Terminada y desplegada en darkviolet el 2026-09-26** — ramas `pc/vocabulario-sap-2026-09-24` y `pc/vocabulario-sobre-vivo-2026-09-26` | 2026-09-24 | Solo texto visible, `vocabulario.json` y la tarjeta «Por zona»; no tocó la base ni el árbol canónico. Falta que la **estación empuje T2.28.3/T2.28.6** y fusione estas ramas en `master`, y que alguien vea las pantallas con sesión. Detalle, cifras y cómo se revierte en **§1t** |
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
 | ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó, se detuvo a propósito una vez (error nº 44) y se relanzó. ✅ **T2.28.2, el módulo de correos, construido, desplegado y verificado el 2026-09-24** (013 aplicada, `TODO OK`; `correos.php`; `Destinatarios::resolver()`; el tope y el cupo por hora del despachador — `§1s-undecies`). **Pendiente, de aprobación:** `correos_sembrar_cli.php --ejecutar` (el simulacro ya da 3/3 contra el maestro). De T2.28.3 ya está lo que cubrió el arreglo urgente; sigue T2.28.6 en el carril. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b puntos 7 y 8 |

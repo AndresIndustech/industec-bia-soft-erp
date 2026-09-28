@@ -1364,6 +1364,21 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
   </form>
 </dialog>
 
+<?php /* La pantalla de seguridad (pedido de Andrés, 2026-09-27). En «Marcar
+         como cerrada en SAP» dos Enter seguidos en la nota confirman, y un
+         doble Enter puede ser sin querer: antes de enviar se pregunta. No es
+         un window.confirm() a propósito, porque ese acepta con Enter y un
+         tercer Enter involuntario habría cerrado la orden igual: aquí el foco
+         arranca en «No, volver», así que Enter de más = volver. */ ?>
+<dialog id="acc-seguro" style="max-width:420px">
+  <h2 style="margin:0 0 4px;font-size:17px">¿Estás seguro de que deseas confirmar?</h2>
+  <p class="sub" id="acc-seguro-texto" style="margin:0 0 12px"></p>
+  <div class="row" style="margin-top:14px;gap:8px">
+    <button class="btn" type="button" id="acc-seguro-no" autofocus>No, volver</button>
+    <button class="btn primary" type="button" id="acc-seguro-si">Sí, marcar como cerrada</button>
+  </div>
+</dialog>
+
 <script>
 /* Qué pide cada acción. Sale de aquí y no del HTML de cada fila para que el
    texto que ve la persona esté en un solo sitio y no en 900 copias. */
@@ -1379,7 +1394,7 @@ var ACC = {
   derivar:     { t:'Derivar a otra zona',        a:'La orden pasa a la otra zona y queda sin asignar: el técnico que la tenía ya no puede atenderla.',
                  campos:['zona'], ok:'Derivar' },
   cerrado_sap: { t:'Marcar como cerrada en SAP', a:'INDUSTEC ya emitió su OT INDUSTEC de cierre. Esto es que además ya la cerraste en SAP, que es lo que el correo nunca avisa.',
-                 campos:['motivo'], ok:'Confirmar', motivo:'Nota (opcional)' },
+                 campos:['motivo'], ok:'Confirmar', motivo:'Nota (opcional)', seguro:true },
   regularizar: { t:'Marcar como regularizada',   a:'Se cerró sin atención. Esto la deja explicada ante KFC y deja de contar como tarea tuya; la orden sigue constando como cerrada sin atención.',
                  campos:['motivo'], ok:'Regularizar', motivo:'Qué se hizo (opcional)' },
   otro_trabajo: { t:'Otros trabajos',           a:'Un trabajo fuera del área de INDUSTEC hecho por acuerdo con KFC se autoriza aquí: se cuenta y se reporta aparte, como extra, y la orden sigue su flujo normal. Si no hubo acuerdo, lo que corresponde es la resolución «no nos compete».',
@@ -1427,17 +1442,68 @@ document.getElementById('acc-tec').addEventListener('change', function () {
   document.getElementById('acc-confirmo-zona-wrap').hidden = !otra;
   if (!otra) { document.getElementById('acc-confirmo-zona').checked = false; }
 });
+/* `seguroOk` es la bandera de «ya pasó por la pantalla de seguridad»: la pone
+   solo el botón «Sí» y la borra abrir(). Sin ella, cada envío de una acción con
+   `seguro:true` —venga del botón Confirmar o del doble Enter— se intercepta y
+   se pregunta primero. */
+var seguroOk = false;
 document.getElementById('acc-form').addEventListener('submit', function (ev) {
+  var accion = document.getElementById('acc-accion').value;
   var wrap = document.getElementById('acc-confirmo-zona-wrap');
-  if (document.getElementById('acc-accion').value === 'asignar'
+  if (accion === 'asignar'
       && !wrap.hidden && !document.getElementById('acc-confirmo-zona').checked) {
     ev.preventDefault();
     alert('Marca que confirmas la zona antes de asignar a otra zona.');
+    return;
+  }
+  if (ACC[accion] && ACC[accion].seguro && !seguroOk) {
+    ev.preventDefault();
+    var aviso = document.getElementById('acc-aviso').value;
+    document.getElementById('acc-seguro-texto').textContent =
+      'Vas a marcar la orden ' + aviso + ' como cerrada en SAP. Si el doble Enter fue sin querer, vuelve.';
+    var seg = document.getElementById('acc-seguro');
+    seg.showModal();
+    /* El foco va en «No, volver» aunque el navegador ignore `autofocus`:
+       un Enter de más tiene que volver, no cerrar la orden. */
+    document.getElementById('acc-seguro-no').focus();
+  }
+});
+document.getElementById('acc-seguro-si').addEventListener('click', function () {
+  seguroOk = true;
+  document.getElementById('acc-seguro').close();
+  document.getElementById('acc-form').requestSubmit();
+});
+document.getElementById('acc-seguro-no').addEventListener('click', function () {
+  document.getElementById('acc-seguro').close();
+});
+/* Al cerrarse por cualquier vía (No, Esc) se vuelve a la nota sin perder lo
+   escrito: el diálogo de abajo nunca se cerró, solo se le devuelve el foco. */
+document.getElementById('acc-seguro').addEventListener('close', function () {
+  if (!seguroOk) { document.getElementById('acc-mt').focus(); }
+});
+/* Doble Enter = Confirmar, solo en las acciones con `seguro:true`. La nota es
+   «en una línea» (lo dice el placeholder), así que Enter no mete salto; dos
+   Enter seguidos dentro de 1,5 s piden el envío por requestSubmit(), que
+   respeta `required` y pasa por el handler de arriba. Shift+Enter sigue
+   insertando salto por si alguien de verdad lo quiere. */
+var enterPrevio = 0;
+document.getElementById('acc-mt').addEventListener('keydown', function (ev) {
+  var c = ACC[document.getElementById('acc-accion').value];
+  if (!c || !c.seguro || ev.key !== 'Enter' || ev.shiftKey) { return; }
+  ev.preventDefault();
+  var ahora = Date.now();
+  if (ahora - enterPrevio <= 1500) {
+    enterPrevio = 0;
+    document.getElementById('acc-form').requestSubmit();
+  } else {
+    enterPrevio = ahora;
   }
 });
 
 function abrir(accion, aviso, zona) {
   var c = ACC[accion];
+  seguroOk = false;
+  enterPrevio = 0;
   document.getElementById('acc-form').dataset.zona = zona || '';
   document.getElementById('acc-accion').value = accion;
   document.getElementById('acc-aviso').value  = aviso;
