@@ -80,11 +80,18 @@ try {
     // ya se habían indexado al Archivo (archivo_indexar_cli.php) no desaparecen
     // solas de ot_archivo. Sin esto la pantalla «Archivo» sigue mostrando las
     // 90xx con un PDF que ya no existe en disco.
-    $narch = 0;
-    if ($idIndustec) {
-        $enArch = implode(',', array_fill(0, count($idIndustec), '?'));
-        $narch = Db::ejecutar("DELETE FROM ot_archivo WHERE id_industec IN ($enArch) AND origen = 'APP'", $idIndustec);
-    }
+    // Desde el 2026-09-28 también las filas APP de prueba que ya no tienen
+    // captura (aviso 9999… o técnico «Prueba Tecnico …»): cuatro de ellas
+    // (OT-9117 a OT-9120) sobrevivieron a una limpieza anterior con el enlace
+    // roto. Una fila con captura no entra por esa vía: las OT del piloto de
+    // los técnicos reales la tienen.
+    $huerfana = "origen = 'APP' AND aviso LIKE '9999%'
+                 AND NOT EXISTS (SELECT 1 FROM ot_capturadas c WHERE c.id_industec = ot_archivo.id_industec)";
+    $huerfana = "($huerfana) OR (origen = 'APP' AND tecnico LIKE 'Prueba Tecnico%'
+                 AND NOT EXISTS (SELECT 1 FROM ot_capturadas c WHERE c.id_industec = ot_archivo.id_industec))";
+    $enArch = $idIndustec ? implode(',', array_fill(0, count($idIndustec), '?')) : "''";
+    $narch = Db::ejecutar("DELETE FROM ot_archivo WHERE (id_industec IN ($enArch) AND origen = 'APP') OR $huerfana",
+                          $idIndustec);
     Db::ejecutar("INSERT INTO bitacora (accion, entidad, referencia, estado_despues, exito, detalle, datos, ip, equipo)
                   VALUES ('PRUEBA_DESHACER', 'prueba', 'T2.12.4-6', 'REVERTIDA', 1, ?, ?, '', 'CLI por SSH (PC de Andrés)')",
                  ['Se revirtieron las cuentas y los datos de prueba del alcance por rol',

@@ -28,6 +28,18 @@ declare(strict_types=1);
  * Las filas de casos_gestion y equipos_propuestos de esos dos avisos ya las
  * cubrían los patrones genéricos de abajo (`aviso LIKE '9999%'` y `equipo_uuid
  * LIKE '99990000-%'`): no hizo falta agregar un paso nuevo para ellas.
+ *
+ * DESDE EL 2026-09-28: LAS FILAS HUÉRFANAS DEL ARCHIVO. El 28-sep quedaban en
+ * `ot_archivo` cuatro filas APP de OT de prueba (OT-9117 a OT-9120, técnico
+ * «Prueba Tecnico Uio A», avisos 9999xxxx, PDF ya borrados) cuya captura ya no
+ * existía. Este script solo las buscaba por la lista de capturas de las cuentas
+ * de prueba: si la captura ya se había borrado (una corrida anterior, o
+ * deshacer_prueba.php) y el índice nocturno ya la había copiado al Archivo, la
+ * fila quedaba colgando para siempre con un enlace roto. Ahora también entra
+ * toda fila APP SIN captura que sea de prueba por su aviso (9999…) o por su
+ * técnico («Prueba Tecnico …»). Una fila con captura —de cualquier usuario— no
+ * entra por esa vía jamás, y las OT del piloto de los técnicos reales (serie
+ * 9000, avisos reales) tienen captura: no se tocan.
  */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require getcwd() . '/nucleo/Db.php';
@@ -48,8 +60,18 @@ foreach ($argv as $a) {
 
 $en  = implode(',', array_fill(0, count(CUENTAS), '?'));
 $ids = array_map('intval', array_column(Db::todos("SELECT usuario_id FROM usuarios WHERE usuario IN ($en)", CUENTAS), 'usuario_id'));
-if (!$ids) { echo "No hay cuentas de prueba: nada que limpiar.\n"; exit(0); }
-$ei = implode(',', $ids);   // enteros salidos de la base: seguros para interpolar
+
+/* Las filas APP del Archivo que son de prueba y ya no tienen captura (ver la
+   cabecera). Se buscan aunque ya no queden cuentas de prueba: las cuatro del
+   28-sep-2026 sobrevivieron justo a eso. */
+const HUERFANA_PRUEBA = "a.origen = 'APP'
+    AND NOT EXISTS (SELECT 1 FROM ot_capturadas c WHERE c.id_industec = a.id_industec)
+    AND (a.aviso LIKE '9999%' OR a.tecnico LIKE 'Prueba Tecnico%')";
+$huerfanas = array_column(Db::todos('SELECT a.id_industec FROM ot_archivo a WHERE ' . HUERFANA_PRUEBA), 'id_industec');
+
+if (!$ids && !$huerfanas) { echo "No hay cuentas de prueba ni filas de prueba sueltas en el Archivo: nada que limpiar.\n"; exit(0); }
+// Sin cuentas, `0` no calza con ningún usuario: solo corren los pasos por patrón.
+$ei = $ids ? implode(',', $ids) : '0';   // enteros salidos de la base: seguros para interpolar
 
 $ots = array_column(Db::todos("SELECT id_industec FROM ot_capturadas WHERE usuario_id IN ($ei) AND id_industec IS NOT NULL"), 'id_industec');
 $eo  = $ots ? implode(',', array_map(fn($o) => Db::conn()->quote($o), $ots)) : "''";
@@ -67,7 +89,10 @@ if ($reales) {
 // Cada paso: [tabla, WHERE]. El orden respeta las llaves foráneas (RESTRICT hacia usuarios).
 $pasos = [
     'ot_fotos'           => "usuario_id IN ($ei)",
-    'ot_archivo'         => "origen = 'APP' AND id_industec IN ($eo)",
+    // Las de las capturas de las cuentas de prueba, y las huérfanas de prueba
+    // (28-sep-2026). El alias `a` es el de HUERFANA_PRUEBA.
+    'ot_archivo'         => "id_industec IN (SELECT id_industec FROM (SELECT a.id_industec FROM ot_archivo a
+                                 WHERE (a.origen = 'APP' AND a.id_industec IN ($eo)) OR (" . HUERFANA_PRUEBA . ")) x)",
     'email_queue'        => "captura_id IN (SELECT captura_id FROM ot_capturadas WHERE usuario_id IN ($ei))",
     'ot_capturadas'      => "usuario_id IN ($ei)",
     'pendiente_notas'    => "pendiente_id IN (SELECT pendiente_id FROM pendientes WHERE abierto_por IN ($ei) OR activo_fijo LIKE 'PRUEBA-%') OR usuario_id IN ($ei)",
@@ -101,7 +126,7 @@ $cifras = [];
 foreach ($pasos as $t => $w) {
     $cifras[$t] = (int) Db::uno("SELECT COUNT(*) n FROM `$t` WHERE $w", $params[$t] ?? [])['n'];
 }
-$archivos = array_map(fn($o) => "ordenes_pdf/$o.pdf", $ots);
+$archivos = array_map(fn($o) => "ordenes_pdf/$o.pdf", array_values(array_unique(array_merge($ots, $huerfanas))));
 foreach (Db::todos("SELECT ruta FROM ot_fotos WHERE usuario_id IN ($ei)") as $r) { $archivos[] = 'ordenes_fotos/' . $r['ruta']; }
 $cifras['archivos_en_disco'] = count(array_filter($archivos, 'is_file'));
 
@@ -134,8 +159,8 @@ try {
     }
     Db::ejecutar("INSERT INTO bitacora (accion, entidad, referencia, estado_despues, exito, detalle, datos, ip, equipo)
                   VALUES ('LIMPIEZA_PRUEBAS', 'sistema', 'datos de prueba', 'RETIRADOS', 1, ?, ?, '', 'CLI por SSH (estación)')",
-                 ['Se retiraron las cuentas de prueba y todo lo que generaron, a pedido de Andrés Basantes; '
-                  . 'los avisos 10355931 y 10356012 vuelven a NUEVO', json_encode($hecho)]);
+                 ['Se retiraron las cuentas de prueba, todo lo que generaron y las filas de prueba sueltas del Archivo',
+                  json_encode($hecho + ['huerfanas_archivo' => $huerfanas])]);
     $pdo->commit();
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }
