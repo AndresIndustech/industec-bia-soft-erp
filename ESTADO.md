@@ -3,7 +3,7 @@
 > **Empieza por aquí.** Este archivo dice dónde vamos; [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) dice qué hay que construir y con qué criterios.
 > Si vas a trabajar, **anótate primero en §5 (Trabajo en paralelo)** antes de tocar nada.
 
-**Última actualización:** 2026-09-23
+**Última actualización:** 2026-09-27
 **Fase en curso:** 2 · Automatización — **construida y desplegada en el sitio de pruebas; lo que sigue es el piloto en UIO** (paquete en `desarrollo/sistema_ots/piloto/`). La Fase 1 quedó cerrada
 **Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
 
@@ -859,6 +859,44 @@ la que dejó T2.23.
   haga falta para las otras baterías.
 
 ---
+
+## 1u. Doble Enter = Confirmar, con pantalla de seguridad, en «Marcar como cerrada en SAP» (2026-09-27, fuera del plan, pedido de Andrés)
+
+**En el árbol de trabajo del PC de Andrés, sin commit y sin desplegar** (lo que falta, en `PLAN_INDUSTEC.md` §11b, acción **R**).
+Andrés pidió que en el diálogo «Marcar como cerrada en SAP · NNNN» un doble Enter haga Confirmar, y que
+antes de confirmar aparezca «¿Está seguro?» por si el doble Enter fue involuntario.
+
+**Qué quedó funcionando** — todo en `desarrollo/sistema_ots/app/publico/casos.php`:
+
+- **El diálogo nuevo `#acc-seguro`** (líneas 1288-1301, comentario incluido; el `<dialog>` va de la 1294 a la 1301): «¿Estás seguro de que deseas confirmar?», el texto
+  «Vas a marcar la orden NNNN como cerrada en SAP. Si el doble Enter fue sin querer, vuelve.» y dos botones,
+  «No, volver» (con `autofocus` **y** `focus()` explícito) y «Sí, marcar como cerrada». No es `window.confirm()`
+  a propósito: ese acepta con Enter, y un tercer Enter involuntario habría cerrado la orden igual.
+- **La bandera `seguro:true` en `ACC.cerrado_sap`** (línea 1318), única acción que la lleva. Las otras siete
+  (`asignar`, `seguimiento`, `revision`, `veredicto`, `derivar`, `regularizar`, `otro_trabajo`) no cambian.
+- **El handler de `submit`** (líneas 1364-1389): conserva la validación de `confirmo_zona` para `asignar` y,
+  para una acción con `seguro`, intercepta el envío —venga del botón Confirmar o del doble Enter— y abre
+  `#acc-seguro`. Solo «Sí» pone la bandera `seguroOk` y reenvía con `requestSubmit()`; «No» o Esc cierran la
+  seguridad y devuelven el foco a la nota, que nunca se borró porque `#acc` no se cerró.
+- **El doble Enter** (líneas 1403-1420): en el textarea de la nota, Enter sin Shift no inserta salto (la nota
+  es «en una línea», como dice el placeholder) y dos Enter dentro de 1,5 s llaman a `requestSubmit()`, que
+  respeta `required` y pasa por el handler de arriba. Shift+Enter sigue insertando salto. `abrir()` reinicia la
+  bandera y el contador (líneas 1424-1425).
+
+**Cómo se comprobó:**
+
+| Comprobación | Resultado |
+|---|---|
+| `ssh -p 65002 -i ~/.ssh/industec_hostinger_pc u671729428@82.25.73.181 'php -l' < casos.php` (por stdin, no escribe nada en el servidor) | `No syntax errors detected in Standard input code` |
+| `node --check` sobre el bloque `<script>` extraído | sintaxis OK |
+| `node prueba_contratos.mjs` (todo `getElementById` tiene su `id`, incluidos los cuatro nuevos) | **57 · 0** |
+| `node prueba_graficos.mjs` | **62 · 0** |
+| **`node prueba_dialogo_seguro.mjs`** — nueva: recorta el diálogo y su JS **reales** de `casos.php`, los carga en **Edge sin ventana** y dispara las teclas y clics | **23 · 0**: un Enter no envía; el doble Enter abre la seguridad **con el foco en «No, volver»** y con el número de orden; «No» y Esc vuelven a la nota **sin perderla**; Confirmar también pasa por la seguridad; «Sí» envía **una sola vez**; dos Enter a más de 1,5 s no confirman; Shift+Enter no cuenta; `revision` no intercepta Enter, respeta `required` y envía sin seguridad; `asignar` a otra zona sin la casilla sigue avisando |
+
+**Lo que NO se comprobó:** la pantalla **con sesión real** en darkviolet (no se desplegó), el diálogo **en un celular**
+(la seguridad hereda el estilo `@media (max-width:560px)` del `dialog`, pero nadie lo miró), y que un **Enter físico** sobre
+«No, volver» dispare el clic: la prueba verifica que el foco está ahí, que es lo que hace que el navegador convierta
+Enter en clic; la activación por teclado no se puede simular con un evento sintético.
 
 ## 1t. Vocabulario SAP: las mismas palabras para todos los roles (2026-09-24/26, fuera del plan, pedido de la administradora)
 

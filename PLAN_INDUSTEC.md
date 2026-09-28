@@ -1983,6 +1983,31 @@ históricos traen lo que escribió el técnico. Hay `Jenny montaño`, `José Lui
 Nuñez` con la tilde perdida y mayúsculas mezcladas. Normalizar para comparar,
 **conservar lo que se leyó** para mostrar.
 
+**R. Doble Enter = Confirmar, con pantalla de seguridad, en «Marcar como
+cerrada en SAP»** (pedido de Andrés del 2026-09-27, fuera del plan) — ✅
+**construido y verificado el 2026-09-27 desde el PC de Andrés; sin commit y
+sin desplegar.** Solo toca `app/publico/casos.php` (el diálogo `#acc`, su JS y
+el diálogo nuevo `#acc-seguro`) y suma `app/pruebas/prueba_dialogo_seguro.mjs`.
+Criterio de aceptación: en la nota de `cerrado_sap`, Enter no mete salto y dos
+Enter seguidos (≤ 1,5 s) confirman; **toda** confirmación de esa acción —doble
+Enter o clic en Confirmar— pasa antes por «¿Estás seguro de que deseas
+confirmar?» con el foco en «No, volver» (un tercer Enter vuelve, no cierra);
+Esc o «No» devuelven a la nota sin perder lo escrito; las otras siete acciones
+no cambian. Se comprueba con `node prueba_dialogo_seguro.mjs` (Edge sin
+ventana) → **23 · 0**, más `prueba_contratos.mjs` 57 · 0. Cifras en
+`ESTADO.md` **§1u**.
+**Lo que falta para que llegue a la gente:** (1) commit en una rama
+`pc/doble-enter-cerrado-sap-2026-09-27` y push, **con aprobación de Andrés**;
+(2) desplegar `casos.php` a darkviolet con `t2_10_desplegar.py` y comprobar
+lo que entrega la web (curl + SHA contra el archivo local); (3) que alguien
+lo pruebe **con sesión de administración** en un caso del arnés, no en uno
+real; (4) que la estación fusione la rama en `master`. Nada de esto se hizo:
+Andrés pidió el cambio, no el despliegue.
+
+| Autónomo | Requiere aprobación | Prohibido |
+|---|---|---|
+| Editar `casos.php` y la prueba; `php -l` por stdin en el servidor; correr las pruebas locales | Commit/push de la rama; desplegar a darkviolet | Tocar `nucleo/config.php`; desplegar a producción; probar sobre casos reales del cliente |
+
 **L. Continuidad entre casos (T2.25)** — ✅ **hecha, aplicada y desplegada el
 2026-09-21.** La 012 está en darkviolet (`verificar_esquema.php` → **TODO OK**,
 con 0 casos enlazados: no enlaza nada por su cuenta) y `verificar_continuidad.py`
