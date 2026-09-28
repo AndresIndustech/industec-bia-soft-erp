@@ -1034,10 +1034,20 @@ final class Casos
      * `ot_disponible`; fila 3 y sus sublíneas sin `equipo_disponible`.
      *
      * @param string[] $zonasFijas zonas que llevan tarjeta aunque no tengan nada (la del jefe de zona)
+     * Desde el 27-sep-2026 (buzón simplificado que pidió la administradora)
+     * también cuenta, por zona y en total, lo que NO entra en el TOTAL pero
+     * ella sí mira: `cerradas_sap` (RESUELTO), `en_buzon` (todas las órdenes
+     * de la zona en la ventana de 90 días, el «total de órdenes generadas»)
+     * y `nuevas_7d` (creadas hoy o en los seis días anteriores: hoy más seis,
+     * porque «-7 días» con «>=» metía OCHO días en un número que dice «7»,
+     * como pasó en casos.php hasta esa fecha). Salen del mismo recorrido
+     * para que el buzón, Asignación y el panel no puedan decir números
+     * distintos.
+     *
      * @return array{zonas:array<string,array>, tres_zonas:array, total:int, ot_disponible:bool,
      *               equipo_disponible:bool, sin_tecnico:int, asignadas_3d:?int,
      *               asignadas_3d_por_estado:int, espera_repuesto:int, en_revision:int,
-     *               atendidas:int, sin_regularizar:int}
+     *               atendidas:int, sin_regularizar:int, cerradas_sap:int, en_buzon:int, nuevas_7d:int}
      */
     public static function tarjetasPorZona(array $casos, array $gestion, array $informes,
                                            ?string $hoy = null, array $zonasFijas = []): array
@@ -1052,6 +1062,7 @@ final class Casos
             'deshabilitados' => 0, 'vencidas' => 0, 'operativos' => 0, 'sin_dato' => 0,
             'en_revision' => 0, 'atendidas' => 0, 'sin_regularizar' => 0,
             'sin_tecnico' => 0, 'asignadas_3d_por_estado' => 0, 'espera_repuesto' => 0,
+            'cerradas_sap' => 0, 'en_buzon' => 0, 'nuevas_7d' => 0,
         ];
         // Las tres zonas tienen tarjeta aunque estén en cero (y la del jefe de
         // zona, que llega en `$zonasFijas`): una zona sin órdenes se ve en 0,
@@ -1073,6 +1084,13 @@ final class Casos
             if ($estado === 'ATENDIDO')    { $t['atendidas']++; }
             if ($estado === 'EN_REVISION') { $t['en_revision']++; }
             if ($estado === 'CERRADO_SIN_ATENCION' && empty($g['regularizado_en'])) { $t['sin_regularizar']++; }
+            if ($estado === 'RESUELTO')    { $t['cerradas_sap']++; }
+            // Toda orden de la zona, esté en el estado que esté: es la columna
+            // «Órdenes» de la tabla por zona del buzón, y cada una de las
+            // demás cifras de la zona es un subconjunto de esta.
+            $t['en_buzon']++;
+            $edad = self::diasDesde($c['fecha_creacion'] ?? null, $hoy);
+            if ($edad !== null && $edad >= 0 && $edad <= 6) { $t['nuevas_7d']++; }
 
             if (!$clasif[$aviso]['en_total']) { unset($t); continue; }
             $grupo = $clasif[$aviso]['grupo'];
@@ -1138,7 +1156,13 @@ final class Casos
             // «sin zona» van aparte y no entran.
             'tres_zonas' => ['total' => $sumar($tres, 'total'),
                              'deshabilitados' => $sumar($tres, 'deshabilitados'),
-                             'operativos' => $sumar($tres, 'operativos')],
+                             'operativos' => $sumar($tres, 'operativos'),
+                             'abiertas' => $sumar($tres, 'abiertas'),
+                             'espera_informe' => $sumar($tres, 'espera_informe'),
+                             'atendidas' => $sumar($tres, 'atendidas'),
+                             'cerradas_sap' => $sumar($tres, 'cerradas_sap'),
+                             'en_buzon' => $sumar($tres, 'en_buzon'),
+                             'nuevas_7d' => $sumar($tres, 'nuevas_7d')],
             // El cuadro de «Cómo va el buzón»: todas, incluidas OTRA y sin zona.
             'total' => $sumar($zonas, 'total'),
             'ot_disponible' => $otOk,
@@ -1150,6 +1174,13 @@ final class Casos
             'en_revision' => $sumar($zonas, 'en_revision'),
             'atendidas' => $sumar($zonas, 'atendidas'),
             'sin_regularizar' => $sumar($zonas, 'sin_regularizar'),
+            'cerradas_sap' => $sumar($zonas, 'cerradas_sap'),
+            'en_buzon' => $sumar($zonas, 'en_buzon'),
+            'nuevas_7d' => $sumar($zonas, 'nuevas_7d'),
+            // Las filas 1 y 2 del conjunto, para el resumen del buzón y de
+            // Asignación: null si falta una fuente de OT (I-7), como en cada zona.
+            'abiertas' => $sumar($zonas, 'abiertas'),
+            'espera_informe' => $sumar($zonas, 'espera_informe'),
         ];
     }
 

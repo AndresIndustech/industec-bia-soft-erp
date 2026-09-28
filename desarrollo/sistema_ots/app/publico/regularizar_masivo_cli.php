@@ -40,8 +40,15 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 require_once __DIR__ . '/nucleo/Db.php';
 require_once __DIR__ . '/nucleo/Pendientes.php';
+require_once __DIR__ . '/nucleo/Vocabulario.php';
 
 $ejecutar = in_array('--ejecutar', $argv, true);
+// VALORES GUARDADOS: $motivo (bitácora) y los dos literales de los UPDATE de abajo
+// quedaron escritos en la base cuando este script se corrió el 2026-09-21. Se dejan
+// tal cual se grabaron —con «casos», «cerrado» y «regularizado»— para que una búsqueda
+// por el texto del script encuentre esas filas. Son datos, no pantalla: están en
+// lista_negra_excepciones de vocabulario.json. Lo que imprime la consola sí usa el
+// diccionario.
 $motivo = 'Regularización masiva 2026-09-21, a pedido de Andrés Basantes: se asume que '
         . 'la administradora ya reportó/cerró estos casos en SAP. No se verificó caso por '
         . 'caso contra SAP.';
@@ -77,10 +84,10 @@ foreach ($atendidos as $c) {
     $aCerrar[] = $c['aviso'];
 }
 
-echo "1. ATENDIDO -> cerrado en SAP\n";
-echo '   en ATENDIDO                                : ' . count($atendidos) . "\n";
-echo '   con pendiente de repuestos vivo (se saltan) : ' . count($conPendiente) . "\n";
-echo '   a cerrar                                    : ' . count($aCerrar) . "\n";
+echo '1. ATENDIDO (' . Vocabulario::t('ATENDIDA') . ') -> RESUELTO (' . Vocabulario::t('CERRADA_SAP') . ")\n";
+echo '   ' . str_pad(Vocabulario::t('ATENDIDA', 2), 44) . ': ' . count($atendidos) . "\n";
+echo '   ' . str_pad('con ' . Vocabulario::t('SOLICITUD_EN_TRAMITE') . ' (se saltan)', 44) . ': ' . count($conPendiente) . "\n";
+echo '   ' . str_pad('a marcar ' . Vocabulario::t('CERRADA_SAP'), 44) . ': ' . count($aCerrar) . "\n";
 
 if ($ejecutar) {
     foreach ($aCerrar as $aviso) {
@@ -93,7 +100,7 @@ if ($ejecutar) {
         );
         anotar('CERRADO_SAP_MASIVO', $aviso, 'ATENDIDO', 'RESUELTO', $motivo);
     }
-    echo '   cerrados                                    : ' . count($aCerrar) . "\n";
+    echo '   ' . str_pad(Vocabulario::t('CERRADA_SAP', 2), 44) . ': ' . count($aCerrar) . "\n";
 } else {
     echo "   NO se escribio nada. Agrega --ejecutar para aplicarlo.\n";
 }
@@ -102,8 +109,8 @@ if ($ejecutar) {
 $pendReg = Db::todos(
     "SELECT aviso FROM casos_gestion WHERE estado = 'CERRADO_SIN_ATENCION' AND regularizado_en IS NULL"
 );
-echo "\n2. CERRADO_SIN_ATENCION -> regularizado\n";
-echo '   pendientes de regularizar                   : ' . count($pendReg) . "\n";
+echo "\n2. CERRADO_SIN_ATENCION (" . Vocabulario::t('CERRADA_SIN_ATENCION') . ') -> ' . Vocabulario::t('REGULARIZADA') . "\n";
+echo '   ' . str_pad(Vocabulario::t('SIN_REGULARIZAR', 2), 44) . ': ' . count($pendReg) . "\n";
 
 if ($ejecutar) {
     foreach ($pendReg as $c) {
@@ -115,17 +122,22 @@ if ($ejecutar) {
         );
         anotar('REGULARIZAR_MASIVO', $c['aviso'], 'CERRADO_SIN_ATENCION', 'CERRADO_SIN_ATENCION', $motivo);
     }
-    echo '   regularizados                               : ' . count($pendReg) . "\n";
+    echo '   ' . str_pad(Vocabulario::t('REGULARIZADA', 2), 44) . ': ' . count($pendReg) . "\n";
 } else {
     echo "   NO se escribio nada. Agrega --ejecutar para aplicarlo.\n";
 }
 
 echo "\nEstado de la tabla:\n";
+// El código de la base y, al lado, su nombre en el diccionario: quien lee la
+// consola es la misma persona que después ve la pantalla.
 foreach (Db::todos('SELECT estado, COUNT(*) n FROM casos_gestion GROUP BY estado ORDER BY n DESC') as $x) {
-    printf("   %-22s %5d\n", $x['estado'], $x['n']);
+    // Un estado que el diccionario no conoce no tumba la consola: se dice (I-7).
+    try { $txt = Vocabulario::t(Vocabulario::deEstado((string) $x['estado'])); }
+    catch (VocabularioError $ex) { $txt = '(sin concepto en el diccionario)'; }
+    printf("   %-22s %-30s %5d\n", $x['estado'], $txt, $x['n']);
 }
 $p = Db::uno("SELECT COUNT(*) n FROM casos_gestion
                WHERE estado = 'CERRADO_SIN_ATENCION' AND regularizado_en IS NULL");
-echo '   pendientes de regularizar   : ' . $p['n'] . "\n";
+echo '   ' . str_pad(Vocabulario::t('SIN_REGULARIZAR', 2), 44) . ': ' . $p['n'] . "\n";
 $a = Db::uno("SELECT COUNT(*) n FROM casos_gestion WHERE estado = 'ATENDIDO'");
-echo '   ATENDIDO sin cerrar en SAP  : ' . $a['n'] . "\n";
+echo '   ' . str_pad(Vocabulario::t('ATENDIDA', 2), 44) . ': ' . $a['n'] . "\n";

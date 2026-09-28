@@ -57,7 +57,7 @@ $payload = json_decode((string) file_get_contents($ruta), true);
 $cierres = $payload['cierres'] ?? null;
 if (!is_array($cierres)) { fwrite(STDERR, "el JSON no trae 'cierres'\n"); exit(1); }
 
-echo "T2.24.2 · cierre masivo de preventivos sin cerrar\n";
+echo "T2.24.2 · marca masiva de ejecutado de los preventivos atrasados, por marcar como ejecutados\n";
 echo 'generado del payload : ' . ($payload['generado'] ?? '?') . "\n";
 echo 'en el payload         : ' . count($cierres) . "\n";
 
@@ -96,7 +96,7 @@ foreach ($cierres as $c) {
     }
     if ($i['estado'] !== 'EN_CURSO') { $saltados[] = [$id, $i['local_codigo'], 'ya no está EN_CURSO (' . $i['estado'] . ')']; continue; }
     if ($i['plan_vigente_fin'] === null || $i['plan_vigente_fin'] >= date('Y-m-d')) {
-        $saltados[] = [$id, $i['local_codigo'], 'ya no está vencido']; continue;
+        $saltados[] = [$id, $i['local_codigo'], 'ya no está atrasado']; continue;
     }
     if ($i['actualizado_por'] !== null) {
         $saltados[] = [$id, $i['local_codigo'], 'alguien ya lo tocó desde la app — no se pisa']; continue;
@@ -115,6 +115,11 @@ foreach ($cierres as $c) {
           WHERE ingreso_id = ?',
         [$rIni, $rFin, $ANDRES_ID, $id]
     );
+    // VALORES GUARDADOS: el título y el detalle del movimiento del ingreso quedaron
+    // escritos en cronograma_novedades cuando este script se corrió el 2026-09-21. Se
+    // dejan tal cual se grabaron para que una búsqueda por el texto del script encuentre
+    // esas filas (están en lista_negra_excepciones de vocabulario.json); la consola sí
+    // habla con el diccionario.
     $detalle = 'Cierre masivo T2.24.2 (2026-09-21), a pedido de Andrés Basantes: más de 7 días de atraso, '
              . 'KFC y la administradora ya lo dan por hecho. Fecha real de ' . ($c['fuente_fecha'] ?? '?')
              . '. No se verificó caso por caso contra SAP ni contra el local.';
@@ -122,14 +127,14 @@ foreach ($cierres as $c) {
              $detalle, $i['plan_original_fin'], $rFin, $ANDRES_ID);
 }
 
-echo "\nvalidados y listos para cerrar : $ok\n";
-echo "  a tiempo                     : $aTiempo\n";
-echo "  tarde                        : $tarde\n";
+echo "\nlistos para marcar como ejecutados : $ok\n";
+echo "  a tiempo                         : $aTiempo\n";
+echo "  tarde                            : $tarde\n";
 echo 'saltados (' . count($saltados) . "):\n";
 foreach ($saltados as $s) { echo '  ' . implode(' · ', $s) . "\n"; }
 
 if ($ejecutar) {
-    echo "\nCERRADOS: $ok\n";
+    echo "\nMARCADOS COMO EJECUTADOS: $ok\n";
 } else {
     echo "\nNO se escribió nada. Agrega --ejecutar para aplicarlo.\n";
 }
