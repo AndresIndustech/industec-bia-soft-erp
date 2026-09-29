@@ -2488,6 +2488,77 @@ automático, dos veces, ambas por tocar infraestructura compartida:**
 comprobación por SSH de la migración 014 antes de que esta conversación (o
 cualquier otra) retome T2.28.7 o despliegue algo nuevo.
 
+**Cerrado el mismo día (2026-09-29), con la aprobación de Andrés** («avanza
+con lo pendiente... despliégalo en la página»): `git push` empujado
+(`de68901`) y comprobación por SSH de la migración 014 — **14 fichas de
+equipo y 23 cambios de serie intactos**, nada vivo sin contemplar (detalle
+en §1s-quindecies).
+
+### 1s-quindecies. T2.28.7 · Fotos del antes y del después, por equipo — MIGRADA, DESPLEGADA y verificada en darkviolet (2026-09-29)
+
+**Migración `015_fotos_por_equipo.sql`** (idempotente, `ADD COLUMN IF NOT
+EXISTS` × 3 + índice) aplicada con `aplicar_sql.php`, tras el volcado de
+respaldo verificado por hash (`volcado_20260929T174107Z.sql.gz`,
+`f221cb0b…`). `verificar_esquema.php` en el servidor: bloque «migracion 015»
+**TODO OK**, y el resto del esquema (007 a 022) sigue en verde con los
+mismos permisos por rol que documenta la fusión (SUPERADMIN 43, ADMIN 42,
+JEFE_ZONA 29, TECNICO 14).
+
+**Desplegado:** `app.js`, `index.html`, `cola.js`, `foto.php`,
+`nucleo/Emision.php`, `nucleo/Validacion.php`, `nucleo/plantilla_ot.php`,
+`reglas.js`, `sw.js` (**v26**), `verificar_esquema.php` — verificado con
+`t2_10_desplegar.py`: «la web entrega exactamente lo que se subió» en los
+dos despliegues (el primero de 10 archivos olvidó `plantilla_ot.php`, ver
+error nº 52 del plan; el segundo lo corrigió).
+
+**Un bug real encontrado y corregido antes de dar la tarea por hecha:**
+`plantilla_ot.php` cambió en la fusión (sin conflicto, se fusionó solo) pero
+no estaba en la primera lista de archivos a subir. Síntoma: el PDF de una
+orden con fotos por equipo salía sin la sección «EVIDENCIA FOTOGRÁFICA POR
+EQUIPO», con `Emision::html()` construyendo `fotos_por_equipo` perfectamente
+(confirmado con trazas temporales dentro del propio método, luego
+retiradas) — la plantilla que lo imprime era la de antes de T2.28.7.
+Encontrado comparando sha256 del archivo local contra el del servidor,
+archivo por archivo. Detalle completo en el error nº 52 del plan.
+
+**Verificación (contra darkviolet, arnés recién preparado cada vez):**
+
+```
+verificar_esquema.php: TODO OK (bloque «migracion 015»: ot_fotos.equipo_n/momento/tomada_en, índice idx_foto_equipo, todo "si")
+verificar_emision.py: 68 de 68 comprobaciones pasan; 0 fallan
+  -- incluye los tres criterios exactos de la especificación (T2.28.7 §): 2 equipos x 1 foto de cada momento -> PDF con
+     "Antes" x4 y "Después" x4 (pypdf); 6.a foto de un equipo -> 400 "máximo"; 7 equipos x 5 fotos (35) emitida en 1.8 s
+     y sin error nuevo en el log de la web (criterio: <30 s)
+verificar_bandeja.py: 37 de 37 comprobaciones pasan; 0 fallan
+verificar_formulario.mjs (navegador real, Chrome DevTools Protocol): 39 comprobaciones, 0 fallos, 0 excepciones JS
+```
+
+**Tres aserciones de prueba corregidas** (commit `bc98263`), las tres por
+texto que el vocabulario del piloto cambió a propósito el 28-sep, no por
+ningún defecto: el recibo ya no dice «el correo no salió (sistema en
+pruebas)» sino «es del piloto: NO llegó a Grupo KFC ni al local»; el
+historial dice «Aviso SAP N», no «Aviso N»; y la ficha de T2.28.6 necesita
+declarar `fotos_antes`/`fotos_despues` para no chocar con la regla nueva
+`FOTOS_ANTES_DESPUES` que **si** debe bloquear ese caso.
+
+**Lo que NO se pudo comprobar / quedó pendiente, ajeno a esta tarea:**
+`verificar_http.py` sigue con 1 falla ya conocida (T2.12.4, arrastrada desde
+T2.28.6, sin relación con equipos ni fotos). `verificar_ciclo.py` y
+`verificar_continuidad.py` fallan 10 comprobaciones por el apagado
+intencional de `resolverPorOrden()`/la cadena completa de avisos para
+órdenes del piloto (decisión de Andrés del 28-sep) — las pruebas no se
+actualizaron cuando se tomó esa decisión; **ninguna de las 10 la causó
+T2.28.7**. `prueba_cola_vivo.mjs` (navegador) también encontró una falla
+ajena: toma `avisos.datos[0]` a ciegas y el sintético sin local (99990011)
+ahora ordena antes que los que sí tienen local. Las tres cosas quedaron
+como error nº 53 del plan, con la pregunta pendiente para Andrés: ¿se
+actualizan esas baterías al nuevo comportamiento del piloto, o se corren
+solo contra `emision_modo=PRODUCCION`? Migración 022 (repuesto/marcas,
+del PC) no se tocó ni se auditó: fuera del alcance de esta tarea.
+
+**No se desplegó nada a producción** (`yellow-elephant`): todo lo de arriba
+es exclusivamente el sitio de pruebas (`darkviolet-armadillo-872352`).
+
 ### 1r-bis. T2.27.7 · El panel «Automatización», con las cinco tareas INACTIVAS (2026-09-23)
 
 Andrés pidió construir las tareas programadas **dentro del panel donde va a ir la
@@ -3490,7 +3561,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 | ~~Vocabulario SAP en todo el sistema~~ (pedido de la administradora, fuera del plan) | ✅ **Terminada y desplegada en darkviolet el 2026-09-26** — ramas `pc/vocabulario-sap-2026-09-24` y `pc/vocabulario-sobre-vivo-2026-09-26` | 2026-09-24 | Solo texto visible, `vocabulario.json` y la tarjeta «Por zona»; no tocó la base ni el árbol canónico. Falta que la **estación empuje T2.28.3/T2.28.6** y fusione estas ramas en `master`, y que alguien vea las pantallas con sesión. Detalle, cifras y cómo se revierte en **§1t** |
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
 | ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó, se detuvo a propósito una vez (error nº 44) y se relanzó. ✅ **T2.28.2, el módulo de correos, construido, desplegado y verificado el 2026-09-24** (013 aplicada, `TODO OK`; `correos.php`; `Destinatarios::resolver()`; el tope y el cupo por hora del despachador — `§1s-undecies`), **y sembrado**: los tres jefes de zona ya están en `correo_destinatarios` (3/3 contra el maestro). ✅ **T2.28.3 terminada el 2026-09-24** (`§1s-duodecies`): fuera `#correojefeop`, línea «también se enviará a» resuelta con `Destinatarios::copiasPorLocal()` (funciona sin señal), `formulario_v: 2`, regla `CORREO_INVALIDO` en las tres implementaciones y el fixture, y `envio.php` corregido para que `locales_admin.correo_veces`/`correo_visto` sí se llenen. `sw.js` v19. ✅ **T2.28.6, la ficha del equipo, terminada el 2026-09-24** (`§1s-terdecies`): migración 014 aplicada (`equipos_ficha`/`equipos_ficha_cambios`), `t2_28_marcas.py`/`t2_28_exportar_equipos.py` escritos y corridos (455 marcas, 3.083 modelos), desplegado y verificado (`verificar_emision.py` 48·0, `verificar_formulario.mjs` 39·0). De paso, un bug real (error nº 48): seis baterías de prueba elegían el equipo a ciegas y podían escribir la ficha de un equipo SAP real — corregido. Sigue **T2.28.7** en el carril |
-| **T2.28.7 · Fotos del antes y del después, por equipo** | Conversación en curso (carril T2.28.3→…→T2.28.9). **2026-09-29: fusionada sobre el piloto del PC** (`ffe0e76`, sobre `b4886ca`) — 8 conflictos resueltos a mano en `app.js`, `catalogos.php`, `index.html`, `nucleo/Emision.php`, `nucleo/Validacion.php`, `reglas.js`, `sw.js` (v26) y `verificar_esquema.php`; commiteado, **push a origin pendiente de aprobación** (bloqueado por el clasificador de modo automático). Antes de desplegar falta auditar si la migración 014 (T2.28.6) sigue viva en darkviolet tras los despliegues del piloto del 28-sep, y correr `t2_10_desplegar.py --comprobar-web` aparte contra esta base | 2026-09-24 | Migración `015_fotos_por_equipo.sql` (sin aplicar en ningún servidor), `app.js`, `index.html`, `cola.js`, `foto.php`, `Emision.php`, `plantilla_ot.php`, `sw.js`, reglas (tres implementaciones) y fixture |
+| ~~T2.28.7 · Fotos del antes y del después, por equipo~~ | ✅ **Terminada, fusionada, migrada y DESPLEGADA en darkviolet el 2026-09-29** — 8 conflictos de la fusión resueltos a mano (commit `ffe0e76`), migración 015 aplicada, `verificar_emision.py` 68·0, `verificar_bandeja.py` 37·0, `verificar_formulario.mjs` 39·0. Detalle en **§1s-quindecies** | — | Migración `015_fotos_por_equipo.sql`, `app.js`, `index.html`, `cola.js`, `foto.php`, `Emision.php`, `plantilla_ot.php`, `sw.js` v26, reglas (cuatro implementaciones) y fixture. Sigue **T2.28.8** en el carril (casos sin local) |
 | ~~T2.28.16a/16b · Cronograma de preventivos contra el Excel de hoy~~ | ✅ **Terminada el 2026-09-23** | — | `t2_7_cronograma_preventivo.py` (16a) y `t2_28_cronograma.py --comparar` (16b), solo lectura. 15/15 pruebas unitarias; 351/352 sin regresión contra el snapshot del 8-sep (1 corrección a propósito, documentada); informe 52 REAGENDAR (37 + 15 que destapa 16a) y 1 CONFLICTO con CUMPLIDO (mismo caso, K121EC ingreso 3 — a D7). Detalle en **§1s-quinquies**. No tocó 16c/16d (puerta D7) |
 | ~~Revisión de las estadísticas del inicio y de Reportes~~ · ~~Reportes para Grupo KFC y tablero de gerencia (T2.27)~~ | ✅ **Terminadas el 2026-09-23** | — | Estadísticas desplegadas en darkviolet (§1q, `verificar_cifras.py` 21·0). Cinco generadores nuevos en `desarrollo/agentes/scripts/t2_27_*.py` y el lanzador `reportes_kfc.bat`; salidas en `SALIDAS IA\REPORTES\KFC`. **No escribió en ninguna tabla ni en el correo** (solo lectura). Detalle en §1r |
 | ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |

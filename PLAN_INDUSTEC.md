@@ -1915,17 +1915,12 @@ python verificar_seguridad.py   # 28 · 0
 >    el suyo por equipo y `cola.js`/`foto.php` ya hablan `equipo_n`/`momento` de
 >    punta a punta. Verificado: sin marcadores de conflicto residuales, `node
 >    --check` en los tres `.js`, llaves balanceadas en los cuatro `.php` tocados.
->    **`git push origin master` lo bloqueó el clasificador de modo automático**
->    (acción visible para el otro equipo): el commit está en la estación, no en
->    GitHub. **La comprobación por SSH de si la migración 014 sigue intacta en
->    darkviolet también la bloqueó el mismo clasificador**; lo único que se pudo
->    verificar sin permiso especial fue `curl` a `sw.js` en vivo: entrega
->    exactamente **v25**, el mismo que documenta `ESTADO.md` §1y como el último
->    desplegado — no hay nada vivo que esta base no contemple. **Antes de
->    desplegar T2.28.7 o de continuar la Fase 2: Andrés aprueba el `git push` y,
->    aparte, corre o autoriza la comprobación por SSH de la migración 014**
->    (`SHOW TABLES LIKE 'equipos_ficha'` + conteo de filas) para descartar el
->    patrón del error nº 48 antes de subir nada nuevo.
+>    ✅ **2026-09-29, con la aprobación explícita de Andrés:** `git push`
+>    empujado (`de68901`, y los commits siguientes de esta misma jornada,
+>    hasta `bc98263`); la comprobación por SSH de la migración 014 confirmó
+>    **14 fichas y 23 cambios de serie intactos** (`SHOW TABLES LIKE
+>    'equipos_ficha'` + conteo) — el patrón del error nº 48 no ocurrió, nada
+>    vivo quedó sin contemplar.
 >
 > **Para el corte a PRODUCCION**, además de lo de siempre: cargar a mano el
 > contador real de cada serie en `correlativos` **antes** de poner
@@ -2053,26 +2048,23 @@ cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 >    `prueba_cola_vivo.mjs` llevan el arreglo por prevención pero no se
 >    volvieron a ejecutar): quien las corra en la siguiente subtarea confirma
 >    que el arreglo no les rompió nada propio.
-> 10. 🔨 **T2.28.7, las fotos del antes y del después por equipo — construida
->    entera, sin migrar ni desplegar.** Cortada por el límite semanal de sesión
->    justo antes del tramo de migración/despliegue/baterías. Lo que existe en
->    código, verificado al fusionarse con el piloto el 2026-09-29 (`ESTADO.md`
->    **§1s-quaterdecies**): `sql/015_fotos_por_equipo.sql` (columnas
->    `equipo_n`/`momento`/`tomada_en` sobre `ot_fotos`, ya existente desde la
->    008); el picker por equipo en `app.js` (`bloqueEquipo()` →
->    `inicializarFotosEq`, reemplaza al picker único que tenía el formulario);
->    `cola.js`/`foto.php` hablando `equipo_n`/`momento` de punta a punta;
->    `nucleo/Emision.php::fotoReducidaParaPdf()` para que el PDF no reviente
->    con una preventiva de 7 equipos y 40 fotos; la regla
->    `FOTOS_ANTES_DESPUES`/`FOTO_ANTES_POSTERIOR` en las cuatro implementaciones
->    (`reglas.js`, `Validacion.php`, `t2_5_validacion.py` y el fixture —
->    confirmado con `grep`, las cuatro la tienen). **Siguiente paso, en
->    orden:** (a) Andrés aprueba el `git push` del commit de la fusión y la
->    comprobación por SSH de la migración 014 (punto 6 de arriba); (b) recién
->    entonces, auditar si algo de T2.28.6/T2.28.7 quedó afectado por los
->    despliegues del piloto; (c) aplicar la migración 015 con respaldo previo;
->    (d) desplegar y correr las baterías de servidor una por una
->    (`preparar_prueba.php` → baterías → `limpiar_pruebas.php`).
+> 10. ✅ **T2.28.7, las fotos del antes y del después por equipo — MIGRADA,
+>    DESPLEGADA y verificada en darkviolet el 2026-09-29** (`ESTADO.md`
+>    **§1s-quindecies**). Migración `015_fotos_por_equipo.sql` aplicada
+>    (`equipo_n`/`momento`/`tomada_en` sobre `ot_fotos`); desplegados
+>    `app.js`, `index.html`, `cola.js`, `foto.php`, `nucleo/Emision.php`,
+>    `nucleo/Validacion.php`, `nucleo/plantilla_ot.php` (el que faltó al
+>    primer intento — error nº 52), `reglas.js`, `sw.js` (v26),
+>    `verificar_esquema.php`. Verificado: `verificar_emision.py` **68·0**,
+>    `verificar_bandeja.py` **37·0**, `verificar_formulario.mjs` **39·0**,
+>    los tres con el arnés recién preparado. Corregidas tres aserciones de
+>    prueba desactualizadas por el vocabulario del piloto (commit `bc98263`).
+>    **Hallazgo aparte, no de esta subtarea, anotado como error nº 53:**
+>    `verificar_ciclo.py` y `verificar_continuidad.py` fallan 10 comprobaciones
+>    por el apagado intencional de `resolverPorOrden()`/la cadena completa
+>    para el piloto (28-sep-2026) — las pruebas no se actualizaron cuando se
+>    tomó esa decisión. Pendiente de Andrés: decidir si esas dos baterías se
+>    actualizan o se corren solo en modo PRODUCCIÓN.
 >
 > **Avance de la Fase 1 (análisis de solo lectura), sumado el 2026-09-23 en
 > segunda pasada:** T2.28.16a/16b ya están **hechas y verificadas** —
@@ -3062,6 +3054,52 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     habría tocado —estaba bien—, pero el informe habría dicho una cifra de
     «quedan» falsa. **Regla:** antes de un DELETE se cuentan los dos lados, el
     de afuera con `NOT COALESCE(criterio, 0)`, y se aborta si no suman el total.
+
+52. **Al desplegar una fusión, la lista de archivos a subir sale de `git diff
+    <base>..HEAD --name-only`, no de memoria de cuáles tuvieron conflicto.**
+    Al desplegar T2.28.7 (2026-09-29) se subieron los 8 archivos que habían
+    tenido conflicto de fusión más `cola.js`/`foto.php`, y se olvidó
+    `nucleo/plantilla_ot.php` —cambió, pero se fusionó SOLO, sin conflicto—.
+    El síntoma fue sutil y engañoso: `Emision::html()` armaba
+    `fotos_por_equipo` perfectamente (confirmado con trazas dentro del propio
+    método), pero el PDF salía sin la sección «EVIDENCIA FOTOGRÁFICA POR
+    EQUIPO» porque la plantilla que la imprime era la versión de antes de
+    T2.28.7. Ni `php -l` ni `verificar_esquema.php` lo detectan: el archivo
+    compila y el esquema no cambió. Se encontró comparando el sha256 del
+    archivo local contra el del servidor, archivo por archivo, después de
+    media hora largando trazas de depuración dentro de `Emision.php` por la
+    pista falsa. **Regla:** `git diff <último-commit-desplegado>..HEAD
+    --name-only -- <carpeta>` es la lista de qué subir, siempre — nunca la
+    lista de qué tuvo conflicto en la fusión, que es un subconjunto.
+
+53. **Una decisión de seguridad correcta (el piloto no resuelve pendientes ni
+    cierra casos, 28-sep-2026: `!$piloto` en `envio.php`) deja baterías de
+    servidor enteras fallando por una razón que no tiene nada que ver con lo
+    que se está probando ese día.** Al correr `verificar_ciclo.py` y
+    `verificar_continuidad.py` limpios contra darkviolet (2026-09-29, para
+    verificar T2.28.7) aparecieron 10 fallas: el pendiente ya no se resuelve
+    solo al concluir la orden (P-06), la cadena de avisos ya no se cierra
+    junta (T2.25.3) — ambas **a propósito**, porque toda orden del sitio de
+    pruebas es del piloto desde el 28-sep y esas dos funciones se apagan
+    explícitamente para el piloto (`envio.php`, comentario de las líneas
+    656-667: doce órdenes se habían cerrado en SAP con una OT que KFC nunca
+    recibió). Las pruebas se escribieron **antes** de esa decisión y nadie las
+    volvió a correr desde entonces contra la base fusionada. Se sumó una
+    quinta falla ajena en `prueba_cola_vivo.mjs`: toma `avisos.datos[0]` a
+    ciegas, y el aviso sintético sin local (99990011) ordena antes que los que
+    sí tienen local — sin relación con el piloto, un supuesto de la prueba que
+    nunca se verificó. **Ninguna de las 10 fallas la causó T2.28.7** (que
+    quedó 68·0 + 37·0 + 39·0 en las tres baterías que sí la ejercitan) — se
+    aíslan corriendo cada batería sola, recién preparada, y comparando el
+    texto exacto de la falla contra lo que el código dice que hace a
+    propósito. **Regla:** después de fusionar una rama con cambios de
+    comportamiento deliberados, correr la batería completa una vez —no solo
+    la de la tarea del día— y clasificar cada falla contra el commit que la
+    explica antes de darla por un defecto nuevo. **Pendiente, no resuelto
+    aquí:** decidir con Andrés si `verificar_ciclo.py`/`verificar_continuidad.py`
+    se actualizan para esperar el nuevo comportamiento del piloto, o si se
+    corren solo con `emision_modo=PRODUCCION`; y corregir el supuesto de orden
+    en `prueba_cola_vivo.mjs`.
 
 ### Lo que no se toca, nunca
 
