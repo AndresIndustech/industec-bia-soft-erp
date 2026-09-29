@@ -1936,19 +1936,28 @@ cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 >    pestañas (Por zona, Generales, Por local, Reportes, Propuestos, Vista
 >    previa), enlazada desde «Automatización». Evidencia completa, con las
 >    cifras exactas de cada batería, en `ESTADO.md` **§1s-undecies**.
->    **Lo único que queda, y requiere aprobación de Andrés** (no lo ejecuta un
->    agente): `php correos_sembrar_cli.php --ejecutar` en el servidor —el
->    simulacro ya muestra que las tres zonas coinciden con el maestro (3/3)—,
->    con lo que `SELECT COUNT(*) ... WHERE rol='JEFE_ZONA' AND activo=1` pasa
->    de **0** a **3**. No bloquea la emisión mientras tanto: sin sembrar, la
->    orden sigue saliendo igual que antes (confirmado por `verificar_emision.py`).
->    A **T2.28.3** (el correo y el administrador del local, editables con listas
->    precargadas) le sigue faltando lo que no cubrió el arreglo urgente: quitar
->    `#correojefeop` y la línea «también se enviará a» del formulario (ya puede
->    hacerse, con `correos.php` construido), `formulario_v: 2`, la regla
->    `CORREO_INVALIDO` en las tres implementaciones y el fixture, y
->    `correosDelLocal()`/`t2_28_admins.py` (la siembra del histórico de
->    administradores, la acción O).
+>    **Sembrado, con aprobación de Andrés en el momento** (2026-09-24): los
+>    tres jefes de zona coinciden con el maestro (3/3) y `SELECT COUNT(*) ...
+>    WHERE rol='JEFE_ZONA' AND activo=1` da **3**. En el camino salió un bug
+>    real (error nº 47): `correos_sembrar_cli.php` usaba `__DIR__` en vez de
+>    `getcwd()`, el mismo patrón del error nº 42 — corregido antes de sembrar.
+>    ✅ **T2.28.3 (resto) terminada el 2026-09-24** (`ESTADO.md` §1s-duodecies):
+>    fuera `#correojefeop`, línea «también se enviará a» (jefe de zona + copias,
+>    resuelta con `Destinatarios::copiasPorLocal()`, nuevo — no con
+>    `resolver()`, que releería el catálogo entero 100 veces; funciona sin
+>    señal porque viaja en la misma copia cacheada de `catalogos.php`),
+>    `formulario_v: 2`, regla `CORREO_INVALIDO` (ADVIERTE, solo CAPTURA) en las
+>    tres implementaciones y el fixture (41 casos, antes 37). De paso, un hueco
+>    real de la migración anterior: `envio.php` no llenaba
+>    `locales_admin.correo_veces`/`correo_visto` aunque la 013 ya traía esas
+>    columnas — corregido, con `ADMIN_CORREO_CAMBIO` en la bitácora cuando el
+>    correo de un administrador ya conocido cambia. **No se agregó
+>    `Catalogo::correosDelLocal()`**: `app.js` ya arma esa misma lista en el
+>    cliente con `admins_v2` + `correo_local`, y duplicarla en el servidor no
+>    aportaba nada (instrucción explícita de la subtarea). `sw.js` v19.
+>    La siembra del histórico de administradores (`t2_28_admins.py`, la acción O)
+>    sigue sin construir — no se pidió en esta vuelta del carril y su
+>    `--ejecutar` es una puerta de aprobación aparte.
 > 8. ✅ **Tres pedidos directos de INDUSTEC, desplegados el 2026-09-24** (por
 >    delante de la Fase 2, `sw.js` **v18**): el equipo se busca escribiendo y,
 >    si no está, se puede crear («+ Crear «…» como equipo nuevo»); los
@@ -1962,6 +1971,31 @@ cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 >    la lección, error nº 45. **No se comprobó**: un jefe de zona real
 >    emitiendo (la cuenta de prueba de jefe no está en el padrón) ni un
 >    Android real.
+> 9. ✅ **T2.28.6, la ficha del equipo, terminada el 2026-09-24** (`ESTADO.md`
+>    **§1s-terdecies**): migración `014_ficha_equipo.sql` aplicada
+>    (`equipos_ficha`/`equipos_ficha_cambios`); `t2_28_marcas.py` y
+>    `t2_28_exportar_equipos.py`, los dos scripts que faltaban de un intento
+>    anterior sin cuota, ya escritos y corridos (455 marcas, 3.083 modelos
+>    subidos; el maestro en Excel). Desplegado (14 archivos) y verificado:
+>    `verificar_esquema.php` TODO OK, `verificar_emision.py` 48·0 (7 nuevas de
+>    T2.28.6), `verificar_formulario.mjs` 39·0, `verificar_http.py` 88/89 (1
+>    fallo de T2.12.4, anterior a esta subtarea y sin relación con equipos —
+>    sin investigar, fuera de alcance). **Bug real encontrado con el
+>    simulacro, no con la puerta** (como pide esta regla del carril): seis
+>    baterías (`verificar_emision.py`, `verificar_http.py`,
+>    `verificar_bandeja.py`, `verificar_ciclo.py`, `verificar_continuidad.py`,
+>    `prueba_cola_vivo.mjs`) armaban su orden de prueba con `equipos[0]` del
+>    local a ciegas, y con la ficha nueva eso podía escribir sobre un equipo
+>    SAP **real** (pasó: `30004677`/G007EC y `30004735`/G018EC, dos activos
+>    reales de KFC, quedaron con una fila de ficha de prueba hasta que se
+>    corrigió). Las seis ahora prefieren el equipo `PROPUESTO` sintético que
+>    siembra `preparar_prueba.php`. Ciclo final limpio: `equipos_ficha`/
+>    `equipos_ficha_cambios` en 0/0 tras `limpiar_pruebas.php --ejecutar`.
+>    **Solo se corrieron las tres que pide la compuerta de T2.28.6**
+>    (`verificar_ciclo.py`/`verificar_bandeja.py`/`verificar_continuidad.py`/
+>    `prueba_cola_vivo.mjs` llevan el arreglo por prevención pero no se
+>    volvieron a ejecutar): quien las corra en la siguiente subtarea confirma
+>    que el arreglo no les rompió nada propio.
 >
 > **Avance de la Fase 1 (análisis de solo lectura), sumado el 2026-09-23 en
 > segunda pasada:** T2.28.16a/16b ya están **hechas y verificadas** —
@@ -2886,6 +2920,24 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     usa `require getcwd() . '/nucleo/…'`, nunca `__DIR__`. Antes de aprobar un
     `--ejecutar` nuevo, correr primero el simulacro sin `--ejecutar` como
     prueba de humo — así se encontró este, antes de tocar ningún dato.
+48. **Una batería de pruebas que elige "el primer equipo del local" a ciegas
+    deja de ser inofensiva en cuanto el código empieza a escribir algo
+    persistente por equipo.** `verificar_emision.py`, `verificar_http.py` y
+    cuatro más armaban su orden de prueba con `equipos[0]` del catálogo del
+    local — durante años eso solo afectó texto superficial del PDF, así que
+    nadie lo vio como un problema. T2.28.6 le agregó a `envio.php` un upsert
+    en `equipos_ficha` por cada equipo de la orden, y `equipos[0]` podía ser
+    (y fue) un activo SAP **real** del local: dos equipos reales de KFC
+    (`30004677`, `30004735`) quedaron con una fila de ficha de prueba
+    (`marca='MARCAPRUEBA'` en uno) hasta que se corrigió. **La regla:**
+    cuando una batería de pruebas construye una orden de verdad, el equipo
+    que elige no puede salir de "lo primero que haya en el local real" —
+    tiene que preferir explícitamente el equipo `PROPUESTO` sintético que
+    `preparar_prueba.php` siembra para ese aviso (`next(e for e in equipos if
+    e.get("propuesto"))`), igual que ya se cuidaba con el aviso y el local.
+    Se encontró corriendo la batería de verdad contra el servidor, no
+    leyendo el código — `verificar_esquema.php` y `php -l` no tienen forma
+    de verlo.
 
 48. **Dos despliegues el mismo día, desde dos worktrees, y el segundo pisa al
     primero sin decir nada.** El 28-sep-2026 el buzón simplificado subió

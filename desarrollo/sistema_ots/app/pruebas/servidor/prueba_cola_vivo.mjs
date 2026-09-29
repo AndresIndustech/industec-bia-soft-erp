@@ -173,8 +173,14 @@ const ORDEN_JS = `(async () => {
   const cat = await (await fetch('catalogos.php')).json();
   const c = ((cat.avisos || {}).datos || [])[0];
   const eqs = (cat.equipos || {})[c.local] || [];
-  const eq = eqs.length ? { equipo_sap: String(eqs[0].equipo_sap), tipo: eqs[0].tipo || '' }
-                        : { tipo: (cat.tipos || ['FREIDORA'])[0] };
+  // T2.28.6: envio.php ahora escribe una ficha (marca/modelo/serie) por cada
+  // equipo de la orden -- se prefiere el equipo PROPUESTO que preparar_prueba.php
+  // sembró para este aviso y nunca un activo SAP real del local (prohibido
+  // escribir fichas de equipos reales desde las baterías).
+  const eqProp = eqs.find((e) => e.propuesto);
+  const eqElegido = eqProp || eqs[0];
+  const eq = eqElegido ? { equipo_sap: String(eqElegido.equipo_sap), tipo: eqElegido.tipo || '' }
+                       : { tipo: (cat.tipos || ['FREIDORA'])[0] };
   const hoy = new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, 10);
   const orden = { local: c.local, aviso: c.aviso, tipo: 'CORRECTIVO', equipos: [eq], uso_repuesto: false,
                   repuestos: '', fecha_atencion: hoy, inicio: hoy + ' 07:00', fin: hoy + ' 08:15',

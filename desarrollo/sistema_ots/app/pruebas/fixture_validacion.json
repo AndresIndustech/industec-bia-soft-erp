@@ -196,6 +196,111 @@
      "cambios": {"con_proveedor_marcado": true, "con_proveedor": "Frio Total · compresor de la camara 2"},
      "espera": []},
 
+    {"nombre": "correo del local invalido en CAPTURA solo advierte",
+     "cambios": {"correo_local": "no-es-un-correo"}, "espera": ["CORREO_INVALIDO"],
+     "nota": "T2.28.3 obs. 2: no bloquea -la orden sale igual, al correo del maestro- y solo se revisa en CAPTURA."},
+
+    {"nombre": "correo del local valido no genera hallazgo",
+     "cambios": {"correo_local": "administrador.local@ejemplo.com"}, "espera": []},
+
+    {"nombre": "correo del local vacio no genera hallazgo",
+     "cambios": {"correo_local": null}, "espera": [],
+     "nota": "El campo es opcional: sin correo, Emision::correoLocal() usa el del maestro."},
+
+    {"nombre": "en HISTORICO un correo invalido no se revisa",
+     "contexto": "HISTORICO",
+     "cambios": {"correo_local": "no-es-un-correo"}, "espera": [],
+     "nota": "El historico no tiene este campo -es nuevo, T2.28.3-, y CORREO_INVALIDO solo aplica en CAPTURA."},
+
+    {"nombre": "T2.28.6: sin marca ni modelo, en formulario_v 2, bloquea y ademas advierte que falta la serie",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA",
+                                                 "fotos_antes": 1, "fotos_despues": 1}]},
+     "espera": ["EQUIPO_SIN_DATOS_DE_PLACA", "EQUIPO_SIN_SERIE"],
+     "nota": "obs. 4: sin la placa no queda un dato util, y el reemplazo se pierde en la bitacora. Con fotos de antes y despues, para aislar del hallazgo de T2.28.7."},
+
+    {"nombre": "T2.28.6: marcado 'sin placa o ilegible' no exige marca, modelo ni serie",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA", "sin_placa": true,
+                                                 "fotos_antes": 1, "fotos_despues": 1}]},
+     "espera": []},
+
+    {"nombre": "T2.28.6: con marca y modelo pero sin serie, en formulario_v 2, solo advierte",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA",
+                                                 "marca": "Manitowoc", "modelo": "IYT0500A",
+                                                 "fotos_antes": 1, "fotos_despues": 1}]},
+     "espera": ["EQUIPO_SIN_SERIE"]},
+
+    {"nombre": "T2.28.6: con marca, modelo y serie completos, en formulario_v 2, no genera hallazgo",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA",
+                                                 "marca": "Manitowoc", "modelo": "IYT0500A", "serie": "SN-PRUEBA-1",
+                                                 "fotos_antes": 1, "fotos_despues": 1}]},
+     "espera": []},
+
+    {"nombre": "T2.28.6: una marca con un valor marcador (S/N) cuenta como si faltara",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA",
+                                                 "marca": "S/N", "modelo": "IYT0500A", "serie": "SN-PRUEBA-1",
+                                                 "fotos_antes": 1, "fotos_despues": 1}]},
+     "espera": ["EQUIPO_SIN_DATOS_DE_PLACA"],
+     "nota": "esMarcador() trata S/N, XXX, guiones, etc. igual que un campo vacio (mismo contrato en las tres implementaciones)."},
+
+    {"nombre": "T2.28.6: sin formulario_v (app vieja en cache) no se exige la ficha del equipo",
+     "cambios": {"equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA", "marca": "S/N"}]},
+     "espera": [],
+     "nota": "§5.4: campo nuevo opcional para el servidor. Sin formulario_v >= 2 la regla ni se evalua."},
+
+    {"nombre": "T2.28.6: en HISTORICO, con formulario_v 2, tampoco se exige (solo CAPTURA)",
+     "contexto": "HISTORICO",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA"}]},
+     "espera": []},
+
+    {"nombre": "T2.28.6: un equipo nuevo propuesto tambien necesita sus datos de placa",
+     "cambios": {"formulario_v": 2, "equipos": [{"nuevo": true, "tipo": "HORNO",
+                                                 "fotos_antes": 1, "fotos_despues": 1}]},
+     "espera": ["EQUIPO_NUEVO_PROPUESTO", "EQUIPO_SIN_DATOS_DE_PLACA", "EQUIPO_SIN_SERIE"]},
+
+    {"nombre": "T2.28.7: sin fotos, en formulario_v 2, bloquea nombrando el equipo",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA",
+                                                 "sin_placa": true}]},
+     "espera": ["FOTOS_ANTES_DESPUES"],
+     "nota": "obs. 1: sin_placa exime la ficha, no las fotos -son dos cosas distintas."},
+
+    {"nombre": "T2.28.7: falta solo la foto del despues",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA",
+                                                 "sin_placa": true, "fotos_antes": 1, "fotos_despues": 0}]},
+     "espera": ["FOTOS_ANTES_DESPUES"]},
+
+    {"nombre": "T2.28.7: falta solo la foto del antes",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA",
+                                                 "sin_placa": true, "fotos_antes": 0, "fotos_despues": 1}]},
+     "espera": ["FOTOS_ANTES_DESPUES"]},
+
+    {"nombre": "T2.28.7: con una foto de cada momento, en formulario_v 2, no genera hallazgo",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA",
+                                                 "sin_placa": true, "fotos_antes": 1, "fotos_despues": 1}]},
+     "espera": []},
+
+    {"nombre": "T2.28.7: la foto del despues es mas vieja que la del antes solo advierte",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA",
+                                                 "sin_placa": true, "fotos_antes": 1, "fotos_despues": 1,
+                                                 "antes_max_ms": 2000, "despues_min_ms": 1000}]},
+     "espera": ["FOTO_ANTES_POSTERIOR"],
+     "nota": "un reloj mal puesto en el celular no invalida la foto (I-7): solo advierte, no bloquea."},
+
+    {"nombre": "T2.28.7: el despues mas nuevo que el antes no advierte",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA",
+                                                 "sin_placa": true, "fotos_antes": 1, "fotos_despues": 1,
+                                                 "antes_max_ms": 1000, "despues_min_ms": 2000}]},
+     "espera": []},
+
+    {"nombre": "T2.28.7: sin formulario_v (app vieja en cache) no se exige la foto por equipo",
+     "cambios": {"equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA"}]},
+     "espera": [],
+     "nota": "§5.4: campo nuevo opcional para el servidor. Sin formulario_v >= 2 la regla ni se evalua."},
+
+    {"nombre": "T2.28.7: en HISTORICO, con formulario_v 2, tampoco se exige (solo CAPTURA)",
+     "contexto": "HISTORICO",
+     "cambios": {"formulario_v": 2, "equipos": [{"equipo_sap": "30009664", "tipo": "FREIDORA ABIERTA"}]},
+     "espera": []},
+
     {"nombre": "un pendiente con diagnostico por codigo y repuestos estructurados no afecta la validacion del formato",
      "cambios": {"pendiente": {"activo_fijo": "007762", "diagnostico": "Resistencia abierta segun FRE-01",
                                "diagnostico_codigo": "FRE-01",

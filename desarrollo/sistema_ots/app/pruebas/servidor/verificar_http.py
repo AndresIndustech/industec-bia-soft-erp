@@ -241,7 +241,13 @@ def main():
         print(f"  AVISO: el tecnico de prueba no tiene el aviso sintetico {AVISO_HTTP} con local. "
               "Corre ~/respaldos/preparar_prueba.php antes de creerle a lo que sigue.")
     equipos = (cat_a.get("equipos") or {}).get(local) or []
-    eq = ({"equipo_sap": str(equipos[0].get("equipo_sap")), "tipo": equipos[0].get("tipo", "")} if equipos
+    # T2.28.6: igual que en verificar_emision.py -envio.php ahora escribe una
+    # ficha por cada equipo de la orden-, se prefiere el equipo PROPUESTO que
+    # preparar_prueba.php sembró para este aviso (uuid 99990000-…) y nunca un
+    # activo SAP real del local, que limpiar_pruebas.php no debe tocar.
+    eq_prop = next((e for e in equipos if e.get("propuesto")), None)
+    eq_elegido = eq_prop or (equipos[0] if equipos else None)
+    eq = ({"equipo_sap": str(eq_elegido.get("equipo_sap")), "tipo": eq_elegido.get("tipo", "")} if eq_elegido
           else {"tipo": (cat_a.get("tipos") or ["FREIDORA"])[0]})
     hoy = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).date().isoformat()
     orden = {"local": local, "aviso": aviso, "tipo": "CORRECTIVO", "equipos": [eq], "uso_repuesto": False,

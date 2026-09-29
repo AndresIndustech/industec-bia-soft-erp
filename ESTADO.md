@@ -2121,6 +2121,230 @@ apagados a propósito; quedan solo como sugerencia en el simulacro de la siembra
 
 ---
 
+### 1s-duodecies. T2.28.3 (resto) · El correo del jefe de operaciones deja de ser un campo, «también se enviará a», y `CORREO_INVALIDO` (2026-09-24)
+
+Lo que ya dejó el arreglo urgente (correo y administrador editables, ambos
+usados en la emisión) no se repitió. Se construyó solo lo que faltaba:
+
+- **`Destinatarios::filas()` pública y `Destinatarios::copiasPorLocal()`
+  (nuevo)**: las COPIAS de una orden (jefe de zona + jefe de operaciones si
+  ya está configurado + otras copias), para la línea del formulario. NO llama
+  a `resolver()` a propósito: `resolver()` recalcula el «para» con
+  `Emision::correoLocal()` → `localFila()`, que relee TODO el catálogo (4 JSON
+  + 2 consultas) por cada llamada, y `catalogos.php` la necesita para los 100
+  locales de una sola vez. `copiasPorLocal()` recibe `$filas` (una sola
+  lectura de `correo_destinatarios`) y la fila del local que el propio
+  llamador ya tiene cargada — cero consultas de más.
+- **`catalogos.php`**: suma `destinatarios_cc` (por local, con `jefe_zona`
+  marcado en cada dirección para poder armar la frase). **No se agregó
+  `Catalogo::correosDelLocal()` ni `correos_locales`** (sí los pedía la
+  especificación): `app.js` ya arma exactamente esa lista en el cliente, con
+  `admins_v2` + `locales[].correo_local` — agregar el mismo dato por el
+  servidor no mejoraba nada, solo duplicaba la regla (I-6, «no dupliques si
+  no aporta», instrucción explícita de esta subtarea).
+- **`index.html`**: fuera `#correojefeop`. En su lugar, una línea de solo
+  lectura «Esta orden también se enviará a: …» con un botón «ver» que lista
+  las direcciones (sin `.combo-lista`: es una lista fija, no un buscador).
+- **`app.js`**: `actualizarTambienEnvio()` arma la frase desde
+  `CAT.destinatarios_cc` (que ya viaja en la misma copia cacheada de
+  `catalogos.php`, así que funciona sin señal sin código aparte);
+  `reunirOrden()` suma `formulario_v: 2` (no bloquea nada; es la marca que
+  T2.28.15 va a usar para cerrar la ventana de compatibilidad — §5.4).
+- **`CORREO_INVALIDO`** (ADVIERTE, solo `CAPTURA`) en `reglas.js`,
+  `Validacion.php`, `t2_5_validacion.py` y el fixture (4 casos nuevos:
+  inválido en CAPTURA, válido, vacío, inválido en HISTÓRICO no se revisa).
+- **`envio.php`**: el upsert de `locales_admin` **no llenaba
+  `correo_veces`/`correo_visto`** aunque la 013 ya trajera esas columnas
+  (hueco real de la migración anterior, no de esta subtarea) — corregido, y
+  ahora anota `ADMIN_CORREO_CAMBIO` en la bitácora cuando el correo de un
+  administrador ya conocido cambia (con el valor anterior, leído antes del
+  upsert, en la misma transacción).
+- `sw.js` → **v19**.
+
+**Verificado:**
+
+```
+node reglas.fixture.mjs                        → 41/41 (reglas.js)
+php pruebas/validacion_test.php                 → 41 casos (PHP)
+t2_5_validacion.py --fixture                     → 41 casos (Python) -- los tres iguales
+php pruebas/prueba_destinatarios.php            → 34·0 (12 nuevas: copiasPorLocal)
+pruebas/prueba_48h.php 120·0 · prueba_contratos.mjs 57·0 · prueba_graficos.mjs 62·0 · prueba_continuidad.php 42·0 ·
+prueba_despacho.php 20·0 · prueba_casos_prueba.php 7·0 (sin regresión)
+
+Despliegue (t2_10_desplegar.py): 8/8 archivos, «la web entrega exactamente lo que se subió»
+php verificar_esquema.php                        → TODO OK («migracion 013» sigue OK; ORDEN: 3 destinatarios activos)
+
+verificar_http.py                                → 89·0
+verificar_emision.py                             → 41·0, incluida la nueva:
+    "correo_veces queda en 1 (primera orden del ciclo con ese correo)" → [{'correo': '...', 'correo_veces': 1}]
+node verificar_formulario.mjs (sola)             → 39·0, incluidas las 7 nuevas:
+    "G4 ya no existe el campo fijo #correojefeop"                          → sinCampoFijo:true
+    "G4 la línea dice que también se enviará al jefe de zona"              → "jefe de zona de INDUSTEC"
+    "G4 «ver» lista el correo del jefe de zona de UIO"                     → "jefezona-uio@industec.me"
+    "sin senal, sigue sin existir el campo fijo #correojefeop"             → sinCampoFijo:true
+    "sin senal, «también se enviará a» igual dice el jefe de zona"         → "jefe de zona de INDUSTEC"
+    "sin senal, «ver» igual lista el correo del jefe de zona de UIO"       → "jefezona-uio@industec.me"
+limpiar_pruebas.php --ejecutar: cifras exactas (simulacro corrido primero, sin sorpresas)
+```
+
+**Lo que NO se pudo comprobar:** el envío real de `ADMIN_CORREO_CAMBIO` a la
+bitácora (necesita dos órdenes del mismo administrador con dos correos
+distintos en el mismo ciclo de prueba; se revisó por lectura de código, no
+por batería automática — el camino "primera vez" sí está probado, con
+`correo_veces = 1`). Tampoco se probó con un jefe de zona real (sigue sin
+cuenta en el padrón, igual que T2.28.2).
+
+Siguiente en el carril: **T2.28.6** — ✅ terminada, ver §1s-terdecies abajo.
+
+---
+
+### 1s-terdecies. T2.28.6 · La ficha del equipo (marca, modelo, serie que se quedan), migrada, desplegada y verificada (2026-09-24)
+
+**Punto de partida:** un intento anterior de esta misma subtarea se había
+quedado sin cuota a medio camino, con casi todo el código ya escrito en disco
+(`equipos.php`, `plantilla_ot.php`, `nucleo/Catalogo.php`, `Validacion.php`,
+`Emision.php`, `Destinatarios.php`, `envio.php`, `catalogos.php`,
+`verificar_esquema.php`, `index.html`, `app.js`, `reglas.js`, `offline.js`,
+`sw.js`, `saneamiento_nocturno.py`, `t2_5_validacion.py`,
+`fixture_validacion.json` con 49 casos, y `sql/014_ficha_equipo.sql` sin
+trackear). Se leyó todo contra el documento y contra los criterios antes de
+tocar nada (instrucción explícita): **estaba prácticamente completo y bien
+hecho** — `esMarcador()`/`normMarca()` en las tres implementaciones, la
+casilla «sin placa», el prellenado desde la ficha con su aviso, la búsqueda de
+equipo extendida por marca/modelo (`buscarEn` en `crearCombo`, sin segundo
+buscador), el upsert de `envio.php` con `COALESCE` (nunca pisa un dato real
+con un vacío o un marcador) y el historial en `equipos_ficha_cambios`, la
+bitácora `EQUIPO_SERIE_CAMBIO`, la sección «Series que cambiaron (90 días)»
+en `equipos.php`, el «sin placa o ilegible» del PDF, y el paso `equipos` del
+saneamiento nocturno. **Lo único que faltaba de verdad:** los dos scripts de
+la estación (`t2_28_marcas.py`, `t2_28_exportar_equipos.py`) y todo el tramo
+de migración/despliegue/baterías.
+
+**Lo que se construyó en esta vuelta:**
+- `t2_28_marcas.py`: combina `ot_equipos` (base local, 9.702 filas) e
+  `Inventario 2023.xlsx` (57.451 filas) con la MISMA `es_marcador`/`norm_marca`
+  que valida el formulario (importadas de `t2_5_validacion.py`, no copiadas).
+  Filtra además candidatos sin ninguna letra (`----` y similares no son una
+  marca bajo ninguna lectura; hallazgo propio antes de correrlo la primera
+  vez, sin tocar la lista de marcadores compartida). Salida:
+  `catalogos/marcas.json` (455 marcas con frecuencia ≥ 3), `catalogos/modelos.json`
+  (3.083 modelos, hasta 60 por marca) y el Excel
+  `MARCAS POR UNIFICAR (generado agente).xlsx` para que Andrés o César decidan
+  los sinónimos. `--subir` los sube por scp a `catalogos/` y verifica el
+  sha256 remoto.
+- `t2_28_exportar_equipos.py`: lee `equipos_ficha`, `equipos_ficha_cambios` y
+  `equipos_propuestos` del servidor por `sql_remoto` (solo `SELECT`), los
+  enriquece con `locales.json`/`equipos_por_local.json` de la estación, y
+  escribe `MAESTRO DE EQUIPOS (generado agente).xlsx` (hojas «Equipos» y
+  «Cambios de serie»). Aborta con mensaje claro si el Excel está abierto (I-4).
+  Es el paso `equipos` que el saneamiento nocturno ya invocaba desde la vuelta
+  anterior.
+- **Bug real encontrado corriendo el simulacro, no la puerta** (mandato
+  explícito de esta tarea): `verificar_emision.py`, `verificar_http.py`,
+  `verificar_bandeja.py`, `verificar_ciclo.py`, `verificar_continuidad.py` y
+  `prueba_cola_vivo.mjs` arman su orden de prueba con `equipos[0]` del local
+  **a ciegas** — antes de esta subtarea eso solo afectaba texto superficial
+  del PDF, pero ahora `envio.php` escribe una ficha por cada equipo de
+  cualquier orden, y `equipos[0]` podía ser un activo SAP **real** del local
+  (confirmado: la primera corrida dejó fichas en `30004677`/G007EC con
+  `marca='MARCAPRUEBA'` y en `30004735`/G018EC con todo `NULL` — dos equipos
+  reales de KFC). Corregido en las seis pruebas: prefieren el equipo
+  `PROPUESTO` que `preparar_prueba.php` ya siembra para el aviso sintético
+  (uuid `99990000-…`), y solo caen al primero de la lista si no hay ninguno
+  propuesto. Verificado después del arreglo: `equipos_ficha` con exactamente
+  3 filas, las tres `PROPUESTO:99990000-…` — cero equipos reales tocados.
+- `verificar_emision.py` suma el gesto completo de T2.28.6 (7 comprobaciones
+  nuevas, con su propio equipo `PROPUESTO:99990000-…-0f1` para no interferir
+  con el resto de la batería): sin marca/modelo/sin-placa → 400 con
+  `EQUIPO_SIN_DATOS_DE_PLACA`; con marca/modelo/serie → emitida y
+  `equipos_ficha` las guarda; `catalogos.php` prellena esa ficha; un segundo
+  envío con otra serie deja 1 fila en `equipos_ficha_cambios` y la bitácora
+  `EQUIPO_SERIE_CAMBIO`.
+- `verificar_formulario.mjs`: sin marcar la casilla «sin placa» del equipo
+  propuesto, la orden síntetica del arnés quedaba bloqueada por
+  `EQUIPO_SIN_DATOS_DE_PLACA` (4 fallos, detectados en la primera corrida
+  después de desplegar) — corregido marcando `[data-eq-sinplaca]` antes de
+  enviar, como haría el técnico si no puede leer la placa.
+
+**Migración `014_ficha_equipo.sql`** (revisada contra el documento antes de
+aplicarla: coincidía exacto con el borrador que ya estaba en disco) aplicada
+en darkviolet con volcado previo (`t2_4_volcado_bd.py`,
+`volcado_20260924T200601Z.sql.gz`, sha256 `63bcb1d6…`):
+
+```
+014_ficha_equipo.sql: 2 sentencias
+  1. CREATE ok
+  2. CREATE ok
+anotada en migraciones
+aplicado
+```
+
+**Despliegue** (`t2_10_desplegar.py`, 14 archivos — todo lo tocado por esta
+subtarea más lo que ya venía de T2.28.3): `14 de 14 archivos en el sitio de
+pruebas · la web entrega exactamente lo que se subió`. `marcas.json` y
+`modelos.json` subidos aparte por `t2_28_marcas.py --subir`, sha256 verificado
+en los dos.
+
+`php verificar_esquema.php` → **TODO OK**, con el bloque nuevo:
+
+```
+migracion 014
+  tabla equipos_ficha                            si                             OK
+  tabla equipos_ficha_cambios                    si                             OK
+  equipos_ficha: PK equipo_clave (I-9)           equipo_clave                   OK
+  equipos_ficha.marca / .modelo / .serie / .sin_placa / .fuente / .actualizado_por   si   OK (×6)
+  equipos_ficha_cambios.campo / .antes / .despues                                    si   OK (×3)
+```
+
+**Baterías de servidor**, ciclo limpio y único (`preparar_prueba.php` → las
+tres → `limpiar_pruebas.php`, sin repetir `preparar_prueba.php` a medio
+camino — la primera vuelta sí lo hizo por iterar sobre el bug de arriba, y
+dejó un pendiente de CNLJ en un estado que dos comprobaciones de T2.12.4/9/5
+no reconocían; se limpió con `limpiar_pruebas.php --ejecutar` y se repitió
+todo desde cero):
+
+```
+verificar_http.py         → 88 de 89 (1 fallo: T2.12.4 "admin_prueba: pendientes.php
+                              muestra el pendiente de CNLJ" — ver «no comprobado» abajo)
+verificar_emision.py      → 48 de 48, con las 7 nuevas de T2.28.6:
+    "sin marca, sin modelo y sin 'sin placa' -> 400, EQUIPO_SIN_DATOS_DE_PLACA"
+    "con marca, modelo y serie -> emitida"
+    "equipos_ficha guarda esa marca, modelo y serie"                      → MANITOWOC/IYT0500A/SN-PRUEBA-1
+    "catalogos.php prellena la ficha para el próximo formulario"          → ídem
+    "un segundo envío con otra serie -> emitida"
+    "equipos_ficha_cambios deja 1 fila: SN-PRUEBA-1 -> SN-PRUEBA-2"
+    "y queda en la bitácora como posible reemplazo del equipo"            → 1
+node verificar_formulario.mjs (sola)  → 39 de 39
+limpiar_pruebas.php --ejecutar: cifras exactas del simulacro (sin sorpresas)
+   → "archivos borrados del disco: 6 de 6 · padrón de técnicos: 21 → 19 · casos_prueba.json borrado: sí"
+SELECT COUNT(*) FROM equipos_ficha / equipos_ficha_cambios  → 0 / 0 (nada quedó, ni real ni de prueba)
+```
+
+Locales, en el mismo ciclo: `prueba_48h.php` 120·0 · `prueba_contratos.mjs`
+57·0 · `prueba_graficos.mjs` 62·0 · `prueba_continuidad.php` 42·0 ·
+`reglas.fixture.mjs`/`validacion_test.php`/`t2_5_validacion.py --fixture` →
+49/49 los tres iguales.
+
+**Lo que NO se pudo comprobar:** el único fallo de `verificar_http.py`
+(T2.12.4, «admin_prueba: pendientes.php muestra el pendiente de CNLJ») es
+anterior a esta subtarea y no tiene relación con equipos/marca/modelo — el
+propio caso que revisa (aviso sintético `99990001`, fijo, no uno de los
+`9999002x` de T2.28.6) ni pasa por `envio.php`. No se investigó a fondo
+(fuera de alcance de T2.28.6): es candidato a revisarse aparte, quizás
+paginación o un backlog de pendientes `CNLJ` de prueba que ya lleva muchas
+corridas acumuladas. Tampoco se corrió `verificar_ciclo.py`/
+`verificar_bandeja.py`/`verificar_continuidad.py`/`prueba_cola_vivo.mjs` en
+esta vuelta (no los pide la compuerta de T2.28.6) — se les aplicó el mismo
+arreglo del equipo `PROPUESTO` por prevención (comparten el mismo patrón
+`equipos[0]` y la próxima subtarea que los corra habría tropezado con el
+mismo bug), pero **sin volver a ejecutarlos**: queda para quien los corra la
+próxima vez confirmar que el arreglo no rompió nada suyo.
+
+Siguiente en el carril: **T2.28.7** (fotos del antes y del después, por
+equipo).
+
+---
+
 ## 1r. T2.27 · Los reportes que KFC le pide a la administración, generados, y el tablero de gerencia (2026-09-23)
 
 Andrés pidió armar los reportes «tal cual se los pide KFC», revisando el correo
@@ -3201,7 +3425,8 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 | ~~Buzón simplificado y cifras de Asignación~~ (pedido de Isabel, fuera del plan) | ✅ **Desplegada el 2026-09-28 a las 08:13 UTC**, pisada en `casos.php` y `nucleo/Casos.php` por el despliegue del panel (08:16) y **repuesta a las ~19:30 UTC** por el de la OT del piloto (`4240a67`, que contiene las dos ramas; §1w) — rama `pc/buzon-simplificado-2026-09-27` en GitHub | 2026-09-27 | Solo `casos.php`, `asignacion.php`, `nucleo/Casos.php` (tres claves nuevas en `tarjetasPorZona()`), `prueba_panel_zona.php` (85·0) y una frase en las dos hojas del piloto. No toca la base, el árbol canónico ni `vocabulario.json`. Detalle, cifras y comando de despliegue en **§1v**. Conviven con dos cambios sin confirmar de otras conversaciones (§1u en el árbol principal y el worktree `_wt_panel_estados_2026-09-27`): fusionar de uno en uno |
 | ~~Vocabulario SAP en todo el sistema~~ (pedido de la administradora, fuera del plan) | ✅ **Terminada y desplegada en darkviolet el 2026-09-26** — ramas `pc/vocabulario-sap-2026-09-24` y `pc/vocabulario-sobre-vivo-2026-09-26` | 2026-09-24 | Solo texto visible, `vocabulario.json` y la tarjeta «Por zona»; no tocó la base ni el árbol canónico. Falta que la **estación empuje T2.28.3/T2.28.6** y fusione estas ramas en `master`, y que alguien vea las pantallas con sesión. Detalle, cifras y cómo se revierte en **§1t** |
 | ~~T2.27.7 · Panel «Automatización» con las tareas programadas, INACTIVAS~~ | ✅ **Terminada el 2026-09-23** | — | Panel y migración 020 en darkviolet, las 5 tareas **inactivas**; `verificar_automatizacion.py` 27·0. Detalle en **§1r-bis**. La sección «Correos de las órdenes» del panel queda para T2.28.2 |
-| ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó, se detuvo a propósito una vez (error nº 44) y se relanzó. ✅ **T2.28.2, el módulo de correos, construido, desplegado y verificado el 2026-09-24** (013 aplicada, `TODO OK`; `correos.php`; `Destinatarios::resolver()`; el tope y el cupo por hora del despachador — `§1s-undecies`). **Pendiente, de aprobación:** `correos_sembrar_cli.php --ejecutar` (el simulacro ya da 3/3 contra el maestro). De T2.28.3 ya está lo que cubrió el arreglo urgente; sigue T2.28.6 en el carril. Qué falta exactamente, en `PLAN_INDUSTEC.md` §11b puntos 7 y 8 |
+| ~~T2.28 · Fase 1 (línea base, robot, Archivo, arnés, análisis de solo lectura)~~ | ✅ **Terminada el 2026-09-24**, salvo lo que depende de personas o de tiempo real | — | Los tres carriles de la Fase 1 cerrados: **estación** (18a/18b/18c el robot, 17a/17c/17e el Archivo — `§1s-septies`), **web** (T2.28.1 el arnés, 17b el Archivo por la web — `§1s-sexies`) y **análisis** (4a correos, 3-siembra admins, 10a repuestos, 12a actividades, 16a/16b cronograma, 18d el robot de punta a punta — `§1s-ter` a `§1s-quinquies`). ✅ **El vigilante en vivo se reinició el 2026-09-23** (PID 13340 con código viejo → PID 29360 con el código de `5318497`, a pedido directo de Andrés — `§1s-octies`). Pendiente de **personas**: que Andrés confirme el tope de sesiones de Hostinger en hPanel y decida las discrepancias de T2.28.4a (94/6/0 vs 92/8/0, con hipótesis) y T2.28.16b (`K121EC` CUMPLIDO con fecha mal importada, a D7). Pendiente de **tiempo real**: la medición de 48 h de 18a y el criterio de dos noches de 18b, que recién puede empezar a contar desde el código nuevo. ✅ **Arreglo urgente del formulario desplegado el 2026-09-24** (correo y administrador editables y usados en la emisión, repuestos con texto libre, lista de casos sin recortar; `sw.js` v16 — `§1s-nonies`). ✅ **El robot confirmado `BIEN` y tres pedidos más desplegados, madrugada del 2026-09-24** (equipo buscable y creable, acompañantes por zona con el jefe primero, migración 021 para que el jefe de zona también atienda, padrón de técnicos regenerado tras 18 días atrasado; `sw.js` v18 — `§1s-decies`). La **Fase 2** (T2.28.2 en adelante, en serie) se lanzó, se detuvo a propósito una vez (error nº 44) y se relanzó. ✅ **T2.28.2, el módulo de correos, construido, desplegado y verificado el 2026-09-24** (013 aplicada, `TODO OK`; `correos.php`; `Destinatarios::resolver()`; el tope y el cupo por hora del despachador — `§1s-undecies`), **y sembrado**: los tres jefes de zona ya están en `correo_destinatarios` (3/3 contra el maestro). ✅ **T2.28.3 terminada el 2026-09-24** (`§1s-duodecies`): fuera `#correojefeop`, línea «también se enviará a» resuelta con `Destinatarios::copiasPorLocal()` (funciona sin señal), `formulario_v: 2`, regla `CORREO_INVALIDO` en las tres implementaciones y el fixture, y `envio.php` corregido para que `locales_admin.correo_veces`/`correo_visto` sí se llenen. `sw.js` v19. ✅ **T2.28.6, la ficha del equipo, terminada el 2026-09-24** (`§1s-terdecies`): migración 014 aplicada (`equipos_ficha`/`equipos_ficha_cambios`), `t2_28_marcas.py`/`t2_28_exportar_equipos.py` escritos y corridos (455 marcas, 3.083 modelos), desplegado y verificado (`verificar_emision.py` 48·0, `verificar_formulario.mjs` 39·0). De paso, un bug real (error nº 48): seis baterías de prueba elegían el equipo a ciegas y podían escribir la ficha de un equipo SAP real — corregido. Sigue **T2.28.7** en el carril |
+| **T2.28.7 · Fotos del antes y del después, por equipo** | Conversación en curso (carril T2.28.3→…→T2.28.9) | 2026-09-24 | Migración `015_fotos_por_equipo.sql`, `app.js`, `index.html`, `cola.js`, `foto.php`, `Emision.php`, `plantilla_ot.php`, `sw.js`, reglas (tres implementaciones) y fixture |
 | ~~T2.28.16a/16b · Cronograma de preventivos contra el Excel de hoy~~ | ✅ **Terminada el 2026-09-23** | — | `t2_7_cronograma_preventivo.py` (16a) y `t2_28_cronograma.py --comparar` (16b), solo lectura. 15/15 pruebas unitarias; 351/352 sin regresión contra el snapshot del 8-sep (1 corrección a propósito, documentada); informe 52 REAGENDAR (37 + 15 que destapa 16a) y 1 CONFLICTO con CUMPLIDO (mismo caso, K121EC ingreso 3 — a D7). Detalle en **§1s-quinquies**. No tocó 16c/16d (puerta D7) |
 | ~~Revisión de las estadísticas del inicio y de Reportes~~ · ~~Reportes para Grupo KFC y tablero de gerencia (T2.27)~~ | ✅ **Terminadas el 2026-09-23** | — | Estadísticas desplegadas en darkviolet (§1q, `verificar_cifras.py` 21·0). Cinco generadores nuevos en `desarrollo/agentes/scripts/t2_27_*.py` y el lanzador `reportes_kfc.bat`; salidas en `SALIDAS IA\REPORTES\KFC`. **No escribió en ninguna tabla ni en el correo** (solo lectura). Detalle en §1r |
 | ~~Limpieza de datos y usuarios de prueba~~ | ✅ **Terminada el 2026-09-22** | — | 5 cuentas y todo lo que generaron, retirados de darkviolet y del espejo local; 2 casos reales devueltos a NUEVO. Cifras y lo que no se borró en **§1p** |

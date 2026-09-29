@@ -99,6 +99,12 @@ $pasos = [
     'pendientes'         => "abierto_por IN ($ei) OR activo_fijo LIKE 'PRUEBA-%'",
     'novedades'          => "reportada_por IN ($ei) OR novedad_uuid LIKE '99990000-%'",
     'equipos_propuestos' => "propuesto_por IN ($ei) OR equipo_uuid LIKE '99990000-%'",
+    // T2.28.6: la ficha del equipo (marca, modelo, serie) y su historial de
+    // cambios que dejaron las cuentas de prueba. El arnés solo escribe fichas
+    // de equipos de prueba (clave PROPUESTO:99990000-...), nunca de un
+    // equipo real: los dos patrones cubren lo mismo por dos caminos.
+    'equipos_ficha_cambios' => "por IN ($ei) OR equipo_clave LIKE 'PROPUESTO:99990000-%'",
+    'equipos_ficha'      => "actualizado_por IN ($ei) OR equipo_clave LIKE 'PROPUESTO:99990000-%'",
     'casos_seguimientos' => "tecnico_id IN ($ei) OR pedido_por IN ($ei)",
     'casos_gestion'      => "aviso LIKE '9999%'",
     // Aprendidos del campo «administrador» de las órdenes de prueba.

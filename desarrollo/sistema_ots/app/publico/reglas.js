@@ -73,7 +73,12 @@
     // con la app vieja en caché no traen estos campos, y marcarlos ahí
     // inventaría un defecto que la orden nunca tuvo (§5.4).
     EQUIPO_SIN_DATOS_DE_PLACA: BLOQUEA,
-    EQUIPO_SIN_SERIE: ADVIERTE
+    EQUIPO_SIN_SERIE: ADVIERTE,
+    // T2.28.7 (obs. 1): la foto del antes y la del después, por equipo. Mismo
+    // contexto que la ficha del equipo (§5.4): solo CAPTURA con
+    // formulario_v >= 2 -el histórico y una app vieja en caché no las piden.
+    FOTOS_ANTES_DESPUES: BLOQUEA,
+    FOTO_ANTES_POSTERIOR: ADVIERTE
   };
 
   /* =======================================================================
@@ -270,6 +275,27 @@
           }
           if (esMarcador(eq.serie)) {
             add('equipos[' + n + ']', 'EQUIPO_SIN_SERIE', 'falta la serie del equipo');
+          }
+        }
+        // --- FOTOS DEL ANTES Y DEL DESPUES (T2.28.7, obs. 1) ---
+        // Mismo contexto que la ficha (CAPTURA, formulario_v >= 2, equipo
+        // elegido) pero SIN el `!eq.sin_placa`: que la placa no se pueda leer
+        // no exime de fotografiar el equipo antes y después del trabajo, son
+        // dos cosas distintas.
+        if (contexto === 'CAPTURA' && (+o.formulario_v || 0) >= 2 && hayEquipoElegido) {
+          var etiquetaEq = 'Equipo ' + n + (tipoEq ? ' (' + tipoEq + ')' : '');
+          var faltaAntes = !(+eq.fotos_antes > 0);
+          var faltaDespues = !(+eq.fotos_despues > 0);
+          if (faltaAntes || faltaDespues) {
+            var quePasa = faltaAntes && faltaDespues ? 'la foto del antes y del después'
+                        : faltaAntes ? 'la foto del antes' : 'la foto del después';
+            add('equipos[' + n + ']', 'FOTOS_ANTES_DESPUES', etiquetaEq + ': falta ' + quePasa);
+          } else if (eq.antes_max_ms != null && eq.despues_min_ms != null
+                     && +eq.antes_max_ms > +eq.despues_min_ms) {
+            // Informativo (I-7): un celular con el reloj mal puesto no
+            // invalida la foto, solo se advierte para que se revise.
+            add('equipos[' + n + ']', 'FOTO_ANTES_POSTERIOR',
+              etiquetaEq + ': la foto del después parece más vieja que la del antes; revisa el orden');
           }
         }
       });

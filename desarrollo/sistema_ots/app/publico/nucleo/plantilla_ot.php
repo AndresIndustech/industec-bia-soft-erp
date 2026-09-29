@@ -129,6 +129,56 @@ $atiempo = strtoupper(str_replace('Í', 'I', mb_strtoupper(trim($d['atiempo'])))
 <div class="h2">ESTADO DE LA OT</div>
 <div class="box"><div class="text"><?= $e($d['estado_ot']) ?></div></div>
 
+<?php if (!empty($d['fotos_por_equipo'])): ?>
+<div class="h2">EVIDENCIA FOTOGRÁFICA POR EQUIPO</div>
+<div class="box">
+  <?php foreach ($d['equipos'] as $i => $q):
+    $fp = $d['fotos_por_equipo'][$i] ?? null;
+    if ($fp === null) { continue; }
+  ?>
+    <div class="eq<?= $i === 0 ? ' primero' : '' ?>">
+      <b>Equipo <?= $i + 1 ?> · <?= $e($q['tipo'] ?: 'sin tipo') ?></b>
+      <?php foreach (['ANTES' => 'Antes', 'DESPUES' => 'Después'] as $clave => $etiqueta):
+        $lista = $fp[$clave] ?? [];
+      ?>
+        <div style="margin-top:4px">
+          <b><?= $etiqueta ?>:</b>
+          <?php if (!$lista): ?>
+            <?php /* T2.28.7 (I-7): si falta el grupo, se dice -- no se calla. */ ?>
+            <span> sin foto del <?= mb_strtolower($etiqueta) ?></span>
+          <?php else: ?>
+            <table class="photo-table"><tr>
+              <?php foreach ($lista as $k => $img): ?>
+                <?php if ($k > 0 && $k % 3 === 0): ?></tr><tr><?php endif; ?>
+                <td><img src="<?= $img ?>" alt="<?= $etiqueta ?> <?= $k + 1 ?>">
+                  <div style="text-align:center;font-size:10px"><?= $etiqueta ?> <?= $k + 1 ?></div></td>
+              <?php endforeach; ?>
+              <?php for ($k = count($lista) % 3; $k > 0 && $k < 3; $k++): ?><td></td><?php endfor; ?>
+            </tr></table>
+          <?php endif; ?>
+        </div>
+      <?php endforeach; ?>
+      <?php if (!empty($fp['REPUESTO'])): ?>
+        <div style="margin-top:4px">
+          <b>Repuesto — respaldo:</b>
+          <table class="photo-table"><tr>
+            <?php foreach ($fp['REPUESTO'] as $k => $img): ?>
+              <?php if ($k > 0 && $k % 3 === 0): ?></tr><tr><?php endif; ?>
+              <td><img src="<?= $img ?>" alt="Repuesto <?= $k + 1 ?>"></td>
+            <?php endforeach; ?>
+          </tr></table>
+        </div>
+      <?php endif; ?>
+    </div>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
+<?php /* T2.28.7: bloque anterior intacto, solo para las fotos sin `equipo_n`/
+        `momento` (NULL = de antes de la 015, o de una app vieja en caché). Se
+        omite cuando la orden ya tiene evidencia agrupada por equipo y ninguna
+        foto suelta -- decir "Sin fotos" ahí sería falso (I-7). */ ?>
+<?php if (!empty($d['fotos']) || empty($d['fotos_por_equipo'])): ?>
 <div class="h2">EVIDENCIA FOTOGRÁFICA</div>
 <div class="box">
   <?php if (!$d['fotos']): ?>
@@ -146,6 +196,7 @@ $atiempo = strtoupper(str_replace('Í', 'I', mb_strtoupper(trim($d['atiempo'])))
     </tr></table>
   <?php endif; ?>
 </div>
+<?php endif; ?>
 
 <div class="h2">SATISFACCIÓN DEL CLIENTE</div>
 <div class="box">

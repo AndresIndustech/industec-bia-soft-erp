@@ -837,8 +837,65 @@
       '  <label>Área (opcional)</label><input type="text" data-eq-area="' + i + '" placeholder="cocina caliente, bodega…">' +
       '</div>' +
       '<label style="margin-top:8px">Observaciones del equipo</label>' +
-      '<textarea data-eq-obs="' + i + '" placeholder="Opcional"></textarea>';
+      '<textarea data-eq-obs="' + i + '" placeholder="Opcional"></textarea>' +
+      // T2.28.7 (obs. 1): dos grupos de fotos por equipo -antes y despues-,
+      // en vez de la sola "Evidencia fotográfica" de toda la orden que había
+      // antes. Máximo 5 por equipo ENTRE los dos (lo controla agregarFotoEq).
+      '<div class="grid g2" style="margin-top:10px">' +
+      '  <div><label>Foto del antes</label><div class="picker">' +
+      '    <div class="row">' +
+      '      <label class="btn ghost">Tomar foto<input type="file" data-eq-foto-antes-camera="' + i + '" accept="image/*" capture="environment" multiple hidden></label>' +
+      '      <label class="btn ghost">Galería<input type="file" data-eq-foto-antes-gallery="' + i + '" accept="image/*" multiple hidden></label>' +
+      '    </div>' +
+      '    <div class="slot-list" data-eq-foto-antes-lista="' + i + '"><div class="small">Sin fotos</div></div>' +
+      '  </div></div>' +
+      '  <div><label>Foto del después</label><div class="picker">' +
+      '    <div class="row">' +
+      '      <label class="btn ghost">Tomar foto<input type="file" data-eq-foto-despues-camera="' + i + '" accept="image/*" capture="environment" multiple hidden></label>' +
+      '      <label class="btn ghost">Galería<input type="file" data-eq-foto-despues-gallery="' + i + '" accept="image/*" multiple hidden></label>' +
+      '    </div>' +
+      '    <div class="slot-list" data-eq-foto-despues-lista="' + i + '"><div class="small">Sin fotos</div></div>' +
+      '  </div></div>' +
+      '</div>';
     $('#equipos').appendChild(wrap);
+
+    // T2.28.7: las fotos del antes y del después de ESTE bloque, con el
+    // archivo tal como lo entregó el picker (se reduce recién al enviar,
+    // igual que hacía el picker único de antes -- prepararFotosEquipos()).
+    // Van colgadas del propio elemento, como ya hace `selEq._combo`: cuando
+    // el bloque se quita, sus fotos se van con él sin que nadie más lo pida.
+    wrap._fotos = { ANTES: [], DESPUES: [] };
+    function inicializarFotosEq(momento) {
+      var pref = momento.toLowerCase();
+      var listaEl = wrap.querySelector('[data-eq-foto-' + pref + '-lista="' + i + '"]');
+      function render() {
+        var arr = wrap._fotos[momento];
+        if (!arr.length) { listaEl.innerHTML = '<div class="small">Sin fotos</div>'; return; }
+        listaEl.innerHTML = '';
+        arr.forEach(function (f, idx) {
+          var row = document.createElement('div');
+          row.className = 'slot';
+          row.innerHTML = '<span class="name">' + esc(f.name || ('foto ' + (idx + 1))) + '</span>' +
+            '<span class="actions"><button type="button">Quitar</button></span>';
+          row.querySelector('button').addEventListener('click', function () { arr.splice(idx, 1); render(); });
+          listaEl.appendChild(row);
+        });
+      }
+      function agregar(files) {
+        Array.prototype.forEach.call(files, function (f) {
+          var total = wrap._fotos.ANTES.length + wrap._fotos.DESPUES.length;
+          if (total >= 5) { alert('Máximo 5 fotos por equipo, entre antes y después.'); return; }
+          wrap._fotos[momento].push(f);
+        });
+        render();
+      }
+      wrap.querySelector('[data-eq-foto-' + pref + '-camera="' + i + '"]')
+        .addEventListener('change', function (e) { agregar(e.target.files); e.target.value = ''; });
+      wrap.querySelector('[data-eq-foto-' + pref + '-gallery="' + i + '"]')
+        .addEventListener('change', function (e) { agregar(e.target.files); e.target.value = ''; });
+    }
+    inicializarFotosEq('ANTES');
+    inicializarFotosEq('DESPUES');
 
     /* T2.28.6: la casilla «sin placa o ilegible» apaga y vacía marca, modelo
        y serie -- son mutuamente excluyentes, y así el técnico no deja una
@@ -1491,32 +1548,10 @@
     };
   }
 
-  /* ---------- Fotos ---------- */
-  var fotos = [];
-  function initFotos() {
-    function render() {
-      var lista = $('#fileList');
-      if (!fotos.length) { lista.innerHTML = '<div class="small">Sin fotos</div>'; return; }
-      lista.innerHTML = '';
-      fotos.forEach(function (f, idx) {
-        var row = document.createElement('div');
-        row.className = 'slot';
-        row.innerHTML = '<span class="name">' + esc(f.name || ('foto ' + (idx + 1))) + '</span>' +
-          '<span class="actions"><button type="button">Quitar</button></span>';
-        row.querySelector('button').addEventListener('click', function () { fotos.splice(idx, 1); render(); });
-        lista.appendChild(row);
-      });
-    }
-    function agregar(files) {
-      Array.prototype.forEach.call(files, function (f) {
-        if (fotos.length >= 8) { alert('Máximo 8 fotos.'); return; }
-        fotos.push(f);
-      });
-      render();
-    }
-    $('#fileCamera').addEventListener('change', function (e) { agregar(e.target.files); });
-    $('#fileGallery').addEventListener('change', function (e) { agregar(e.target.files); });
-  }
+  /* ---------- Fotos ----------
+     T2.28.7: ya no hay un picker único de la orden -- cada bloque de equipo
+     tiene el suyo, del antes y del después (ver `inicializarFotosEq` dentro
+     de `bloqueEquipo()`), y sus fotos quedan colgadas de `wrap._fotos`. */
 
   /* Reduce una foto a 1.600 px por el lado mayor y la vuelve JPEG (T2.13, la
      008): una de 4 MB queda en ~300 KB, que es lo que sube con datos móviles y
@@ -1544,10 +1579,33 @@
     }).catch(function () { return file; });
   }
 
-  /** Las fotos de la orden, listas para la cola: cada una con su UUID. */
-  function prepararFotos(lista) {
-    return Promise.all(lista.map(reducirFoto)).then(function (blobs) {
-      return blobs.map(function (b) { return { uuid: Cola.uuid(), blob: b }; });
+  /**
+   * Las fotos de TODOS los equipos de la orden, listas para la cola: cada
+   * una con su UUID, el equipo al que pertenece (su posición en la orden al
+   * momento de enviar -- los bloques se pueden quitar, así que no hay otra
+   * referencia estable), si es del antes o del después, y cuándo se tomó
+   * (T2.28.7). `equipo_n`/`momento`/`tomada_ms` son opcionales del lado del
+   * servidor (§5.4): una app vieja en caché sigue sin mandarlos.
+   */
+  function prepararFotosEquipos() {
+    var trabajos = [];
+    $$('#equipos .bloque').forEach(function (b, n) {
+      ['ANTES', 'DESPUES'].forEach(function (momento) {
+        ((b._fotos && b._fotos[momento]) || []).forEach(function (f) {
+          trabajos.push({
+            file: f, equipo_n: n, momento: momento,
+            tomada_ms: (typeof f.lastModified === 'number') ? f.lastModified : null
+          });
+        });
+      });
+    });
+    return Promise.all(trabajos.map(function (t) { return reducirFoto(t.file); })).then(function (blobs) {
+      return blobs.map(function (b, i) {
+        return {
+          uuid: Cola.uuid(), blob: b,
+          equipo_n: trabajos[i].equipo_n, momento: trabajos[i].momento, tomada_ms: trabajos[i].tomada_ms
+        };
+      });
     });
   }
 
@@ -1604,6 +1662,18 @@
       eq.sin_placa = !!(chkSinPlaca && chkSinPlaca.checked);
       eq.codigo_activo = txt('[data-eq-cod]') || null;
       if (eq.nuevo) { eq.area = txt('[data-eq-area]') || null; }
+      // T2.28.7 (obs. 1): cuántas fotos de cada momento trae ESTE bloque, y
+      // cuándo se tomaron las que marcan el borde (la más nueva del antes, la
+      // más vieja del después) -- lo que necesita FOTOS_ANTES_DESPUES/
+      // FOTO_ANTES_POSTERIOR sin mandar cada foto entera solo para validar.
+      var fAntes = (b._fotos && b._fotos.ANTES) || [];
+      var fDespues = (b._fotos && b._fotos.DESPUES) || [];
+      var msAntes = fAntes.map(function (f) { return f.lastModified; }).filter(function (n) { return typeof n === 'number'; });
+      var msDespues = fDespues.map(function (f) { return f.lastModified; }).filter(function (n) { return typeof n === 'number'; });
+      eq.fotos_antes = fAntes.length;
+      eq.fotos_despues = fDespues.length;
+      eq.antes_max_ms = msAntes.length ? Math.max.apply(null, msAntes) : null;
+      eq.despues_min_ms = msDespues.length ? Math.min.apply(null, msDespues) : null;
       return eq;
     });
 
@@ -1662,7 +1732,9 @@
       satisfaccion: $('#satisfaccion').value ? +$('#satisfaccion').value : null,
       firma_presente: firma.tieneTinta(),
       firma_png: firma.tieneTinta() ? firma.png() : null,
-      fotos_cantidad: fotos.length,
+      // T2.28.7: ya no hay un picker único de la orden -- el total es la suma
+      // de las fotos del antes y del después de cada equipo.
+      fotos_cantidad: equipos.reduce(function (n, e) { return n + (e.fotos_antes || 0) + (e.fotos_despues || 0); }, 0),
       tecnico: nombres.join(', '),
       /* La cadena viaja con la orden aunque se derive del maestro. Es lo que
          permite reportar por cliente el dia que INDUSTEC atienda a mas de uno,
@@ -1890,7 +1962,7 @@
       // Las fotos se reducen antes de guardarlas con la orden. La orden queda
       // ligada a quien la llenó: en un celular compartido, el servidor no la
       // acepta con la sesión de otro.
-      prepararFotos(fotos).then(function (listas) {
+      prepararFotosEquipos().then(function (listas) {
         // H-07: "Corregir y reenviar" -- si esto vino de
         // `?reintentar=<uuid>`, es la MISMA fila, no una nueva; las fotos que
         // ya se habían subido se conservan (Cola.reencolar las mantiene) y
@@ -2099,7 +2171,6 @@
     $('#rNueva').addEventListener('click', function () { location.reload(); });
 
     firma = initFirma();
-    initFotos();
     initRating();
     listaRepuestosOrden = crearListaPartes('#repuestosLista');
     listaPartesTrabado = crearListaPartes('#penPartes');

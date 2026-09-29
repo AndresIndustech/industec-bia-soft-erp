@@ -89,6 +89,10 @@ final class Validacion
         // formulario_v >= 2 (§5.4, misma razón que CORREO_INVALIDO).
         'EQUIPO_SIN_DATOS_DE_PLACA' => self::BLOQUEA,
         'EQUIPO_SIN_SERIE' => self::ADVIERTE,
+        // T2.28.7 (obs. 1): la foto del antes y la del después, por equipo.
+        // Mismo contexto que la ficha del equipo (§5.4).
+        'FOTOS_ANTES_DESPUES' => self::BLOQUEA,
+        'FOTO_ANTES_POSTERIOR' => self::ADVIERTE,
     ];
 
     /**
@@ -328,6 +332,25 @@ final class Validacion
                 }
                 if (self::esMarcador($eq['serie'] ?? null)) {
                     $add("equipos[$n]", 'EQUIPO_SIN_SERIE', 'falta la serie del equipo');
+                }
+            }
+            // --- FOTOS DEL ANTES Y DEL DESPUES (T2.28.7, obs. 1). Mismo
+            // contexto que la ficha (CAPTURA, formulario_v >= 2, equipo
+            // elegido) pero SIN el `sin_placa`: que la placa no se pueda leer
+            // no exime de fotografiar el equipo antes y después.
+            if ($contexto === 'CAPTURA' && (int) ($o['formulario_v'] ?? 0) >= 2 && $hayEquipoElegido) {
+                $faltaAntes  = (int) ($eq['fotos_antes'] ?? 0) < 1;
+                $faltaDespues = (int) ($eq['fotos_despues'] ?? 0) < 1;
+                $etiquetaEq  = "Equipo $n" . ($tipoEq !== '' ? " ($tipoEq)" : '');
+                if ($faltaAntes || $faltaDespues) {
+                    $quePasa = $faltaAntes && $faltaDespues ? 'la foto del antes y del después'
+                             : ($faltaAntes ? 'la foto del antes' : 'la foto del después');
+                    $add("equipos[$n]", 'FOTOS_ANTES_DESPUES', "$etiquetaEq: falta $quePasa");
+                } elseif (isset($eq['antes_max_ms'], $eq['despues_min_ms'])
+                          && $eq['antes_max_ms'] !== null && $eq['despues_min_ms'] !== null
+                          && (int) $eq['antes_max_ms'] > (int) $eq['despues_min_ms']) {
+                    $add("equipos[$n]", 'FOTO_ANTES_POSTERIOR',
+                         "$etiquetaEq: la foto del después parece más vieja que la del antes; revisa el orden");
                 }
             }
         }

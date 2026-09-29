@@ -254,6 +254,21 @@ try {
   const admin = await escribir('#admin', 'Nombre Libre de Prueba');
   afirmar('G2 se puede escribir el administrador', admin === 'Nombre Libre de Prueba', admin);
 
+  /* T2.28.3 (obs. 2, D-G): el campo fijo «Correo del jefe de operaciones»
+     desaparece; en su lugar, una línea informativa que resuelve el servidor. */
+  const tambienEnvio = await nav.ev(`({
+    sinCampoFijo: !document.querySelector('#correojefeop'),
+    resumen: (document.querySelector('#tambienEnvioResumen') || {}).textContent || '',
+    verVisible: !((document.querySelector('#tambienEnvioVer') || {}).hidden ?? true)
+  })`);
+  afirmar('G4 ya no existe el campo fijo #correojefeop', tambienEnvio.sinCampoFijo, JSON.stringify(tambienEnvio));
+  afirmar('G4 la línea dice que también se enviará al jefe de zona', /jefe de zona/i.test(tambienEnvio.resumen), tambienEnvio.resumen);
+  afirmar('G4 el botón «ver» aparece (hay al menos una copia configurada)', tambienEnvio.verVisible, JSON.stringify(tambienEnvio));
+  await tocar(await centro(`document.querySelector('#tambienEnvioVer')`));
+  const tambienEnvioLista = await nav.ev(`(document.querySelector('#tambienEnvioLista') || {}).textContent || ''`);
+  afirmar('G4 «ver» lista el correo del jefe de zona de UIO', /jefezona-uio@industec\.me/.test(tambienEnvioLista), tambienEnvioLista);
+  await nav.captura(join(SALIDA, 'verG4_tambien_se_enviara.png'));
+
   await abrirPasoDe('#segRepuesto'); await sleep(500);
   await tocar(await centro(`document.querySelector('#segRepuesto button[data-v=si]')`));
   const libre = await escribir('#repuestosLista .parte-desc', 'repuesto escrito a mano xyz');
@@ -369,6 +384,20 @@ try {
   afirmar('el catalogo se sirve de la copia guardada', /100 locales/.test(sinSenal.cat), sinSenal.cat.slice(0, 48));
   afirmar('el equipo tambien se preselecciona sin senal', !!sinSenal.equipo || true, sinSenal.equipo || '(lo explica)');
 
+  // T2.28.3: «también se enviará a» sale de la MISMA copia de catalogos.php
+  // que el trabajador de servicio ya cacheó -no de un fetch aparte-, así que
+  // tiene que verse igual sin señal que con ella.
+  const tambienEnvioSinSenal = await nav.ev(`({
+    resumen: (document.querySelector('#tambienEnvioResumen') || {}).textContent || '',
+    sinCampoFijo: !document.querySelector('#correojefeop')
+  })`);
+  afirmar('sin senal, sigue sin existir el campo fijo #correojefeop', tambienEnvioSinSenal.sinCampoFijo, JSON.stringify(tambienEnvioSinSenal));
+  afirmar('sin senal, «también se enviará a» igual dice el jefe de zona', /jefe de zona/i.test(tambienEnvioSinSenal.resumen), tambienEnvioSinSenal.resumen);
+  await nav.ev(`document.querySelector('#tambienEnvioVer').click()`);
+  const tambienEnvioListaSinSenal = await nav.ev(`(document.querySelector('#tambienEnvioLista') || {}).textContent || ''`);
+  afirmar('sin senal, «ver» igual lista el correo del jefe de zona de UIO (de la copia del catálogo)',
+          /jefezona-uio@industec\.me/.test(tambienEnvioListaSinSenal), tambienEnvioListaSinSenal);
+
   console.log('\n== D · la orden se guarda en el telefono ==');
   await nav.ev(`(() => {
     const q = (s) => document.querySelector(s);
@@ -383,6 +412,21 @@ try {
     if (sel && !sel.value) {
       const o = [...sel.options].find((x) => x.value && x.value.indexOf('TIPO:') !== 0);
       if (o) { sel.value = o.value; sel.dispatchEvent(new Event('change',{bubbles:true})); }
+    }
+    // T2.28.6: sin esto, EQUIPO_SIN_DATOS_DE_PLACA bloquea el envío (formulario_v: 2
+    // ya exige marca y modelo, o esta casilla) -- este arnés no escribe una marca
+    // real, así que marca «sin placa o ilegible», como haría el técnico si no puede leerla.
+    const sp = q('[data-eq-sinplaca]'); if (sp && !sp.checked) { sp.click(); }
+    // T2.28.7: sin esto, FOTOS_ANTES_DESPUES bloquea el envío igual que la
+    // ficha de arriba (formulario_v: 2 ya exige una foto de cada momento por
+    // equipo). Se empuja directo a _fotos del bloque -mismo estado que deja
+    // el picker real- en vez de simular el input de archivo, que no acepta
+    // asignarle archivos por fuera de un gesto del usuario.
+    const bloque = q('#equipos .bloque');
+    if (bloque && bloque._fotos) {
+      const ahora = Date.now();
+      bloque._fotos.ANTES.push(new File(['antes'], 'antes.jpg', { type: 'image/jpeg', lastModified: ahora - 60000 }));
+      bloque._fotos.DESPUES.push(new File(['despues'], 'despues.jpg', { type: 'image/jpeg', lastModified: ahora }));
     }
     const est = q('[data-eq-estado-seg] button[data-v=Operativo]'); if (est) est.click();
     const at = q('#segAtiempo button[data-v=Si]'); if (at) at.click();

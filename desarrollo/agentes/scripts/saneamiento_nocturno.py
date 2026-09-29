@@ -60,6 +60,10 @@ PASOS = [
     ("ingesta",    ["t1_7_ingesta.py"],                           "arbol canonico -> base de la estacion"),
     ("informes",   ["t2_11_informes_ot.py", "--empujar"],         "informes de OT del buzon -> sitio"),
     ("archivo",    ["t2_15_exportar_archivo.py", "--desde-mariadb", "--empujar"], "catalogo historico -> indice del archivo"),
+    # T2.28.6 (2026-09-24): el maestro de equipos a un Excel -"que se
+    # mantenga en un archivo", como pidio INDUSTEC. Solo LEE equipos_ficha y
+    # equipos_propuestos del servidor (sql_remoto, SELECT); no escribe nada.
+    ("equipos",    ["t2_28_exportar_equipos.py"],                  "equipos_ficha del servidor -> Excel del maestro de equipos"),
     # T2.19 (2026-09-14, revoca D2): los PDF que faltan en el servidor, verificados
     # por hash. Va ULTIMO a proposito: un lote que falle no debe frenar el catalogo,
     # y el propio t2_19 reindexa al terminar (archivo_indexar_cli.php --solo-pdf).

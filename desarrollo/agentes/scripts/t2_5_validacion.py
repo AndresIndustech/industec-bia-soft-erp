@@ -79,6 +79,36 @@ def es_sin_repuesto(v):
     return re.sub(r"[.\s]", "", str(v)).upper() in SIN_REPUESTO
 
 
+# T2.28.6 (obs. 4): las grafias de "no hay dato" en la placa de un equipo o en
+# lo que teclea el tecnico. Mismo contrato que reglas.js::esMarcador() y
+# Validacion.php::esMarcador() -con casos en el fixture-, para que las tres
+# implementaciones no se separen.
+MARCADORES = {
+    "S/N", "SN", "S/M", "SM", "N/A", "NA", "XXX", "-", "—", "--",
+    "NO TIENE", "SIN SERIE", "SIN PLACA", "0",
+}
+
+
+def _sin_tildes(s):
+    return unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode()
+
+
+def es_marcador(s):
+    n = _sin_tildes(s).strip().upper().rstrip(".")
+    return n == "" or n in MARCADORES
+
+
+def norm_marca(s, sinonimos=None):
+    """Mayusculas, sin espacios dobles, sin tildes; con un mapa de sinonimos
+    opcional (de marcas.json, p. ej. TRUE REFRIGERATOR -> TRUE) que
+    t2_28_marcas.py arma para que una persona lo revise -nunca se adivina
+    aqui (I-7)."""
+    n = re.sub(r"\s+", " ", _sin_tildes(s).strip()).upper()
+    if sinonimos and n in sinonimos:
+        return sinonimos[n]
+    return n
+
+
 class Hallazgo:
     __slots__ = ("campo", "regla", "severidad", "mensaje")
 
@@ -213,11 +243,55 @@ def validar(orden, cat, contexto="CAPTURA"):
             h.append(Hallazgo(f"equipos[{i}]", "EQUIPO_ELEGIBLE_POR_ACTIVO", INFORMA,
                               f"{local} tiene activos de tipo '{tipo_eq}' en el catalogo; "
                               "conviene elegir cual"))
+        # --- FICHA DEL EQUIPO (T2.28.6, obs. 4). Solo en CAPTURA y con
+        # formulario_v >= 2: el historico y una app vieja en cache no traen
+        # estos campos (§5.4). "Hay equipo elegido" es lo mismo que ya decide
+        # EQUIPO_SIN_IDENTIFICAR arriba.
+        hay_equipo_elegido = bool(ref) or bool(tipo_eq)
+        if (contexto == "CAPTURA" and int(orden.get("formulario_v") or 0) >= 2
+                and hay_equipo_elegido and not eq.get("sin_placa")):
+            falta_marca = es_marcador(eq.get("marca"))
+            falta_modelo = es_marcador(eq.get("modelo"))
+            if falta_marca or falta_modelo:
+                h.append(Hallazgo(f"equipos[{i}]", "EQUIPO_SIN_DATOS_DE_PLACA", BLOQUEA,
+                                  "falta la marca o el modelo del equipo; marca "
+                                  "'sin placa o ilegible' si no se puede leer"))
+            if es_marcador(eq.get("serie")):
+                h.append(Hallazgo(f"equipos[{i}]", "EQUIPO_SIN_SERIE", ADVIERTE,
+                                  "falta la serie del equipo"))
+        # --- FOTOS DEL ANTES Y DEL DESPUES (T2.28.7, obs. 1). Mismo contexto
+        # que la ficha (CAPTURA, formulario_v >= 2, equipo elegido) pero SIN
+        # el "sin_placa": que la placa no se pueda leer no exime de
+        # fotografiar el equipo antes y despues del trabajo.
+        if (contexto == "CAPTURA" and int(orden.get("formulario_v") or 0) >= 2
+                and hay_equipo_elegido):
+            falta_antes = int(eq.get("fotos_antes") or 0) < 1
+            falta_despues = int(eq.get("fotos_despues") or 0) < 1
+            etiqueta_eq = f"Equipo {i}" + (f" ({tipo_eq})" if tipo_eq else "")
+            if falta_antes or falta_despues:
+                que_pasa = ("la foto del antes y del después" if falta_antes and falta_despues
+                            else "la foto del antes" if falta_antes else "la foto del después")
+                h.append(Hallazgo(f"equipos[{i}]", "FOTOS_ANTES_DESPUES", BLOQUEA,
+                                  f"{etiqueta_eq}: falta {que_pasa}"))
+            elif (eq.get("antes_max_ms") is not None and eq.get("despues_min_ms") is not None
+                    and int(eq["antes_max_ms"]) > int(eq["despues_min_ms"])):
+                h.append(Hallazgo(f"equipos[{i}]", "FOTO_ANTES_POSTERIOR", ADVIERTE,
+                                  f"{etiqueta_eq}: la foto del después parece más vieja "
+                                  "que la del antes; revisa el orden"))
 
     # --- TRABAJO CON OTRO PROVEEDOR (H-18, D10). ---------------------------
     if orden.get("con_proveedor_marcado") and not str(orden.get("con_proveedor") or "").strip():
         h.append(Hallazgo("con_proveedor", "CON_PROVEEDOR_SIN_NOMBRE", BLOQUEA,
                           "marcaste que el trabajo lo hizo otro proveedor pero falta su nombre"))
+
+    # --- CORREO DEL LOCAL (T2.28.3, obs. 2). --------------------------------
+    # Solo en CAPTURA: el historico no trae este campo, y marcarlo ahi
+    # inventaria un defecto que la orden nunca tuvo. No bloquea: el envio
+    # sigue y Emision::correoLocal() cae al correo del maestro.
+    correo_local = str(orden.get("correo_local") or "")
+    if contexto == "CAPTURA" and correo_local and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", correo_local):
+        h.append(Hallazgo("correo_local", "CORREO_INVALIDO", ADVIERTE,
+                          f"'{correo_local}' no parece un correo valido; la orden saldra al correo del maestro"))
 
     # --- REPUESTOS. La casilla que elimina el 50% del ruido. ---------------
     uso = orden.get("uso_repuesto")
@@ -606,6 +680,9 @@ def _mapear_severidades():
         ("TECNICO_YA_NO_VIGENTE", INFORMA), ("FECHA_FUTURA", BLOQUEA),
         ("VARIOS_TECNICOS_EN_UN_CAMPO", INFORMA),
         ("EQUIPO_NUEVO_PROPUESTO", ADVIERTE), ("CON_PROVEEDOR_SIN_NOMBRE", BLOQUEA),
+        ("CORREO_INVALIDO", ADVIERTE),
+        ("EQUIPO_SIN_DATOS_DE_PLACA", BLOQUEA), ("EQUIPO_SIN_SERIE", ADVIERTE),
+        ("FOTOS_ANTES_DESPUES", BLOQUEA), ("FOTO_ANTES_POSTERIOR", ADVIERTE),
     ]:
         _SEVERIDADES[nombre] = sev
 

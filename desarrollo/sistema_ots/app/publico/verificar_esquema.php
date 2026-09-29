@@ -330,5 +330,32 @@ if ($mas022) {
               (int) $db->query("SELECT COUNT(*) FROM rol_permisos WHERE permiso = 'casos.repuesto_gestion'")->fetchColumn(), 3);
 }
 
+// La 015 es la foto del antes y del después, por equipo (T2.28.7, obs. 1
+// de la revisión con INDUSTEC). No suma permisos ni tablas: solo tres
+// columnas opcionales sobre `ot_fotos` que ya existía (008).
+$hay015 = (int) $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS
+                             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ot_fotos'
+                               AND COLUMN_NAME = 'equipo_n'")->fetchColumn() > 0;
+if ($hay015) {
+    echo "\nmigracion 015\n";
+    $colsFotos = array_column($db->query('SHOW COLUMNS FROM ot_fotos')->fetchAll(), 'Field');
+    foreach (['equipo_n', 'momento', 'tomada_en'] as $c) {
+        comprobar("ot_fotos.$c", in_array($c, $colsFotos, true) ? 'si' : 'no', 'si');
+    }
+    $tipoMomento = $db->query("SHOW COLUMNS FROM ot_fotos LIKE 'momento'")->fetch();
+    comprobar("ot_fotos.momento admite ANTES/DESPUES/REPUESTO",
+              (str_contains((string) $tipoMomento['Type'], "'ANTES'")
+               && str_contains((string) $tipoMomento['Type'], "'DESPUES'")
+               && str_contains((string) $tipoMomento['Type'], "'REPUESTO'")) ? 'si' : 'no', 'si');
+    $kFotos = array_unique(array_column($db->query('SHOW KEYS FROM ot_fotos')->fetchAll(), 'Key_name'));
+    comprobar('indice idx_foto_equipo', in_array('idx_foto_equipo', $kFotos, true) ? 'si' : 'no', 'si');
+    /* Prueba negativa: aplicar la migración NO reclasifica ninguna foto
+       vieja. Solo se informa, sin exigir 0: el uso real ya escribe
+       filas con momento después de aplicada. */
+    echo '  (fotos con equipo_n/momento clasificado: '
+       . (int) $db->query('SELECT COUNT(*) FROM ot_fotos WHERE momento IS NOT NULL')->fetchColumn()
+       . ")\n";
+}
+
 echo "\n" . ($ok ? 'TODO OK' : 'HAY FALLAS') . "\n";
 exit($ok ? 0 : 1);

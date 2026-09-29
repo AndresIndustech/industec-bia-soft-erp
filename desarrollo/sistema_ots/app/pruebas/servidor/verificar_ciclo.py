@@ -70,8 +70,14 @@ def main():
     caso = next(a for a in cat["avisos"]["datos"] if a["aviso"] == aviso)
     local = caso["local"]
     equipos = (cat.get("equipos") or {}).get(local) or []
-    activo = str(equipos[0]["equipo_sap"]) if equipos else ""
-    eq = {"equipo_sap": activo, "tipo": equipos[0].get("tipo", "")} if equipos else {"tipo": (cat.get("tipos") or ["FREIDORA"])[0]}
+    # T2.28.6: envio.php ahora escribe una ficha (marca/modelo/serie) por cada
+    # equipo de la orden -- se prefiere el equipo PROPUESTO que preparar_prueba.php
+    # sembró para este aviso y nunca un activo SAP real del local (prohibido
+    # escribir fichas de equipos reales desde las baterías).
+    eq_prop = next((e for e in equipos if e.get("propuesto")), None)
+    eq_elegido = eq_prop or (equipos[0] if equipos else None)
+    activo = str(eq_elegido["equipo_sap"]) if eq_elegido else ""
+    eq = {"equipo_sap": activo, "tipo": eq_elegido.get("tipo", "")} if eq_elegido else {"tipo": (cat.get("tipos") or ["FREIDORA"])[0]}
     hoy = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).date().isoformat()
 
     def orden_base(concluida, pendiente=None):

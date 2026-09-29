@@ -164,8 +164,17 @@
       },
       orden: orden,
       /* Las fotos, cada una con su UUID. Se marcan al subir: si la señal se
-         corta a mitad, las que ya llegaron no se vuelven a mandar. */
-      fotos: fotos.map(function (f, i) { return { uuid: f.uuid, n: i, blob: f.blob, subida: false }; })
+         corta a mitad, las que ya llegaron no se vuelven a mandar.
+         T2.28.7: `equipo_n`/`momento`/`tomada_ms` viajan igual -- opcionales
+         del lado del servidor (§5.4) -- y se conservan al reintentar. */
+      fotos: fotos.map(function (f, i) {
+        return {
+          uuid: f.uuid, n: i, blob: f.blob, subida: false,
+          equipo_n: (f.equipo_n != null) ? f.equipo_n : null,
+          momento: f.momento || null,
+          tomada_ms: (f.tomada_ms != null) ? f.tomada_ms : null
+        };
+      })
     };
     return tx('readwrite', function (t) { t.put(fila); })
       .then(function () {
@@ -228,7 +237,14 @@
       if (!fila) { throw new Error('esa OT INDUSTEC ya no está guardada en este celular'); }
       var previas = fila.fotos || [];
       var base = previas.length;
-      var nuevas = nuevasFotos.map(function (f, i) { return { uuid: f.uuid, n: base + i, blob: f.blob, subida: false }; });
+      var nuevas = nuevasFotos.map(function (f, i) {
+        return {
+          uuid: f.uuid, n: base + i, blob: f.blob, subida: false,
+          equipo_n: (f.equipo_n != null) ? f.equipo_n : null,
+          momento: f.momento || null,
+          tomada_ms: (f.tomada_ms != null) ? f.tomada_ms : null
+        };
+      });
       orden.fotos = previas.concat(nuevas).map(function (f) { return f.uuid; });
       fila.orden = orden;
       fila.fotos = previas.concat(nuevas);
@@ -329,6 +345,11 @@
         datos.append('envio_uuid', fila.uuid);
         datos.append('foto_uuid', f.uuid);
         datos.append('n', String(f.n));
+        // T2.28.7: opcionales -- una fila guardada con la app vieja no los
+        // tiene, y foto.php los acepta ausentes (§5.4).
+        if (f.equipo_n != null) { datos.append('equipo_n', String(f.equipo_n)); }
+        if (f.momento) { datos.append('momento', f.momento); }
+        if (f.tomada_ms != null) { datos.append('tomada_ms', String(f.tomada_ms)); }
         datos.append('foto', f.blob, f.uuid + '.jpg');
         return fetch(ENDPOINT_FOTO, { method: 'POST', credentials: 'same-origin',
                                       headers: { 'X-Csrf': token || '' }, body: datos })
