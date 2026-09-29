@@ -33,9 +33,12 @@ const RE_UUID   = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 // cola.js SÍ reintenta, cada dos minutos, para siempre. 24 Mpx es más que
 // cualquier foto de celular real (12-16 Mpx) y deja margen.
 const MAX_PIXELES = 24_000_000;
-// E-23: tope de fotos por orden. app.js ya para en 8 en el picker; esto es lo
-// mismo del lado del servidor, que es el que de verdad decide.
-const MAX_FOTOS_POR_ENVIO = 8;
+// E-23, y T2.28.7 (obs. 1): tope de fotos por orden y, dentro de ella, tope
+// por equipo (antes + después, entre los dos). app.js ya para en 5 por
+// equipo en el picker; esto es lo mismo del lado del servidor, que es el que
+// de verdad decide. 40 = 7 equipos x 5 fotos + 5 de repuesto (T2.28.11).
+const MAX_FOTOS_POR_ENVIO = 40;
+const MAX_FOTOS_POR_EQUIPO = 5;
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -61,6 +64,22 @@ if (!preg_match(RE_UUID, $envio) || !preg_match(RE_UUID, $foto)) {
 }
 $n = max(0, min(99, (int) ($_POST['n'] ?? 0)));
 
+// T2.28.7 (obs. 1): opcionales -- una app vieja en caché no los manda, y eso
+// es exactamente lo que tiene que seguir aceptando (§5.4; prohibido exigirlos
+// aquí). Sin `equipo_n` la foto cae en el bloque de siempre del PDF (NULL).
+$equipoN = null;
+if (array_key_exists('equipo_n', $_POST) && $_POST['equipo_n'] !== '') {
+    $equipoN = max(0, min(6, (int) $_POST['equipo_n']));
+}
+$momento = (string) ($_POST['momento'] ?? '');
+$momento = in_array($momento, ['ANTES', 'DESPUES', 'REPUESTO'], true) ? $momento : null;
+$tomadaEn = null;
+if (isset($_POST['tomada_ms']) && $_POST['tomada_ms'] !== '') {
+    $ms = (int) $_POST['tomada_ms'];
+    // Informativo (I-7): un valor absurdo no invalida la foto, solo se ignora.
+    if ($ms > 0) { $tomadaEn = date('Y-m-d H:i:s', (int) ($ms / 1000)); }
+}
+
 try {
     // Ya estaba: el reintento no la duplica. La de otro no se toca.
     $previa = Db::uno('SELECT usuario_id FROM ot_fotos WHERE foto_uuid = ?', [$foto]);
@@ -76,11 +95,21 @@ try {
         responder(409, ['ok' => false, 'ajena' => true, 'motivo' => 'esa orden la llenó otro usuario']);
     }
     // E-23: tope de fotos por orden. Se cuenta ANTES de aceptar el archivo:
-    // no tiene sentido decodificar una novena foto para rechazarla después.
+    // no tiene sentido decodificar una foto de más para rechazarla después.
     $yaSubidas = (int) (Db::uno('SELECT COUNT(*) AS n FROM ot_fotos WHERE envio_uuid = ?', [$envio])['n'] ?? 0);
     if ($yaSubidas >= MAX_FOTOS_POR_ENVIO) {
         responder(400, ['ok' => false,
                         'motivo' => 'esta orden ya tiene ' . MAX_FOTOS_POR_ENVIO . ' fotos, el máximo por orden']);
+    }
+    // T2.28.7: el mismo tope, por equipo. Solo se cuenta cuando la foto trae
+    // `equipo_n` -- una foto sin clasificar (app vieja) no compite por ese cupo.
+    if ($equipoN !== null) {
+        $yaDelEquipo = (int) (Db::uno('SELECT COUNT(*) AS n FROM ot_fotos WHERE envio_uuid = ? AND equipo_n = ?',
+                                      [$envio, $equipoN])['n'] ?? 0);
+        if ($yaDelEquipo >= MAX_FOTOS_POR_EQUIPO) {
+            responder(400, ['ok' => false,
+                            'motivo' => 'este equipo ya tiene ' . MAX_FOTOS_POR_EQUIPO . ' fotos, el máximo por equipo']);
+        }
     }
 } catch (Throwable $ex) {
     error_log('foto.php: ' . $ex->getMessage());
@@ -161,10 +190,13 @@ if (file_put_contents($destino . '.tmp', $jpg) !== strlen($jpg) || !rename($dest
 }
 
 try {
-    Db::ejecutar('INSERT INTO ot_fotos (foto_uuid, envio_uuid, usuario_id, orden_n, ruta, bytes, ancho, alto, sha256)
-                  VALUES (?,?,?,?,?,?,?,?,?)
+    Db::ejecutar('INSERT INTO ot_fotos
+                    (foto_uuid, envio_uuid, usuario_id, orden_n, ruta, bytes, ancho, alto, sha256,
+                     equipo_n, momento, tomada_en)
+                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
                   ON DUPLICATE KEY UPDATE foto_id = foto_id',
-                 [$foto, $envio, $uid, $n, $ruta, strlen($jpg), $w, $h, hash('sha256', $jpg)]);
+                 [$foto, $envio, $uid, $n, $ruta, strlen($jpg), $w, $h, hash('sha256', $jpg),
+                  $equipoN, $momento, $tomadaEn]);
 } catch (Throwable $ex) {
     error_log('foto.php: ' . $ex->getMessage());
     responder(503, ['ok' => false, 'motivo' => 'no se pudo registrar la foto; queda en el celular y se reintenta']);

@@ -187,9 +187,13 @@
           <span class="derivado" id="msgCorreoLocal">Escribe o elige el correo del local.</span>
         </div>
         <div>
-          <label>Correo del jefe de operaciones</label>
-          <input type="email" name="correojefeop" id="correojefeop" readonly>
-          <span class="derivado">Buzón de zona de INDUSTEC — el mismo que recibe en copia los avisos de SAP.</span>
+          <!-- T2.28.3 (obs. 2, D-G): ya no es un campo -nada fijo en el
+               formulario-, sino una línea informativa que resuelve el
+               servidor (catalogos.php, con Destinatarios::copiasPorLocal())
+               con las mismas reglas que usa la emisión. -->
+          <span class="derivado">Esta orden también se enviará a: <b id="tambienEnvioResumen">—</b>
+            <button type="button" class="btn sm ghost" id="tambienEnvioVer" hidden aria-expanded="false">ver</button></span>
+          <div class="derivado" id="tambienEnvioLista" hidden></div>
         </div>
       </div>
 
@@ -330,21 +334,6 @@
         <button type="button" data-v="Cerrada">Cerrada</button>
       </div>
       <input type="hidden" name="estado_ot" id="estado_ot" value="Abierta">
-
-      <!-- ============ EVIDENCIA ============ -->
-      <h2>Evidencia fotográfica</h2>
-      <div class="picker">
-        <div class="row">
-          <label class="btn ghost">Tomar foto
-            <input type="file" id="fileCamera" accept="image/*" capture="environment" multiple hidden>
-          </label>
-          <label class="btn ghost">Galería
-            <input type="file" id="fileGallery" accept="image/*" multiple hidden>
-          </label>
-        </div>
-        <div class="slot-list" id="fileList"><div class="small">Sin fotos</div></div>
-        <div class="small">Toma las fotos aquí; suben solas cuando haya señal. Hasta 8 por orden.</div>
-      </div>
 
       <!-- ============ NOVEDADES DE LA VISITA ============
            Sin esto, la plancha que ya estaba fallando y el tomacorriente

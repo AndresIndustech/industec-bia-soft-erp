@@ -141,6 +141,25 @@ const ETIQUETA = [
 ];
 $hayFiltro = $fEstado !== '' || $fZona !== '';
 
+// T2.28.6 (obs. 4): qué series cambiaron en los últimos 90 días -la señal de
+// que un equipo se reemplazó, no solo se le corrigió un typeo a la placa
+// (envio.php ya distingue: esto solo se anota si ANTES había un valor real,
+// nunca la primera vez que se conoce la serie). Try/catch: sin la 014
+// aplicada, la sección sale vacía en vez de tumbar la pantalla.
+try {
+    $seriesCambiadas = Db::todos(
+        "SELECT c.equipo_clave, c.antes, c.despues, c.en, ef.local_codigo, u.nombre AS por_nombre
+           FROM equipos_ficha_cambios c
+           LEFT JOIN equipos_ficha ef ON ef.equipo_clave = c.equipo_clave
+           LEFT JOIN usuarios u ON u.usuario_id = c.por
+          WHERE c.campo = 'serie' AND c.antes IS NOT NULL AND c.en >= NOW() - INTERVAL 90 DAY
+          ORDER BY c.en DESC
+          LIMIT 300"
+    );
+} catch (Throwable $ex) {
+    $seriesCambiadas = [];
+}
+
 Ui::cabecera($u, 'equipos.php', ['equipos' => $cont['PROPUESTO']], ['titulo' => 'Equipos nuevos']);
 ?>
 <div class="wrap ancho">
@@ -266,6 +285,36 @@ Ui::cabecera($u, 'equipos.php', ['equipos' => $cont['PROPUESTO']], ['titulo' => 
               <span class="sub">decidido</span>
             <?php endif; ?>
           </td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 style="margin-top:26px">Series que cambiaron (90 días)</h2>
+  <p class="sub" style="margin:0 0 12px">
+    Cuando la serie de un equipo cambia desde un valor real -no la primera vez que se conoce, sino un reemplazo-,
+    queda anotada aquí. Es lo más parecido a saber que se cambió el equipo sin que nadie lo registre aparte.
+    Solo lectura: no hay nada que aprobar.
+  </p>
+  <div class="tabla-wrap">
+    <table class="tarjetas equipos">
+      <thead><tr><th>Local</th><th>Equipo</th><th>Serie antes</th><th>Serie ahora</th><th>Cuándo</th><th>Quién</th></tr></thead>
+      <tbody>
+      <?php if (!$seriesCambiadas): ?>
+        <tr><td colspan="6" class="vacio">Ninguna serie cambió en los últimos 90 días.</td></tr>
+      <?php endif; ?>
+      <?php foreach ($seriesCambiadas as $s): ?>
+        <tr>
+          <td data-th="Local">
+            <b class="mono"><?= $e($s['local_codigo'] ?: '—') ?></b>
+            <div class="sub"><?= $e($nombreLocal[$s['local_codigo']] ?? '') ?></div>
+          </td>
+          <td data-th="Equipo"><span class="mono"><?= $e($s['equipo_clave']) ?></span></td>
+          <td data-th="Serie antes"><?= $e($s['antes']) ?></td>
+          <td data-th="Serie ahora"><?= $e($s['despues']) ?></td>
+          <td data-th="Cuándo"><span class="mono"><?= $e(substr((string) $s['en'], 0, 16)) ?></span></td>
+          <td data-th="Quién"><?= $e($s['por_nombre'] ?: '—') ?></td>
         </tr>
       <?php endforeach; ?>
       </tbody>

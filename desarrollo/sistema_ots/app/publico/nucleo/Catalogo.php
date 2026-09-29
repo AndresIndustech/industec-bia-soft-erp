@@ -206,4 +206,64 @@ final class Catalogo
         unset($d);
         return ['familias' => $familias, 'diagnosticos' => $diag, 'repuestos' => $rep];
     }
+
+    /**
+     * La ficha de cada equipo (T2.28.6, obs. 4): el último marca/modelo/serie
+     * que quedó, por `equipo_clave` (equipo_sap real, o `PROPUESTO:<uuid>`
+     * para uno todavía sin aprobar). `[]` si la 014 no está aplicada: el
+     * formulario sigue funcionando sin prellenado, como cualquier añadido.
+     */
+    public static function fichas(): array
+    {
+        try {
+            $filas = Db::todos(
+                "SELECT ef.equipo_clave, ef.marca, ef.modelo, ef.serie, ef.sin_placa,
+                        ef.actualizado_en, u.nombre AS actualizado_por_nombre
+                   FROM equipos_ficha ef
+                   LEFT JOIN usuarios u ON u.usuario_id = ef.actualizado_por"
+            );
+        } catch (Throwable $e) {
+            return [];
+        }
+        $out = [];
+        foreach ($filas as $f) {
+            $out[(string) $f['equipo_clave']] = [
+                'marca'     => $f['marca'],
+                'modelo'    => $f['modelo'],
+                'serie'     => $f['serie'],
+                'sin_placa' => (bool) $f['sin_placa'],
+                'en'        => $f['actualizado_en'],
+                'por'       => $f['actualizado_por_nombre'],
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Las marcas y modelos más frecuentes (T2.28.6), armados por
+     * `t2_28_marcas.py` desde el histórico (`ot_equipos` y el inventario
+     * 2023) y subidos como JSON, igual que los demás catálogos de archivo.
+     * `[]` si el JSON todavía no se generó: el campo sigue siendo de texto
+     * libre con sugerencias vacías, nunca bloquea al técnico.
+     */
+    public static function marcas(): array
+    {
+        return self::leerJsonCatalogo('marcas.json');
+    }
+
+    /** @return array<string,array<int,string>> {marca: [modelos más frecuentes]} */
+    public static function modelos(): array
+    {
+        return self::leerJsonCatalogo('modelos.json');
+    }
+
+    private static function leerJsonCatalogo(string $archivo): array
+    {
+        $base = self::carpeta();
+        if ($base === null) { return []; }
+        $ruta = $base . '/' . $archivo;
+        if (!is_file($ruta)) { return []; }
+        $j = json_decode((string) file_get_contents($ruta), true);
+        return is_array($j) ? (array) ($j['datos'] ?? $j) : [];
+    }
 }

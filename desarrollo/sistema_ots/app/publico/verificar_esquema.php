@@ -96,6 +96,8 @@ $mas020 = (int) $db->query("SELECT COUNT(*) FROM permisos WHERE codigo = 'automa
 $mas021 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE archivo LIKE '%021_jefe_atiende.sql'")->fetchColumn() > 0 ? 1 : 0;
 $hay013 = $hayTabla('correo_destinatarios');
 $mas013 = $hay013 ? 1 : 0;
+// La 014 (T2.28.6) no suma permisos nuevos: la ficha del equipo la escribe
+// envio.php con el mismo permiso ots.crear que ya usa cualquier orden.
 $esperado = $hay009
     ? ['SUPERADMIN' => 39 + $mas012 + $mas020 + $mas013, 'ADMIN' => 38 + $mas012 + $mas020 + $mas013,
        'JEFE_ZONA' => 26 + $mas012 + $mas021, 'TECNICO' => 13 + $mas012]
@@ -271,6 +273,62 @@ if ($hay009) {
         echo '  (destinatarios activos por uso: '
            . json_encode(array_column($db->query(
                "SELECT uso, COUNT(*) n FROM correo_destinatarios WHERE activo = 1 GROUP BY uso")->fetchAll(), 'n', 'uso'))
+           . ")\n";
+    }
+
+    // La 014 es la ficha del equipo -marca, modelo y serie que se quedan-
+    // (T2.28.6, obs. 4 de la revisión con INDUSTEC).
+    $hay014 = $hayTabla('equipos_ficha');
+    if ($hay014) {
+        echo "\nmigracion 014\n";
+        foreach (['equipos_ficha', 'equipos_ficha_cambios'] as $t) {
+            comprobar("tabla $t", $hayTabla($t) ? 'si' : 'no', 'si');
+        }
+        $pk = $db->query("SHOW KEYS FROM equipos_ficha WHERE Key_name='PRIMARY'")->fetch();
+        comprobar('equipos_ficha: PK equipo_clave (I-9)', $pk['Column_name'] ?? '', 'equipo_clave');
+        $colsFicha = array_column($db->query('SHOW COLUMNS FROM equipos_ficha')->fetchAll(), 'Field');
+        foreach (['marca', 'modelo', 'serie', 'sin_placa', 'fuente', 'actualizado_por'] as $c) {
+            comprobar("equipos_ficha.$c", in_array($c, $colsFicha, true) ? 'si' : 'no', 'si');
+        }
+        $colsCambios = array_column($db->query('SHOW COLUMNS FROM equipos_ficha_cambios')->fetchAll(), 'Field');
+        foreach (['campo', 'antes', 'despues', 'por', 'en'] as $c) {
+            comprobar("equipos_ficha_cambios.$c", in_array($c, $colsCambios, true) ? 'si' : 'no', 'si');
+        }
+        /* Prueba negativa (tabla de permisos de T2.28.6): aplicar la
+           migración NO siembra ninguna ficha desde el histórico. Solo se
+           informa, sin exigir 0: las baterías de servidor y el uso real ya
+           escriben filas después de aplicada. */
+        echo '  (fichas de equipo hoy: '
+           . (int) $db->query('SELECT COUNT(*) FROM equipos_ficha')->fetchColumn()
+           . ' · cambios de serie: '
+           . (int) $db->query("SELECT COUNT(*) FROM equipos_ficha_cambios WHERE campo = 'serie'")->fetchColumn()
+           . ")\n";
+    }
+
+    // La 015 es la foto del antes y del después, por equipo (T2.28.7, obs. 1
+    // de la revisión con INDUSTEC). No suma permisos ni tablas: solo tres
+    // columnas opcionales sobre `ot_fotos` que ya existía (008).
+    $hay015 = (int) $db->query("SELECT COUNT(*) FROM information_schema.COLUMNS
+                                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ot_fotos'
+                                   AND COLUMN_NAME = 'equipo_n'")->fetchColumn() > 0;
+    if ($hay015) {
+        echo "\nmigracion 015\n";
+        $colsFotos = array_column($db->query('SHOW COLUMNS FROM ot_fotos')->fetchAll(), 'Field');
+        foreach (['equipo_n', 'momento', 'tomada_en'] as $c) {
+            comprobar("ot_fotos.$c", in_array($c, $colsFotos, true) ? 'si' : 'no', 'si');
+        }
+        $tipoMomento = $db->query("SHOW COLUMNS FROM ot_fotos LIKE 'momento'")->fetch();
+        comprobar("ot_fotos.momento admite ANTES/DESPUES/REPUESTO",
+                  (str_contains((string) $tipoMomento['Type'], "'ANTES'")
+                   && str_contains((string) $tipoMomento['Type'], "'DESPUES'")
+                   && str_contains((string) $tipoMomento['Type'], "'REPUESTO'")) ? 'si' : 'no', 'si');
+        $kFotos = array_unique(array_column($db->query('SHOW KEYS FROM ot_fotos')->fetchAll(), 'Key_name'));
+        comprobar('indice idx_foto_equipo', in_array('idx_foto_equipo', $kFotos, true) ? 'si' : 'no', 'si');
+        /* Prueba negativa: aplicar la migración NO reclasifica ninguna foto
+           vieja. Solo se informa, sin exigir 0: el uso real ya escribe
+           filas con momento después de aplicada. */
+        echo '  (fotos con equipo_n/momento clasificado: '
+           . (int) $db->query('SELECT COUNT(*) FROM ot_fotos WHERE momento IS NOT NULL')->fetchColumn()
            . ")\n";
     }
 }

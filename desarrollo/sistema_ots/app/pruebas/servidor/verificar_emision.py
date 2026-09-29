@@ -17,6 +17,7 @@ import json
 import re
 import struct
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -56,11 +57,16 @@ def abrir(sesion, req):
         return e.code, e.headers.get("Content-Type", ""), e.read()
 
 
-def subir(sesion, envio, foto, n, datos, nombre="foto.png", tipo="image/png"):
-    """POST multipart a foto.php, como lo manda cola.js."""
+def subir(sesion, envio, foto, n, datos, nombre="foto.png", tipo="image/png", extra=None):
+    """POST multipart a foto.php, como lo manda cola.js.
+
+    `extra` (T2.28.7): equipo_n/momento/tomada_ms, opcionales -exactamente
+    como los manda cola.js cuando la foto viene de un bloque de equipo.
+    """
     limite = "----industec" + uuid.uuid4().hex
+    campos = [("envio_uuid", envio), ("foto_uuid", foto), ("n", str(n))] + list((extra or {}).items())
     partes = [f'--{limite}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
-              for k, v in (("envio_uuid", envio), ("foto_uuid", foto), ("n", str(n)))]
+              for k, v in campos]
     partes.append(f'--{limite}\r\nContent-Disposition: form-data; name="foto"; filename="{nombre}"\r\n'
                   f'Content-Type: {tipo}\r\n\r\n'.encode() + datos + b"\r\n")
     partes.append(f"--{limite}--\r\n".encode())
@@ -136,7 +142,17 @@ def main():
         return 1
     local = caso["local"]
     equipos = (cat.get("equipos") or {}).get(local) or []
-    eq = ({"equipo_sap": str(equipos[0]["equipo_sap"]), "tipo": equipos[0].get("tipo", "")} if equipos
+    # T2.28.6: envio.php ahora escribe una ficha (marca/modelo/serie) por cada
+    # equipo de la orden. Elegir a ciegas equipos[0] podía caer en un activo
+    # SAP REAL del local -y esta prueba manda marca="MarcaPrueba", que
+    # quedaría pisando el dato real de un equipo que nadie tocó (prohibido:
+    # "nunca escribir fichas de equipos reales desde las baterías", detectado
+    # corriendo esta misma batería antes de dar la subtarea por cerrada). Se
+    # prefiere el equipo PROPUESTO que preparar_prueba.php ya sembró para este
+    # aviso (uuid 99990000-…), que es el que limpiar_pruebas.php sabe borrar.
+    eq_prop = next((e for e in equipos if e.get("propuesto")), None)
+    eq_elegido = eq_prop or (equipos[0] if equipos else None)
+    eq = ({"equipo_sap": str(eq_elegido["equipo_sap"]), "tipo": eq_elegido.get("tipo", "")} if eq_elegido
           else {"tipo": (cat.get("tipos") or ["FREIDORA"])[0]})
     eq.update({"estado": "Operativo", "obs": "PRUEBA: observación del equipo", "marca": "MarcaPrueba"})
     hoy = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5))).date().isoformat()
@@ -185,9 +201,14 @@ def main():
     anotar("correo", "y no al buzón genérico de INDUSTEC como correo del local",
            bool(para) and "servicioalcliente@industec.me" not in (para[0]["para"] or ""),
            (para[0]["para"] or "")[:120] if para else "sin fila")
-    aprendido = sql("SELECT correo FROM locales_admin WHERE local_codigo = ? AND nombre = 'Administrador de Prueba'", [local])
+    aprendido = sql("SELECT correo, correo_veces FROM locales_admin WHERE local_codigo = ? AND nombre = 'Administrador de Prueba'", [local])
     anotar("correo", "el correo queda aprendido para la próxima orden de ese local",
            bool(aprendido) and aprendido[0]["correo"] == CORREO_PRUEBA, aprendido)
+    # T2.28.3: preparar_prueba.php/limpiar_pruebas.php dejan 'Administrador de
+    # Prueba' sin fila, así que esta es su primera orden del ciclo -correo_veces
+    # tiene que quedar en 1, no arrastrar de una corrida anterior.
+    anotar("correo", "correo_veces queda en 1 (primera orden del ciclo con ese correo)",
+           bool(aprendido) and int(aprendido[0]["correo_veces"] or 0) == 1, aprendido)
 
     # T2.28.2: a quién más va la orden (Destinatarios::resolver()) y la
     # propuesta que deja para que la administración apruebe el correo del
@@ -250,6 +271,180 @@ def main():
            int(sql("SELECT ultimo FROM correlativos WHERE serie = ?", [serie])[0]["ultimo"]) == num, "")
     n = sql("SELECT COUNT(*) n FROM email_queue WHERE id_industec = ?", [ot])[0]["n"]
     anotar("008", "ni se encoló un segundo correo", int(n) == 1, n)
+
+    print("\n== T2.28.6: la ficha del equipo (marca, modelo, serie) ==")
+    # Equipo propio de esta batería (no el de la emisión de arriba): "nuevo"
+    # con un uuid 99990000-... para que limpiar_pruebas.php lo reconozca por
+    # su patrón `PROPUESTO:99990000-%` y lo borre junto con lo demás del
+    # arnés. Cada orden va SIN aviso (sin_aviso=True): lo único que importa
+    # aquí es el equipo, y encadenar varias órdenes reales al mismo aviso
+    # 99990021 ya cerrado arriba no aporta nada.
+    FICHA_UUID = "99990000-0000-4000-8000-0000000000f1"
+    CLAVE_FICHA = f"PROPUESTO:{FICHA_UUID}"
+
+    def orden_ficha(datos_equipo):
+        o = dict(orden)
+        o.pop("aviso", None)
+        o["sin_aviso"] = True
+        o["formulario_v"] = 2
+        o["fotos"], o["fotos_cantidad"] = [], 0          # SIN_FOTOS solo ADVIERTE
+        eq2 = {"nuevo": True, "equipo_uuid": FICHA_UUID, "tipo": "FREIDORA",
+               "area": "Cocina caliente", "estado": "Operativo",
+               "obs": "PRUEBA T2.28.6: ficha del equipo"}
+        eq2.update(datos_equipo)
+        o["equipos"] = [eq2]
+        return o
+
+    def emitir_ficha(datos_equipo):
+        env = str(uuid.uuid4())
+        cuerpo_f = {"envio_uuid": env, "usuario_captura": a,
+                    "capturada_en": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "orden": orden_ficha(datos_equipo)}
+        st, _, c = sa.pedir("envio.php", cuerpo_json=cuerpo_f)
+        try:
+            return st, json.loads(c)
+        except ValueError:
+            return st, {"crudo": c[:200]}
+
+    st, j = emitir_ficha({})   # sin marca, sin modelo, sin "sin placa"
+    anotar("T2.28.6", "sin marca, sin modelo y sin 'sin placa' -> 400, EQUIPO_SIN_DATOS_DE_PLACA",
+           st == 400 and "marca" in (j.get("motivo") or "").lower(), f"{st} · {j.get('motivo')}")
+
+    st, j = emitir_ficha({"marca": "MANITOWOC", "modelo": "IYT0500A", "serie": "SN-PRUEBA-1"})
+    anotar("T2.28.6", "con marca, modelo y serie -> emitida", st == 200 and (j.get("recibo") or {}).get("estado") == "EMITIDA",
+           f"{st} · {j}")
+    ficha = sql("SELECT marca, modelo, serie, sin_placa FROM equipos_ficha WHERE equipo_clave = ?", [CLAVE_FICHA])
+    anotar("T2.28.6", "equipos_ficha guarda esa marca, modelo y serie",
+           bool(ficha) and ficha[0]["marca"] == "MANITOWOC" and ficha[0]["modelo"] == "IYT0500A"
+           and ficha[0]["serie"] == "SN-PRUEBA-1", ficha)
+
+    st, _, c = sa.pedir("catalogos.php")
+    cat2 = json.loads(c)
+    f = (cat2.get("fichas") or {}).get(CLAVE_FICHA)
+    anotar("T2.28.6", "catalogos.php prellena la ficha para el próximo formulario del mismo equipo",
+           bool(f) and f.get("marca") == "MANITOWOC" and f.get("modelo") == "IYT0500A"
+           and f.get("serie") == "SN-PRUEBA-1", f)
+
+    st, j = emitir_ficha({"marca": "MANITOWOC", "modelo": "IYT0500A", "serie": "SN-PRUEBA-2"})
+    anotar("T2.28.6", "un segundo envío con otra serie -> emitida", st == 200 and (j.get("recibo") or {}).get("estado") == "EMITIDA",
+           f"{st} · {j}")
+    cambio = sql("SELECT antes, despues FROM equipos_ficha_cambios WHERE equipo_clave = ? AND campo = 'serie' "
+                 "ORDER BY cambio_id DESC LIMIT 1", [CLAVE_FICHA])
+    anotar("T2.28.6", "equipos_ficha_cambios deja 1 fila: SN-PRUEBA-1 -> SN-PRUEBA-2",
+           bool(cambio) and cambio[0]["antes"] == "SN-PRUEBA-1" and cambio[0]["despues"] == "SN-PRUEBA-2", cambio)
+    nbit = sql("SELECT COUNT(*) n FROM bitacora WHERE accion = 'EQUIPO_SERIE_CAMBIO' AND referencia = ?",
+               [CLAVE_FICHA])[0]["n"]
+    anotar("T2.28.6", "y queda en la bitácora como posible reemplazo del equipo", int(nbit) >= 1, nbit)
+
+    print("\n== T2.28.7: fotos del antes y del después, por equipo ==")
+    # Igual patrón que la ficha de arriba: órdenes propias de esta batería, sin
+    # aviso, con equipos "nuevo" de uuid 99990000-... que limpiar_pruebas.php
+    # reconoce y borra. `sin_placa: true` aísla del hallazgo de T2.28.6 -lo que
+    # se prueba aquí es la foto, no la placa.
+    def orden_fotos(equipos):
+        o = dict(orden)
+        o.pop("aviso", None)
+        o["sin_aviso"] = True
+        o["formulario_v"] = 2
+        o["fotos"] = []
+        o["fotos_cantidad"] = sum((e.get("fotos_antes") or 0) + (e.get("fotos_despues") or 0) for e in equipos)
+        o["equipos"] = equipos
+        return o
+
+    def emitir_fotos(envio_uuid, equipos):
+        cuerpo_f = {"envio_uuid": envio_uuid, "usuario_captura": a,
+                    "capturada_en": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "orden": orden_fotos(equipos)}
+        st, _, c = sa.pedir("envio.php", cuerpo_json=cuerpo_f)
+        try:
+            return st, json.loads(c)
+        except ValueError:
+            return st, {"crudo": c[:200]}
+
+    ahora_ms = int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000)
+
+    print("-- dos equipos, una foto de cada momento --")
+    ENV_2EQ = str(uuid.uuid4())
+    for n_eq, rgb in ((0, (10, 200, 10)), (1, (10, 10, 200))):
+        st, j = subir(sa, ENV_2EQ, str(uuid.uuid4()), n_eq * 2, png(80, 60, rgb),
+                      extra={"equipo_n": str(n_eq), "momento": "ANTES", "tomada_ms": str(ahora_ms - 60000)})
+        anotar("T2.28.7", f"foto ANTES del equipo {n_eq} -> 200", st == 200 and j.get("ok") is True, f"{st} · {j}")
+        st, j = subir(sa, ENV_2EQ, str(uuid.uuid4()), n_eq * 2 + 1, png(80, 60, rgb),
+                      extra={"equipo_n": str(n_eq), "momento": "DESPUES", "tomada_ms": str(ahora_ms)})
+        anotar("T2.28.7", f"foto DESPUES del equipo {n_eq} -> 200", st == 200 and j.get("ok") is True, f"{st} · {j}")
+    n_fotos = sql("SELECT COUNT(*) n FROM ot_fotos WHERE envio_uuid = ? AND momento IS NOT NULL", [ENV_2EQ])[0]["n"]
+    anotar("T2.28.7", "las 4 fotos quedan con su equipo_n y momento", int(n_fotos) == 4, n_fotos)
+
+    equipos_2 = [
+        {"nuevo": True, "equipo_uuid": "99990000-0000-4000-8000-0000000000f2", "tipo": "FREIDORA",
+         "area": "Cocina caliente", "estado": "Operativo", "sin_placa": True, "fotos_antes": 1, "fotos_despues": 1},
+        {"nuevo": True, "equipo_uuid": "99990000-0000-4000-8000-0000000000f3", "tipo": "MAQUINA DE HIELO",
+         "area": "Bodega", "estado": "Operativo", "sin_placa": True, "fotos_antes": 1, "fotos_despues": 1},
+    ]
+    st, j = emitir_fotos(ENV_2EQ, equipos_2)
+    ot2 = (j.get("recibo") or {}).get("id_industec") or ""
+    anotar("T2.28.7", "2 equipos con 1 foto de cada momento -> emitida",
+           st == 200 and (j.get("recibo") or {}).get("estado") == "EMITIDA", f"{st} · {j}")
+
+    st, tipo, pdf2 = binario(sa, f"pdf.php?ot={ot2}")
+    anotar("T2.28.7", "el PDF de esa orden se descarga", st == 200 and pdf2[:5] == b"%PDF-", f"{st} · {len(pdf2)} B")
+    texto_pdf = ""
+    try:
+        from pypdf import PdfReader
+        import io
+        texto_pdf = "".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(pdf2)).pages)
+    except Exception as ex:
+        anotar("T2.28.7", "pypdf pudo leer el PDF emitido", False, f"{type(ex).__name__}: {ex}")
+    anotar("T2.28.7", "el texto del PDF (pypdf) dice «Antes» dos veces, una por equipo",
+           texto_pdf.count("Antes") >= 2, f'"Antes" x{texto_pdf.count("Antes")}')
+    anotar("T2.28.7", "el texto del PDF (pypdf) dice «Después» dos veces, una por equipo",
+           texto_pdf.count("Después") >= 2, f'"Después" x{texto_pdf.count("Después")}')
+
+    print("-- el tope de 5 fotos por equipo --")
+    ENV_TOPE = str(uuid.uuid4())
+    for k in range(5):
+        st, j = subir(sa, ENV_TOPE, str(uuid.uuid4()), k, png(40, 30, (5, 5, 5)),
+                      extra={"equipo_n": "2", "momento": "ANTES", "tomada_ms": str(ahora_ms)})
+        anotar("T2.28.7", f"foto {k + 1}/5 del equipo -> 200", st == 200 and j.get("ok") is True, f"{st} · {j}")
+    st, j = subir(sa, ENV_TOPE, str(uuid.uuid4()), 5, png(40, 30, (5, 5, 5)),
+                  extra={"equipo_n": "2", "momento": "ANTES", "tomada_ms": str(ahora_ms)})
+    anotar("T2.28.7", "la 6.a foto del mismo equipo -> 400 con 'máximo'",
+           st == 400 and "máximo" in (j.get("motivo") or "").lower(), f"{st} · {j.get('motivo')}")
+
+    print("-- 7 equipos x 5 fotos, emitida en menos de 30 s y sin error nuevo en el log de la web --")
+    ARCHIVO_LOG = "~/.logs/error_log_darkviolet-armadillo-872352_hostingersite_com"
+    lineas_antes = int((ssh(f"wc -l < {ARCHIVO_LOG} 2>/dev/null || echo 0") or "0").strip() or "0")
+
+    ENV_CARGA = str(uuid.uuid4())
+    equipos_carga = []
+    ok_subida = True
+    for n_eq in range(7):
+        uid_eq = f"99990000-0000-4000-8000-0000000010{n_eq:02x}"
+        for k in range(5):
+            momento = "ANTES" if k == 0 else "DESPUES"
+            st, j = subir(sa, ENV_CARGA, str(uuid.uuid4()), n_eq * 5 + k,
+                          png(1600, 1200, ((n_eq * 30) % 256, (k * 40) % 256, 80)),
+                          extra={"equipo_n": str(n_eq), "momento": momento,
+                                 "tomada_ms": str(ahora_ms - (5 - k) * 1000)})
+            ok_subida = ok_subida and st == 200 and j.get("ok") is True
+        equipos_carga.append({"nuevo": True, "equipo_uuid": uid_eq, "tipo": "FREIDORA",
+                              "area": "Cocina caliente", "estado": "Operativo",
+                              "sin_placa": True, "fotos_antes": 1, "fotos_despues": 4})
+    anotar("T2.28.7", "las 35 fotos (7 equipos x 5) se subieron", ok_subida, ok_subida)
+    n_carga = sql("SELECT COUNT(*) n FROM ot_fotos WHERE envio_uuid = ?", [ENV_CARGA])[0]["n"]
+    anotar("T2.28.7", "y quedaron las 35 filas en ot_fotos", int(n_carga) == 35, n_carga)
+
+    t0 = time.time()
+    st, j = emitir_fotos(ENV_CARGA, equipos_carga)
+    transcurrido = time.time() - t0
+    anotar("T2.28.7", "orden con 7 equipos x 5 fotos -> emitida en menos de 30 s",
+           st == 200 and (j.get("recibo") or {}).get("estado") == "EMITIDA" and transcurrido < 30,
+           f"{transcurrido:.1f} s · {st} · {(j.get('recibo') or {}).get('estado')}")
+
+    lineas_despues = int((ssh(f"wc -l < {ARCHIVO_LOG} 2>/dev/null || echo 0") or "0").strip() or "0")
+    nuevas = ssh(f"tail -n +{lineas_antes + 1} {ARCHIVO_LOG}") if lineas_despues > lineas_antes else ""
+    anotar("T2.28.7", "sin error nuevo en el log de la web durante la emisión",
+           lineas_despues == lineas_antes, nuevas[:200] if nuevas else f"{lineas_antes} -> {lineas_despues}")
 
     print("\n== diez reservas a la vez, diez números distintos (T2.1.5) ==")
     # Cada proceso escribe en su propio archivo: con la salida compartida dos

@@ -20,6 +20,10 @@ python-dotenv==1.0.1
 # Ya llegaba instalado como dependencia transitiva de pandas; se declara aqui
 # porque t2_28_admins.py lo importa directo (T2.28.3).
 python-dateutil==2.9.0.post0
+# Extraer el texto de un PDF ya emitido, para comprobar de verdad lo que
+# imprime la plantilla (no solo el HTML antes de dompdf). La usa
+# pruebas/servidor/verificar_emision.py (T2.28.7).
+pypdf==6.19.0
 
 # Consola local de OTs (desarrollo/sistema_ots/local/app.py).
 # Van aqui y no en un requirements aparte porque comparten el mismo venv

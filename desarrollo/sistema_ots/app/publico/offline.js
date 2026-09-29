@@ -129,12 +129,16 @@
   function leerCampo(b, sel) { var el = b.querySelector(sel); return el ? el.value : ''; }
   function datosEquipo(b) {
     var on = b.querySelector('[data-eq-estado-seg] button.on');
+    var sinPlaca = b.querySelector('[data-eq-sinplaca]');
     return {
       valor: (b.querySelector('.eq-sel') || {}).value || '',
       marca: leerCampo(b, '[data-eq-marca]'), modelo: leerCampo(b, '[data-eq-modelo]'),
       serie: leerCampo(b, '[data-eq-serie]'), codigo: leerCampo(b, '[data-eq-cod]'),
       area: leerCampo(b, '[data-eq-area]'), obs: leerCampo(b, '[data-eq-obs]'),
-      estado: on ? on.dataset.v : null
+      estado: on ? on.dataset.v : null,
+      // T2.28.6: sin ella, "Retomar" olvidaba la casilla y el borrador volvía
+      // a pedir marca y modelo de un equipo que ya se había dicho sin placa.
+      sin_placa: !!(sinPlaca && sinPlaca.checked)
     };
   }
   function datosNovedad(b) {

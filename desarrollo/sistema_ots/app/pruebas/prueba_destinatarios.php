@@ -121,5 +121,48 @@ afirmar('un correo de orden inválido cae al del maestro', $r['para'], ['servici
 $r = Destinatarios::resolverConFilas([], 'UIO', 'G007EC', 'GUS', 'servicioalcliente@industec.me', $localG007);
 afirmar('un buzón @industec.me escrito en la orden no cuenta como "del local": cae al maestro igual', $r['para'], ['servicioalcliente@industec.me']);
 
+echo "\n=== 9. copiasPorLocal(): solo copias, para «también se enviará a» (T2.28.3) ===\n";
+$filas9 = [
+    fila(['ambito' => 'ZONA', 'zona' => 'UIO', 'rol' => 'JEFE_ZONA', 'correo' => 'jefezona-uio@industec.me']),
+    fila(['ambito' => 'GENERAL', 'correo' => 'general@industec.me']),
+    fila(['ambito' => 'LOCAL', 'local_codigo' => 'G007EC', 'destino' => 'CLIENTE',
+          'rol' => 'JEFE_OPERACIONES', 'correo' => 'jefeop.g007@kfc.example']),
+    // Una fila PARA no es una copia: no tiene que aparecer aquí (la resuelve
+    // el propio campo de correo del técnico, no esta línea informativa).
+    fila(['ambito' => 'LOCAL', 'local_codigo' => 'G007EC', 'tipo' => 'PARA', 'correo' => 'para.g007@kfc.example']),
+    // Otro local: no calza, no debe aparecer.
+    fila(['ambito' => 'LOCAL', 'local_codigo' => 'G018EC', 'rol' => 'JEFE_OPERACIONES', 'correo' => 'jefeop.g018@kfc.example']),
+];
+$cp = Destinatarios::copiasPorLocal($filas9, $localG007, 'UIO', 'G007EC', 'GUS');
+$correos9 = array_column($cp, 'correo');
+afirmar('trae al jefe de zona', in_array('jefezona-uio@industec.me', $correos9, true), true);
+afirmar('trae la copia general', in_array('general@industec.me', $correos9, true), true);
+afirmar('trae al jefe de operaciones de ESTE local', in_array('jefeop.g007@kfc.example', $correos9, true), true);
+afirmar('NO trae la fila PARA (no es una copia)', in_array('para.g007@kfc.example', $correos9, true), false);
+afirmar('NO trae al jefe de operaciones de OTRO local', in_array('jefeop.g018@kfc.example', $correos9, true), false);
+$jz = array_values(array_filter($cp, fn($d) => $d['correo'] === 'jefezona-uio@industec.me'));
+afirmar('el jefe de zona queda marcado jefe_zona=true', $jz[0]['jefe_zona'] ?? null, true);
+$gral = array_values(array_filter($cp, fn($d) => $d['correo'] === 'general@industec.me'));
+afirmar('una copia general NO queda marcada jefe_zona', $gral[0]['jefe_zona'] ?? null, false);
+
+$filasDup = [
+    fila(['ambito' => 'GENERAL', 'correo' => 'DUP@industec.me']),
+    fila(['ambito' => 'ZONA', 'zona' => 'UIO', 'correo' => 'dup@industec.me']),
+    fila(['ambito' => 'GENERAL', 'correo' => 'no es un correo']),
+];
+$cpDup = Destinatarios::copiasPorLocal($filasDup, $localG007, 'UIO', 'G007EC', 'GUS');
+afirmar('duplicados (mayúsculas distintas) no se repiten', count($cpDup), 1);
+afirmar('correos inválidos quedan fuera', array_column($cpDup, 'correo'), ['dup@industec.me']);
+
+$cpRespaldo = Destinatarios::copiasPorLocal(null, $localG007, 'UIO', 'G007EC', 'GUS');
+$correosResp = array_column($cpRespaldo, 'correo');
+afirmar('respaldo (sin la 013): trae el correo_jefe_op del maestro',
+        in_array('jefezona-uio@industec.me', $correosResp, true), true);
+$jzResp = array_values(array_filter($cpRespaldo, fn($d) => $d['correo'] === 'jefezona-uio@industec.me'));
+afirmar('respaldo: queda marcado jefe_zona=true (era EL buzón de zona antes de sembrar)',
+        $jzResp[0]['jefe_zona'] ?? null, true);
+$cpRespaldoVacio = Destinatarios::copiasPorLocal([], $localG007, 'UIO', 'G007EC', 'GUS');
+afirmar('con tabla vacía (013 aplicada, sin filas) da lo mismo que sin tabla', $cpRespaldoVacio, $cpRespaldo);
+
 printf("\n%d comprobaciones · %d fallos\n", $total, $fallos);
 exit($fallos === 0 ? 0 : 1);

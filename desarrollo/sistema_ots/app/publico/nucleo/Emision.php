@@ -378,15 +378,31 @@ final class Emision
                 'marca'         => $eq['marca'] ?? null,
                 'modelo'        => $eq['modelo'] ?? null,
                 'serie'         => $eq['serie'] ?? null,
+                // T2.28.6 (obs. 4): la placa se pudo leer, o no se pudo -el
+                // PDF lo dice con esas palabras en vez de dejar los tres
+                // campos en blanco, que I-7 leería como "no se preguntó".
+                'sin_placa'     => !empty($eq['sin_placa']),
                 'estado'        => $eq['estado'] ?? null,
                 'obs'           => $eq['obs'] ?? null,
             ];
         }
+        // T2.28.7 (obs. 1): las fotos con `equipo_n`/`momento` (formulario_v >= 2)
+        // se agrupan por equipo y momento para la plantilla; las que no lo
+        // traen (NULL = de antes de la 015, o de una app vieja en caché) van
+        // al bloque de siempre en `$fotos`, exactamente como imprimía antes.
         $fotos = [];
-        foreach (Db::todos('SELECT ruta FROM ot_fotos WHERE envio_uuid = ? ORDER BY orden_n, foto_id',
-                           [(string) $c['envio_uuid']]) as $f) {
-            $p = self::dirFotos() . '/' . $f['ruta'];
-            if (is_file($p)) { $fotos[] = 'data:image/jpeg;base64,' . base64_encode((string) file_get_contents($p)); }
+        $fotosPorEquipo = [];
+        foreach (Db::todos(
+            "SELECT ruta, equipo_n, momento FROM ot_fotos WHERE envio_uuid = ?
+              ORDER BY equipo_n, FIELD(momento,'ANTES','DESPUES','REPUESTO'), orden_n, foto_id",
+            [(string) $c['envio_uuid']]) as $f) {
+            $uri = self::fotoReducidaParaPdf((string) $f['ruta']);
+            if ($uri === null) { continue; }
+            if ($f['equipo_n'] === null || $f['momento'] === null) {
+                $fotos[] = $uri;
+                continue;
+            }
+            $fotosPorEquipo[(int) $f['equipo_n']][(string) $f['momento']][] = $uri;
         }
         $logo = __DIR__ . '/logo-industec.png';
         $d = [
@@ -420,6 +436,7 @@ final class Emision
             'atiempo'         => (string) ($orden['atiempo'] ?? ''),
             'satisfaccion'    => max(0, min(10, (int) ($orden['satisfaccion'] ?? 0))),
             'fotos'           => $fotos,
+            'fotos_por_equipo' => $fotosPorEquipo,
             'fotos_esperadas' => count((array) ($orden['fotos'] ?? [])),
             'firma'           => self::firmaValida((string) ($orden['firma_png'] ?? '')),
             'emitida'         => date('Y-m-d H:i'),
@@ -427,6 +444,44 @@ final class Emision
         ob_start();
         include __DIR__ . '/plantilla_ot.php';
         return (string) ob_get_clean();
+    }
+
+    /**
+     * Una foto del disco, reducida a 900 px por el lado mayor y JPEG calidad
+     * 70 (T2.28.7, obs. 1), lista como data URI para el PDF.
+     *
+     * `foto.php` ya la había dejado en máximo 1.200 px al subirla -- esta es
+     * una SEGUNDA reducción, solo para el PDF. Con una preventiva de 7 equipos
+     * y hasta 40 fotos, incrustar la copia de 1.200 px hacía que el PDF
+     * pesara varios MB y que dompdf, que arma todo el documento en memoria,
+     * se quedara sin ella a mitad de camino (criterio de T2.28.7: 35 fotos en
+     * menos de 30 s y sin error en el log). `null` si el archivo no está o no
+     * se pudo decodificar -- se salta, nunca revienta la emisión entera por
+     * una foto suelta.
+     */
+    private static function fotoReducidaParaPdf(string $ruta): ?string
+    {
+        $p = self::dirFotos() . '/' . $ruta;
+        if (!is_file($p)) { return null; }
+        $img = @imagecreatefromstring((string) file_get_contents($p));
+        if ($img === false) { return null; }
+        $w = imagesx($img);
+        $h = imagesy($img);
+        $lado = 900;
+        $escala = min(1, $lado / max($w, $h));
+        if ($escala < 1) {
+            $nw = max(1, (int) round($w * $escala));
+            $nh = max(1, (int) round($h * $escala));
+            $chica = imagecreatetruecolor($nw, $nh);
+            imagecopyresampled($chica, $img, 0, 0, 0, 0, $nw, $nh, $w, $h);
+            imagedestroy($img);
+            $img = $chica;
+        }
+        ob_start();
+        imagejpeg($img, null, 70);
+        $jpg = (string) ob_get_clean();
+        imagedestroy($img);
+        return 'data:image/jpeg;base64,' . base64_encode($jpg);
     }
 
     /** La firma, solo si de verdad es una imagen PNG de tamaño razonable: va dentro del PDF. */
