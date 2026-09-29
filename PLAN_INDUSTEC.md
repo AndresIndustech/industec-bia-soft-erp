@@ -1865,10 +1865,31 @@ python verificar_seguridad.py   # 28 · 0
 > 5. Antes de volver a correr el arnés de servidor: subir a `~/respaldos/` los
 >    `limpiar_pruebas.php` y `deshacer_prueba.php` de la rama (los del servidor no
 >    retiran las filas sueltas del Archivo).
-> 6. **La estación fusiona `pc/ot-piloto-no-cierra-2026-09-28` antes de desplegar
->    nada** (lleva dentro `pc/panel-estados-administradora-2026-09-27` y
->    `pc/buzon-simplificado-2026-09-27`): desplegar desde otra base pisaría lo que
->    hoy está vivo (error nº 48).
+> 6. ✅ **Fusionada el 2026-09-29** (`ffe0e76`, sobre `b4886ca` — ya trae dentro
+>    `pc/panel-estados-administradora-2026-09-27` y `pc/buzon-simplificado-2026-09-27`):
+>    8 conflictos reales resueltos a mano (`app.js`, `catalogos.php`, `index.html`,
+>    `nucleo/Emision.php`, `nucleo/Validacion.php`, `reglas.js`, `sw.js` → v26,
+>    `verificar_esquema.php`), commiteados sobre la rama de resguardo
+>    `estacion/wip-2026-09-29` que traía T2.28.3/T2.28.6 (ya desplegadas antes del
+>    28-sep) y T2.28.7 sin desplegar. Criterio de la fusión: donde el código vivo
+>    de la PC y mi trabajo caían en el mismo bloque, se conservaron los dos —
+>    p. ej. en `Emision.php` conviven `fechaAtencion()`/`fechaEmision()` (seguridad
+>    del piloto) con `fotoReducidaParaPdf()` (T2.28.7); el picker global
+>    «Evidencia fotográfica» de `index.html` se retiró porque `app.js` ya construye
+>    el suyo por equipo y `cola.js`/`foto.php` ya hablan `equipo_n`/`momento` de
+>    punta a punta. Verificado: sin marcadores de conflicto residuales, `node
+>    --check` en los tres `.js`, llaves balanceadas en los cuatro `.php` tocados.
+>    **`git push origin master` lo bloqueó el clasificador de modo automático**
+>    (acción visible para el otro equipo): el commit está en la estación, no en
+>    GitHub. **La comprobación por SSH de si la migración 014 sigue intacta en
+>    darkviolet también la bloqueó el mismo clasificador**; lo único que se pudo
+>    verificar sin permiso especial fue `curl` a `sw.js` en vivo: entrega
+>    exactamente **v25**, el mismo que documenta `ESTADO.md` §1y como el último
+>    desplegado — no hay nada vivo que esta base no contemple. **Antes de
+>    desplegar T2.28.7 o de continuar la Fase 2: Andrés aprueba el `git push` y,
+>    aparte, corre o autoriza la comprobación por SSH de la migración 014**
+>    (`SHOW TABLES LIKE 'equipos_ficha'` + conteo de filas) para descartar el
+>    patrón del error nº 48 antes de subir nada nuevo.
 >
 > **Para el corte a PRODUCCION**, además de lo de siempre: cargar a mano el
 > contador real de cada serie en `correlativos` **antes** de poner
