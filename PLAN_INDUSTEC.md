@@ -1800,10 +1800,46 @@ bitácora conserva sus 1.219 filas de prueba, que hoy es inalterable. **Para
 volver a correr las baterías de servidor** hay que ejecutar antes
 `preparar_prueba.php` y, al terminar, `limpiar_pruebas.php` (error nº 37).
 
+**Sumado el 2026-09-24 a 2026-09-29 — T2.28 (las observaciones de la revisión
+con INDUSTEC) y, en paralelo, el piloto real en UIO.** Dos frentes que
+corrieron a la vez, en dos copias del repositorio (estación y PC de Andrés),
+y que recién se unieron hoy:
+
+- **T2.28, Fase 1** (línea base, robot del correo, Archivo, arnés de pruebas):
+  **cerrada el 2026-09-24**, salvo lo que depende de personas o de tiempo real
+  (detalle en `ESTADO.md` §1s-* y la fila de la Fase 1 en §5.1).
+- **T2.28, Fase 2** (en serie, T2.28.2 en adelante): **T2.28.2 el módulo de
+  correos**, **T2.28.3 el correo del local editable**, y **T2.28.6 la ficha
+  del equipo** (marca/modelo/serie) — las tres **construidas, migradas (013,
+  021, 014), desplegadas y verificadas en darkviolet**. De paso se corrigieron
+  el buscador de equipo (ahora se escribe y se puede crear uno nuevo) y la
+  lista de acompañantes (solo activos de la zona de la orden, jefe de zona
+  primero, y el jefe de zona ya puede atender sus propios casos). **T2.28.7,
+  fotos del antes y del después por equipo: construida entera** (interfaz,
+  cola de envío, servidor, PDF, las tres validaciones) **pero nunca migrada
+  ni desplegada** — se quedó sin cuota de sesión antes de ese paso.
+- **En paralelo, desde el PC de Andrés y fuera del plan original:** la OT del
+  piloto que no cierra ni sale a KFC (§1w), el PDF sin la franja «DOCUMENTO DE
+  PRUEBA» con los 14 PDF del piloto regenerados (§1x/§1y), el panel «En qué
+  estado están» con las cuatro cifras de la administradora más la gestión del
+  repuesto (migración 022, §1u), el buzón simplificado (§1v) y el vocabulario
+  SAP unificado en toda la interfaz — **todo construido y desplegado en
+  darkviolet** entre el 24 y el 28-sep.
+- **2026-09-29: los dos frentes se fusionaron** (`ffe0e76`, sobre `b4886ca`):
+  8 conflictos reales resueltos a mano, sin perder la lógica de seguridad del
+  piloto ni el trabajo de T2.28.7. Detalle completo, criterio de cada
+  resolución y evidencia en `ESTADO.md` **§1s-quaterdecies**. **Quedaron
+  bloqueadas dos acciones que necesitan a Andrés** (el clasificador de modo
+  automático no deja tocar infraestructura compartida sin su aprobación
+  explícita): empujar el commit de la fusión a GitHub, y comprobar por SSH que
+  la migración 014 sigue intacta en darkviolet tras los despliegues del
+  piloto. Hasta que eso se resuelva, **T2.28.7 no se migra ni se despliega**.
+
 ### Antes de dar nada por verificado
 
 Las baterías **están todas en verde al 2026-09-13**, y esa es la línea base que
-hay que conservar:
+hay que conservar (desde entonces, cada tarea documenta su propia evidencia en
+`ESTADO.md` — no se repite aquí):
 
 ```bash
 # Locales (con el PHP 8.2 de la estación o el portable del PC en PHP_BIN)
@@ -2017,6 +2053,26 @@ cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 >    `prueba_cola_vivo.mjs` llevan el arreglo por prevención pero no se
 >    volvieron a ejecutar): quien las corra en la siguiente subtarea confirma
 >    que el arreglo no les rompió nada propio.
+> 10. 🔨 **T2.28.7, las fotos del antes y del después por equipo — construida
+>    entera, sin migrar ni desplegar.** Cortada por el límite semanal de sesión
+>    justo antes del tramo de migración/despliegue/baterías. Lo que existe en
+>    código, verificado al fusionarse con el piloto el 2026-09-29 (`ESTADO.md`
+>    **§1s-quaterdecies**): `sql/015_fotos_por_equipo.sql` (columnas
+>    `equipo_n`/`momento`/`tomada_en` sobre `ot_fotos`, ya existente desde la
+>    008); el picker por equipo en `app.js` (`bloqueEquipo()` →
+>    `inicializarFotosEq`, reemplaza al picker único que tenía el formulario);
+>    `cola.js`/`foto.php` hablando `equipo_n`/`momento` de punta a punta;
+>    `nucleo/Emision.php::fotoReducidaParaPdf()` para que el PDF no reviente
+>    con una preventiva de 7 equipos y 40 fotos; la regla
+>    `FOTOS_ANTES_DESPUES`/`FOTO_ANTES_POSTERIOR` en las cuatro implementaciones
+>    (`reglas.js`, `Validacion.php`, `t2_5_validacion.py` y el fixture —
+>    confirmado con `grep`, las cuatro la tienen). **Siguiente paso, en
+>    orden:** (a) Andrés aprueba el `git push` del commit de la fusión y la
+>    comprobación por SSH de la migración 014 (punto 6 de arriba); (b) recién
+>    entonces, auditar si algo de T2.28.6/T2.28.7 quedó afectado por los
+>    despliegues del piloto; (c) aplicar la migración 015 con respaldo previo;
+>    (d) desplegar y correr las baterías de servidor una por una
+>    (`preparar_prueba.php` → baterías → `limpiar_pruebas.php`).
 >
 > **Avance de la Fase 1 (análisis de solo lectura), sumado el 2026-09-23 en
 > segunda pasada:** T2.28.16a/16b ya están **hechas y verificadas** —
