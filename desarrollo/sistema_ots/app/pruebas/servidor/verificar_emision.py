@@ -177,8 +177,12 @@ def main():
     anotar("008", "la orden sale EMITIDA, con número de la serie de pruebas",
            st == 200 and rec.get("estado") == "EMITIDA"
            and re.fullmatch(rf"OT-9\d{{3}}-{re.escape(local)}-{caso['aviso']}-UIO", ot) is not None, f"{st} · {ot or c[:100]}")
-    anotar("008", "el recibo dice que el correo no salió (sistema en pruebas)",
-           "no se envió a nadie" in (rec.get("que_sigue") or ""), (rec.get("que_sigue") or "")[:90])
+    # La coletilla «Es el sistema en pruebas: el correo no se envió a nadie.»
+    # se retiró el 28-sep-2026: toda orden del sitio de pruebas «es del
+    # piloto» y ahora lo dice con esas palabras (envio.php:758-764).
+    anotar("008", "el recibo dice que es del piloto y no llegó a Grupo KFC ni al local",
+           "es del piloto" in (rec.get("que_sigue") or "") and "NO llegó a Grupo KFC" in (rec.get("que_sigue") or ""),
+           (rec.get("que_sigue") or "")[:90])
     fila = sql("SELECT estado, emitida_en, pdf_sha256, emision_error FROM ot_capturadas WHERE envio_uuid = ?", [envio])[0]
     # Desde la 009 el estado real es EMITIDA (PROCESADA era el nombre anterior a los
     # estados NUMERADA/EMITIDA/ENVIADA/FALLIDA, E-12).
@@ -297,9 +301,14 @@ def main():
         o["sin_aviso"] = True
         o["formulario_v"] = 2
         o["fotos"], o["fotos_cantidad"] = [], 0          # SIN_FOTOS solo ADVIERTE
+        # T2.28.7: con formulario_v >= 2 y equipo elegido, FOTOS_ANTES_DESPUES
+        # BLOQUEA si el equipo no declara 1+1 -- esta batería prueba la ficha,
+        # no las fotos, así que solo se declara el conteo (igual que hacía
+        # antes fotos_cantidad arriba): no hace falta subir ninguna de verdad.
         eq2 = {"nuevo": True, "equipo_uuid": FICHA_UUID, "tipo": "FREIDORA",
                "area": "Cocina caliente", "estado": "Operativo",
-               "obs": "PRUEBA T2.28.6: ficha del equipo"}
+               "obs": "PRUEBA T2.28.6: ficha del equipo",
+               "fotos_antes": 1, "fotos_despues": 1}
         eq2.update(datos_equipo)
         o["equipos"] = [eq2]
         return o

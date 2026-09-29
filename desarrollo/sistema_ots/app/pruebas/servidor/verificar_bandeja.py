@@ -146,8 +146,9 @@ def main():
     anotar("T2.13.3", "la OT INDUSTEC contra esa orden entra sin «esa orden no figura entre las tuyas»",
            st == 200 and "no figura entre las tuyas" not in c, f"{st} · {c[:100]}")
     st, _, c = sa.pedir("mis.php?t=atendidas")
+    # Vocabulario único (24-sep-2026): el rótulo es «Aviso SAP», no «Aviso» a secas.
     anotar("T2.13.3", "y aparece en su historial, con su número de orden y su PDF (la 008)",
-           f"Aviso {ABIERTO}" in c and f"-{ABIERTO}-UIO" in c and "Ver PDF" in c, st)
+           f"Aviso SAP {ABIERTO}" in c and f"-{ABIERTO}-UIO" in c and "Ver PDF" in c, st)
 
     print("\n== T2.13.5 · el buzón de avisos del técnico ==")
     reg = json.loads(ssh("cat ~/respaldos/prueba_deshacer.json"))
