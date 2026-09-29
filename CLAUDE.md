@@ -107,6 +107,7 @@ Invócalas según lo que vayas a hacer; están en `.claude/skills/`:
 | `industec-extraccion-pdf` | Al extraer campos de un PDF por patrones |
 | `industec-archivos-canonicos` | Al mover, renombrar o clasificar documentos del corpus |
 | `industec-agentes-y-entregables` | Al construir un agente o un archivo que va a leer una persona |
+| `industec-despliegue-web` | Al desplegar `sistema_ots` a darkviolet o correr una batería de servidor |
 
 ## Cómo se escribe aquí
 

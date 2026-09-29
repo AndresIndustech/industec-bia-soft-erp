@@ -3720,7 +3720,7 @@ Están razonadas en el plan; aquí solo el titular, para que ninguna conversaci�
 
 ## 7. El criterio ganado está en las skills
 
-Seis skills en `.claude/skills/`, minadas del propio código de la Fase 1 para que no se pierda lo aprendido. Invócalas según lo que vayas a hacer:
+Siete skills en `.claude/skills/`, minadas del propio código para que no se pierda lo aprendido. Invócalas según lo que vayas a hacer:
 
 | Skill | Cuándo |
 |---|---|
@@ -3730,6 +3730,7 @@ Seis skills en `.claude/skills/`, minadas del propio código de la Fase 1 para q
 | `industec-extraccion-pdf` | Al extraer campos de un PDF por patrones |
 | `industec-archivos-canonicos` | Al mover, renombrar o clasificar documentos del corpus |
 | `industec-agentes-y-entregables` | Al construir un agente o un archivo que va a leer una persona |
+| `industec-despliegue-web` | Al desplegar `sistema_ots` a darkviolet o correr una batería de servidor |
 
 Cada una lleva la evidencia real de qué se rompió y el comando exacto que comprueba que la regla se cumple. No son teoría: salieron de los errores que este proyecto ya pagó.
 

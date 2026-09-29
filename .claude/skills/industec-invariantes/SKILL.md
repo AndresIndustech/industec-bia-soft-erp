@@ -7,7 +7,7 @@ description: Invocala SIEMPRE al empezar cualquier tarea del proyecto INDUSTEC, 
 
 Proyecto de automatizacion de ordenes de trabajo (OTs) para INDUSTEC, empresa de mantenimiento HORECA en Ecuador, cliente final Grupo KFC. Tres zonas operativas: **UIO**, **LARB** (Ambato/Latacunga/Riobamba), **CNLJ** (Cuenca/Loja). 100 locales, 13 cadenas, ~7.333 PDFs historicos.
 
-Esta skill es el arranque obligatorio. Si vas a leer Excel, cargar a MySQL, extraer PDF, mover archivos o escribir un agente, ademas invoca la skill especifica.
+Esta skill es el arranque obligatorio. Si vas a leer Excel, cargar a MySQL, extraer PDF, mover archivos o escribir un agente, ademas invoca la skill especifica. Si vas a desplegar codigo del sistema_ots (desarrollo/sistema_ots/app) o correr una bateria de servidor, invoca `industec-despliegue-web`.
 
 ## 1. Mapa de rutas (memorizalo, no lo deduzcas)
 
