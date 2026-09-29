@@ -1815,9 +1815,11 @@ y que recién se unieron hoy:
   el buscador de equipo (ahora se escribe y se puede crear uno nuevo) y la
   lista de acompañantes (solo activos de la zona de la orden, jefe de zona
   primero, y el jefe de zona ya puede atender sus propios casos). **T2.28.7,
-  fotos del antes y del después por equipo: construida entera** (interfaz,
-  cola de envío, servidor, PDF, las tres validaciones) **pero nunca migrada
-  ni desplegada** — se quedó sin cuota de sesión antes de ese paso.
+  fotos del antes y del después por equipo: construida, migrada (015) y
+  DESPLEGADA en darkviolet el 2026-09-29**, verificada con las tres
+  baterías que la ejercitan (68·0, 37·0, 39·0 — detalle en `ESTADO.md`
+  §1s-quindecies). **Siguiente en el carril: T2.28.8** (casos sin local,
+  sin empezar — punto 11 de la lista Q más abajo).
 - **En paralelo, desde el PC de Andrés y fuera del plan original:** la OT del
   piloto que no cierra ni sale a KFC (§1w), el PDF sin la franja «DOCUMENTO DE
   PRUEBA» con los 14 PDF del piloto regenerados (§1x/§1y), el panel «En qué
@@ -1828,12 +1830,16 @@ y que recién se unieron hoy:
 - **2026-09-29: los dos frentes se fusionaron** (`ffe0e76`, sobre `b4886ca`):
   8 conflictos reales resueltos a mano, sin perder la lógica de seguridad del
   piloto ni el trabajo de T2.28.7. Detalle completo, criterio de cada
-  resolución y evidencia en `ESTADO.md` **§1s-quaterdecies**. **Quedaron
-  bloqueadas dos acciones que necesitan a Andrés** (el clasificador de modo
-  automático no deja tocar infraestructura compartida sin su aprobación
-  explícita): empujar el commit de la fusión a GitHub, y comprobar por SSH que
-  la migración 014 sigue intacta en darkviolet tras los despliegues del
-  piloto. Hasta que eso se resuelva, **T2.28.7 no se migra ni se despliega**.
+  resolución y evidencia en `ESTADO.md` **§1s-quaterdecies**. **El mismo día,
+  con la aprobación explícita de Andrés:** `git push` empujado y comprobación
+  por SSH de que la migración 014 seguía intacta (14 fichas, 23 cambios de
+  serie — nada del piloto se pisó), y con eso despejado, **T2.28.7 completa:
+  migrada, desplegada y verificada** (§1s-quindecies). **Hallazgo aparte,
+  no de T2.28.7:** `verificar_ciclo.py` y `verificar_continuidad.py` quedaron
+  con 10 fallas por el apagado intencional de `resolverPorOrden()` para el
+  piloto (28-sep) — las pruebas no se actualizaron cuando se tomó esa
+  decisión; anotado como error nº 53, pendiente de que Andrés diga si se
+  actualizan esas dos baterías o se corren solo en modo PRODUCCIÓN.
 
 ### Antes de dar nada por verificado
 
@@ -2065,6 +2071,25 @@ cifras medidas en `ESTADO.md` **§1s**. Lo primero, y es urgente:
 >    para el piloto (28-sep-2026) — las pruebas no se actualizaron cuando se
 >    tomó esa decisión. Pendiente de Andrés: decidir si esas dos baterías se
 >    actualizan o se corren solo en modo PRODUCCIÓN.
+>
+> 11. ⬜ **T2.28.8, casos sin local: identificarlos desde el buzón — SIGUIENTE,
+>    sin empezar.** Especificación completa en
+>    [`T2_28_OBSERVACIONES_INDUSTEC.md`](T2_28_OBSERVACIONES_INDUSTEC.md)
+>    §"T2.28.8" (obs. 6; D-A): migración `016_alias_locales.sql`
+>    (`locales_alias_propuestos`, permiso `locales.identificar`); `casos.php`
+>    con un formulario por fila (local del datalist de 100, o «fuera de
+>    alcance», con nota); `t2_6_imap_avisos.py::recoger_alias()` antes de
+>    `cargar_maestro()`, que aborta si una clave ya apunta a OTRO local
+>    (I-10/I-11); **cuidado con `t1_5_importar_maestro_locales.py:271`**, que
+>    hace `DELETE FROM locales_alias` al reimportar el maestro y borraría los
+>    alias de la administración si no se limita a las reglas del propio
+>    maestro (mismo patrón que el error nº 18, anotado ahí). Autónomo:
+>    migración, código, prueba de unidad. Requiere aprobación: el diff del
+>    cambio a `t1_5_importar_maestro_locales.py`, antes de aplicarlo.
+>    Prohibido: adivinar la zona de un caso o crear un alias por parecido sin
+>    decisión humana. Antes de escribir código: invocar `industec-invariantes`
+>    y `industec-despliegue-web` (si toca `sistema_ots`), y `industec-escritura-mysql`
+>    antes de la migración.
 >
 > **Avance de la Fase 1 (análisis de solo lectura), sumado el 2026-09-23 en
 > segunda pasada:** T2.28.16a/16b ya están **hechas y verificadas** —
