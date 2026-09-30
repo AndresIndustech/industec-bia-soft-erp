@@ -2,6 +2,8 @@
 
 > Esta hoja es para quien prepara el sitio de pruebas el día anterior al arranque. Las otras hojas del paquete son para las personas que van a usar el sistema. Fecha de preparación: 13 de septiembre de 2026; términos al día con el vocabulario único del 24 de septiembre de 2026 (**orden** = el trabajo que pide KFC; **OT INDUSTEC** = el documento del técnico).
 
+> **Al 29 de septiembre de 2026 esta hoja quedó atrás en un punto:** desde las 21:45 de ese día el **envío real está activo en UIO, LARB y CNLJ** (T2.29, `ESTADO.md` §1z). Las OT INDUSTEC de la app salen a Grupo KFC, al local y a la administración desde reclutamiento@industec.me, con la numeración del formulario viejo, y los técnicos ya **no** emiten por los dos formularios. Lo que abajo dice «correo RETENIDO», «serie 9000» o «no cambiar `emision_modo`» vale solo para las cuentas de prueba (que emiten en ENSAYO, serie 8000, correo retenido) y para la zona OTRA. El interruptor ya no está en config.php: está en Correos → «Envío de las OT».
+
 El piloto corre **en el sitio de pruebas** (`darkviolet-armadillo-872352.hostingersite.com/ot/`), con la zona **UIO**. El sistema de producción (`yellow-elephant`) no se toca: los técnicos siguen mandando sus OT INDUSTEC por el formulario de siempre **además** de la app nueva, hasta el corte (PLAN, T2.16).
 
 Cada paso trae **cómo se comprueba que salió bien**. Si uno falla, no se empieza.

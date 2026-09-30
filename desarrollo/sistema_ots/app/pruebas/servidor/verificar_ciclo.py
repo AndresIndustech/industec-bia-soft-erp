@@ -29,6 +29,11 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
+# T2.29: el correo del administrador del local que escribe el técnico en la
+# OT final (un dominio de prueba: nunca sale, la cuenta de prueba emite en ENSAYO).
+CORREO_ADMIN_LOCAL = "admin.flujo@local-prueba.ec"
+
+
 def estado(pid):
     return vh.sql("SELECT estado, via, veredicto_kfc, tercero, requerimiento_sap, cerrado_en IS NOT NULL cerrado "
                   "FROM pendientes WHERE pendiente_id = ?", [pid])[0]
@@ -201,7 +206,11 @@ def main():
     vh.anotar("T2.14.3", "«KFC envía el repuesto» → REPUESTO_ENVIADO", st == 302 and estado(pid)["estado"] == "REPUESTO_ENVIADO", estado(pid)["estado"])
     st, _, _ = adm.pedir("pendientes.php", form={"accion": "mover", "pendiente_id": pid, "estado": "ENTREGADO", "nota": "", "prometido": hoy})
     vh.anotar("T2.14.3", "llegó al local: ENTREGADO, con fecha comprometida", st == 302 and estado(pid)["estado"] == "ENTREGADO", estado(pid)["estado"])
-    st, _, c = enviar(orden_base(True))
+    # T2.29: la OT final lleva escrito el correo del administrador del local,
+    # como la llena el técnico; el paso 9 comprueba a quién va su correo.
+    orden_final = orden_base(True)
+    orden_final["correo_local"] = CORREO_ADMIN_LOCAL
+    st, _, c = enviar(orden_final)
     e = estado(pid)
     vh.anotar("T2.14.3", "la orden concluida del técnico resuelve sola el pendiente ENTREGADO (P-06)",
               st == 200 and e["estado"] == "RESUELTO" and int(e["cerrado"]) == 1, f"{st} · {e}")
@@ -268,6 +277,37 @@ def main():
     q5 = vh.sql("SELECT COUNT(*) n FROM casos_gestion WHERE estado IN ('CERRADO_SIN_ATENCION','ATENDIDO') "
                 "AND aviso IN (SELECT aviso FROM pendientes WHERE estado NOT IN ('RESUELTO','CANCELADO'))")[0]
     vh.anotar("T2.12.10", "consulta 5 de la 007: ningún caso cerrado con pendiente vivo", int(q5["n"]) == 0, f"{q5['n']} filas")
+
+    print("\n== 9. T2.29: el correo de la OT final y el cierre en SAP de la administradora ==")
+    # La cuenta de prueba emite en ENSAYO: se comporta como una OT real (por
+    # eso el paso 5 la deja ATENDIDO) pero su correo queda RETENIDO: nunca le
+    # escribe a Grupo KFC. Se comprueba que, de salir, iría al correo que
+    # escribió el técnico y a las copias de la zona configuradas en Correos.
+    ot_final = recibo.get("id_industec") or ""
+    vh.anotar("T2.29", "la OT final de la cuenta de prueba es de ensayo (8xxx) y no del piloto",
+              ot_final.startswith("OT-8") and recibo.get("prueba") is False, f"{ot_final} · prueba={recibo.get('prueba')}")
+    q = vh.sql("SELECT estado, motivo, para, cc FROM email_queue WHERE id_industec = ? AND tipo = 'EMISION'", [ot_final])
+    q = q[0] if q else {}
+    vh.anotar("T2.29", "su correo queda RETENIDO por ser de una cuenta de prueba",
+              q.get("estado") == "RETENIDO" and "cuenta de prueba" in (q.get("motivo") or ""), q.get("estado"))
+    para = json.loads(q.get("para") or "[]")
+    cc = sorted(json.loads(q.get("cc") or "[]"))
+    vh.anotar("T2.29", "va (para) al correo del administrador del local que escribió el técnico",
+              para == [CORREO_ADMIN_LOCAL], para)
+    zona_caso = vh.sql("SELECT zona FROM casos_gestion WHERE aviso = ?", [aviso])[0]["zona"]
+    esperadas = sorted({r["correo"] for r in vh.sql(
+        "SELECT correo FROM correo_destinatarios WHERE uso = 'ORDEN' AND activo = 1 AND tipo = 'COPIA' "
+        "AND (ambito = 'GENERAL' OR (ambito = 'ZONA' AND zona = ?) OR (ambito = 'LOCAL' AND local_codigo = ?)) "
+        "AND (cadena IS NULL OR cadena = 'KFC')", [zona_caso, local])})
+    vh.anotar("T2.29", f"y en copia van las de la zona configuradas en Correos ({len(esperadas)})",
+              bool(esperadas) and set(esperadas) <= set(cc), f"esperadas={esperadas} · cc={cc}")
+    b_sap = int(vh.sql("SELECT COUNT(*) n FROM bitacora WHERE entidad = 'caso' AND referencia = ? AND accion = 'CERRADO_SAP'", [aviso])[0]["n"])
+    st, _, _ = adm.pedir("casos.php", form={"accion": "cerrado_sap", "aviso": aviso, "motivo": ""})
+    g3 = vh.sql("SELECT estado, ot_cierre FROM casos_gestion WHERE aviso = ?", [aviso])[0]
+    vh.anotar("T2.29", "la administradora la marca cerrada en SAP: RESUELTO, con su OT de cierre",
+              st == 302 and g3["estado"] == "RESUELTO" and g3["ot_cierre"] == ot_final, g3)
+    vh.anotar("T2.29", "  … y queda en la bitácora (CERRADO_SAP)",
+              int(vh.sql("SELECT COUNT(*) n FROM bitacora WHERE entidad = 'caso' AND referencia = ? AND accion = 'CERRADO_SAP'", [aviso])[0]["n"]) == b_sap + 1, "")
 
     for se in s.values():
         se.pedir("salir.php", form={})

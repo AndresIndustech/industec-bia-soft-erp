@@ -40,8 +40,8 @@ Cada fallo recibe una respuesta en el grupo: «reproducido y en arreglo», «arr
 ## Lo que no es un fallo (y por qué)
 
 - **La OT INDUSTEC no salió al instante.** Sin señal, la app la guarda en el celular y la manda sola cuando vuelve la conexión; mientras tanto aparece «en cola» («enviando» cuando vuelve la señal). Si dice «detenida en el celular», hay que volver a entrar con el usuario. No hay que volver a llenarla.
-- **No llegó el correo de la OT INDUSTEC al local.** En el sitio de pruebas el correo está **retenido a propósito**: ningún correo sale hasta el corte. La OT INDUSTEC sí tiene número y PDF.
-- **Veo OT INDUSTEC con número 90xx.** Son las de las pruebas automáticas, anteriores al piloto. Las reales del piloto continúan la numeración del sistema viejo cuando se haga el corte.
+- **No llegó el correo de la OT INDUSTEC al local.** Desde el 29 de septiembre de 2026 el correo sale de verdad. Si no llegó, se mira en Correos → «Envío de las OT»: la fila dice si salió, si espera un reintento o por qué no salió. Si el técnico no escribió el correo del administrador del local, el local no lo recibe, y el recibo del técnico se lo dijo: eso no es un fallo del sistema.
+- **Veo OT INDUSTEC con número 91xx o 92xx.** Son las del piloto (24 al 29 de septiembre): no llegaron a Grupo KFC y así se marcan. Desde el 29 de septiembre la app sigue la numeración del formulario viejo.
 - **Me sacó del sistema.** La sesión caduca a las 2 horas sin usarla, o si la misma cuenta entró desde otro aparato.
 - **No veo las órdenes de otra zona en el Buzón de órdenes.** Es la regla: cada zona ve y gestiona lo suyo. El **Archivo de OT INDUSTEC** sí es de todas las zonas, solo para consultar.
 - **La tarjeta «Por zona» no da la misma cifra que SAP o que el STATUS.** Cuenta el buzón de B.IA (las órdenes de los últimos 90 días que llegaron por el correo de SAP), y el correo trae más o menos la mitad de las órdenes abiertas en SAP: no avisa reaperturas ni cierres. Además, el TOTAL DE ÓRDENES ABIERTAS ya no incluye las atendidas, por cerrar en SAP. Sí es un fallo si la cifra de una tarjeta no coincide con las filas que muestra su enlace.

@@ -206,7 +206,12 @@ def main():
     fuga = [a for a in cnlj_muestra if a in c]
     anotar("T2.12.4", "jefe UIO pidiendo ?zona=CNLJ en casos.php → ningún caso de CNLJ", st == 200 and not fuga, f"{st} · fuga={fuga}")
     for u, debe in [("jefe_prueba_uio", False), ("jefe_prueba_cnlj", True), ("admin_prueba", True)]:
-        st, _, c = s[u].pedir("pendientes.php")
+        # ?g=abiertos y no la pantalla por omisión: sin filtro, la
+        # administración cae en «por registrar en SAP» si hay ALGUNA solicitud
+        # real esperando ese paso (la 53, aviso 10356500, el 29-sep-2026), y el
+        # pendiente de prueba de CNLJ (SIN_VEREDICTO) no está en esa cola. Lo
+        # que se prueba aquí es el alcance por zona, no la cola de cada rol.
+        st, _, c = s[u].pedir("pendientes.php?g=abiertos")
         anotar("T2.12.4", f"{u}: pendientes.php {'muestra' if debe else 'NO muestra'} el pendiente de CNLJ", ("99990001" in c) == debe, f"{st} · {'lo muestra' if '99990001' in c else 'no lo muestra'}")
         st, _, c = s[u].pedir("novedades_visita.php")
         anotar("T2.12.4", f"{u}: novedades_visita.php {'muestra' if debe else 'NO muestra'} la novedad de CNLJ", ("PRUEBA de alcance" in c) == debe, f"{st} · {'la muestra' if 'PRUEBA de alcance' in c else 'no la muestra'}")

@@ -21,7 +21,7 @@ Hoy llenas la orden en el formulario de siempre y el PDF te llega por correo. Co
 - **Ves el PDF de cada OT INDUSTEC** en el momento, y el archivo de todas las OT INDUSTEC de todas las zonas, para consultar.
 - Tus **Notificaciones** te cuentan cuando te asignan o te quitan una orden, cuando responden sobre una solicitud de repuesto o cuando resuelven una novedad tuya.
 
-Durante el piloto **sigues mandando la orden por el formulario viejo además de por la app**: así, si algo falla, no se pierde nada. Al corte se apaga el viejo.
+**Desde el 29 de septiembre de 2026, la OT INDUSTEC que emites en la app llega a Grupo KFC, al local y a la administración** (UIO, Latacunga-Ambato-Riobamba-Baños y Cuenca-Loja), con la numeración de siempre. **Ya no la mandes también por el formulario viejo**: si la mandas por los dos, KFC recibe el mismo trabajo dos veces. Escribe siempre el correo del administrador del local: si lo dejas vacío, el correo no le llega al local y la app te lo dice. El formulario viejo queda solo por si la app no te deja enviar; en ese caso, avisa a tu jefe de zona.
 
 ## 1. Entrar y dejar la app en el celular
 

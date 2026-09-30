@@ -185,7 +185,7 @@ Cada acción de cada usuario, con fecha, resultado (hecho o rechazado), estado a
 ## 13. Lo que el sistema no hace solo, a propósito
 
 - **No cierra órdenes por falta de atención** sin que lo confirmes (la cifra aparece en Inicio; el botón pide confirmación).
-- **No manda correos** desde el sitio de pruebas: las OT INDUSTEC quedan con su PDF y el correo **retenido** hasta el corte.
+- **Desde el 29 de septiembre de 2026 sí manda el correo de cada OT INDUSTEC** de UIO, LARB y CNLJ: al local, a Grupo KFC y a las copias de Correos, desde reclutamiento@industec.me, como el formulario viejo. En **Correos → «Envío de las OT»** ves qué salió, qué espera y qué no salió, con su motivo, y puedes pulsar «Enviar ahora». Las OT del piloto (números 9xxx) no salieron nunca y no salen.
 - **No decide** si una orden corresponde a INDUSTEC: la alerta la señala como «fuera del área, por decidir» y la resolución es tuya.
 - **No borra** nada: órdenes, OT INDUSTEC, solicitudes, documentos y usuarios se cancelan, retiran o desactivan.
 

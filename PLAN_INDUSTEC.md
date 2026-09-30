@@ -1575,13 +1575,31 @@ activar su zona se emite como del piloto aunque llegue después.
 
 | # | Subtarea | Criterio de aceptación | Verificación |
 |---|---|---|---|
-| **T2.29.1** | Migración `023_envio_real.sql` (aditiva): `emision_zonas` (+cambios), `correo_cuentas` (+cambios), columnas en `correlativos` y `email_queue`, permisos, series del piloto apartadas a `PRUEBA:` | Aplicada; las cuatro zonas en PRUEBA tras aplicar (no activa nada); UNIQUE (host, usuario) y una sola cuenta activa | `php verificar_esquema.php` → bloque «migracion 023» y TODO OK |
-| **T2.29.2** | `nucleo/Correo.php` (cifrado, cuentas, prueba, despacho) y `nucleo/EnvioZonas.php` (modo por zona, siembra, vigilancia); `Emision`, `envio.php`, `yo.php`, `despachar_correo_cli.php` | Pruebas puras en verde, sin regresión en las existentes | `php pruebas/prueba_envio_real.php` → 0 fallos; `prueba_ot_piloto.php` → 0 fallos |
-| **T2.29.3** | `correo_cuenta_importar_cli.php`: la cuenta del viejo, leída como texto, cotejada entre sus 5 copias (I-10) | 5/5 copias iguales; la clave guardada se descifra con la misma huella; queda activa; conexión OK | salida literal del `--ejecutar --probar` |
-| **T2.29.4** | Correos: pestañas «Envío de las OT» (interruptor por zona, cola, últimos correos) y «Cuenta de envío» (probar, correo de prueba, agregar, usar, deshabilitar) | Un correo de prueba sale desde reclutamiento y llega a `servicioalcliente@` con su PDF | IMAP de solo lectura desde la estación, por la referencia `P-…` del asunto |
-| **T2.29.5** | Activar UIO, LARB y CNLJ | Las tres en PRODUCCION; series sembradas = contador del viejo + 5; la franja del piloto ya no sale | `SELECT * FROM emision_zonas`; `correlativos`; `yo.php` de un técnico real → PRODUCCION |
-| **T2.29.6** | El proceso completo con las cuentas de prueba (ENSAYO) | `verificar_emision.py`, `verificar_ciclo.py`, `verificar_continuidad.py`, `verificar_bandeja.py` en verde, cada una con su limpiar+preparar | salida literal de cada batería |
-| **T2.29.7** | La primera OT real enviada | `email_queue` ENVIADO desde reclutamiento y el correo en `servicioalcliente@` con el PDF | consulta a `email_queue` + IMAP |
+| ✅ **T2.29.1** | Migración `023_envio_real.sql` (aditiva): `emision_zonas` (+cambios), `correo_cuentas` (+cambios), columnas en `correlativos` y `email_queue`, permisos, series del piloto apartadas a `PRUEBA:` | Aplicada; las cuatro zonas en PRUEBA tras aplicar (no activa nada); UNIQUE (host, usuario) y una sola cuenta activa | `php verificar_esquema.php` → bloque «migracion 023» y TODO OK |
+| ✅ **T2.29.2** | `nucleo/Correo.php` (cifrado, cuentas, prueba, despacho) y `nucleo/EnvioZonas.php` (modo por zona, siembra, vigilancia); `Emision`, `envio.php`, `yo.php`, `despachar_correo_cli.php` | Pruebas puras en verde, sin regresión en las existentes | `php pruebas/prueba_envio_real.php` → 0 fallos; `prueba_ot_piloto.php` → 0 fallos |
+| ✅ **T2.29.3** | `correo_cuenta_importar_cli.php`: la cuenta del viejo, leída como texto, cotejada entre sus 5 copias (I-10) | 5/5 copias iguales; la clave guardada se descifra con la misma huella; queda activa; conexión OK | salida literal del `--ejecutar --probar` |
+| ✅ **T2.29.4** | Correos: pestañas «Envío de las OT» (interruptor por zona, cola, últimos correos) y «Cuenta de envío» (probar, correo de prueba, agregar, usar, deshabilitar) | Un correo de prueba sale desde reclutamiento y llega a `servicioalcliente@` con su PDF | IMAP de solo lectura desde la estación, por la referencia `P-…` del asunto |
+| ✅ **T2.29.5** | Activar UIO, LARB y CNLJ | Las tres en PRODUCCION; series sembradas = contador del viejo + 5; la franja del piloto ya no sale | `SELECT * FROM emision_zonas`; `correlativos`; `yo.php` de un técnico real → PRODUCCION |
+| ✅ **T2.29.6** | El proceso completo con las cuentas de prueba (ENSAYO) | `verificar_emision.py`, `verificar_ciclo.py`, `verificar_continuidad.py`, `verificar_bandeja.py` en verde, cada una con su limpiar+preparar | salida literal de cada batería |
+| ⏳ **T2.29.7** | La primera OT real enviada — **SIGUIENTE ACCIÓN**, espera a que un técnico emita | `email_queue` ENVIADO desde reclutamiento y el correo en `servicioalcliente@` con el PDF | `php envio_real_cli.php estado` (la cola) + IMAP de solo lectura por el asunto `ORDEN DE TRABAJO INDUSTEC - OT-1952` (o la primera que salga) |
+
+**Estado al cierre del 2026-09-29 (21:50):** T2.29.1 a T2.29.6 hechas, desplegadas y
+verificadas en darkviolet (`45142ae` y el commit siguiente; cifras y salidas en
+`ESTADO.md` §1z). **El envío real está ACTIVO en UIO, LARB y CNLJ desde las 21:45**
+(OTRA sigue en piloto). Las próximas OT de la app: correctivo UIO **OT-1952**, LARB
+**OT-2327**, CNLJ **OT-2652**; preventivo UIO **OT-0232**, LARB **OT-0359**, CNLJ
+**OT-0248**. **Pendiente de Andrés:** (1) avisar a los técnicos de las tres zonas que
+desde ahora emiten SOLO por la app —si siguen usando el formulario viejo, KFC recibe el
+trabajo dos veces; Correos lo vigila—; (2) programar en hPanel el cron del despachador
+cada 5 min (`despachar_correo_cli.php`) y del reemisor cada 10 (`emitir_pendientes_cli.php`):
+sin él, un correo que falle se reintenta recién con la siguiente OT; (3) decidir si se
+cargan los **jefes de operaciones de KFC por local** —el formulario viejo los mandaba en
+cada OT (el técnico los escribía) y en el nuevo van por local en Correos: la propuesta,
+leída en solo lectura de 619 correos del viejo de los últimos 90 días, está en
+`SALIDAS IA\OTS\propuesta_jefes_operaciones_por_local_2026-09-29 (generado agente).csv`
+—96 locales, 122 direcciones, 24 locales con más de una; columna «DECISION ANDRES»—;
+cargarla es agregar destinatarios de KFC, así que requiere su aprobación; (4) decidir
+OTRA.
 
 | Autónomo | Requiere aprobación | Prohibido |
 |---|---|---|
@@ -1744,7 +1762,7 @@ Las tareas T1.9 a T1.11 avanzan en paralelo conforme se desbloqueen sus dependen
 
 ---
 
-## 11b. Arranque para una conversación nueva — al 2026-09-21
+## 11b. Arranque para una conversación nueva — al 2026-09-29 (el envío real de las OT está ACTIVO desde las 21:45: ver el último punto de «Sumado el 2026-09-24 a 2026-09-29»)
 
 > Esta sección existe para que quien abra una conversación nueva pueda **empezar
 > a ejecutar sin preguntar nada**. Se actualiza cada vez que cambia lo que sigue.
@@ -1885,7 +1903,7 @@ y que recién se unieron hoy:
   DESPLEGADA en darkviolet el 2026-09-29**, verificada con las tres
   baterías que la ejercitan (68·0, 37·0, 39·0 — detalle en `ESTADO.md`
   §1s-quindecies). **Siguiente en el carril: T2.28.8** (casos sin local,
-  sin empezar — punto 11 de la lista Q más abajo).
+  sin empezar — punto 11 de la lista Q más abajo), **después de T2.29.7**.
 - **En paralelo, desde el PC de Andrés y fuera del plan original:** la OT del
   piloto que no cierra ni sale a KFC (§1w), el PDF sin la franja «DOCUMENTO DE
   PRUEBA» con los 14 PDF del piloto regenerados (§1x/§1y), el panel «En qué
@@ -1906,6 +1924,22 @@ y que recién se unieron hoy:
   piloto (28-sep) — las pruebas no se actualizaron cuando se tomó esa
   decisión; anotado como error nº 53, pendiente de que Andrés diga si se
   actualizan esas dos baterías o se corren solo en modo PRODUCCIÓN.
+- **2026-09-29 (noche) — T2.29, EL ENVÍO REAL ESTÁ ACTIVO** (pedido de Andrés:
+  «que ya se pruebe el envío y tanto KFC como la administradora reciban las
+  órdenes»). Desde las **21:45** las OT de la app en **UIO, LARB y CNLJ** salen
+  con la numeración del formulario viejo (UIO OT-1952, LARB OT-2327, CNLJ
+  OT-2652; preventivo 0232 · 0359 · 0248) y su correo sale desde
+  **reclutamiento@industec.me** —la cuenta del viejo, copiada cifrada— al correo
+  del administrador del local que escribe el técnico y a las copias de la zona
+  en Correos. OTRA sigue en piloto. Ya no hay franja del piloto para esas zonas.
+  El interruptor por zona y la cuenta de envío se manejan en **Correos** (o por
+  SSH con `php envio_real_cli.php estado|activar|piloto|prueba|despachar`). Las
+  cuentas `_prueba` emiten en ENSAYO (serie 8000, correo retenido) y eso cerró
+  el error nº 53: `verificar_ciclo.py` 54·0 —con el cierre en SAP de la
+  administradora agregado— y `verificar_continuidad.py` 30·0. Detalle, cifras y
+  lo que no se comprobó en `ESTADO.md` **§1z**; decisiones D-1 a D-10 y
+  pendientes de Andrés en **T2.29**. **Siguiente acción: T2.29.7** —ver salir la
+  primera OT real (cola ENVIADO + IMAP)—, después T2.28.8.
 
 ### Antes de dar nada por verificado
 
@@ -3191,6 +3225,47 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     se actualizan para esperar el nuevo comportamiento del piloto, o si se
     corren solo con `emision_modo=PRODUCCION`; y corregir el supuesto de orden
     en `prueba_cola_vivo.mjs`.
+    **✅ Resuelto el 2026-09-29 con T2.29:** las cuentas `_prueba` emiten en modo
+    ENSAYO (serie 8000, comportamiento de producción, correo RETENIDO), así que
+    las dos baterías vuelven a probar el camino real: `verificar_ciclo.py`
+    54·0 y `verificar_continuidad.py` 30·0 contra darkviolet. Sigue abierto
+    solo el supuesto de orden de `prueba_cola_vivo.mjs`.
+54. **`INSERT … SELECT … FROM <misma tabla> … ON DUPLICATE KEY UPDATE col =
+    f(tabla.col)` aborta en MariaDB con el error 1052 (columna ambigua).** La
+    migración 023 lo traía al copiar las series del piloto a `PRUEBA:`, y el
+    mismo patrón se había escrito en `t2_14_sembrar_correlativos.py`. Se
+    detectó **antes del servidor**, restaurando el volcado del día en una base
+    local y aplicando ahí la migración con el mismo `aplicar_sql.php`; en el
+    servidor habría dejado la 023 a medio aplicar. **Regla:** la tabla de
+    origen va como derivada con columnas renombradas (`FROM (SELECT serie AS
+    s, ultimo AS u …) x`); y toda migración con `INSERT … SELECT` o
+    `ON DUPLICATE` se prueba antes sobre el último volcado restaurado en local
+    (`restaurar_local.py` del scratchpad de la sesión del 29-sep describe cómo).
+55. **Una serie de números «de prueba» por debajo de la de producción se cuela
+    en cualquier MAX() que no la excluya.** La primera versión de
+    `mayorNumeroReal()` solo quitaba la serie del piloto (≥ 9000) y contaba las
+    OT de ensayo del arnés (8001-8999). Activar una zona después de correr una
+    batería habría sembrado la serie real en 8001, y la primera OT a Grupo KFC
+    habría salido como OT-8002. Lo encontró la revisión adversarial. La prueba
+    de integración local lo dejaba pasar porque afirmaba «la serie sigue desde
+    más de 1961» y 8002 lo cumple. **Regla:** toda consulta que tome el mayor
+    número real filtra por rango (`< SERIE_ENSAYO`) **y** por usuario (sin
+    `_prueba`); y una aserción sobre un número sembrado pide el número exacto,
+    nunca «mayor que».
+56. **En MariaDB, en un `UPDATE` o un `ON DUPLICATE KEY UPDATE`, cada
+    asignación ya ve el valor nuevo de las anteriores.** `encolar()` ponía
+    `estado = IF(estado='FALLIDO'…,'PENDIENTE',…)` en tercer lugar, y las
+    condiciones de `intentos`, `proximo_intento_en` y `motivo` ya leían
+    PENDIENTE. Un correo FALLIDO reencolado conservaba sus intentos y el primer
+    error lo daba por agotado. **Regla:** la columna que otras condiciones
+    consultan se asigna **al final**.
+57. **Una batería que mira la pantalla «por omisión» depende de los datos
+    reales del momento.** `verificar_http.py` esperaba ver el pendiente de
+    prueba de CNLJ en `pendientes.php` sin filtro. La administración cae por
+    diseño en «por registrar en SAP» si hay alguna solicitud real en ese
+    punto: el 29-sep había una, la 53 (aviso 10356500). Falló sin que nada
+    estuviera roto. **Regla:** para probar el alcance se pide la cola
+    explícita (`?g=abiertos`), no la de aterrizaje.
 
 ### Lo que no se toca, nunca
 

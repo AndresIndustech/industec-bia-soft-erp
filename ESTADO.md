@@ -3,8 +3,8 @@
 > **Empieza por aquí.** Este archivo dice dónde vamos; [`PLAN_INDUSTEC.md`](PLAN_INDUSTEC.md) dice qué hay que construir y con qué criterios.
 > Si vas a trabajar, **anótate primero en §5 (Trabajo en paralelo)** antes de tocar nada.
 
-**Última actualización:** 2026-09-28
-**Fase en curso:** 2 · Automatización — **construida y desplegada en el sitio de pruebas; lo que sigue es el piloto en UIO** (paquete en `desarrollo/sistema_ots/piloto/`). La Fase 1 quedó cerrada
+**Última actualización:** 2026-09-29 (noche)
+**Fase en curso:** 2 · Automatización — **el envío real de las OT está ACTIVO desde el 2026-09-29 21:45 en UIO, LARB y CNLJ** (T2.29, §1z): lo que se emite en la app sale a Grupo KFC, al local y a la administración desde reclutamiento@industec.me. La Fase 1 quedó cerrada
 **Repositorio git:** la raíz del proyecto, `D:\INDUSTECH IA` — cubre el código **y** estos documentos, para que quede historial de las decisiones. Fuera del control de versiones: `ENTRADAS IA`, `SALIDAS IA`, el entorno virtual y las credenciales.
 
 **Nombre del sistema, decidido por Andrés el 2026-09-10: B.IA Soft ERP.**
@@ -51,6 +51,7 @@ del rediseño.
 | **Continuidad entre casos del mismo equipo** (T2.25) | ✅ **desplegada y verificada contra el servidor el 2026-09-21** | Migración **012 aplicada** (`verificar_esquema.php` → **TODO OK**, con 0 casos enlazados: no enlaza nada por su cuenta), `verificar_continuidad.py` en **25 · 0** —incluido el arrastre real del pendiente huérfano—, `verificar_http.py` **86 · 0** y `verificar_bandeja.py` **37 · 0**. Locales: **36 · 0** la nueva, 120 · 0, 57 · 0, 62 · 0. El fenómeno, medido: **185 grupos** local+equipo con más de un caso en el buzón vivo y **509 avisos** del histórico SAP que nacen dentro de la semana de otro del mismo equipo. Detalle en **§1l** |
 | **Buzón de la administradora, regularizado en bloque** | ✅ **2026-09-21** | **124 ATENDIDO → cerrados en SAP** + **773 CERRADO_SIN_ATENCION → regularizados**, a pedido de Andrés y asumiendo que ella ya lo hizo en SAP (sin verificar caso por caso). Pendientes de regularizar: **0**. Detalle, la herramienta y la nota sobre los «656» vs 773 reales en **§1h** |
 | **Pantalla de preventivos** | ✅ **rediseñada y desplegada, 2026-09-21/22 (T2.23 + T2.24.2)** | De **~110 elementos** en la primera pantalla a **~28**. Tres horizontes en pestañas en vez de apilados; el atraso como cola de trabajo. Destapó tres cifras que se leían al revés: los **174 ingresos «sin cerrar»** (ya cerrados en bloque, ver §1m), el «0 % a tiempo» que en realidad era «ningún ingreso cerrado todavía», y el «sin kit» que salía en el 86 % de las filas. Baterías locales **120·0, 57·0, 62·0, 11·0**; cuadre de bloques **82+174+19+16+77 = 368**. Detalle en **§1k** (pantalla) y **§1m** (cierre masivo). **Falta correr las siete baterías de servidor** |
+| **Envío real de las OT INDUSTEC (T2.29)** | ✅ **ACTIVO desde el 2026-09-29 21:45 en UIO, LARB y CNLJ** (`45142ae` y siguiente); OTRA en piloto | Cuenta `reclutamiento@industec.me` importada del viejo (5/5 copias iguales, huella `1f9f059a`), conexión OK y **correo de prueba recibido en servicioalcliente@ con su PDF** (IMAP). Series sembradas = contador viejo + 5: próximas OT-1952 (UIO) · OT-2327 (LARB) · OT-2652 (CNLJ). Baterías: emisión 69·0 (antes y después de activar), ciclo 54·0, continuidad 30·0, bandeja 37·0, http 89·0; locales 112·0 + 119·0 + integración 81·0. **Falta ver salir la primera OT real** (T2.29.7). Detalle en **§1z** |
 | **OT INDUSTEC del piloto: marcada y sin cerrar órdenes** | ✅ **desplegada en darkviolet el 2026-09-28** (`4240a67`) | 19/19 archivos = rama; `tarjeta_cli` 34·0 ×2; 14 OT del piloto, 0 discrepancias PHP/SQL; 12 cerradas en SAP con OT del piloto señaladas en el buzón; bitácora sin lo de prueba (−2.642 filas, candado probado). Detalle y lo no comprobado en **§1w** |
 
 **Cuadre del corpus, exacto contra los 7.333 PDFs originales:**
@@ -858,6 +859,85 @@ la que dejó T2.23.
   corrido: cinco cuentas de prueba y los casos 10356012 y 10355931 asignados al
   técnico A). Se revierte con `php ~/respaldos/deshacer_prueba.php` cuando ya no
   haga falta para las otras baterías.
+
+---
+
+## 1z. T2.29 · El envío real de las OT INDUSTEC, ACTIVO en UIO, LARB y CNLJ, y la cuenta de envío configurable (2026-09-29, noche, pedido de Andrés, ✅ salvo T2.29.7)
+
+**Qué cambió para cada persona, desde las 21:45 del 29-sep:**
+
+- **Técnico (UIO, LARB, CNLJ):** ya no ve la franja del piloto. Su OT sale con la
+  numeración de siempre y el recibo dice a quién salió el correo según la cola
+  (local / Grupo KFC / administración). Si no escribió el correo del
+  administrador del local, se le dice que el local no lo recibió. Y se le pide
+  **no emitirla otra vez en el formulario de siempre**.
+- **Grupo KFC, el local y la administración:** reciben cada OT como la mandaba
+  el viejo. El remitente es «Ordenes de Trabajo INDUSTEC» <reclutamiento@industec.me>;
+  el asunto, `ORDEN DE TRABAJO INDUSTEC - OT-…`; el cuerpo es el que lee el robot,
+  y va el PDF adjunto.
+- **Administración (Correos):** pestaña **«Envío de las OT»** (el estado por zona,
+  el número desde el que sigue cada serie, la vigilancia del formulario viejo, la
+  cola —enviados, por enviar, no salieron, retenidos— y los últimos 25 correos con
+  su motivo) y pestaña **«Cuenta de envío»**. Activar o volver al piloto y
+  cambiar la cuenta lo hace solo un SUPERADMIN.
+
+**Evidencia, en el orden en que se hizo (salida literal resumida):**
+
+| Paso | Comando | Resultado |
+|---|---|---|
+| Volcado previo | `t2_4_volcado_bd.py --sin-retencion` | `volcado_20260929T211808Z.sql.gz` · sha256 `e98f9a4e…` · OK |
+| Migración, antes en local | volcado restaurado en `industec_prueba_023` + `aplicar_sql.php` | **destapó el error 1052** (nº 54) → corregida; después 10/10 sentencias, dos veces (idempotente), `verificar_esquema.php` TODO OK. La base local se borró al terminar |
+| Migración en darkviolet | `php aplicar_sql.php sql/023_envio_real.sql` | 10/10 · `verificar_esquema.php` → **TODO OK** (bloque «migracion 023»: 4 tablas, `uq_cuenta`, `uq_cuenta_activa`, 4 zonas, columnas, 2/2 permisos solo SUPERADMIN, series 9xxx con su copia `PRUEBA:`) |
+| Despliegue | `t2_10_desplegar.py` (14 + 6 archivos) | 14/14 y 6/6 por hash; «la web entrega exactamente lo que se subió». Antes: los 10 reemplazados eran `= HEAD` en el servidor |
+| Cuenta de envío | `correo_cuenta_importar_cli.php --ejecutar --probar --a-nombre-de abasantes` | 5/5 copias del viejo iguales; cuenta 1; «la clave guardada se descifra con la misma huella que la del viejo (largo 13, huella 1f9f059a)»; activa; «conectó con smtp.titan.email:587 y el servidor aceptó el usuario y la clave» |
+| Correo de prueba | `envio_real_cli.php prueba servicioalcliente@industec.me` | referencia `P-20260929-212519-0272`; **IMAP (solo lectura): llegó a INBOX de servicioalcliente@**, de «Ordenes de Trabajo INDUSTEC <reclutamiento@industec.me>», con `prueba-P-…pdf` (17.263 bytes) |
+| Baterías, antes de activar | una por limpiar+preparar | `verificar_emision.py` **69/69** · `verificar_ciclo.py` **54/54** · `verificar_continuidad.py` **30/30** · `verificar_bandeja.py` **37/37** · `verificar_http.py` **89/89** |
+| Activación | `envio_real_cli.php activar UIO\|LARB\|CNLJ --a-nombre-de abasantes` | UIO: viejo 1946 → serie 1951 (primera **1952**), preventivo 226 → 231 (**0232**) · LARB: 2321 → 2326 (**2327**), 353 → 358 (**0359**) · CNLJ: 2646 → 2651 (**2652**), 242 → 247 (**0248**) |
+| Después de activar | `verificar_esquema.php`, `Emision::modo()`, `verificar_emision.py` | TODO OK · UIO/LARB/CNLJ/sitio `PRODUCCION`, OTRA `PRUEBA` · 69/69; los correos de la cuenta de prueba (OT-8001…8005, UIO) **RETENIDO «cuenta de prueba»**; series reales intactas |
+| Limpieza | `limpiar_pruebas.php` | 0 cuentas `_prueba`; nada suelto en el Archivo |
+
+Locales: `prueba_envio_real.php` **112·0**, `prueba_ot_piloto.php` **119·0** (la falla
+previa del `sw.js` v25 se corrigió), el resto sin cambios (`prueba_contratos` 57·0,
+`prueba_franja_piloto` 20·0, etc.); **integración local** sobre el volcado, con dobles de
+PHPMailer y dompdf: **81·0** (activar, emitir 1951, saltar 1952 del Archivo, saltar sobre
+el viejo, retener ENSAYO/piloto, CUENTA_FALLA sin gastar intentos, 550 → FALLIDO,
+cupo por hora, reencolar con intentos en 0, volver al piloto, reactivar sin bajar,
+activar LARB después de una OT de ensayo → 2325).
+
+**Defectos encontrados y corregidos antes de activar** (los cuatro, en los errores
+nº 54 a 57 del plan): el 1052 de la migración y del sembrador `t2_14`; `mayorNumeroReal`
+contando la serie de ensayo (lo encontró la revisión adversarial: habría sembrado en
+8001); la alarma del formulario viejo que no avisaba nunca; y el orden de las
+asignaciones del `ON DUPLICATE` de la cola. Además: `t2_14` nunca bajaba un contador
+del piloto (`GREATEST` con 9205), y `verificar_http.py` dependía de los datos reales.
+
+**Lo que NO se comprobó (I-7):**
+- **Ninguna OT real salió todavía.** Hasta las 21:48 no entró ninguna desde la
+  activación. El envío de la cola con el SMTP real se probó por partes: el mismo
+  `Correo::mailer()` mandó el correo de prueba con adjunto, y `despachar()` se
+  probó con dobles. **La primera OT de un técnico es T2.29.7**: mirar
+  `php envio_real_cli.php estado` (la cola) y el correo en servicioalcliente@.
+- **La revisión adversarial quedó a medias:** de cuatro revisores, tres cayeron
+  por el límite de sesión (numeración, envío y seguridad) y solo respondió el del
+  flujo completo. Esas tres lentes las cubrí yo leyendo el código y con las
+  pruebas, no con revisores independientes.
+- **No hay cron en hPanel** para el despachador ni para el reemisor. Sin él, un
+  correo que falle se reintenta con la siguiente OT que entre o con «Enviar
+  ahora» en Correos. Lo programa Andrés.
+- **Las pantallas nuevas de Correos no se vieron con una sesión real** de
+  SUPERADMIN: se comprobaron con `php -l`, el 302 sin sesión y las acciones
+  por la línea de órdenes, que usan las mismas funciones.
+- **Diferencia con el viejo que decide Andrés:** el viejo mandaba cada OT
+  también al **jefe de operaciones de KFC del local** (lo escribía el técnico). En el
+  nuevo va por local en Correos y hoy no hay ninguno cargado. Propuesta en
+  `SALIDAS IA\OTS\propuesta_jefes_operaciones_por_local_2026-09-29 (generado agente).csv`
+  (96 locales). Otra: Miguel Vásquez (KFC) recibe también los preventivos y los
+  correctivos de CNLJ, porque así lo cargó la administración; en el viejo no le
+  llegaban.
+- **Los técnicos todavía no están avisados.** Esa noche el formulario viejo se
+  siguió usando (UIO pasó de 1945 a 1946 entre la tarde y la activación). Si lo
+  siguen usando después de activar, KFC recibe el trabajo dos veces. Correos lo
+  avisa como «usos del viejo desde que se activó», y la app numera por encima.
 
 ---
 
@@ -3555,7 +3635,7 @@ Edita esta tabla al tomar una tarea y bórrate al terminar. Si la tabla está va
 
 | Tarea | Conversación / responsable | Desde | Recursos que bloquea |
 |---|---|---|---|
-| **Envío real de las OT (fin del modo piloto) + cuenta de correo configurable** (`reclutamiento@industec.me`, tomada del sistema viejo) — pedido de Andrés del 2026-09-29 | 🔨 **En curso** — conversación de la estación (Claude) | 2026-09-29 | `nucleo/Emision.php`, `envio.php`, `despachar_correo_cli.php`, `correos.php`, `nucleo/Destinatarios.php`, `nucleo/Despacho.php`, un `nucleo/Correo.php` nuevo, migración 023, `verificar_esquema.php`, `sw.js`; en darkviolet, `nucleo/config.php` (interruptor `emision_modo`), `correlativos`, `email_queue` y las tablas `correo_*`. **Del sistema viejo (`yellow-elephant`) solo LEE** (regla 9). Nada se despliega ni se activa hasta que pasen las baterías y Andrés confirme el primer envío real |
+| ~~**Envío real de las OT (fin del modo piloto) + cuenta de correo configurable** (`reclutamiento@industec.me`, tomada del sistema viejo) — pedido de Andrés del 2026-09-29~~ | ✅ **Terminada, desplegada y ACTIVA el 2026-09-29 21:45** (T2.29) — conversación de la estación. Queda solo T2.29.7: ver salir la primera OT real | 2026-09-29 | Ya no bloquea nada. Tocó: migración 023, `nucleo/EnvioZonas.php` y `nucleo/Correo.php` (nuevos), `Emision.php`, `Casos.php`, `envio.php`, `yo.php`, `correos.php`, `automatizacion.php`, `verificar_esquema.php`, `despachar_correo_cli.php`, `correo_cuenta_importar_cli.php` y `envio_real_cli.php` (nuevos), `app.js`, `sw.js` v27; en darkviolet `emision_zonas`, `correo_cuentas`, `correlativos`. **config.php no se tocó.** Del viejo solo se LEYÓ. Detalle en **§1z** |
 | ~~El PDF de la OT INDUSTEC sin la franja «DOCUMENTO DE PRUEBA», y los 14 del piloto regenerados como copia interna (6 con la fecha de atención corregida)~~ (decisiones A–E de Andrés del 28-sep-2026) | ✅ **Desplegada y ejecutada en darkviolet el 2026-09-28** (18:20–18:27 EC): 14 HECHA · 0 INCONSISTENTE, índice nocturno corrido sin pisar la corrección — Steven, worktree `_wt_ot_piloto_2026-09-28` (rama `pc/ot-piloto-no-cierra-2026-09-28`, empujada). Cifras, rollback y lo abierto (captura 204; línea de la OT-9125) en **§1y** | 2026-09-28 | Ya no bloquea nada. Lo que tocó: `nucleo/Emision.php`, `archivo_indexar_cli.php`, `vocabulario*.json`, `ui.js`, `sw.js` v25; los 14 de `ordenes_pdf/`, `ot_capturadas` (carga.correccion_admin en 6, `pdf_sha256_regen` en 14), `ot_archivo` y la bitácora #8206–#8219 |
 | ~~Cuadro «En qué estado están» con las cuatro cifras de la administradora, + gestión del repuesto y marcas de la novedad (migración 022)~~ (pedido de Isabel del 27-sep-2026, fuera del plan) | ✅ **Hecha y DESPLEGADA en darkviolet el 2026-09-28** (rama `pc/panel-estados-administradora-2026-09-27`, sin empujar a GitHub) — Steven, desde el PC de Andrés, en un worktree aparte (`_wt_panel_estados_2026-09-27`) para no cruzarse con la conversación que edita `casos.php` | 2026-09-27 | `panel.php`, `Casos.php` (función nueva), `vocabulario.json` (+4 conceptos, v2026-09-27.1) y lo que regenera, `sw.js` v22, `tarjeta_cli.php`, `verificar_cifras.py`, `VOCABULARIO.md`. No toca la base ni el árbol canónico. Detalle, cifras y preguntas en **§1u** |
 | ~~Buzón simplificado y cifras de Asignación~~ (pedido de Isabel, fuera del plan) | ✅ **Desplegada el 2026-09-28 a las 08:13 UTC**, pisada en `casos.php` y `nucleo/Casos.php` por el despliegue del panel (08:16) y **repuesta a las ~19:30 UTC** por el de la OT del piloto (`4240a67`, que contiene las dos ramas; §1w) — rama `pc/buzon-simplificado-2026-09-27` en GitHub | 2026-09-27 | Solo `casos.php`, `asignacion.php`, `nucleo/Casos.php` (tres claves nuevas en `tarjetasPorZona()`), `prueba_panel_zona.php` (85·0) y una frase en las dos hojas del piloto. No toca la base, el árbol canónico ni `vocabulario.json`. Detalle, cifras y comando de despliegue en **§1v**. Conviven con dos cambios sin confirmar de otras conversaciones (§1u en el árbol principal y el worktree `_wt_panel_estados_2026-09-27`): fusionar de uno en uno |
