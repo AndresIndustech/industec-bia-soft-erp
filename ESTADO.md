@@ -895,6 +895,8 @@ la que dejó T2.23.
 | Activación | `envio_real_cli.php activar UIO\|LARB\|CNLJ --a-nombre-de abasantes` | UIO: viejo 1946 → serie 1951 (primera **1952**), preventivo 226 → 231 (**0232**) · LARB: 2321 → 2326 (**2327**), 353 → 358 (**0359**) · CNLJ: 2646 → 2651 (**2652**), 242 → 247 (**0248**) |
 | Después de activar | `verificar_esquema.php`, `Emision::modo()`, `verificar_emision.py` | TODO OK · UIO/LARB/CNLJ/sitio `PRODUCCION`, OTRA `PRUEBA` · 69/69; los correos de la cuenta de prueba (OT-8001…8005, UIO) **RETENIDO «cuenta de prueba»**; series reales intactas |
 | Limpieza | `limpiar_pruebas.php` | 0 cuentas `_prueba`; nada suelto en el Archivo |
+| El despacho en lote, contra Titan | script de una vez (`SMTPKeepAlive`, un `smtpConnect()`, dos `send()` por la misma conexión, como `Correo::despachar()`) | referencia `L-20260929-215226`: **llegaron los 2** a servicioalcliente@ (IMAP), cada uno con su PDF (14.506 bytes). El script se borró del servidor |
+| Correos, con una sesión de ADMIN (cuenta de prueba) | GET y POST por HTTP | «Envío de las OT» 200: aviso verde, reclutamiento@, próximas OT-1952/2327/2652, **sin** botones de activar para ADMIN · «Cuenta de envío» 200, solo lectura, sin campo de clave · POST `zona_piloto` y `cuenta_probar` de ADMIN → **403** (UIO sigue en PRODUCCION) · sin errores de PHP |
 
 Locales: `prueba_envio_real.php` **112·0**, `prueba_ot_piloto.php` **119·0** (la falla
 previa del `sw.js` v25 se corrigió), el resto sin cambios (`prueba_contratos` 57·0,
@@ -912,11 +914,13 @@ asignaciones del `ON DUPLICATE` de la cola. Además: `t2_14` nunca bajaba un con
 del piloto (`GREATEST` con 9205), y `verificar_http.py` dependía de los datos reales.
 
 **Lo que NO se comprobó (I-7):**
-- **Ninguna OT real salió todavía.** Hasta las 21:48 no entró ninguna desde la
+- **Ninguna OT real salió todavía.** Hasta las 21:55 no entró ninguna desde la
   activación. El envío de la cola con el SMTP real se probó por partes: el mismo
-  `Correo::mailer()` mandó el correo de prueba con adjunto, y `despachar()` se
-  probó con dobles. **La primera OT de un técnico es T2.29.7**: mirar
-  `php envio_real_cli.php estado` (la cola) y el correo en servicioalcliente@.
+  `Correo::mailer()` mandó el correo de prueba con adjunto; el lote de dos por una
+  sola conexión (el patrón de `despachar()`) llegó entero; y `despachar()` con su
+  cola se probó con dobles (integración 81·0). **La primera OT de un técnico es
+  T2.29.7**: mirar `php envio_real_cli.php estado` (la cola) y el correo en
+  servicioalcliente@.
 - **La revisión adversarial quedó a medias:** de cuatro revisores, tres cayeron
   por el límite de sesión (numeración, envío y seguridad) y solo respondió el del
   flujo completo. Esas tres lentes las cubrí yo leyendo el código y con las
@@ -924,9 +928,12 @@ del piloto (`GREATEST` con 9205), y `verificar_http.py` dependía de los datos r
 - **No hay cron en hPanel** para el despachador ni para el reemisor. Sin él, un
   correo que falle se reintenta con la siguiente OT que entre o con «Enviar
   ahora» en Correos. Lo programa Andrés.
-- **Las pantallas nuevas de Correos no se vieron con una sesión real** de
-  SUPERADMIN: se comprobaron con `php -l`, el 302 sin sesión y las acciones
-  por la línea de órdenes, que usan las mismas funciones.
+- **Las pantallas nuevas de Correos no se vieron con la sesión de un
+  SUPERADMIN** (no hay cuenta de prueba con ese rol): se vieron con la de ADMIN
+  (arriba), y los botones que solo ve el SUPERADMIN (activar, volver al piloto,
+  probar, correo de prueba, agregar y usar otra cuenta) se ejercitaron por la
+  línea de órdenes, que llama a las mismas funciones. Nadie los pulsó en un
+  navegador.
 - **Diferencia con el viejo que decide Andrés:** el viejo mandaba cada OT
   también al **jefe de operaciones de KFC del local** (lo escribía el técnico). En el
   nuevo va por local en Correos y hoy no hay ninguno cargado. Propuesta en
