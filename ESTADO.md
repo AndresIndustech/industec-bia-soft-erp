@@ -945,6 +945,12 @@ del piloto (`GREATEST` con 9205), y `verificar_http.py` dependía de los datos r
   siguió usando (UIO pasó de 1945 a 1946 entre la tarde y la activación). Si lo
   siguen usando después de activar, KFC recibe el trabajo dos veces. Correos lo
   avisa como «usos del viejo desde que se activó», y la app numera por encima.
+- **El robot del buzón va a ver tres correos de prueba** de reclutamiento@ en
+  servicioalcliente@ (`P-20260929-212519-0272` y los dos `L-20260929-215226`).
+  No dicen «nueva OT:», así que `t2_11_informes_ot.py` los cuenta como «sin
+  parsear» y no los toma por OT: no es una falla. Las OT reales de la app sí
+  llevan el cuerpo de siempre y el robot las procesa como las del viejo. Su
+  nombre trae el local con `EC` (OT-1952-G018EC-…), la forma canónica.
 
 ---
 
