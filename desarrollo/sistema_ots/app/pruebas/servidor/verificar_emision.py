@@ -167,21 +167,24 @@ def main():
              "firma_png": "data:image/png;base64," + base64.b64encode(png(300, 100, (250, 250, 250))).decode(),
              "fotos": [f1, f2], "fotos_cantidad": 2, "tecnico": "Cualquier nombre que mande el celular",
              "concluida": True}
-    serie = "CORRECTIVO:UIO"
+    # T2.29 (29-sep-2026): las cuentas de prueba emiten en modo ENSAYO —su
+    # propia serie desde 8000, comportamiento de producción, correo RETENIDO—,
+    # aunque la zona tenga el envío real activo. Hasta ese día emitían como
+    # piloto (serie 9000) y esta batería lo comprobaba así.
+    serie = "ENSAYO:CORRECTIVO:UIO"
     antes = sql("SELECT ultimo FROM correlativos WHERE serie = ?", [serie])
     cuerpo = {"envio_uuid": envio, "usuario_captura": a,
               "capturada_en": datetime.datetime.now(datetime.timezone.utc).isoformat(), "orden": orden}
     st, _, c = sa.pedir("envio.php", cuerpo_json=cuerpo)
     rec = (json.loads(c) if st == 200 else {}).get("recibo", {})
     ot = rec.get("id_industec") or ""
-    anotar("008", "la orden sale EMITIDA, con número de la serie de pruebas",
+    anotar("008", "la orden sale EMITIDA, con número de la serie de ensayo (8xxx)",
            st == 200 and rec.get("estado") == "EMITIDA"
-           and re.fullmatch(rf"OT-9\d{{3}}-{re.escape(local)}-{caso['aviso']}-UIO", ot) is not None, f"{st} · {ot or c[:100]}")
-    # La coletilla «Es el sistema en pruebas: el correo no se envió a nadie.»
-    # se retiró el 28-sep-2026: toda orden del sitio de pruebas «es del
-    # piloto» y ahora lo dice con esas palabras (envio.php:758-764).
-    anotar("008", "el recibo dice que es del piloto y no llegó a Grupo KFC ni al local",
-           "es del piloto" in (rec.get("que_sigue") or "") and "NO llegó a Grupo KFC" in (rec.get("que_sigue") or ""),
+           and re.fullmatch(rf"OT-8\d{{3}}-{re.escape(local)}-{caso['aviso']}-UIO", ot) is not None, f"{st} · {ot or c[:100]}")
+    anotar("T2.29", "la de una cuenta de prueba NO es del piloto: se comporta como real",
+           rec.get("prueba") is False, rec.get("prueba"))
+    anotar("T2.29", "el recibo dice que es de una cuenta de prueba y que el correo queda retenido",
+           "cuenta de prueba" in (rec.get("que_sigue") or "") and "retenido" in (rec.get("que_sigue") or ""),
            (rec.get("que_sigue") or "")[:90])
     fila = sql("SELECT estado, emitida_en, pdf_sha256, emision_error FROM ot_capturadas WHERE envio_uuid = ?", [envio])[0]
     # Desde la 009 el estado real es EMITIDA (PROCESADA era el nombre anterior a los
@@ -197,7 +200,7 @@ def main():
     anotar("008", "un correo en la cola, RETENIDO y con el PDF adjunto",
            len(cola) == 1 and cola[0]["estado"] == "RETENIDO" and cola[0]["adjunto"] == ot + ".pdf",
            cola[0]["estado"] if cola else "sin fila")
-    anotar("008", "y dice por qué no sale", bool(cola) and "sitio de pruebas" in (cola[0]["motivo"] or ""),
+    anotar("008", "y dice por qué no sale", bool(cola) and "cuenta de prueba" in (cola[0]["motivo"] or ""),
            (cola[0]["motivo"] or "")[:70] if cola else "")
     para = sql("SELECT para FROM email_queue WHERE id_industec = ?", [ot])
     anotar("correo", "la cola va al correo del local que escribió el técnico",
@@ -468,21 +471,24 @@ def main():
     # Cada proceso escribe en su propio archivo: con la salida compartida dos
     # números se pegaban en una sola línea («90069005») y la prueba fallaba sin
     # que la reserva estuviera mal (flaqueza medida el 2026-09-13).
+    # En modo ENSAYO (T2.29): con UIO en envío real, sin modo explícito la
+    # reserva iría a la serie real, que para «CONCURRENCIA:UIO» no existe.
     salida = ssh(f"cd {D} && rm -f /tmp/conc_uio_* && for i in $(seq 10); do php -r 'require \"nucleo/Emision.php\"; "
-                 f"echo Emision::reservar(\"CONCURRENCIA:UIO\"), PHP_EOL;' > /tmp/conc_uio_$i & done; wait; "
+                 f"echo Emision::reservar(\"CONCURRENCIA:UIO\", \"ENSAYO\"), PHP_EOL;' > /tmp/conc_uio_$i & done; wait; "
                  f"cat /tmp/conc_uio_*; echo; rm -f /tmp/conc_uio_*")
     nums = sorted(int(x) for x in salida.split())
     anotar("008", "10 procesos a la vez: 10 números, sin repetir y seguidos",
            len(nums) == 10 and len(set(nums)) == 10 and nums[-1] - nums[0] == 9, nums)
-    ejecutar("DELETE FROM correlativos WHERE serie = 'CONCURRENCIA:UIO'")
+    ejecutar("DELETE FROM correlativos WHERE serie IN ('CONCURRENCIA:UIO', 'ENSAYO:CONCURRENCIA:UIO', 'PRUEBA:CONCURRENCIA:UIO')")
 
     print("\n== el historial del técnico ==")
     st, _, c = sa.pedir("mis.php?t=atendidas")
     anotar("008", "mis.php muestra el número y el enlace a su PDF", st == 200 and ot in c and f"pdf.php?ot={ot}" in c, st)
-    # Desde el 28-sep-2026 la marca es la del vocabulario (OT_PILOTO, «corto»):
-    # «del piloto · no enviada a KFC». El texto viejo «es de prueba: no se envió
-    # a nadie» ya no existe (lo retiró la versión 2026-09-28.1).
-    anotar("008", "y dice que es del piloto, no enviada a KFC", "del piloto · no enviada a KFC" in c, "")
+    # Desde el 28-sep-2026 la marca del piloto es la del vocabulario (OT_PILOTO,
+    # «corto»): «del piloto · no enviada a KFC». Desde el 29-sep (T2.29) la
+    # cuenta de prueba emite en ENSAYO: su OT se comporta como real y NO lleva
+    # esa marca (si la llevara, el arnés volvería a probar el piloto).
+    anotar("T2.29", "y no la marca como del piloto (ENSAYO)", "del piloto · no enviada a KFC" not in c, "")
 
     for se in s.values():
         se.pedir("salir.php")

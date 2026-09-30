@@ -68,5 +68,9 @@ echo json_encode([
     // piloto que nunca llegaron a Grupo KFC. Va en la caché con lo demás, así
     // que la franja sale también sin señal. No es control de nada: lo que
     // decide si una OT es del piloto es su número (Emision::esDePrueba).
-    'emision_modo' => Emision::modo(),
+    // Desde el 29-sep (T2.29) es el modo de la zona de quien entra —con el
+    // envío real activo en su zona, la franja desaparece—; sin zona, el del
+    // sitio; y una cuenta de prueba ve ENSAYO, porque así emite (sin franja:
+    // su OT se comporta como real y su correo queda retenido).
+    'emision_modo' => str_contains((string) $u['usuario'], '_prueba') ? 'ENSAYO' : Emision::modo($u['zona'] ?? null),
 ], JSON_UNESCAPED_UNICODE);

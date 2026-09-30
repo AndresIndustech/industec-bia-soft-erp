@@ -23,11 +23,24 @@ declare(strict_types=1);
  * Se busca desde el panel «Automatización» (decisión de Andrés del
  * 2026-09-23): automatizacion.php enlaza aquí, con el número de propuestas
  * pendientes.
+ *
+ * T2.29 (29-sep-2026, pedido de Andrés): dos pestañas más, primero que todo.
+ *   «Envío de las OT»: el interruptor del envío real por zona (EnvioZonas),
+ *     con lo que tiene que estar en orden antes de activar, el número desde el
+ *     que sigue cada serie, si el formulario viejo se sigue usando, y la cola:
+ *     qué salió, qué espera y qué falló. Activar o volver al piloto pide el
+ *     permiso `emision.activar` (solo SUPERADMIN).
+ *   «Cuenta de envío»: desde qué cuenta salen los correos (Correo). Viene
+ *     cargada la del formulario viejo, reclutamiento@industec.me; se puede
+ *     probar, mandar un correo de prueba, agregar otra y cambiar a ella. Pide
+ *     `correos.cuenta` (solo SUPERADMIN). La clave nunca se muestra.
  */
 require_once __DIR__ . '/nucleo/Ui.php';
 require_once __DIR__ . '/nucleo/Catalogo.php';
 require_once __DIR__ . '/nucleo/Destinatarios.php';
 require_once __DIR__ . '/nucleo/Vocabulario.php';   // CNLJ se lee «CUENCA-LOJA» en los botones de zona
+require_once __DIR__ . '/nucleo/Correo.php';        // T2.29: la cuenta de envío y la cola
+require_once __DIR__ . '/nucleo/EnvioZonas.php';    // T2.29: el envío real por zona
 
 $u = Auth::exigir();
 if (!Ui::puedeModulo('correos.configurar', ['SUPERADMIN', 'ADMIN'], $u)) {
@@ -38,7 +51,12 @@ if (!Ui::puedeModulo('correos.configurar', ['SUPERADMIN', 'ADMIN'], $u)) {
 $e = fn(?string $s): string => Ui::e($s);
 
 const ZONAS = ['UIO', 'LARB', 'CNLJ', 'OTRA'];
-const TABS = ['zona', 'generales', 'locales', 'reportes', 'propuestos', 'vista'];
+const TABS = ['envio', 'cuenta', 'zona', 'generales', 'locales', 'reportes', 'propuestos', 'vista'];
+
+// T2.29: lo que solo hace un superadministrador. Con el rol de respaldo por si
+// la 023 todavía no repartió los permisos.
+$puedeActivar = Ui::puedeModulo('emision.activar', ['SUPERADMIN'], $u);
+$puedeCuenta  = Ui::puedeModulo('correos.cuenta', ['SUPERADMIN'], $u);
 
 function terminarCorreo(?string $ok, ?string $error, string $query = ''): void
 {
@@ -69,6 +87,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     Auth::exigirCsrf();
     $accion = (string) ($_POST['accion'] ?? '');
     $volver = (string) ($_POST['volver'] ?? '');
+    $uid    = (int) $u['usuario_id'];
+
+    // --- T2.29: el envío real por zona ------------------------------------
+    if ($accion === 'zona_activar' || $accion === 'zona_piloto') {
+        if (!$puedeActivar) {
+            Auth::bitacora('DENEGADO', 'emision_zona', (string) ($_POST['zona'] ?? ''), 'sin permiso emision.activar', null, null, [], false);
+            http_response_code(403);
+            exit('Activar o desactivar el envío real lo hace un superadministrador.');
+        }
+        $zona = strtoupper(trim((string) ($_POST['zona'] ?? '')));
+        if (!in_array($zona, ZONAS, true)) { terminarCorreo(null, 'Zona desconocida.', 'tab=envio'); }
+        if ($accion === 'zona_activar') {
+            $r = EnvioZonas::activar($zona, $uid, trim((string) ($_POST['nota'] ?? '')));
+            if (!$r['ok']) { terminarCorreo(null, 'No se activó ' . $zona . ': ' . implode(' ', $r['errores']), 'tab=envio'); }
+            $primeras = [];
+            foreach ($r['detalle'] as $serie => $d) {
+                $primeras[] = strtolower(explode(':', $serie)[0]) . ' desde OT-' . str_pad((string) $d['primera'], 4, '0', STR_PAD_LEFT);
+            }
+            terminarCorreo('Envío real activo en ' . Ui::nombreZona($zona) . ': ' . implode(', ', $primeras)
+                         . '. Desde ahora sus OT INDUSTEC salen a Grupo KFC, al local y a la administración.', null, 'tab=envio');
+        }
+        $r = EnvioZonas::desactivar($zona, $uid, (string) ($_POST['motivo'] ?? ''));
+        if (!$r['ok']) { terminarCorreo(null, implode(' ', $r['errores']), 'tab=envio'); }
+        terminarCorreo(Ui::nombreZona($zona) . ' volvió al piloto: sus OT nuevas quedan con el correo retenido.', null, 'tab=envio');
+    }
+
+    if ($accion === 'despachar') {
+        $r = Correo::despachar(20, 40);
+        $txt = match ($r['estado']) {
+            'HECHO'        => "Enviados {$r['enviados']}, por reintentar {$r['temporales']}, fallidos {$r['fallidos']}"
+                              . ($r['retenidos'] ? ", retenidos del piloto {$r['retenidos']}" : '') . '.',
+            'NADA'         => 'No había nada pendiente de enviar.',
+            'OCUPADO'      => 'Ya se está enviando en este momento: vuelve a mirar en un minuto.',
+            'CUENTA_FALLA' => null,
+            default        => null,
+        };
+        Auth::bitacora('CORREO_DESPACHO_MANUAL', 'email_queue', '', $r['estado'] . ' · ' . implode(' | ', array_slice($r['lineas'], 0, 3)));
+        terminarCorreo($txt, $txt === null ? implode(' ', $r['lineas']) : null, 'tab=envio');
+    }
+
+    // --- T2.29: la cuenta de envío ----------------------------------------
+    if (str_starts_with($accion, 'cuenta_')) {
+        if (!$puedeCuenta) {
+            Auth::bitacora('DENEGADO', 'correo_cuenta', (string) ($_POST['id'] ?? ''), 'sin permiso correos.cuenta', null, null, [], false);
+            http_response_code(403);
+            exit('La cuenta de envío la configura un superadministrador.');
+        }
+        $id = (int) ($_POST['id'] ?? 0);
+        if ($accion === 'cuenta_guardar') {
+            $r = Correo::guardar($_POST, $id > 0 ? $id : null, $uid);
+            terminarCorreo($r['ok'] ? ($id > 0 ? 'Cuenta actualizada.' : 'Cuenta agregada. Pruébala antes de usarla.') : null,
+                           $r['ok'] ? null : $r['error'], 'tab=cuenta');
+        }
+        if ($accion === 'cuenta_probar') {
+            $r = Correo::probarYAnotar($id, $uid);
+            terminarCorreo($r['ok'] ? 'Conexión correcta: ' . $r['detalle'] . '.' : null,
+                           $r['ok'] ? null : 'La conexión falló: ' . $r['detalle'], 'tab=cuenta');
+        }
+        if ($accion === 'cuenta_prueba') {
+            $r = Correo::enviarPrueba($id, (string) ($_POST['destino'] ?? ''), $uid, (string) $u['nombre']);
+            terminarCorreo($r['ok'] ? 'Correo de prueba ' . $r['detalle'] . '. Revisa que haya llegado, con su PDF.' : null,
+                           $r['ok'] ? null : 'El correo de prueba no salió: ' . $r['detalle'], 'tab=cuenta');
+        }
+        if ($accion === 'cuenta_activar') {
+            $r = Correo::activar($id, $uid);
+            terminarCorreo($r['ok'] ? 'Listo: los correos salen ahora desde esta cuenta.' : null, $r['error'], 'tab=cuenta');
+        }
+        if ($accion === 'cuenta_habilitar') {
+            $si = (string) ($_POST['si'] ?? '') === '1';
+            $r = Correo::habilitar($id, $si, $uid);
+            terminarCorreo($r['ok'] ? ($si ? 'Cuenta habilitada.' : 'Cuenta deshabilitada: no se borra.') : null, $r['error'], 'tab=cuenta');
+        }
+        terminarCorreo(null, 'Acción desconocida.', 'tab=cuenta');
+    }
 
     if ($accion === 'alta') {
         $c = leerCampos($_POST);
@@ -203,7 +295,7 @@ $okFlash  = $_SESSION['flash']['ok'] ?? null;
 unset($_SESSION['flash']['ok']);
 $errFlash = Ui::errorFlash();
 
-$tab     = in_array((string) ($_GET['tab'] ?? ''), TABS, true) ? (string) $_GET['tab'] : 'zona';
+$tab     = in_array((string) ($_GET['tab'] ?? ''), TABS, true) ? (string) $_GET['tab'] : 'envio';
 $zonaSel = in_array((string) ($_GET['zona'] ?? ''), ZONAS, true) ? (string) $_GET['zona'] : 'UIO';
 
 $cat = Catalogo::cargar();
@@ -333,25 +425,60 @@ function formAlta(callable $e, string $volver, string $uso, string $destino, str
     return (string) ob_get_clean();
 }
 
+// T2.29: el estado del envío, para el aviso de arriba y la pestaña «Envío».
+$estadoZonas = EnvioZonas::estado();
+$modoConfig  = Emision::modoConfig();
+$cola        = Correo::resumenCola();
+$cuentaAct   = Correo::cuentaActiva();
+$zonasReales = array_values(array_filter(ZONAS, static fn($z) => Emision::modo($z) === 'PRODUCCION'));
+$nombresZona = static fn(array $zs): string => implode(', ', array_map(static fn($z) => Ui::nombreZona($z), $zs));
+
 Ui::cabecera($u, 'correos.php', ['correos' => $contPendientes], ['titulo' => 'Correos']);
 ?>
 <div class="wrap ancho">
   <div class="titulo entra">
     <h1>Correos de las OT INDUSTEC</h1>
     <p class="sub">
-      A quién va cada OT INDUSTEC que se emite: el buzón institucional del jefe de zona (siempre en copia), las demás
-      copias internas de INDUSTEC, las copias al cliente (Grupo KFC) y el jefe de operaciones de cada local. Nada se
-      borra aquí: se desactiva. Cada cambio queda en la <a href="bitacora.php?entidad=correo_destinatario">bitácora</a>.
+      Si las OT INDUSTEC salen por correo, desde qué cuenta y a quién: el buzón institucional del jefe de zona (siempre
+      en copia), las demás copias internas de INDUSTEC, las copias al cliente (Grupo KFC) y el jefe de operaciones de
+      cada local. Nada se borra aquí: se desactiva. Cada cambio queda en la
+      <a href="bitacora.php?entidad=correo_destinatario">bitácora</a>.
     </p>
   </div>
 
-  <?= Ui::aviso('ambar', '<b>En el sitio de pruebas los correos no salen.</b> Lo que configures aquí decide a quién '
-      . 'IRÍAN en producción; en este sitio el correo de toda OT INDUSTEC queda RETENIDO (no se conecta a ningún SMTP).') ?>
+  <?php
+    // El aviso de arriba dice lo que pasa HOY con el correo de una OT: nunca
+    // «no sale» si sale, ni al revés (hasta el 29-sep decía, fijo, que no salía).
+    if ($modoConfig === 'PRUEBA') {
+        echo Ui::aviso('err', '<b>El envío está frenado para todo el sitio.</b> config.php fija <span class="mono">emision_modo = PRUEBA</span>: '
+            . 'ninguna OT INDUSTEC sale por correo, aunque su zona esté activada aquí.');
+    } elseif ($zonasReales === []) {
+        echo Ui::aviso('warn', '<b>Ninguna zona tiene el envío real activo.</b> Las OT INDUSTEC que se emiten son del piloto: '
+            . 'su correo queda retenido y no le llega a nadie. Se activa en «Envío de las OT».');
+    } else {
+        $sinReal = array_values(array_diff(EnvioZonas::ZONAS_CONTRATO, $zonasReales));
+        echo Ui::aviso('ok', '<b>Envío real activo en ' . $e($nombresZona($zonasReales)) . '.</b> Cada OT INDUSTEC de '
+            . (count($zonasReales) === 1 ? 'esa zona' : 'esas zonas') . ' sale desde ' . ($cuentaAct !== null ? '<span class="mono">' . $e((string) $cuentaAct['remitente']) . '</span>' : '<b>ninguna cuenta (falta configurarla)</b>')
+            . ' al local, a Grupo KFC y a las copias configuradas. Hoy: ' . (int) $cola['ENVIADO_HOY'] . ' enviados, '
+            . (int) $cola['PENDIENTE'] . ' por enviar, ' . (int) $cola['FALLIDO'] . ' fallidos.'
+            . ($sinReal !== [] ? ' Siguen en el piloto: ' . $e($nombresZona($sinReal)) . '.' : ''));
+    }
+    if ((int) $cola['FALLIDO'] > 0) {
+        echo Ui::aviso('err', '<b>' . (int) $cola['FALLIDO'] . ' correo(s) de OT no salieron.</b> Revísalos en «Envío de las OT»: '
+            . 'el motivo está en cada fila.');
+    }
+  ?>
 
   <?php if ($okFlash): ?><?= Ui::aviso('ok', $e((string) $okFlash), true) ?><?php endif; ?>
   <?php if ($errFlash): ?><?= Ui::aviso('err', $e($errFlash), true) ?><?php endif; ?>
 
   <div class="tiles tiles-enlace">
+    <a class="tile <?= $tab === 'envio' ? 'azul' : '' ?>" href="correos.php?tab=envio">
+      <div class="t">Envío de las OT</div><div class="pie">Por zona: real o piloto, y qué salió</div>
+    </a>
+    <a class="tile <?= $tab === 'cuenta' ? 'azul' : '' ?>" href="correos.php?tab=cuenta">
+      <div class="t">Cuenta de envío</div><div class="pie"><?= $cuentaAct !== null ? $e((string) $cuentaAct['remitente']) : 'Sin configurar' ?></div>
+    </a>
     <a class="tile <?= $tab === 'zona' ? 'azul' : '' ?>" href="correos.php?tab=zona&zona=<?= $e($zonaSel) ?>">
       <div class="t">Por zona</div><div class="pie">Buzón institucional, copias internas y al cliente</div>
     </a>
@@ -372,6 +499,258 @@ Ui::cabecera($u, 'correos.php', ['correos' => $contPendientes], ['titulo' => 'Co
       <div class="t">Vista previa</div><div class="pie">A quién le llega una OT INDUSTEC de un local</div>
     </a>
   </div>
+
+  <?php if ($tab === 'envio'): ?>
+    <?php
+      $csrf = Auth::csrfToken();
+      $ultimos = Db::todos(
+          "SELECT q.id_industec, q.estado, q.para, q.cc, q.creado_en, q.enviado_en, q.enviado_desde, q.intentos,
+                  q.error_ultimo, q.motivo, q.proximo_intento_en, c.zona
+             FROM email_queue q LEFT JOIN ot_capturadas c ON c.captura_id = q.captura_id
+            ORDER BY q.correo_id DESC LIMIT 25"
+      );
+      $etiquetaCola = ['PENDIENTE' => 'por enviar', 'ENVIANDO' => 'enviándose', 'ENVIADO' => 'enviado',
+                       'FALLIDO' => 'no salió', 'RETENIDO' => 'retenido (piloto)'];
+    ?>
+    <h2>El envío real, por zona</h2>
+    <p class="sub" style="margin:0 0 10px">
+      <b>Real:</b> cada OT INDUSTEC sale por correo al local, a Grupo KFC y a las copias configuradas, con la numeración
+      del formulario de siempre. <b>Piloto:</b> la OT se guarda con número de la serie 9000 y su correo no sale. Al
+      activar una zona, sus técnicos dejan el formulario de siempre: si lo siguen usando, Grupo KFC recibe el mismo
+      trabajo dos veces.
+    </p>
+    <?php foreach (ZONAS as $z):
+        $ez = $estadoZonas[$z];
+        $real = Emision::modo($z) === 'PRODUCCION';
+        $series = EnvioZonas::series($z);
+    ?>
+      <section class="rep" style="margin-bottom:16px">
+        <div class="cab" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <h3 style="margin:0"><?= $e(Ui::nombreZona($z)) ?></h3>
+          <span class="estado-red <?= $real ? 'con' : 'sin' ?>"><?= $real ? 'envío real' : 'piloto' ?></span>
+          <?php if ($ez['desde'] !== null): ?><span class="sub">desde <?= $e(substr((string) $ez['desde'], 0, 16)) ?></span><?php endif; ?>
+        </div>
+        <?php if (in_array($z, EnvioZonas::ACTIVABLES, true)): ?>
+          <ul style="margin:8px 0">
+            <?php foreach ($series as $serie => $s):
+                $mod = $s['modulo'] === 'CORRECTIVO' ? 'Correctivo' : 'Preventivo';
+                $sig = $s['real'] !== null ? $s['real'] + 1 : null; ?>
+              <li><?= $e($mod) ?>:
+                <?php if ($real && $sig !== null): ?>
+                  la próxima OT sale como <b class="mono">OT-<?= $e(str_pad((string) $sig, 4, '0', STR_PAD_LEFT)) ?></b>
+                <?php elseif ($s['viejo'] !== null): ?>
+                  <?php // El mismo cálculo que hará EnvioZonas::activar(): lo que se ve es lo que se siembra. ?>
+                  al activar seguiría en <b class="mono">OT-<?= $e(str_pad((string) (EnvioZonas::siguienteSembrado((int) $s['viejo'], (int) ($s['real'] ?? 0),
+                      Emision::mayorNumeroReal($s['modulo'], $z)) + 1), 4, '0', STR_PAD_LEFT)) ?></b>
+                <?php else: ?>
+                  <span class="sub">sin número real todavía</span>
+                <?php endif; ?>
+                <span class="sub">· formulario de siempre en <?= $s['viejo'] !== null ? (int) $s['viejo'] : 'sin leer' ?></span>
+                <?php if ($real && $s['vigilancia']['usos'] > 0): ?>
+                  <?= Ui::aviso($s['vigilancia']['choque'] ? 'err' : 'warn',
+                      $s['vigilancia']['choque']
+                        ? '<b>El formulario de siempre repitió números que la app ya había dado:</b> '
+                          . $e(implode(', ', array_map(static fn($n) => 'OT-' . str_pad((string) $n, 4, '0', STR_PAD_LEFT),
+                                                       $s['vigilancia']['repetidos'])))
+                          . '. Hay dos OT distintas con cada uno de esos números: revísalas con la administración.'
+                        : '<b>El formulario de siempre se usó ' . (int) $s['vigilancia']['usos'] . ' vez(ces) desde que se activó la app</b> '
+                          . 'en esta zona. Recuerda a los técnicos que ya no lo usen: Grupo KFC recibiría el trabajo dos veces.') ?>
+                <?php endif; ?>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php else: ?>
+          <p class="sub">Todavía no se puede activar: su contador del formulario de siempre es uno solo para correctivo y
+            preventivo, y sembrar las dos series desde el mismo número las haría repetirse. Lo decide Andrés.</p>
+        <?php endif; ?>
+
+        <?php if (!$real && in_array($z, EnvioZonas::ACTIVABLES, true)):
+            $comp = EnvioZonas::comprobaciones($z);
+            $listo = array_filter($comp, static fn($c) => !$c['ok']) === []; ?>
+          <details <?= $listo ? '' : 'open' ?> style="margin:6px 0">
+            <summary><?= $listo ? 'Todo en orden para activar' : 'Falta algo antes de activar' ?></summary>
+            <ul>
+              <?php foreach ($comp as $c): ?>
+                <li><?= $c['ok'] ? '✓' : '✕' ?> <?= $e($c['que']) ?></li>
+              <?php endforeach; ?>
+            </ul>
+          </details>
+          <?php if ($puedeActivar): ?>
+            <form method="post" action="correos.php" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end"
+                  onsubmit="return confirm('¿Activar el envío real en <?= $e(Ui::nombreZona($z)) ?>? Desde este momento cada OT INDUSTEC de la zona sale a Grupo KFC, al local y a la administración, y sus técnicos dejan el formulario de siempre.');">
+              <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+              <input type="hidden" name="accion" value="zona_activar">
+              <input type="hidden" name="zona" value="<?= $e($z) ?>">
+              <label>Nota (opcional)<br><input type="text" name="nota" maxlength="300" placeholder="p. ej. aviso a los técnicos por WhatsApp" style="width:260px"></label>
+              <button class="btn primary" type="submit" <?= $listo ? '' : 'disabled' ?>>Activar el envío real</button>
+            </form>
+          <?php endif; ?>
+        <?php elseif ($real && $puedeActivar): ?>
+          <form method="post" action="correos.php" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:6px"
+                onsubmit="return confirm('¿Volver <?= $e(Ui::nombreZona($z)) ?> al piloto? Las OT nuevas de la zona dejarán de salir por correo.');">
+            <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+            <input type="hidden" name="accion" value="zona_piloto">
+            <input type="hidden" name="zona" value="<?= $e($z) ?>">
+            <label>Motivo<br><input type="text" name="motivo" required minlength="5" maxlength="300" placeholder="Queda en la bitácora" style="width:260px"></label>
+            <button class="btn" type="submit">Volver al piloto</button>
+          </form>
+        <?php endif; ?>
+      </section>
+    <?php endforeach; ?>
+
+    <h2>La cola de correos</h2>
+    <div class="tiles">
+      <div class="tile"><div class="n"><?= (int) $cola['ENVIADO_HOY'] ?></div><div class="t">Enviados hoy</div><div class="pie"><?= (int) $cola['ENVIADO_HORA'] ?> en la última hora (tope <?= Despacho::TOPE_HORA ?>)</div></div>
+      <div class="tile <?= (int) $cola['PENDIENTE'] > 0 ? 'ambar' : '' ?>"><div class="n"><?= (int) $cola['PENDIENTE'] + (int) $cola['ENVIANDO'] ?></div><div class="t">Por enviar</div><div class="pie">Salen solos; o con el botón de abajo</div></div>
+      <div class="tile <?= (int) $cola['FALLIDO'] > 0 ? 'rojo' : '' ?>"><div class="n"><?= (int) $cola['FALLIDO'] ?></div><div class="t">No salieron</div><div class="pie">El motivo, en la tabla</div></div>
+      <div class="tile"><div class="n"><?= (int) $cola['RETENIDO'] ?></div><div class="t">Retenidos</div><div class="pie">OT del piloto: no salen</div></div>
+    </div>
+    <p class="sub">
+      <?php if ($cola['ultimo_enviado']): ?>Último enviado: <span class="mono"><?= $e((string) $cola['ultimo_enviado']['id_industec']) ?></span>
+        el <?= $e(substr((string) $cola['ultimo_enviado']['enviado_en'], 0, 16)) ?> desde <?= $e((string) ($cola['ultimo_enviado']['enviado_desde'] ?? '—')) ?>.
+      <?php else: ?>Todavía no ha salido ningún correo de una OT INDUSTEC desde este sistema.<?php endif; ?>
+    </p>
+    <form method="post" action="correos.php" style="margin:8px 0 18px">
+      <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+      <input type="hidden" name="accion" value="despachar">
+      <button class="btn" type="submit">Enviar ahora lo que está por enviar</button>
+    </form>
+
+    <h3>Los últimos 25 correos de OT</h3>
+    <div class="tabla-wrap">
+      <table class="tarjetas">
+        <thead><tr><th>OT INDUSTEC</th><th>Estado</th><th>A quién</th><th>Cuándo</th><th>Detalle</th></tr></thead>
+        <tbody>
+        <?php if (!$ultimos): ?><tr><td colspan="5" class="vacio">Todavía no hay correos en la cola.</td></tr><?php endif; ?>
+        <?php foreach ($ultimos as $q):
+            $para = json_decode((string) $q['para'], true) ?: [];
+            $cc = json_decode((string) ($q['cc'] ?? ''), true) ?: []; ?>
+          <tr>
+            <td data-th="OT INDUSTEC" class="mono"><?= $e((string) $q['id_industec']) ?></td>
+            <td data-th="Estado"><span class="estado-red <?= $q['estado'] === 'ENVIADO' ? 'con' : ($q['estado'] === 'FALLIDO' ? 'sin' : '') ?>"><?= $e($etiquetaCola[$q['estado']] ?? strtolower((string) $q['estado'])) ?></span></td>
+            <td data-th="A quién" class="sub"><?= count($para) ?> destinatario(s), <?= count($cc) ?> copia(s)<?= $para ? '<br><span class="mono">' . $e(implode(', ', $para)) . '</span>' : '' ?></td>
+            <td data-th="Cuándo" class="sub mono"><?= $e(substr((string) ($q['enviado_en'] ?? $q['creado_en']), 0, 16)) ?><?= $q['enviado_desde'] ? '<br>desde ' . $e((string) $q['enviado_desde']) : '' ?></td>
+            <td data-th="Detalle" class="sub"><?php
+                if ($q['estado'] === 'PENDIENTE' && $q['proximo_intento_en']) { echo 'reintento a las ' . $e(substr((string) $q['proximo_intento_en'], 11, 5)) . ' · '; }
+                echo $e((string) ($q['error_ultimo'] && !str_starts_with((string) $q['error_ultimo'], 'reclamo ') ? $q['error_ultimo'] : ($q['motivo'] ?? '')));
+            ?></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+
+  <?php elseif ($tab === 'cuenta'): ?>
+    <?php
+      $csrf = Auth::csrfToken();
+      $cuentas = Correo::cuentas();
+      $origenTxt = ['SISTEMA_VIEJO' => 'copiada del formulario de siempre', 'MANUAL' => 'agregada a mano'];
+      $formCuenta = static function (?array $c) use ($e, $csrf): string {
+          ob_start(); ?>
+          <form method="post" action="correos.php" class="form-alta" autocomplete="off" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:8px 0 14px">
+            <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+            <input type="hidden" name="accion" value="cuenta_guardar">
+            <input type="hidden" name="id" value="<?= (int) ($c['cuenta_id'] ?? 0) ?>">
+            <label>Nombre<br><input type="text" name="nombre" required maxlength="80" value="<?= $e((string) ($c['nombre'] ?? '')) ?>" placeholder="p. ej. Órdenes de trabajo" style="width:200px"></label>
+            <label>Servidor<br><input type="text" name="host" required maxlength="120" value="<?= $e((string) ($c['host'] ?? 'smtp.titan.email')) ?>" style="width:170px"></label>
+            <label>Puerto<br><input type="number" name="puerto" required min="1" max="65535" value="<?= (int) ($c['puerto'] ?? 587) ?>" style="width:80px"></label>
+            <label>Seguridad<br><select name="seguridad">
+              <option value="STARTTLS" <?= ($c['seguridad'] ?? 'STARTTLS') === 'STARTTLS' ? 'selected' : '' ?>>STARTTLS (587)</option>
+              <option value="SSL" <?= ($c['seguridad'] ?? '') === 'SSL' ? 'selected' : '' ?>>SSL (465)</option>
+            </select></label>
+            <label>Usuario<br><input type="text" name="usuario" required maxlength="160" value="<?= $e((string) ($c['usuario'] ?? '')) ?>" placeholder="cuenta@industec.me" style="width:210px"></label>
+            <label>Clave<br><input type="password" name="clave" <?= $c === null ? 'required' : '' ?> maxlength="200" autocomplete="new-password" placeholder="<?= $c === null ? '' : 'en blanco: no cambia' ?>" style="width:170px"></label>
+            <label>Remitente (From)<br><input type="email" name="remitente" required maxlength="160" value="<?= $e((string) ($c['remitente'] ?? '')) ?>" placeholder="cuenta@industec.me" style="width:210px"></label>
+            <label>Nombre del remitente<br><input type="text" name="remitente_nombre" required maxlength="120" value="<?= $e((string) ($c['remitente_nombre'] ?? 'Ordenes de Trabajo INDUSTEC')) ?>" style="width:220px"></label>
+            <button class="btn primary" type="submit"><?= $c === null ? 'Agregar la cuenta' : 'Guardar' ?></button>
+          </form>
+          <?php return (string) ob_get_clean();
+      };
+    ?>
+    <h2>Desde qué cuenta salen los correos</h2>
+    <p class="sub" style="margin:0 0 10px">
+      La cuenta con la que el sistema se conecta al servidor de correo para mandar cada OT INDUSTEC. Viene cargada la del
+      formulario de siempre, <span class="mono">reclutamiento@industec.me</span>. Se puede agregar otra, probarla y
+      usarla en su lugar. La clave se guarda cifrada y no se muestra nunca; para cambiarla, se escribe otra vez.
+    </p>
+    <?php if (!$puedeCuenta): ?>
+      <?= Ui::aviso('neutro', 'Aquí puedes ver la cuenta. Configurarla lo hace un superadministrador.') ?>
+    <?php endif; ?>
+    <?php if (!$cuentas): ?>
+      <?= Ui::aviso('warn', '<b>No hay ninguna cuenta de envío.</b> Se importa la del formulario de siempre con '
+          . '<span class="mono">php correo_cuenta_importar_cli.php --ejecutar</span>, o se agrega abajo.') ?>
+    <?php endif; ?>
+    <?php foreach ($cuentas as $c):
+        $cid = (int) $c['cuenta_id'];
+        $envioOk = Correo::envioProbado($cid); ?>
+      <section class="rep" style="margin-bottom:14px">
+        <div class="cab" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <h3 style="margin:0"><?= $e((string) $c['nombre']) ?></h3>
+          <?php if ((int) $c['activa'] === 1): ?><span class="estado-red con">con esta salen los correos</span><?php endif; ?>
+          <?php if ((int) $c['habilitada'] !== 1): ?><span class="estado-red sin">deshabilitada</span><?php endif; ?>
+        </div>
+        <p style="margin:6px 0">
+          <b><?= $e((string) $c['remitente_nombre']) ?></b> &lt;<span class="mono"><?= $e((string) $c['remitente']) ?></span>&gt;
+          · servidor <span class="mono"><?= $e((string) $c['host']) ?>:<?= (int) $c['puerto'] ?></span> (<?= $e((string) $c['seguridad']) ?>)
+          · usuario <span class="mono"><?= $e((string) $c['usuario']) ?></span>
+          · clave <?= (int) $c['tiene_clave'] === 1 ? 'guardada (cifrada)' : '<b>sin guardar</b>' ?>
+          · <?= $e($origenTxt[$c['origen']] ?? strtolower((string) $c['origen'])) ?>
+        </p>
+        <p class="sub" style="margin:0 0 8px">
+          Última prueba: <?= $c['probada_en'] ? $e(substr((string) $c['probada_en'], 0, 16)) . ' · ' . ((int) $c['probada_ok'] === 1 ? 'bien' : '<b>falló</b>') . ' · ' . $e((string) $c['probada_detalle']) : 'nunca' ?>.
+          <?= $envioOk !== null ? 'Correo de prueba enviado con éxito el ' . $e(substr($envioOk, 0, 16)) . '.' : 'Sin correo de prueba enviado después de su último cambio.' ?>
+        </p>
+        <?php if ($puedeCuenta): ?>
+          <div class="acciones-fila" style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+            <form method="post" action="correos.php" style="margin:0">
+              <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+              <input type="hidden" name="accion" value="cuenta_probar">
+              <input type="hidden" name="id" value="<?= $cid ?>">
+              <button class="btn" type="submit">Probar conexión</button>
+            </form>
+            <form method="post" action="correos.php" style="margin:0;display:flex;gap:6px;align-items:end">
+              <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+              <input type="hidden" name="accion" value="cuenta_prueba">
+              <input type="hidden" name="id" value="<?= $cid ?>">
+              <label>Correo de prueba a<br><input type="email" name="destino" required value="servicioalcliente@industec.me" pattern=".+@industec\.me" title="Solo un buzón @industec.me" style="width:230px"></label>
+              <button class="btn" type="submit">Enviar correo de prueba</button>
+            </form>
+            <?php if ((int) $c['activa'] !== 1 && (int) $c['habilitada'] === 1): ?>
+              <form method="post" action="correos.php" style="margin:0" onsubmit="return confirm('¿Mandar los correos desde <?= $e((string) $c['remitente']) ?> a partir de ahora?');">
+                <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+                <input type="hidden" name="accion" value="cuenta_activar">
+                <input type="hidden" name="id" value="<?= $cid ?>">
+                <button class="btn primary" type="submit" <?= $envioOk === null ? 'disabled title="Primero un correo de prueba que salga bien"' : '' ?>>Usar esta cuenta</button>
+              </form>
+            <?php endif; ?>
+            <?php if ((int) $c['activa'] !== 1): ?>
+              <form method="post" action="correos.php" style="margin:0">
+                <input type="hidden" name="csrf" value="<?= $e($csrf) ?>">
+                <input type="hidden" name="accion" value="cuenta_habilitar">
+                <input type="hidden" name="id" value="<?= $cid ?>">
+                <input type="hidden" name="si" value="<?= (int) $c['habilitada'] === 1 ? '0' : '1' ?>">
+                <button class="btn" type="submit"><?= (int) $c['habilitada'] === 1 ? 'Deshabilitar' : 'Habilitar' ?></button>
+              </form>
+            <?php endif; ?>
+          </div>
+          <details style="margin-top:8px">
+            <summary>Editar esta cuenta</summary>
+            <?php if ((int) $c['activa'] === 1): ?>
+              <p class="sub">Es la cuenta con la que salen los correos: un cambio de servidor, usuario o clave se prueba antes de guardarse, y el remitente no se cambia aquí (se agrega otra cuenta).</p>
+            <?php endif; ?>
+            <?= $formCuenta($c) ?>
+          </details>
+        <?php endif; ?>
+      </section>
+    <?php endforeach; ?>
+
+    <?php if ($puedeCuenta): ?>
+      <h3>Agregar otra cuenta</h3>
+      <p class="sub" style="margin:0 0 6px">Queda sin usar hasta que le mandes un correo de prueba que salga bien y la elijas con «Usar esta cuenta».</p>
+      <?= $formCuenta(null) ?>
+    <?php endif; ?>
+
+  <?php endif; ?>
 
   <?php if ($tab === 'zona'): ?>
     <div class="filtros" style="margin:14px 0">

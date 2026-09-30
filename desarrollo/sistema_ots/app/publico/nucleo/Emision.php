@@ -4,6 +4,7 @@ require_once __DIR__ . '/Db.php';
 require_once __DIR__ . '/Auth.php';       // la bitácora de la regeneración y del correo sin destino
 require_once __DIR__ . '/Catalogo.php';
 require_once __DIR__ . '/Destinatarios.php';   // T2.28.2: a quién va la cola y qué imprime el PDF
+require_once __DIR__ . '/EnvioZonas.php';      // T2.29: el modo de cada zona y el contador del formulario viejo
 
 /**
  * Emision.php — Convierte una OT INDUSTEC recibida del celular en un documento
@@ -33,14 +34,24 @@ require_once __DIR__ . '/Destinatarios.php';   // T2.28.2: a quién va la cola y
  * correo tiene clave única por orden.
  *
  * ============================================================================
- * EN EL SITIO DE PRUEBAS —modo PRUEBA, el que rige mientras config.php no diga
- * 'emision_modo' => 'PRODUCCION'—:
+ * DOS MODOS, POR ZONA (T2.29, 29-sep-2026). El modo lo decide `emision_zonas`
+ * —un superadministrador lo cambia desde Correos— salvo que config.php traiga
+ * 'emision_modo' (PRUEBA es el freno de emergencia de todo el sitio). Hasta el
+ * 29-sep era uno solo para todo el sitio y siempre PRUEBA.
  *
- *   - las series arrancan en 9000: una OT de prueba no puede llevar un número
- *     que exista o vaya a existir pronto en producción (UIO va por el 2.4xx);
+ * En modo PRUEBA (el piloto):
+ *   - las series arrancan en 9000 (`PRUEBA:{serie}`): una OT de prueba no puede
+ *     llevar un número que exista o vaya a existir en producción;
  *   - el correo queda RETENIDO y no sale nunca. Producción manda cada orden al
  *     local, a Grupo KFC y al buzón de la administradora, que se lee de forma
  *     automática: un correo de prueba llegaría como una orden real.
+ *
+ * En modo PRODUCCION la serie sigue la numeración del formulario viejo (se
+ * siembra al activar la zona, EnvioZonas::activar()) y el correo queda
+ * PENDIENTE: lo manda Correo::despachar() en cuanto se le responde al técnico.
+ * Aun en una zona activada, emiten como piloto las cuentas de prueba y las OT
+ * llenadas antes de activar (EnvioZonas::modoDeCaptura()), y una OT con número
+ * del piloto nunca sale (encolar(), Correo::despachar()).
  *
  * El PDF YA NO lleva la franja «DOCUMENTO DE PRUEBA» (decisión de Andrés del
  * 28-sep-2026: «de ahora en adelante ninguna orden salga con esa franja»), en
@@ -76,6 +87,12 @@ require_once __DIR__ . '/Destinatarios.php';   // T2.28.2: a quién va la cola y
 final class Emision
 {
     public const SERIE_PRUEBA = 9000;
+    /* La serie de las cuentas de prueba del arnés (modo ENSAYO, T2.29): por
+       debajo de 9000 para que se comporten como producción —esDePrueba() no las
+       marca—, y lejos de la real: la más adelantada (correctivo CNLJ) iba en
+       2.645 el 29-sep-2026, a unas 220 por mes. Llegaría a 8000 hacia fines de
+       2028; antes de eso hay que mover este rango (queda anotado en el plan). */
+    public const SERIE_ENSAYO = 8000;
     /* OTRA existe en el esquema y en cuatro locales reales (Pollo Gus fuera de
        las tres zonas): sin ella esas órdenes nunca recibían número (E-01, D7). Su
        serie es propia (CORRECTIVO:OTRA) y el sufijo del nombre, -OTRA. Qué
@@ -84,9 +101,70 @@ final class Emision
 
     private static ?array $cat = null;
 
-    public static function modo(): string
+    /**
+     * El modo que rige para una zona (o, sin zona, para el sitio: PRODUCCION
+     * solo si las tres zonas del contrato lo están). La regla completa está en
+     * EnvioZonas::resolverModo(), que es pura y se prueba sin base.
+     */
+    public static function modo(?string $zona = null): string
     {
-        return ((Db::config()['emision_modo'] ?? '') === 'PRODUCCION') ? 'PRODUCCION' : 'PRUEBA';
+        return EnvioZonas::resolverModo(self::modoConfig(), EnvioZonas::estado(), $zona);
+    }
+
+    /**
+     * Lo que fija config.php, si lo fija: 'PRUEBA', 'PRODUCCION' o null. null
+     * es lo normal desde el 29-sep: manda `emision_zonas`.
+     */
+    public static function modoConfig(): ?string
+    {
+        $v = Db::config()['emision_modo'] ?? null;
+        return in_array($v, ['PRUEBA', 'PRODUCCION'], true) ? $v : null;
+    }
+
+    /**
+     * ¿Es este el sitio de pruebas, con cuentas y casos sintéticos del arnés?
+     * Sí mientras config.php no lo declare sitio de producción definitivo
+     * (T2.16). Que una zona tenga el envío real activo no lo cambia: las
+     * cuentas «_prueba» siguen existiendo y siguen emitiendo como piloto.
+     */
+    public static function sitioDePruebas(): bool
+    {
+        return self::modoConfig() !== 'PRODUCCION';
+    }
+
+    /**
+     * El modo con que se emite ESTA OT INDUSTEC: el de su zona, salvo las
+     * cuentas de prueba y lo que el técnico llenó antes de activar la zona
+     * (EnvioZonas::modoDeCaptura(), con el porqué).
+     */
+    public static function modoCaptura(array $c): string
+    {
+        $zona = (string) ($c['zona'] ?? '');
+        $modoZona = self::modo($zona !== '' ? $zona : null);
+        if ($zona === '' && self::modoConfig() === null) {
+            $modoZona = 'PRUEBA';   // sin zona no hay serie ni destinatarios: nunca sale
+        }
+        $usuario = null;
+        if (!empty($c['usuario_id'])) {
+            $usuario = Db::uno('SELECT usuario FROM usuarios WHERE usuario_id = ?', [(int) $c['usuario_id']])['usuario'] ?? null;
+        }
+        $desde = self::modoConfig() === null ? (EnvioZonas::estado()[$zona]['desde'] ?? null) : null;
+        $visto = (json_decode((string) ($c['carga'] ?? ''), true) ?: [])['modo_visto'] ?? null;
+        return EnvioZonas::modoDeCaptura($modoZona, $desde, isset($c['capturada_en']) ? (string) $c['capturada_en'] : null,
+                                         $usuario !== null ? (string) $usuario : null,
+                                         is_string($visto) ? $visto : null);
+    }
+
+    /** La serie donde numera el piloto: aparte de la real desde la 023. */
+    public static function seriePrueba(string $serie): string
+    {
+        return 'PRUEBA:' . $serie;
+    }
+
+    /** La serie donde numeran las cuentas de prueba del arnés (modo ENSAYO). */
+    public static function serieEnsayo(string $serie): string
+    {
+        return 'ENSAYO:' . $serie;
     }
 
     /**
@@ -185,25 +263,149 @@ final class Emision
      * con LAST_INSERT_ID(expr) suma y deja el valor en la conexión en el mismo
      * paso, con la fila bloqueada hasta que termine la transacción.
      */
-    public static function reservar(string $serie): int
+    public static function reservar(string $serie, ?string $modo = null): int
     {
-        $modo = self::modo();
-        if ($modo === 'PRUEBA') {
+        $modo = $modo ?? self::modo(explode(':', $serie)[1] ?? null);
+        if ($modo === 'ENSAYO') {
+            // Las cuentas de prueba: su propia serie, desde SERIE_ENSAYO.
+            $clave = self::serieEnsayo($serie);
             Db::ejecutar('INSERT INTO correlativos (serie, ultimo, nota) VALUES (?, ?, ?)
                           ON DUPLICATE KEY UPDATE serie = serie',
-                         [$serie, self::SERIE_PRUEBA,
-                          'sitio de pruebas: serie desde ' . self::SERIE_PRUEBA . ', no se cruza con la de producción']);
+                         [$clave, self::SERIE_ENSAYO, 'cuentas de prueba del arnés: serie desde ' . self::SERIE_ENSAYO . ', el correo no sale']);
+            if (Db::ejecutar('UPDATE correlativos SET ultimo = LAST_INSERT_ID(ultimo + 1) WHERE serie = ?', [$clave]) !== 1) {
+                throw new RuntimeException("la serie $clave no tiene contador");
+            }
+            $n = (int) Db::uno('SELECT LAST_INSERT_ID() AS n')['n'];
+        } elseif ($modo !== 'PRODUCCION') {
+            /* El piloto numera en su propia serie desde la 023 (T2.29): la real
+               (`CORRECTIVO:UIO`) se siembra con el contador del formulario
+               viejo al activar la zona, y las cuentas de prueba siguen
+               emitiendo aunque la zona esté activada. Si la serie del piloto no
+               existe todavía, arranca donde iba la real si esa estaba en la
+               serie 9000 (sitio sin la 023): nunca repite un 9xxx ya emitido. */
+            $clave = self::seriePrueba($serie);
+            $real  = Db::uno('SELECT ultimo FROM correlativos WHERE serie = ?', [$serie]);
+            $desde = max(self::SERIE_PRUEBA, $real !== null && (int) $real['ultimo'] >= self::SERIE_PRUEBA ? (int) $real['ultimo'] : 0);
+            Db::ejecutar('INSERT INTO correlativos (serie, ultimo, nota) VALUES (?, ?, ?)
+                          ON DUPLICATE KEY UPDATE serie = serie',
+                         [$clave, $desde,
+                          'piloto: serie desde ' . self::SERIE_PRUEBA . ', no se cruza con la de producción']);
+            if (Db::ejecutar('UPDATE correlativos SET ultimo = LAST_INSERT_ID(ultimo + 1) WHERE serie = ?', [$clave]) !== 1) {
+                throw new RuntimeException("la serie $clave no tiene contador");
+            }
+            $n = (int) Db::uno('SELECT LAST_INSERT_ID() AS n')['n'];
+        } else {
+            $n = self::reservarReal($serie);
         }
-        if (Db::ejecutar('UPDATE correlativos SET ultimo = LAST_INSERT_ID(ultimo + 1) WHERE serie = ?',
-                         [$serie]) !== 1) {
-            throw new RuntimeException("la serie $serie no tiene contador: hay que cargarle el de producción");
-        }
-        $n = (int) Db::uno('SELECT LAST_INSERT_ID() AS n')['n'];
         // Se lanza DENTRO de la transacción de emitir(): el rollBack devuelve
         // el contador y la OT queda FALLIDA con este motivo, para reintentar.
         $error = self::errorDeSerie($serie, $n, $modo);
         if ($error !== null) { throw new RuntimeException($error); }
         return $n;
+    }
+
+    /**
+     * El siguiente número REAL de la serie (modo PRODUCCION), sin repetir uno
+     * que ya exista (T2.29, D-8):
+     *
+     *   1. Si el formulario viejo se volvió a usar y su contador pasó al de la
+     *      app, la serie salta por encima. Solo se LEE el sistema viejo.
+     *   2. Si el número ya figura en el Archivo para esa zona y tipo de trabajo,
+     *      se salta. Medido el 2026-09-29: en UIO hay cuatro OT de julio con
+     *      números por encima del contador viejo (2016, 2061, 2062 y 2064), y
+     *      la numeración las alcanza en unas semanas.
+     *
+     * Cada salto queda en la bitácora. Todo ocurre con la fila de la serie
+     * bloqueada, dentro de la transacción de emitir().
+     */
+    private static function reservarReal(string $serie): int
+    {
+        [$modulo, $zona] = array_pad(explode(':', $serie, 2), 2, '');
+        $viejo = EnvioZonas::contadorViejo($serie);
+        if ($viejo !== null) {
+            $fila = Db::uno('SELECT ultimo FROM correlativos WHERE serie = ? FOR UPDATE', [$serie]);
+            if ($fila !== null && (int) $fila['ultimo'] < $viejo && (int) $fila['ultimo'] < self::SERIE_PRUEBA) {
+                Db::ejecutar('UPDATE correlativos SET ultimo = ? WHERE serie = ?', [$viejo, $serie]);
+                Auth::bitacora('NUMERO_SOBRE_VIEJO', 'correlativo', $serie,
+                               "el formulario viejo va en $viejo y la app iba en " . $fila['ultimo'] . ': la app sigue por encima',
+                               (string) $fila['ultimo'], (string) $viejo, ['viejo' => $viejo], false);
+            }
+        }
+        for ($i = 0; $i < 200; $i++) {
+            if (Db::ejecutar('UPDATE correlativos SET ultimo = LAST_INSERT_ID(ultimo + 1) WHERE serie = ?', [$serie]) !== 1) {
+                throw new RuntimeException("la serie $serie no tiene contador: hay que activar la zona desde Correos");
+            }
+            $n = (int) Db::uno('SELECT LAST_INSERT_ID() AS n')['n'];
+            if ($n >= self::SERIE_PRUEBA || !self::numeroUsado($modulo, $zona, $n)) {
+                return $n;   // errorDeSerie() decide sobre un 9xxx
+            }
+            Auth::bitacora('NUMERO_SALTADO', 'correlativo', $serie, "el número $n ya existe en el Archivo: se salta",
+                           null, (string) $n, ['numero' => $n], false);
+        }
+        throw new RuntimeException("la serie $serie tiene 200 números seguidos ya usados: revisar el Archivo antes de emitir");
+    }
+
+    /**
+     * ¿Ese número ya lo lleva alguna OT de esa zona y tipo de trabajo? En el
+     * Archivo (histórico, correo y app) o en lo emitido por la app. Las filas
+     * del correo no traen el módulo (NULL): cuentan para los dos, por
+     * precaución — saltar un número de más no daña; repetirlo, sí.
+     */
+    public static function numeroUsado(string $modulo, string $zona, int $n): bool
+    {
+        $pref = array_unique(['OT-' . str_pad((string) $n, 4, '0', STR_PAD_LEFT) . '-', 'OT-' . $n . '-']);
+        foreach ($pref as $p) {
+            $like = str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $p) . '%';
+            try {
+                if (Db::uno('SELECT 1 FROM ot_archivo WHERE id_industec LIKE ? AND zona = ? AND (modulo = ? OR modulo IS NULL) LIMIT 1',
+                            [$like, $zona, $modulo]) !== null) {
+                    return true;
+                }
+            } catch (Throwable $e) {
+                // sin la 009 no hay Archivo: queda lo emitido por la app
+            }
+            if (Db::uno('SELECT 1 FROM ot_capturadas WHERE id_industec LIKE ? AND zona = ? AND modulo = ? LIMIT 1',
+                        [$like, $zona, $modulo]) !== null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * El mayor número REAL que ya emitió la app en esa zona y tipo: por debajo
+     * de la serie de ensayo (8000) y de nadie con cuenta de prueba. Revisión
+     * del 29-sep (T2.29): la primera versión solo quitaba la serie del piloto
+     * (9000) y contaba las OT de ensayo del arnés (8001-8999) como reales;
+     * activar una zona después de correr una batería habría sembrado la serie
+     * real en 8001 y la primera OT a Grupo KFC habría salido como OT-8002.
+     */
+    public static function mayorNumeroReal(string $modulo, string $zona): int
+    {
+        $f = Db::uno("SELECT MAX(CAST(SUBSTRING_INDEX(SUBSTRING(c.id_industec, 4), '-', 1) AS UNSIGNED)) n
+                        FROM ot_capturadas c
+                        JOIN usuarios u ON u.usuario_id = c.usuario_id
+                       WHERE c.zona = ? AND c.modulo = ? AND c.id_industec REGEXP '^OT-[0-9]+-'
+                         AND u.usuario NOT LIKE '%\\_prueba%'
+                         AND CAST(SUBSTRING_INDEX(SUBSTRING(c.id_industec, 4), '-', 1) AS UNSIGNED) < " . self::SERIE_ENSAYO,
+                     [$zona, $modulo]);
+        return (int) ($f['n'] ?? 0);
+    }
+
+    /**
+     * El modo que corresponde a un número ya dado: el número manda sobre el
+     * estado actual de la zona. Una OT real reemitida después de volver la
+     * zona al piloto sigue siendo real (su correo sale y la orden se atiende);
+     * una del piloto, del piloto. Revisión del 29-sep (T2.29).
+     */
+    public static function modoDeNumero(string $id): string
+    {
+        if (self::esDePrueba($id)) { return 'PRUEBA'; }
+        if (preg_match('/^OT-0*(\d+)-/', strtoupper(trim($id, ' ')), $m)
+            && (int) $m[1] > self::SERIE_ENSAYO && (int) $m[1] < self::SERIE_PRUEBA) {
+            return 'ENSAYO';
+        }
+        return 'PRODUCCION';
     }
 
     /**
@@ -226,7 +428,19 @@ final class Emision
      */
     public static function errorDeSerie(string $serie, int $n, string $modo): ?string
     {
+        if ($modo === 'ENSAYO') {
+            return ($n > self::SERIE_ENSAYO && $n < self::SERIE_PRUEBA) ? null
+                : "la serie de ensayo de $serie va en el $n, fuera del rango " . self::SERIE_ENSAYO . '-' . (self::SERIE_PRUEBA - 1)
+                  . ': hay que mover el rango de las cuentas de prueba';
+        }
         $dePrueba = $n >= self::SERIE_PRUEBA;
+        if ($modo === 'PRODUCCION' && !$dePrueba && $n >= self::SERIE_ENSAYO) {
+            // La serie real nunca entra al rango de las cuentas de prueba: se
+            // confundiría con sus OT (que se comportan como reales). Llegaría
+            // por el uso normal hacia 2028: antes hay que mover SERIE_ENSAYO.
+            return "la serie $serie llegó al $n, que es del rango de las cuentas de prueba (" . self::SERIE_ENSAYO
+                 . '-' . (self::SERIE_PRUEBA - 1) . '): hay que mover ese rango antes de seguir emitiendo';
+        }
         if ($modo === 'PRODUCCION' && $dePrueba) {
             return "la serie $serie va en el $n, que es de la numeración de pruebas (" . self::SERIE_PRUEBA
                  . ' en adelante): hay que cargarle el contador de producción antes de emitir';
@@ -253,9 +467,13 @@ final class Emision
      */
     public static function emitir(int $capturaId): array
     {
-        $r = ['id_industec' => null, 'pdf' => false, 'correo' => null, 'error' => null];
+        $r = ['id_industec' => null, 'pdf' => false, 'correo' => null, 'error' => null, 'modo' => 'PRUEBA'];
         $c = Db::uno('SELECT * FROM ot_capturadas WHERE captura_id = ?', [$capturaId]);
         if ($c === null) { $r['error'] = 'la OT INDUSTEC no existe'; return $r; }
+        // Un solo modo para toda la emisión de esta OT (T2.29): el número, la
+        // cola y lo que se le dice al técnico tienen que decir lo mismo.
+        $modo = self::modoCaptura($c);
+        $r['modo'] = $modo;
         $orden  = json_decode((string) $c['carga'], true) ?: [];
         $zona   = (string) ($c['zona'] ?? '');
         $local  = (string) ($c['local_codigo'] ?? '');
@@ -277,7 +495,7 @@ final class Emision
                 $id = Db::uno('SELECT id_industec FROM ot_capturadas WHERE captura_id = ? FOR UPDATE',
                               [$capturaId])['id_industec'] ?? null;
                 if ($id === null) {
-                    $id = self::idIndustec(self::reservar($modulo . ':' . $zona), $local,
+                    $id = self::idIndustec(self::reservar($modulo . ':' . $zona, $modo), $local,
                                            $aviso !== '' ? $aviso : null, $dia ?: null, $zona);
                     // NUMERADA: con correlativo y todavía sin PDF (E-12).
                     Db::ejecutar("UPDATE ot_capturadas SET id_industec = ?, estado = 'NUMERADA' WHERE captura_id = ?",
@@ -290,6 +508,12 @@ final class Emision
             }
         }
         $r['id_industec'] = $id;
+        // Con número ya dado, el modo lo dice el número, no el estado actual de
+        // la zona (D-7 y revisión del 29-sep): una OT del piloto reemitida
+        // después de activar sigue siendo del piloto (su correo no sale), y una
+        // real reemitida después de volver la zona al piloto sigue siendo real.
+        $modo = self::modoDeNumero((string) $id);
+        $r['modo'] = $modo;
 
         // 2. El PDF. Se genera si falta: la fila es el registro y el PDF, su representación.
         $ruta = self::dirPdf() . '/' . $id . '.pdf';
@@ -345,9 +569,10 @@ final class Emision
         }
         $r['pdf'] = true;
 
-        // 3. El correo, a la cola. En el sitio de pruebas queda retenido.
+        // 3. El correo, a la cola. En el piloto queda retenido; en una zona
+        //    activada queda PENDIENTE y lo manda Correo::despachar().
         try {
-            $r['correo'] = self::encolar($c, $orden, $id);
+            $r['correo'] = self::encolar($c, $orden, $id, $modo);
         } catch (Throwable $e) {
             return self::falla($capturaId, $r, 'no se pudo encolar el correo: ' . $e->getMessage());
         }
@@ -401,7 +626,7 @@ final class Emision
      * antes (maestro + config.php), así que esta función no necesita saber
      * si la migración llegó o no.
      */
-    private static function encolar(array $c, array $orden, string $id): string
+    private static function encolar(array $c, array $orden, string $id, string $modo): string
     {
         $local  = self::local((string) ($c['local_codigo'] ?? ''));
         $zona   = (string) ($c['zona'] ?? '');
@@ -411,7 +636,8 @@ final class Emision
                                         $cadena !== '' ? $cadena : null, $orden['correo_local'] ?? null);
         $para = $dest['para'];
         $cc   = $dest['cc'];
-        $prueba = self::modo() === 'PRUEBA';
+        // Con número del piloto, nunca sale, se emita en el modo que se emita (D-7).
+        $prueba = $modo !== 'PRODUCCION' || self::esDePrueba($id);
         /* En producción una orden sin destinatarios no se encola como si fuera a
            salir: queda FALLIDO con el motivo y en la bitácora (E-15). */
         $sinDestino = !$prueba && $para === [];
@@ -427,20 +653,29 @@ final class Emision
         // configuración, la bitácora de este correo sigue diciendo a quién fue
         // de verdad. NULL en vez de '[]' cuando no hay copias, para no ensuciar
         // el reporte de correos.php con corchetes vacíos.
+        //
+        // `estado` va AL FINAL a propósito (T2.29): MariaDB evalúa las
+        // asignaciones de izquierda a derecha y las siguientes ya ven el valor
+        // nuevo. Con `estado` en el tercer lugar, un FALLIDO que volvía a
+        // PENDIENTE dejaba `intentos`, `proximo_intento_en` y `motivo` como
+        // estaban (la condición ya leía PENDIENTE), y el primer error del
+        // reintento lo daba por agotado en el acto.
         Db::ejecutar("INSERT INTO email_queue (captura_id, id_industec, tipo, para, cc, asunto, cuerpo, adjunto, estado, motivo)
                       VALUES (?, ?, 'EMISION', ?, ?, ?, ?, ?, ?, ?)
                       ON DUPLICATE KEY UPDATE
                         para     = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', VALUES(para), para),
                         cc       = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', VALUES(cc), cc),
-                        estado   = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', 'PENDIENTE', estado),
                         intentos = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', 0, intentos),
                         proximo_intento_en = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', NULL, proximo_intento_en),
-                        motivo   = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', NULL, motivo)",
+                        motivo   = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', NULL, motivo),
+                        estado   = IF(estado = 'FALLIDO' AND VALUES(estado) = 'PENDIENTE', 'PENDIENTE', estado)",
                      [(int) $c['captura_id'], $id, json_encode($para, JSON_UNESCAPED_UNICODE),
                       $cc !== [] ? json_encode($cc, JSON_UNESCAPED_UNICODE) : null,
                       'ORDEN DE TRABAJO INDUSTEC - ' . $id, $cuerpo, $id . '.pdf',
                       $prueba ? 'RETENIDO' : ($sinDestino ? 'FALLIDO' : 'PENDIENTE'),
-                      $prueba ? 'sitio de pruebas: los correos no salen (irían al local, a Grupo KFC y a las copias configuradas)'
+                      $prueba ? ($modo === 'ENSAYO'
+                                    ? 'cuenta de prueba: el correo no sale (iría al local, a Grupo KFC y a las copias configuradas)'
+                                    : 'OT del piloto: el correo no sale (iría al local, a Grupo KFC y a las copias configuradas)')
                               : ($sinDestino ? 'sin destinatarios: el local no tiene correo y no hay ningún destinatario configurado' : null)]);
         return (string) Db::uno("SELECT estado FROM email_queue WHERE id_industec = ? AND tipo = 'EMISION'", [$id])['estado'];
     }
@@ -481,6 +716,24 @@ final class Emision
         $opt->set('dpi', 96);
         $d = new \Dompdf\Dompdf($opt);
         $d->loadHtml(self::html($c, $orden, $id), 'UTF-8');
+        $d->setPaper('A4', 'portrait');
+        $d->render();
+        return (string) $d->output();
+    }
+
+    /**
+     * Un PDF cualquiera desde HTML, con las mismas opciones que el de la orden
+     * (nada remoto). Lo usa el correo de prueba de la cuenta de envío (T2.29):
+     * así la prueba pasa por dompdf y por el adjunto, como una OT de verdad.
+     */
+    public static function pdfSimple(string $html): string
+    {
+        self::cargarDompdf();
+        $opt = new \Dompdf\Options();
+        $opt->set('isRemoteEnabled', false);
+        $opt->set('defaultFont', 'DejaVu Sans');
+        $d = new \Dompdf\Dompdf($opt);
+        $d->loadHtml($html, 'UTF-8');
         $d->setPaper('A4', 'portrait');
         $d->render();
         return (string) $d->output();

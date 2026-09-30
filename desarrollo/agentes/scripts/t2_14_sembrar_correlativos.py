@@ -20,6 +20,23 @@ base de la app por SSH (`sql_remoto`), solo con --ejecutar, y aborta si una
 serie ya esta sembrada por encima de la de pruebas (correr dos veces no
 duplica ni pisa). Deja acta en `SALIDAS IA/OTS/correlativos_sembrados_<sello>.json`.
 
+DESDE EL 29-SEP-2026 (T2.29) la siembra de UIO, LARB y CNLJ la hace la app al
+activar el envío real de cada zona en Correos (`EnvioZonas::activar()`), con el
+mismo mapa de contadores (`EnvioZonas::CONTADORES_VIEJO`) y el mismo margen, en
+el instante en que cambia el modo. Este script queda para OTRA —cuyo contador
+del viejo es uno solo para correctivo y preventivo: decide Andrés— y para
+revisar a mano. Dos diferencias a saber antes de correrlo sobre una zona ya
+activada: toma también el máximo de la estación, y en UIO eso incluye cuatro OT
+de julio con números por encima del contador (2016, 2061, 2062, 2064), así que
+saltaría a 2069; la app, en cambio, sigue desde el contador y salta solo los
+números que ya existen en el Archivo.
+
+ARREGLADO EL 29-SEP-2026: el UPSERT usaba `GREATEST(ultimo, VALUES(ultimo))`,
+y con el contador del piloto todavía en la serie (CORRECTIVO:UIO iba en 9205)
+el GREATEST dejaba 9205: la siembra no bajaba nunca al número real y la primera
+OT en producción habría fallado por «número de la serie de pruebas». Ahora un
+valor de la serie 9000 se aparta a PRUEBA:<serie> y se reemplaza.
+
 USO:
     .venv/Scripts/python.exe scripts/t2_14_sembrar_correlativos.py              # ensayo
     .venv/Scripts/python.exe scripts/t2_14_sembrar_correlativos.py --ejecutar   # siembra
@@ -149,11 +166,20 @@ def main() -> int:
     ruta = SALIDAS / f"correlativos_sembrados_{sello_utc(inicio)}.json"
 
     if a.ejecutar and plan:
+        # Primero se aparta la numeración del piloto (si la serie real todavía
+        # la tiene) y después se siembra: un valor >= 9000 se REEMPLAZA, uno
+        # real solo sube (GREATEST). Ver la cabecera, «ARREGLADO EL 29-SEP-2026».
         sql = "\n".join(
+            # Tabla derivada con columnas renombradas: sin ella el `ultimo`
+            # del ON DUPLICATE KEY UPDATE es ambiguo (MariaDB, error 1052).
+            "INSERT INTO correlativos (serie, ultimo, nota) SELECT 'PRUEBA:{s}', x.u, 'serie del piloto, apartada al sembrar' "
+            "FROM (SELECT ultimo AS u FROM correlativos WHERE serie = '{s}' AND ultimo >= {lim}) AS x "
+            "ON DUPLICATE KEY UPDATE ultimo = GREATEST(ultimo, VALUES(ultimo));\n"
             "INSERT INTO correlativos (serie, ultimo, nota) VALUES ('{s}', {n}, 'sembrado del sistema viejo el {d}') "
-            "ON DUPLICATE KEY UPDATE ultimo = GREATEST(ultimo, VALUES(ultimo)), nota = VALUES(nota);".format(
-                s=p["serie"], n=p["ultimo"], d=inicio.strftime("%Y-%m-%d"))
-            for p in plan)
+            "ON DUPLICATE KEY UPDATE ultimo = IF(ultimo >= {lim}, VALUES(ultimo), GREATEST(ultimo, VALUES(ultimo))), "
+            "nota = VALUES(nota);".format(
+                s=fila["serie"], n=fila["ultimo"], d=inicio.strftime("%Y-%m-%d"), lim=SERIE_PRUEBA)
+            for fila in plan)
         H.sql_remoto(sql, env=env)
         acta["app_despues"] = actuales_app(env)
         print("\nSEMBRADO. Lo que quedo en la app:")

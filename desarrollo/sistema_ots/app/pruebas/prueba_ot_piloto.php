@@ -100,7 +100,11 @@ afirmar('PRODUCCION con 9153 (contador de pruebas sin cambiar) → error',
         is_string(Emision::errorDeSerie('CORRECTIVO:UIO', 9153, 'PRODUCCION')), true);
 afirmar('PRODUCCION con 9000 → error', is_string(Emision::errorDeSerie('CORRECTIVO:UIO', 9000, 'PRODUCCION')), true);
 afirmar('PRODUCCION con 1925 → vale', Emision::errorDeSerie('CORRECTIVO:UIO', 1925, 'PRODUCCION'), null);
-afirmar('PRODUCCION con 8999 → vale', Emision::errorDeSerie('CORRECTIVO:UIO', 8999, 'PRODUCCION'), null);
+// Desde el 29-sep (T2.29) 8000-8999 es la serie de las cuentas de prueba del
+// arnés (ENSAYO): la real no puede entrar ahí. Antes esta línea pedía que 8999
+// valiera en PRODUCCION; ahora el último real válido es 7999.
+afirmar('PRODUCCION con 7999 → vale', Emision::errorDeSerie('CORRECTIVO:UIO', 7999, 'PRODUCCION'), null);
+afirmar('PRODUCCION con 8999 → error (rango de ensayo)', is_string(Emision::errorDeSerie('CORRECTIVO:UIO', 8999, 'PRODUCCION')), true);
 afirmar('PRUEBA con 9153 → vale', Emision::errorDeSerie('CORRECTIVO:UIO', 9153, 'PRUEBA'), null);
 afirmar('PRUEBA con 9001 (serie nueva) → vale', Emision::errorDeSerie('PREVENTIVO:LARB', 9001, 'PRUEBA'), null);
 afirmar('PRUEBA con 1925 (contador de producción cargado antes del corte) → error',
@@ -350,7 +354,10 @@ afirmar('ENVIO_EMITIDA ya no afirma que el correo salió siempre',
 $pub = json_decode((string) file_get_contents(__DIR__ . '/../publico/vocabulario_publico.json'), true);
 afirmar('la copia pública trae OT_PILOTO (la usan app.js y cola.js)', ($pub['conceptos']['OT_PILOTO']['titulo'] ?? null), 'OT INDUSTEC del piloto');
 // v25 (28-sep-2026, noche): la ayuda de OT_PILOTO ya no nombra la franja del PDF.
-afirmar('sw.js subió de versión', (bool) preg_match("/const VERSION = 'ot-industec-v25'/", $src('sw.js')), true);
+// v26 (29-sep-2026, T2.28.7) la volvió a subir por las fotos por equipo: esta
+// comprobación quedó pidiendo v25 y fallaba sola. Se pide v25 o posterior.
+afirmar('sw.js subió de versión (v25 o posterior)',
+        (bool) preg_match("/const VERSION = 'ot-industec-v(\\d+)'/", $src('sw.js'), $mv) && (int) $mv[1] >= 25, true);
 
 printf("\n%d comprobaciones · %d fallos\n", $total, $fallos);
 exit($fallos === 0 ? 0 : 1);

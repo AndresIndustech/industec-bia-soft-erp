@@ -118,6 +118,11 @@ $pasos = [
     'correo_destinatarios_cambios' => "por IN ($ei)",
     'correo_destinatarios' => "creado_por IN ($ei) OR actualizado_por IN ($ei)",
     'ot_archivo_solicitudes' => "usuario_id IN ($ei)",
+    // T2.29 (29-sep-2026): el contador de la serie de ensayo de las cuentas de
+    // prueba (8000-8999). Sin esto, cada corrida sube la serie y el rango de 999
+    // números se agota en unas 50 baterías. Se borra en la misma pasada que sus
+    // capturas: ninguna OT 8xxx queda viva que un número repetido pudiera pisar.
+    'correlativos'       => "serie LIKE 'ENSAYO:%'",
     'usuario_permisos'   => "usuario_id IN ($ei)",
     'sesiones_log'       => "usuario_id IN ($ei) OR usuario IN ($en)",
     // La bitácora NO está: la 009 la hizo inalterable con un disparador (la

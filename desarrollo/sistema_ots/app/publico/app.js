@@ -1751,6 +1751,13 @@
       // marca que T2.28.15 va a usar para saber cuándo ya nadie manda el
       // formato viejo y se puede exigir sin romper compatibilidad.
       formulario_v: 2,
+      /* T2.29 (29-sep-2026): el modo que la app le mostraba al técnico al
+         llenar la OT. Si vio la franja del piloto («emítela también por el
+         formulario de siempre»), la OT se emite como del piloto aunque llegue
+         después de activarse la zona: si no, KFC recibiría el trabajo dos
+         veces. Vale más que la hora del teléfono, que puede estar corrida. El
+         servidor lo usa solo para bajar a piloto, nunca para subir a real. */
+      modo_visto: (YO && YO.emision_modo) || null,
       _hoy: isoLocal(new Date())
     };
   }

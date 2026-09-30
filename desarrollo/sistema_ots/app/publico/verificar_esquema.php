@@ -101,8 +101,11 @@ $mas013 = $hay013 ? 1 : 0;
 $mas022 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE archivo LIKE '%022_gestion_repuesto_y_marcas_novedad.sql'")->fetchColumn() > 0 ? 1 : 0;
 // La 014 (T2.28.6) no suma permisos nuevos: la ficha del equipo la escribe
 // envio.php con el mismo permiso ots.crear que ya usa cualquier orden.
+// La 023 (T2.29) suma 2 solo a SUPERADMIN: `emision.activar` y
+// `correos.cuenta`. Se reconoce por el libro, como la 021 y la 022.
+$mas023 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE archivo LIKE '%023_envio_real.sql'")->fetchColumn() > 0 ? 2 : 0;
 $esperado = $hay009
-    ? ['SUPERADMIN' => 39 + $mas012 + $mas020 + $mas013 + $mas022, 'ADMIN' => 38 + $mas012 + $mas020 + $mas013 + $mas022,
+    ? ['SUPERADMIN' => 39 + $mas012 + $mas020 + $mas013 + $mas022 + $mas023, 'ADMIN' => 38 + $mas012 + $mas020 + $mas013 + $mas022,
        'JEFE_ZONA' => 26 + $mas012 + $mas021 + $mas022, 'TECNICO' => 13 + $mas012]
     : ($hay007
         ? ['SUPERADMIN' => 26, 'ADMIN' => 25, 'JEFE_ZONA' => 17, 'TECNICO' => 9]
@@ -355,6 +358,42 @@ if ($hay015) {
     echo '  (fotos con equipo_n/momento clasificado: '
        . (int) $db->query('SELECT COUNT(*) FROM ot_fotos WHERE momento IS NOT NULL')->fetchColumn()
        . ")\n";
+}
+
+// La 023 es el envío real por zona y la cuenta de envío (T2.29, pedido de
+// Andrés del 29-sep-2026). Solo si está anotada en el libro.
+if ($mas023) {
+    echo "\nmigracion 023\n";
+    foreach (['emision_zonas', 'emision_zonas_cambios', 'correo_cuentas', 'correo_cuentas_cambios'] as $t) {
+        comprobar("tabla $t", $hayTabla($t) ? 'si' : 'no', 'si');
+    }
+    $clave023 = static function (string $tabla, string $indice) use ($db): string {
+        $f = $db->query("SHOW KEYS FROM `$tabla` WHERE Key_name = " . $db->quote($indice) . " AND Non_unique = 0")->fetchAll();
+        return implode(',', array_column($f, 'Column_name'));
+    };
+    comprobar('emision_zonas: PK zona (I-9)', $clave023('emision_zonas', 'PRIMARY'), 'zona');
+    comprobar('correo_cuentas: uq_cuenta (I-9)', $clave023('correo_cuentas', 'uq_cuenta'), 'host,usuario');
+    comprobar('correo_cuentas: una sola activa', $clave023('correo_cuentas', 'uq_cuenta_activa'), 'activa_unica');
+    comprobar('las cuatro zonas en emision_zonas', (int) $db->query('SELECT COUNT(*) FROM emision_zonas')->fetchColumn(), 4);
+    $colsCorr = array_column($db->query('SHOW COLUMNS FROM correlativos')->fetchAll(), 'Field');
+    foreach (['viejo_al_activar', 'sembrado_en', 'sembrado_por'] as $c) {
+        comprobar("correlativos.$c", in_array($c, $colsCorr, true) ? 'si' : 'no', 'si');
+    }
+    $colsQ = array_column($db->query('SHOW COLUMNS FROM email_queue')->fetchAll(), 'Field');
+    comprobar('email_queue.enviado_desde', in_array('enviado_desde', $colsQ, true) ? 'si' : 'no', 'si');
+    comprobar('emision.activar y correos.cuenta, solo a SUPERADMIN',
+              (int) $db->query("SELECT COUNT(*) FROM rol_permisos WHERE permiso IN ('emision.activar','correos.cuenta') AND rol = 'SUPERADMIN'")->fetchColumn()
+              . '/' . (int) $db->query("SELECT COUNT(*) FROM rol_permisos WHERE permiso IN ('emision.activar','correos.cuenta')")->fetchColumn(), '2/2');
+    // Una serie del piloto sin su copia aparte: la real no se podría sembrar
+    // sin perder la numeración 9xxx.
+    $sinCopia = (int) $db->query("SELECT COUNT(*) FROM correlativos r
+                                   WHERE r.serie NOT LIKE 'PRUEBA:%' AND r.serie NOT LIKE 'ENSAYO:%' AND r.ultimo >= 9000
+                                     AND NOT EXISTS (SELECT 1 FROM correlativos p WHERE p.serie = CONCAT('PRUEBA:', r.serie) AND p.ultimo >= r.ultimo)")->fetchColumn();
+    comprobar('toda serie en 9xxx tiene su copia PRUEBA:', $sinCopia, 0);
+    // Solo se informa: aplicar la migración no activa nada, pero después sí se activa.
+    echo '  (zonas: ' . json_encode(array_column($db->query('SELECT zona, modo FROM emision_zonas')->fetchAll(), 'modo', 'zona'))
+       . ' · cuentas de envío: ' . (int) $db->query('SELECT COUNT(*) FROM correo_cuentas')->fetchColumn()
+       . ', activas: ' . (int) $db->query('SELECT COUNT(*) FROM correo_cuentas WHERE activa = 1')->fetchColumn() . ")\n";
 }
 
 echo "\n" . ($ok ? 'TODO OK' : 'HAY FALLAS') . "\n";

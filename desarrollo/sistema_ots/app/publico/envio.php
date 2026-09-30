@@ -625,7 +625,13 @@ Auth::bitacora('ENVIO_RECIBIDO', 'ot', $uuid,
    reintento de una orden emitida devuelve el mismo número.
    ------------------------------------------------------------------------- */
 $em = Emision::emitir((int) ($fila['captura_id'] ?? 0));
-$prueba = Emision::modo() === 'PRUEBA';
+/* El modo de ESTA OT, el mismo con que se numeró y se encoló (T2.29): el de
+   su zona, salvo las cuentas de prueba (ENSAYO: se comportan como producción
+   con el correo retenido) y lo que el técnico llenó antes de que se activara
+   la zona (EnvioZonas::modoDeCaptura()). Hasta el 29-sep era el modo del
+   sitio entero, y el sitio entero era PRUEBA. */
+$modoOt = (string) ($em['modo'] ?? 'PRUEBA');
+$prueba = $modoOt === 'PRUEBA';
 /* ¿Es una OT INDUSTEC del piloto? Por su número (Emision::esDePrueba), y si
    todavía no lo tiene, por el modo: en PRUEBA el que le toque será de la serie
    9000. Decisión de Andrés del 28-sep-2026, tras el aviso 10356500: mientras
@@ -633,9 +639,9 @@ $prueba = Emision::modo() === 'PRUEBA';
    termina ninguna solicitud. El caso queda a espera de informe técnico hasta
    que llegue la OT INDUSTEC del formulario de siempre.
    En modo PRUEBA es del piloto siempre (su correo queda RETENIDO: no llega a
-   nadie, sea cual sea el número); después del corte, lo dice el número (el
-   reintento de una OT-9xxx sigue siendo del piloto). Emision::reservar() ya no
-   deja que el número y el modo se contradigan (revisión del 28-sep-2026). */
+   nadie, sea cual sea el número); en una zona con el envío real activo, lo
+   dice el número (el reintento de una OT-9xxx sigue siendo del piloto).
+   Emision::reservar() no deja que el número y el modo se contradigan. */
 $piloto = $prueba || (!empty($em['id_industec']) && Emision::esDePrueba((string) $em['id_industec']));
 if ($em['error'] !== null) {
     Auth::bitacora('EMISION_FALLIDA', 'ot', $uuid, mb_substr((string) $em['error'], 0, 150),
@@ -643,7 +649,7 @@ if ($em['error'] !== null) {
 } elseif ($nueva) {
     Auth::bitacora('EMISION', 'ot', (string) $em['id_industec'],
                    'PDF generado · correo ' . strtolower((string) $em['correo']), null, 'PROCESADA',
-                   ['captura_id' => $fila['captura_id'] ?? null, 'modo' => Emision::modo()]);
+                   ['captura_id' => $fila['captura_id'] ?? null, 'modo' => $em['modo'] ?? 'PRUEBA']);
 }
 
 /* -------------------------------------------------------------------------
@@ -740,6 +746,59 @@ if (method_exists('Emision', 'reintentarPendientes')) {
     }
 }
 
+/* EL CORREO SALE EN EL ACTO (T2.29). Con el envío real activo, el correo de
+   la OT queda PENDIENTE en la cola; esperar al cron de 5 minutos —que además
+   lo programa Andrés en hPanel y hasta el 29-sep no existía— dejaba la OT
+   emitida y sin enviar. Se manda aquí, pero DESPUÉS de responderle al técnico:
+   `litespeed_finish_request()` le entrega la respuesta y cierra la conexión, y
+   el correo sale sin que el celular espere al SMTP. Se suelta antes la sesión,
+   o la siguiente petición de ese celular esperaría a que termine el envío.
+   Hasta 5 correos y 25 segundos: lo que no alcance, lo toma la próxima OT o
+   el cron. Lo que falle queda en la cola con su motivo, visible en Correos. */
+$despachar = false;
+$destinosTxt = null;
+try {
+    require_once __DIR__ . '/nucleo/Correo.php';
+    $despachar = Correo::hayPorDespachar();
+    /* A quién sale de verdad, para el recibo (I-7): lo que quedó en la cola,
+       no lo que se supone. Si el técnico no escribió el correo del
+       administrador del local y el maestro solo tiene un buzón de INDUSTEC,
+       el local no lo recibe, y se le dice. */
+    if (!$piloto && $modoOt === 'PRODUCCION' && !empty($em['id_industec'])) {
+        $fq = Db::uno("SELECT para, cc FROM email_queue WHERE id_industec = ? AND tipo = 'EMISION'", [$em['id_industec']]);
+        if ($fq !== null) {
+            $g = Correo::aQuienSale(json_decode((string) $fq['para'], true) ?: [], json_decode((string) ($fq['cc'] ?? ''), true) ?: []);
+            $grupos = array_keys(array_filter(['al local' => $g['local'], 'a Grupo KFC' => $g['kfc'], 'a la administración' => $g['industec']]));
+            $lista = count($grupos) > 1 ? implode(', ', array_slice($grupos, 0, -1)) . ' y ' . end($grupos) : ($grupos[0] ?? '');
+            $destinosTxt = ($lista !== '' ? 'su correo sale ahora ' . $lista . '.' : 'su correo no tiene a quién ir.')
+                         . ($g['local'] ? '' : ' NO le llega al local: no se escribió el correo del administrador del local. '
+                                            . 'Escríbelo en la próxima OT INDUSTEC de este local.');
+        }
+    }
+} catch (Throwable $ex) {
+    error_log('envio.php: hayPorDespachar: ' . $ex->getMessage());
+}
+if ($despachar) {
+    register_shutdown_function(static function (): void {
+        if (session_status() === PHP_SESSION_ACTIVE) { session_write_close(); }
+        // Lo que quede en un búfer de salida sale antes de cerrar la conexión:
+        // la respuesta al técnico tiene que llegar entera, y después el SMTP.
+        while (ob_get_level() > 0) { @ob_end_flush(); }
+        @flush();
+        if (function_exists('litespeed_finish_request')) {
+            litespeed_finish_request();
+        } elseif (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        ignore_user_abort(true);
+        try {
+            Correo::despachar(5, 25);
+        } catch (Throwable $ex) {
+            error_log('envio.php: despachar: ' . $ex->getMessage());
+        }
+    });
+}
+
 responder(200, [
     'ok'     => true,
     'recibo' => [
@@ -766,7 +825,19 @@ responder(200, [
             // Aquí nunca se está en PRUEBA: eso siempre es $piloto (arriba). La
             // coletilla «Es el sistema en pruebas: el correo no se envió a
             // nadie.» se retiró: era todo lo que avisaba del piloto (OT_PILOTO).
-            ? $em['id_industec'] . ' emitida: el PDF está en tu historial. El correo al local sale de la cola.'
+            // Desde el 29-sep (T2.29) el correo sale de verdad: se dice en qué
+            // quedó, sin afirmar que llegó antes de mandarlo (I-7).
+            ? ($modoOt === 'ENSAYO'
+                ? $em['id_industec'] . ' emitida con una cuenta de prueba: su correo queda retenido y no le llega a nadie. '
+                  . 'El PDF está en tu historial.'
+                : match ((string) $em['correo']) {
+                'ENVIADO' => $em['id_industec'] . ' emitida: su correo ya había salido. El PDF está en tu historial.',
+                'FALLIDO' => $em['id_industec'] . ' emitida, pero su correo no tiene a quién ir: el local no tiene correo '
+                             . 'y no hay copias configuradas. Avisa a la administración. El PDF está en tu historial.',
+                default   => $em['id_industec'] . ' emitida: '
+                             . ($destinosTxt ?? 'su correo sale ahora a los destinatarios configurados para la zona.')
+                             . ' No la emitas otra vez en el formulario de siempre. El PDF está en tu historial.',
+              })
             : ($em['id_industec']
                 ? 'La OT INDUSTEC quedó guardada con el número ' . $em['id_industec']
                   . '. El PDF no se pudo generar todavía: se reintenta desde el servidor cada 10 minutos.'

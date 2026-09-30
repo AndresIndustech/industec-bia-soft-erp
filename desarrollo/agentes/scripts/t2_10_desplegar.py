@@ -104,6 +104,10 @@ ARCHIVOS = [
     # T2.28.2: a quién va cada correo de una orden (Emision::encolar() y
     # Emision::html() ya lo requieren) y la clasificación pura del despachador.
     "nucleo/Destinatarios.php", "nucleo/Despacho.php",
+    # T2.29 (29-sep-2026): el envío real por zona y la cuenta de envío. Los
+    # requieren Emision.php, envio.php y correos.php: sin ellos, ninguna OT se
+    # puede emitir.
+    "nucleo/EnvioZonas.php", "nucleo/Correo.php",
     # El diccionario único (vocabulario SAP, ola 1, 2026-09-24): lo leen
     # nucleo/Vocabulario.php y termino() de la estación. Sin él, Vocabulario::t()
     # lanza y la pantalla no se dibuja (I-7): van siempre juntos con Ui.php y
@@ -188,6 +192,8 @@ ARCHIVOS = [
 #   correos_sembrar_cli.php (T2.28.2: siembra el buzón del jefe de zona en
 #   correo_destinatarios; simulacro libre, --ejecutar requiere aprobación de
 #   Andrés. Se sube por scp junto con la migración 013, no por --todo)
+#   correo_cuenta_importar_cli.php (T2.29: copia la cuenta SMTP del formulario
+#   viejo, leída como texto, a correo_cuentas; se corre una vez, a mano)
 #                        herramientas de línea de órdenes. Las que ya están en
 #                        el servidor cortan con 404 por web; el resto no tienen
 #                        por qué llegar. Los dos CLI de T2.14.6 se suben con

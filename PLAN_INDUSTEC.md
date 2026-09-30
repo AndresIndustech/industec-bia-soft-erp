@@ -1527,6 +1527,72 @@ los que deben leer los envíos programados de T2.27.7, y T2.28.16 resuelve el
 
 ---
 
+### T2.29 · El envío real de las OT INDUSTEC y la cuenta de envío configurable (2026-09-29)
+
+**Pedido de Andrés del 2026-09-29:** los técnicos seguían viendo el aviso del piloto
+y la OT no le llegaba ni al local, ni a Grupo KFC, ni a la administradora. Que el
+envío funcione ya, desde `reclutamiento@industec.me` como en el sistema viejo; y en
+Correos, una opción para configurar la cuenta de envío, con reclutamiento ya cargada
+y la posibilidad de agregar otra a futuro. **Objetivo fijado el mismo día:** que el
+proceso completo funcione en producción —la OT del técnico sale al correo del
+administrador del local y a las copias de Correos, queda en la base, la cerrada pasa
+a «cerrar en SAP», el repuesto aparece en Repuestos, se gestiona y se marca pedido a
+KFC, y la OT final del técnico cierra la orden para que la administradora la cierre
+en SAP—.
+
+**Lo medido antes de decidir (29-sep, solo lectura):** darkviolet sin `emision_modo`
+ni `smtp_*` en config.php (todo PRUEBA); 18 correos RETENIDO (16 UIO, 2 CNLJ);
+`correlativos` CORRECTIVO:UIO 9205, CORRECTIVO:CNLJ 9002. Destinatarios ya cargados
+por la administración: por zona, jefe de zona + `servicioalcliente@` (Administración) +
+`reclutamiento@` (Control OTs) + `miguel.vasquez@kfc.com.ec` (KFC; PARA en CNLJ,
+copia en UIO y LARB). El viejo (cinco config.php idénticos): `smtp.titan.email:587`
+STARTTLS, usuario `reclutamiento@industec.me`, clave de 13 caracteres (huella
+`1f9f059a`), remitente «Ordenes de Trabajo INDUSTEC»; contadores correctivo UIO 1945 ·
+LARB 2320 · CNLJ 2645, preventivo 225 · 353 · 241, otros 38, **usados ese mismo día en
+las tres zonas**. En UIO hay cuatro OT de julio con números por encima del contador
+(2016, 2061, 2062, 2064). La web de darkviolet (LiteSpeed) lee los contadores del viejo
+(sin `open_basedir`), tiene `litespeed_finish_request()` y OpenSSL (no sodium);
+PHPMailer 6.12.0 en `~/lib/ot/vendor`.
+
+**Decisiones de Andrés (29-sep):** **D-1** envío real en UIO, LARB y CNLJ a la vez;
+OTRA sigue en piloto (su contador del viejo es uno solo para correctivo y preventivo:
+decide Andrés). **D-2** la numeración sigue la del viejo: contador + 5 de margen, leído
+al activar; los técnicos de una zona activada dejan el formulario viejo (lo comunica
+Andrés). **D-3** la cuenta de envío es la del viejo, copiada servidor a servidor,
+cifrada, nunca mostrada.
+**Por defecto del agente (reversibles):** **D-4** el interruptor vive en la base
+(`emision_zonas`) y se maneja desde Correos; `emision_modo` en config.php manda si
+está (PRUEBA = freno de emergencia). **D-5** solo SUPERADMIN activa zonas y cambia la
+cuenta (`emision.activar`, `correos.cuenta`). **D-6** las cuentas `_prueba` emiten en
+modo ENSAYO: serie propia 8000-8999, comportamiento de producción y correo RETENIDO
+(así las baterías prueban el camino real sin escribirle a KFC; cierra el error nº 53).
+**D-7** una OT con número del piloto no sale nunca, ni reemitida. **D-8** si el
+formulario viejo se vuelve a usar, la app numera por encima de su contador, salta los
+números que ya existen en el Archivo y lo avisa en Correos. **D-9** el correo sale en
+el acto (después de responderle al técnico) y el cron de hPanel cada 5 min reintenta
+lo que quede (lo programa Andrés). **D-10** una OT que el técnico llenó antes de
+activar su zona se emite como del piloto aunque llegue después.
+
+| # | Subtarea | Criterio de aceptación | Verificación |
+|---|---|---|---|
+| **T2.29.1** | Migración `023_envio_real.sql` (aditiva): `emision_zonas` (+cambios), `correo_cuentas` (+cambios), columnas en `correlativos` y `email_queue`, permisos, series del piloto apartadas a `PRUEBA:` | Aplicada; las cuatro zonas en PRUEBA tras aplicar (no activa nada); UNIQUE (host, usuario) y una sola cuenta activa | `php verificar_esquema.php` → bloque «migracion 023» y TODO OK |
+| **T2.29.2** | `nucleo/Correo.php` (cifrado, cuentas, prueba, despacho) y `nucleo/EnvioZonas.php` (modo por zona, siembra, vigilancia); `Emision`, `envio.php`, `yo.php`, `despachar_correo_cli.php` | Pruebas puras en verde, sin regresión en las existentes | `php pruebas/prueba_envio_real.php` → 0 fallos; `prueba_ot_piloto.php` → 0 fallos |
+| **T2.29.3** | `correo_cuenta_importar_cli.php`: la cuenta del viejo, leída como texto, cotejada entre sus 5 copias (I-10) | 5/5 copias iguales; la clave guardada se descifra con la misma huella; queda activa; conexión OK | salida literal del `--ejecutar --probar` |
+| **T2.29.4** | Correos: pestañas «Envío de las OT» (interruptor por zona, cola, últimos correos) y «Cuenta de envío» (probar, correo de prueba, agregar, usar, deshabilitar) | Un correo de prueba sale desde reclutamiento y llega a `servicioalcliente@` con su PDF | IMAP de solo lectura desde la estación, por la referencia `P-…` del asunto |
+| **T2.29.5** | Activar UIO, LARB y CNLJ | Las tres en PRODUCCION; series sembradas = contador del viejo + 5; la franja del piloto ya no sale | `SELECT * FROM emision_zonas`; `correlativos`; `yo.php` de un técnico real → PRODUCCION |
+| **T2.29.6** | El proceso completo con las cuentas de prueba (ENSAYO) | `verificar_emision.py`, `verificar_ciclo.py`, `verificar_continuidad.py`, `verificar_bandeja.py` en verde, cada una con su limpiar+preparar | salida literal de cada batería |
+| **T2.29.7** | La primera OT real enviada | `email_queue` ENVIADO desde reclutamiento y el correo en `servicioalcliente@` con el PDF | consulta a `email_queue` + IMAP |
+
+| Autónomo | Requiere aprobación | Prohibido |
+|---|---|---|
+| Migración aditiva con volcado previo; código y pruebas; desplegar a darkviolet; importar la cuenta del viejo (leer el viejo, escribir en darkviolet); correos de prueba a buzones `@industec.me`; activar UIO, LARB y CNLJ (aprobado por Andrés el 29-sep, D-1) | Activar OTRA; cambiar destinatarios que cargó la administración; el cron de hPanel; rotar la clave SMTP (B.5); dar `correos.cuenta` a ADMIN | Escribir en el sistema viejo (regla 9); mostrar la clave en pantalla, bitácora, chat o git; un correo de prueba a Grupo KFC o a un local; enviar las 18 OT del piloto |
+
+**Deuda que deja, a propósito:** la serie de ensayo (8000-8999) está lejos de la real
+—la más adelantada, correctivo CNLJ, iba en 2.645 a ~220 por mes— pero la alcanzaría
+hacia fines de 2028: antes hay que moverla (`Emision::SERIE_ENSAYO`).
+
+---
+
 # FASE 3 · DECISIÓN — Noviembre
 
 > **Cierra con:** tablero de decisión y equipo capaz de operarlo por su cuenta.

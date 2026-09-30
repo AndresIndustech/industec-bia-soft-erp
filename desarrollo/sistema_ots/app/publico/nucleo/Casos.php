@@ -87,7 +87,9 @@ final class Casos
 
     /**
      * ¿Se fusiona el catálogo de prueba? Solo en el sitio de pruebas
-     * (`Emision::modo() === 'PRUEBA'`) y solo para quien está probando:
+     * (`Emision::sitioDePruebas()`: que una zona tenga el envío real activo
+     * desde el 29-sep no lo cambia, las cuentas de prueba siguen emitiendo
+     * como piloto) y solo para quien está probando:
      *
      *   - CON sesión: decide la sesión, aunque se consulte por CLI —
      *     `alcance_cli.php <usuario>` simula la de cualquiera—. Una cuenta
@@ -102,7 +104,7 @@ final class Casos
     private static function pruebaAplica(): bool
     {
         require_once __DIR__ . '/Emision.php';
-        if (Emision::modo() !== 'PRUEBA') {
+        if (!Emision::sitioDePruebas()) {
             return false;
         }
         $u = Auth::actual();

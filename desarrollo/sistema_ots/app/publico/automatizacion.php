@@ -110,7 +110,8 @@ Ui::cabecera($u, 'automatizacion.php', ['correos' => $correosPendientes], ['titu
   <?= Ui::aviso($activas ? 'info' : 'neutro',
       '<b>' . ($activas ? $activas . ' de ' . count($tareas) . ' tareas activas.' : 'Ninguna tarea está activa todavía.') . '</b>'
       . '<p>Se activan con la aprobación de la administración. Activar pide escribir quién aprobó y cómo, '
-      . 'y exige los destinatarios del modo elegido. En el sitio de pruebas no sale ningún correo.</p>') ?>
+      . 'y exige los destinatarios del modo elegido. El correo de cada OT INDUSTEC es aparte: se activa por zona en '
+      . '<a href="correos.php?tab=envio">Correos</a>.</p>') ?>
 
   <h2 id="reportes">Reportes programados</h2>
   <?php foreach ($tareas as $t):
