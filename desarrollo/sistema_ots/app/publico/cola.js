@@ -125,6 +125,36 @@
 
   var Cola = {};
 
+  /* --- Tiempo límite de cada petición (T2.29.10, 1-oct-2026) ------------------
+     El 30-sep la OT de Anthony Morales tardó 16 minutos en llegar: la primera
+     foto subió a las 12:55:46 y la segunda, junto con la orden, a las 13:11:04;
+     entre las dos el servidor no vio ninguna petición. Causa probable (sin
+     comprobar): una petición colgada —señal a medias, el celular dice «4G» y no
+     pasa nada— que `fetch` no corta nunca. Mientras no termina, `enviando` queda
+     en true y `enviarTodo()` rechaza todo reintento: ni el de cada 2 minutos ni
+     el de volver a la pestaña. Ahora cada petición se corta a su tiempo y la
+     cola sigue sola en el siguiente intento.
+
+     Los tiempos son largos a propósito: una foto de ~150 KB con 2G tarda un
+     minuto, y cortar una subida que sí avanza la dejaría sin enviarse nunca.
+     `Cola.tiempos` los expone para que la prueba pueda acortarlos. Un navegador
+     sin AbortController se queda como estaba. */
+  var TIEMPOS = { sesion: 30000, foto: 120000, orden: 120000 };
+
+  /** fetch + leerRespuesta con tiempo límite; el reloj corre hasta leer el cuerpo entero. */
+  function peticion(url, opciones, ms) {
+    if (typeof AbortController === 'undefined') {
+      return fetch(url, opciones).then(leerRespuesta);
+    }
+    var ctl = new AbortController();
+    var corte = setTimeout(function () { ctl.abort(); }, ms);
+    opciones.signal = ctl.signal;
+    return fetch(url, opciones).then(leerRespuesta).then(
+      function (r) { clearTimeout(corte); return r; },
+      function (e) { clearTimeout(corte); throw e; }
+    );
+  }
+
   /* --- CSRF (T2.14.1, punto 10) -------------------------------------------
      `envio.php` y `foto.php` exigen el token de la sesión en la cabecera
      `X-Csrf`. `yo.php` lo entrega y app.js ya lo consulta al arrancar, pero
@@ -133,8 +163,8 @@
      propia copia, cacheada, en vez de depender de una variable de app.js. */
   var csrfToken = null;
   function obtenerCsrf() {
-    return fetch('yo.php', { credentials: 'same-origin' })
-      .then(function (r) { return r.ok ? r.json() : null; })
+    return peticion('yo.php', { credentials: 'same-origin' }, TIEMPOS.sesion)
+      .then(function (r) { return r.http === 200 ? r.cuerpo : null; })
       .then(function (d) { if (d && d.csrf) { csrfToken = d.csrf; } return csrfToken; })
       .catch(function () { return csrfToken; });
   }
@@ -305,7 +335,7 @@
       return subirFotos(fila, token)
         .then(function (seguir) {
           if (!seguir) { return null; }
-          return fetch(ENDPOINT, {
+          return peticion(ENDPOINT, {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-Csrf': token || '' },
@@ -315,8 +345,7 @@
               usuario_captura: fila.usuario_id || null,
               orden: fila.orden
             })
-          })
-            .then(leerRespuesta)
+          }, TIEMPOS.orden)
             .then(function (res) { return tratarRespuesta(fila, res); });
         });
     }).catch(function () {
@@ -351,9 +380,8 @@
         if (f.momento) { datos.append('momento', f.momento); }
         if (f.tomada_ms != null) { datos.append('tomada_ms', String(f.tomada_ms)); }
         datos.append('foto', f.blob, f.uuid + '.jpg');
-        return fetch(ENDPOINT_FOTO, { method: 'POST', credentials: 'same-origin',
-                                      headers: { 'X-Csrf': token || '' }, body: datos })
-          .then(leerRespuesta)
+        return peticion(ENDPOINT_FOTO, { method: 'POST', credentials: 'same-origin',
+                                         headers: { 'X-Csrf': token || '' }, body: datos }, TIEMPOS.foto)
           .then(function (res) {
             if (res.http === 200 && res.cuerpo.ok) {
               // Subida: se suelta la imagen, que es lo que ocupa el celular.
@@ -680,6 +708,7 @@
   }
 
   Cola.enviarTodo = enviarTodo;
+  Cola.tiempos = TIEMPOS;
   Cola.pintar = pintar;
   Cola.uuid = uuid;
   global.Cola = Cola;

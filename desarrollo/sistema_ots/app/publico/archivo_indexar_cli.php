@@ -99,35 +99,14 @@ function partesDelNombre(string $ot): array
             'local' => $local, 'aviso' => $aviso, 'dia' => $dia];
 }
 
-/** Upsert: lo que llega vacío no pisa lo que ya estaba (COALESCE). */
+/**
+ * Upsert: lo que llega vacío no pisa lo que ya estaba (COALESCE). El SQL vive en
+ * `Emision::archivoGuardar()` —lo comparte con el momento de emitir una OT
+ * (T2.29.10)—: dos copias se separan.
+ */
 function guardar(array $r): void
 {
-    Db::ejecutar(
-        'INSERT INTO ot_archivo (id_industec, zona, local_codigo, local_nombre, cadena, aviso, modulo, dia,
-                                 fecha_atencion, tecnico, origen, en_servidor, ruta, bytes, sha256, fuente_ruta)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE
-            zona           = VALUES(zona),
-            local_codigo   = COALESCE(VALUES(local_codigo), local_codigo),
-            local_nombre   = COALESCE(VALUES(local_nombre), local_nombre),
-            cadena         = COALESCE(VALUES(cadena), cadena),
-            aviso          = COALESCE(VALUES(aviso), aviso),
-            modulo         = COALESCE(VALUES(modulo), modulo),
-            dia            = COALESCE(VALUES(dia), dia),
-            fecha_atencion = COALESCE(VALUES(fecha_atencion), fecha_atencion),
-            tecnico        = COALESCE(VALUES(tecnico), tecnico),
-            -- APP manda sobre CORREO y sobre HISTORICO: es la fuente más rica.
-            origen         = IF(origen = "APP", origen, VALUES(origen)),
-            en_servidor    = GREATEST(en_servidor, VALUES(en_servidor)),
-            ruta           = COALESCE(VALUES(ruta), ruta),
-            bytes          = COALESCE(VALUES(bytes), bytes),
-            sha256         = COALESCE(VALUES(sha256), sha256),
-            fuente_ruta    = COALESCE(VALUES(fuente_ruta), fuente_ruta)',
-        [$r['id_industec'], $r['zona'], $r['local_codigo'] ?? null, $r['local_nombre'] ?? null,
-         $r['cadena'] ?? null, $r['aviso'] ?? null, $r['modulo'] ?? null, $r['dia'] ?? null,
-         $r['fecha_atencion'] ?? null, $r['tecnico'] ?? null, $r['origen'], (int) ($r['en_servidor'] ?? 0),
-         $r['ruta'] ?? null, $r['bytes'] ?? null, $r['sha256'] ?? null, $r['fuente_ruta'] ?? null]
-    );
+    Emision::archivoGuardar($r);
 }
 
 // --- (b) lo que emitió la app: se lee primero para saber qué PDF son APP ----

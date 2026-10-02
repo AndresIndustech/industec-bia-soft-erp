@@ -202,6 +202,11 @@ def main():
            cola[0]["estado"] if cola else "sin fila")
     anotar("008", "y dice por qué no sale", bool(cola) and "cuenta de prueba" in (cola[0]["motivo"] or ""),
            (cola[0]["motivo"] or "")[:70] if cola else "")
+    arch = sql("SELECT origen, en_servidor, sha256, local_codigo, aviso FROM ot_archivo WHERE id_industec = ?", [ot])
+    anotar("T2.29.10", "la OT ya está en el Archivo al emitirla: origen APP, en el servidor, con la huella de su PDF",
+           len(arch) == 1 and arch[0]["origen"] == "APP" and int(arch[0]["en_servidor"]) == 1
+           and arch[0]["sha256"] == fila["pdf_sha256"] and arch[0]["local_codigo"] == local and arch[0]["aviso"] == caso["aviso"],
+           arch[0] if arch else "sin fila")
     para = sql("SELECT para FROM email_queue WHERE id_industec = ?", [ot])
     anotar("correo", "la cola va al correo del local que escribió el técnico",
            bool(para) and CORREO_PRUEBA in (para[0]["para"] or ""), (para[0]["para"] or "")[:120] if para else "sin fila")

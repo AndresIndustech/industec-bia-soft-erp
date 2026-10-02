@@ -625,6 +625,14 @@ final class Emision
         }
         $r['pdf'] = true;
 
+        // 2b. El Archivo la ve en el momento (T2.29.10), no a las 03:50 del día siguiente.
+        //     Nunca rompe la emisión: si falla queda en el log y el índice de la noche la pone.
+        try {
+            self::indexarEnArchivo($c, $orden, (string) $id, $ruta);
+        } catch (Throwable $e) {
+            error_log('Emision, Archivo (' . $id . '): ' . $e->getMessage());
+        }
+
         // 3. El correo, a la cola. En el piloto queda retenido; en una zona
         //    activada queda PENDIENTE y lo manda Correo::despachar().
         try {
@@ -633,6 +641,81 @@ final class Emision
             return self::falla($capturaId, $r, 'no se pudo encolar el correo: ' . $e->getMessage());
         }
         return $r;
+    }
+
+    /**
+     * El upsert de `ot_archivo`. Es UNO solo, y lo usan el índice nocturno
+     * (`archivo_indexar_cli.php`) y el momento de emitir (`indexarEnArchivo()`):
+     * dos copias de este SQL se separan. Lo que llega vacío no pisa lo que ya
+     * estaba (COALESCE), y APP manda sobre CORREO y sobre HISTORICO.
+     *
+     * @param array<string,mixed> $r id_industec, zona, origen y lo demás opcional
+     */
+    public static function archivoGuardar(array $r): void
+    {
+        Db::ejecutar(
+            'INSERT INTO ot_archivo (id_industec, zona, local_codigo, local_nombre, cadena, aviso, modulo, dia,
+                                     fecha_atencion, tecnico, origen, en_servidor, ruta, bytes, sha256, fuente_ruta)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE
+                zona           = VALUES(zona),
+                local_codigo   = COALESCE(VALUES(local_codigo), local_codigo),
+                local_nombre   = COALESCE(VALUES(local_nombre), local_nombre),
+                cadena         = COALESCE(VALUES(cadena), cadena),
+                aviso          = COALESCE(VALUES(aviso), aviso),
+                modulo         = COALESCE(VALUES(modulo), modulo),
+                dia            = COALESCE(VALUES(dia), dia),
+                fecha_atencion = COALESCE(VALUES(fecha_atencion), fecha_atencion),
+                tecnico        = COALESCE(VALUES(tecnico), tecnico),
+                -- APP manda sobre CORREO y sobre HISTORICO: es la fuente más rica.
+                origen         = IF(origen = "APP", origen, VALUES(origen)),
+                en_servidor    = GREATEST(en_servidor, VALUES(en_servidor)),
+                ruta           = COALESCE(VALUES(ruta), ruta),
+                bytes          = COALESCE(VALUES(bytes), bytes),
+                sha256         = COALESCE(VALUES(sha256), sha256),
+                fuente_ruta    = COALESCE(VALUES(fuente_ruta), fuente_ruta)',
+            [$r['id_industec'], $r['zona'], $r['local_codigo'] ?? null, $r['local_nombre'] ?? null,
+             $r['cadena'] ?? null, $r['aviso'] ?? null, $r['modulo'] ?? null, $r['dia'] ?? null,
+             $r['fecha_atencion'] ?? null, $r['tecnico'] ?? null, $r['origen'], (int) ($r['en_servidor'] ?? 0),
+             $r['ruta'] ?? null, $r['bytes'] ?? null, $r['sha256'] ?? null, $r['fuente_ruta'] ?? null]
+        );
+    }
+
+    /**
+     * La OT aparece en el Archivo en el momento de emitirla (T2.29.10, pedido
+     * de Andrés del 2026-10-01). Hasta entonces `ot_archivo` lo llenaba solo el
+     * índice de las 03:50: la OT-1952 de Anthony se emitió el 30-sep a las 13:11
+     * y Andrés la buscó en el Archivo cinco veces, sin verla, con la OT ya
+     * emitida y enviada. Los mismos campos que arma el índice nocturno para una
+     * OT de la app (`archivo_indexar_cli.php`, fuentes a y b).
+     */
+    private static function indexarEnArchivo(array $c, array $orden, string $id, string $ruta): void
+    {
+        if (!is_file($ruta)) { return; }
+        $loc = strtoupper((string) ($c['local_codigo'] ?? ''));
+        $local = $loc !== '' ? self::local($loc) : [];
+        $fecha = self::fechaAtencion($orden);
+        $dia = (string) ($orden['dia'] ?? '');
+        $dia = is_numeric($dia) ? (int) $dia
+             : ((string) ($c['modulo'] ?? '') === 'PREVENTIVO' && (int) ($orden['dia_intervencion'] ?? 0) > 0 ? (int) $orden['dia_intervencion'] : null);
+        $tecnico = Db::uno('SELECT nombre FROM usuarios WHERE usuario_id = ?', [(int) ($c['usuario_id'] ?? 0)]);
+        self::archivoGuardar([
+            'id_industec'    => strtoupper($id),
+            'zona'           => (string) $c['zona'],
+            'local_codigo'   => $loc !== '' ? $loc : null,
+            'local_nombre'   => $local['nombre'] ?? null,
+            'cadena'         => ((string) ($c['cadena'] ?? '')) !== '' ? (string) $c['cadena'] : ($local['cadena'] ?? null),
+            'aviso'          => ((string) ($c['aviso'] ?? '')) !== '' ? (string) $c['aviso'] : null,
+            'modulo'         => ((string) ($c['modulo'] ?? '')) !== '' ? (string) $c['modulo'] : null,
+            'dia'            => $dia,
+            'fecha_atencion' => preg_match('/^\d{4}-\d{2}-\d{2}/', $fecha, $m) ? $m[0] : date('Y-m-d'),
+            'tecnico'        => $tecnico['nombre'] ?? null,
+            'origen'         => 'APP',
+            'en_servidor'    => 1,
+            'ruta'           => 'ordenes_pdf/' . basename($ruta),
+            'bytes'          => (int) filesize($ruta),
+            'sha256'         => hash_file('sha256', $ruta) ?: null,
+        ]);
     }
 
     /** Anota por qué no salió, para que se vea y se reintente. La orden sigue guardada. */
