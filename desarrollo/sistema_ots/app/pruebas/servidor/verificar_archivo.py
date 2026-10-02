@@ -98,12 +98,14 @@ def main():
     nombre_a = vh.sql("SELECT nombre FROM usuarios WHERE usuario_id = ?", [a])[0]["nombre"]
 
     print("\n== 1. el índice del archivo ==")
-    salida = vh.ssh(f"cd {vh.D} && php archivo_indexar_cli.php")
+    # 600 s: con la huella de cada PDF, el reindexado completo de las 8.038
+    # órdenes ya no cabe en los 120 s por omisión (se cortó el 2026-10-01).
+    salida = vh.ssh(f"cd {vh.D} && php archivo_indexar_cli.php", timeout=600)
     print("   " + "\n   ".join(salida.strip().splitlines()[-2:]))
     n = int(vh.sql("SELECT COUNT(*) n FROM ot_archivo")[0]["n"])
     en_srv = int(vh.sql("SELECT COUNT(*) n FROM ot_archivo WHERE en_servidor = 1")[0]["n"])
     vh.anotar("T2.14.4", "archivo_indexar_cli.php deja filas en ot_archivo, con PDF en el servidor", n > 0 and en_srv > 0, f"{n} filas · {en_srv} con PDF")
-    salida2 = vh.ssh(f"cd {vh.D} && php archivo_indexar_cli.php --sin-huella")
+    salida2 = vh.ssh(f"cd {vh.D} && php archivo_indexar_cli.php --sin-huella", timeout=600)
     n2 = int(vh.sql("SELECT COUNT(*) n FROM ot_archivo")[0]["n"])
     vh.anotar("T2.14.4", "correrlo dos veces no duplica (idempotente)", n2 == n, f"{n} → {n2}")
     # Dos órdenes de otras zonas que viven solo en la estación (como los 7.069 históricos hasta D2).
@@ -159,8 +161,14 @@ def main():
     st, _, _ = cabeceras(anonimo, enlace_roto)
     vh.anotar("T2.14.4", "con la firma alterada → 403 y fila exito = 0",
               st == 403 and int(vh.sql("SELECT COUNT(*) n FROM bitacora WHERE usuario = 'enlace' AND accion = 'DENEGADO' AND referencia = ? AND exito = 0", [ot])[0]["n"]) == f0 + 1, st)
-    st, _, c = tec.pedir("ordenes.php", form={"accion": "compartir", "ot": SINT[0][0]})
+    # Desde el 28-sep todo número >= 9000 es «OT del piloto» y no se comparte
+    # (409) antes de mirar si existe: las sintéticas de aquí (99901) caen en esa
+    # regla. El 404 se prueba con un número fuera del rango del piloto que no
+    # está en ningún lado (no escribe nada). Desactualizada hasta el 2026-10-01.
+    st, _, c = tec.pedir("ordenes.php", form={"accion": "compartir", "ot": "OT-0001-Z997EC-UIO"})
     vh.anotar("T2.14.4", "compartir una orden que no está en el servidor → 404", st == 404, st)
+    st, _, c = tec.pedir("ordenes.php", form={"accion": "compartir", "ot": SINT[0][0]})
+    vh.anotar("T2.14.4", "compartir una OT del rango del piloto → 409, no se comparte", st == 409 and "no se comparte" in c, st)
 
     print("\n== 4. pedir copia de lo que vive en la estación ==")
     vh.ejecutar("DELETE FROM ot_archivo_solicitudes WHERE id_industec = ?", [SINT[0][0]])
@@ -176,9 +184,15 @@ def main():
     vh.anotar("T2.14.4", "bitacora.php como técnico → 403", st == 403, st)
     st, _, _ = jefe.pedir("bitacora.php")
     vh.anotar("T2.14.4", "bitacora.php como jefe de zona → 403", st == 403, st)
+    # T2.28.9: por omisión la bitácora esconde las filas de las cuentas de
+    # prueba; se ven marcando la casilla (?pruebas=1). Sin el parámetro, esta
+    # misma consulta quedaba vacía al desplegar el filtro (revisión del 30-sep).
     st, _, c = adm.pedir("bitacora.php?usuario=tec_prueba_uio_a&accion=ABRIR_PDF")
-    vh.anotar("T2.14.4", "como administración → 200 con las filas del técnico", st == 200 and "abrir pdf" in c and ot in c, st)
-    st, cab, cuerpo = cabeceras(adm, "bitacora.php?usuario=tec_prueba_uio_a&formato=csv")
+    vh.anotar("T2.28.9", "sin la casilla, las filas del técnico de prueba NO se ven", st == 200 and ot not in c, st)
+    st, _, c = adm.pedir("bitacora.php?usuario=tec_prueba_uio_a&accion=ABRIR_PDF&pruebas=1")
+    vh.anotar("T2.14.4", "como administración, con la casilla → 200 con las filas del técnico",
+              st == 200 and "abrir pdf" in c and ot in c, st)
+    st, cab, cuerpo = cabeceras(adm, "bitacora.php?usuario=tec_prueba_uio_a&formato=csv&pruebas=1")
     vh.anotar("T2.14.4", "exportar CSV → text/csv con encabezado", st == 200 and "text/csv" in cab.get("content-type", "") and cuerpo.startswith(b"\xef\xbb\xbfid;cuando"), cab.get("content-type"))
     vh.anotar("T2.14.4", "la exportación queda en la bitácora", bitacora("EXPORTAR_BITACORA", "csv", ids["admin_prueba"]) >= 1, "")
 

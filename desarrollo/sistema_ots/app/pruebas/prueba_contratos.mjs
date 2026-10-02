@@ -37,7 +37,7 @@
    Se corre con:  node prueba_contratos.mjs
    ========================================================================= */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 /* Para ejecutar el gemelo en PHP de verdad, en vez de reimplementarlo aquí. */
@@ -63,7 +63,7 @@ function afirmar(que, cond, detalle = '') {
    tocarla es el punto: obliga a pensar qué ids comparte.
    ------------------------------------------------------------------------- */
 const PANTALLAS = {
-  'index.html':           ['ui.js', 'offline.js', 'cola.js', 'reglas.js', 'app.js', 'guia.js'],
+  'index.html':           ['ui.js', 'offline.js', 'cola.js', 'reglas.js', 'partstown.js', 'app.js', 'guia.js'],
   'mis.php':              ['ui.js', 'offline.js', 'cola.js'],
   'cronograma.html':      ['ui.js', 'reglas.js', 'cronograma.js'],
   // Las que cierran con Ui::pie() reciben ui.js, y algunas un guion más.
@@ -71,7 +71,7 @@ const PANTALLAS = {
   'reportes.php':         ['ui.js', 'graficos.js'],
   'casos.php':            ['ui.js', 'busqueda.js'],
   'asignacion.php':       ['ui.js'],
-  'pendientes.php':       ['ui.js'],
+  'pendientes.php':       ['ui.js', 'partstown.js'],
   'novedades_visita.php': ['ui.js'],
   'ordenes.php':          ['ui.js', 'busqueda.js'],
   'usuarios.php':         ['ui.js'],
@@ -293,6 +293,9 @@ console.log('\n=== El buscador: JS y PHP reducen el texto igual ===\n');
     'K191  freidora', 'aviso: 10.352.936',
     'Sâo Paulo', 'François', 'João', 'Peñaherrera', 'Cañar',
     '', '   ', '---', 'a\u00a0b', 'ÁÉÍÓÚ', 'MAYÚSCULAS Y minúsculas',
+    // Revisión del 2026-10-01: texto en NFD (pegado desde un PDF) y letras del bloque
+    // Latin Extended Additional daban otra cosa en el servidor que en el navegador.
+    'Me\u0301xico', 'Cafe\u0301 N\u0303o\u0303o', '\u1ebdxtra-\u1ea11', 'Vi\u1ec7t Nam',
     ...ACENTOS.map((c) => 'x' + c + 'x'),
   ];
 
@@ -411,6 +414,164 @@ console.log('\n=== El buscador: JS y PHP reducen el texto igual ===\n');
           /data-busca="#tabla-casos"/.test(leer('casos.php'))
           && /data-busca="#tabla-archivo"/.test(leer('ordenes.php'))
           && /id="tabla-archivo"/.test(leer('ordenes.php')));
+}
+
+console.log('\n=== Parts Town: JS y PHP arman el mismo enlace (T2.28.11) ===\n');
+{
+  /* Mismo principio que el buscador: se EJECUTAN los dos gemelos sobre la
+     misma lista y se compara la salida literal. La tabla es la de verdad
+     (nucleo/partstown_marcas.json). Cada caso lleva además lo que se espera,
+     tomado de URL de Parts Town confirmadas en el índice del 30-sep. */
+  const tabla = JSON.parse(readFileSync(join(PUB, 'nucleo', 'partstown_marcas.json'), 'utf8'));
+  const g = {};
+  new Function('window', leer('partstown.js'))(g);
+  const PT = g.PartsTown;
+  const B = 'https://www.partstown.com/es/';
+  const CASOS = [
+    [{ marca: 'HENNY PENNY', modelo: 'PFG-690', numero_parte: 'Hen22455' }, 'FICHA', B + 'henny-penny/hen22455'],
+    [{ marca: 'Henny Penny', modelo: 'PFG-690' }, 'MODELO', B + 'henny-penny/pfg-690/parts'],
+    [{ marca: 'Casadio', modelo: 'Undici', numero_parte: 'Lci532-716-200' }, 'FICHA', B + 'cimbali/lci532-716-200'],
+    [{ marca: 'BUNN', modelo: 'ULTRA-2', numero_parte: 'Bu32106.0001' }, 'FICHA', B + 'bunn/bu32106-0001'],
+    [{ marca: 'Hatco', modelo: 'GRAH-48', numero_parte: 'Ht04.08.117.00' }, 'FICHA', B + 'hatco/ht04-08-117-00'],
+    [{ marca: 'Frymaster', modelo: 'X', numero_parte: 'Fm8100705 / FM8100703' }, 'FICHA', B + 'frymaster/fm8100705'],
+    [{ marca: 'Star', modelo: 'GR14SN', sku: 'Sta2E-Z2894', numero_parte: '999' }, 'FICHA', B + 'star/sta2e-z2894'],
+    [{ marca: 'MANITO WOC', modelo: 'UDF0310A' }, 'MODELO', B + 'manitowoc-ice/udf0310a/parts'],
+    [{ marca: 'Turbo Aire', modelo: 'MUR-28-N' }, 'MODELO', B + 'turbo-air/mur-28-n/parts'],
+    [{ marca: 'DEAN', modelo: 'SR42GP' }, 'MODELO', B + 'frymaster/sr42gp/parts'],
+    [{ marca: 'Frymaster', modelo: 'SM35G', numero_parte: '8100705' }, 'MODELO', B + 'frymaster/sm35g/parts'],
+    [{ marca: 'Pitco', modelo: 'SG14R', numero_parte: 'buscar' }, 'MODELO', B + 'pitco/sg14r/parts'],
+    [{ marca: 'Pitco', modelo: 'SG14R', numero_parte: 'PT-100' }, 'MODELO', B + 'pitco/sg14r/parts'],
+    [{ marca: 'TRUE', modelo: 'T-23', numero_parte: 'true' }, 'MODELO', B + 'true/t-23/parts'],
+    [{ marca: 'HENNY PENNY', modelo: 'WDYRC22 (P1331407M)' }, 'MODELO', B + 'henny-penny/wdyrc22-p1331407m/parts'],
+    [{ marca: 'Dukers', modelo: 'D28R' }, 'BUSCAR', B],
+    [{ marca: 'Ñandú Frío', modelo: 'Á B', numero_parte: ' ' }, 'BUSCAR', B],
+    [{ marca: '', modelo: 'PFG-690', numero_parte: 'Hen22455' }, null, null],
+    [{ marca: 'HENNY PENNY', modelo: '   ' }, null, null],
+    [{ marca: ' ', modelo: 'X' }, null, null],   // un espacio duro (U+00A0) no es una marca: antes abría la portada
+    // Los rellenos del histórico NO son la placa: con ellos se armaba …/no-visible/parts (revisión del 2026-10-01).
+    [{ marca: 'HENNY PENNY', modelo: 'N/V' }, null, null],
+    [{ marca: 'HENNY PENNY', modelo: 'NO VISIBLE' }, null, null],
+    [{ marca: 'Frymaster', modelo: 'Nv', numero_parte: 'Fm8100705' }, null, null],
+    [{ marca: 'PITCO', modelo: 'N/O' }, null, null],
+    [{ marca: 'MANITOWOC', modelo: 'Sin modelo' }, null, null],
+    [{ marca: 'N / V', modelo: 'SG14R' }, null, null],
+    [{ marca: 'SIN MARCA', modelo: 'X1' }, null, null],
+    [{ marca: 'HENNY PENNY', modelo: 'xxxx' }, null, null],
+    [{ marca: 'HENNY PENNY', modelo: '----' }, null, null],
+    [{ marca: 'HENNY PENNY', modelo: 'S/N' }, null, null],
+    // El número de parte con espacio adentro es UNO (antes se copiaba «HP» y «Hen»).
+    [{ marca: 'HENNY PENNY', modelo: 'PFG-690', numero_parte: 'Hen 22455' }, 'FICHA', B + 'henny-penny/hen22455'],
+    [{ marca: 'TRUE', modelo: 'T-23', numero_parte: 'TRUE 800366' }, 'FICHA', B + 'true/true800366'],
+    [{ marca: 'Star', modelo: 'GR14SN', numero_parte: 'Hen22455 (original)' }, 'FICHA', B + 'henny-penny/hen22455'],
+    [{ marca: 'Pitco', modelo: 'SG14R', numero_parte: 'HP FR21800' }, 'MODELO', B + 'pitco/sg14r/parts'],
+    [{ marca: 'Pitco', modelo: 'SG14R', numero_parte: 'Fm8100705 /FM8100703' }, 'FICHA', B + 'frymaster/fm8100705'],
+    [{ marca: 'Pitco', modelo: 'SG14R', numero_parte: '\nFm8100705' }, 'FICHA', B + 'frymaster/fm8100705'],
+    // Las dos formas de escribir lo mismo dan el mismo enlace, y las letras raras no se pierden.
+    [{ marca: 'HENNY PENNY', modelo: 'México' }, 'MODELO', B + 'henny-penny/mexico/parts'],
+    [{ marca: 'HENNY PENNY', modelo: 'México' }, 'MODELO', B + 'henny-penny/mexico/parts'],
+    [{ marca: 'HENNY PENNY', modelo: 'Ẽxtra-ạ1' }, 'MODELO', B + 'henny-penny/extra-a1/parts'],
+  ];
+  const entradas = CASOS.map((c) => c[0]);
+  const PHP_BIN = [process.env.PHP_BIN, 'D:/SOFTWARE/PHP83/php.exe', 'php']
+    .find((c) => c && (c === 'php' || existsSync(c)));
+  let php = null;
+  try {
+    php = JSON.parse(execFileSync(PHP_BIN, ['-r',
+      "require getenv('PT_PHP');" +
+      '$c = json_decode(stream_get_contents(STDIN), true);' +
+      'echo json_encode(array_map(function ($d) { $e = PartsTown::enlace($d); $e["aviso"] = PartsTown::aviso($e); return $e; }, $c));',
+    ], { input: JSON.stringify(entradas), env: { ...process.env, PT_PHP: join(PUB, 'nucleo', 'PartsTown.php') }, encoding: 'utf8' }));
+  } catch (e) {
+    console.log(`  (no se pudo ejecutar PHP: ${String(e.message).split('\n')[0]})`);
+  }
+  afirmar(`se ejecutó PartsTown.php de verdad sobre ${CASOS.length} casos`, Array.isArray(php) && php.length === CASOS.length,
+          'sin PHP no hay comprobación: define PHP_BIN');
+  const js = entradas.map((d) => { const e = PT.enlace(d, tabla); return { ...e, aviso: PT.aviso(e) }; });
+  const divergen = !Array.isArray(php) ? ['no se ejecutó PHP']
+    : js.map((e, i) => [i, JSON.stringify(e), JSON.stringify(php[i])]).filter(([, a, b]) => a !== b)
+        .map(([i, a, b]) => `#${i} JS=${a} PHP=${b}`);
+  afirmar(`JS y PHP dan el mismo enlace, tipo, texto a copiar y aviso en los ${CASOS.length} casos`,
+          divergen.length === 0, divergen.slice(0, 2).join(' · '));
+  const errados = CASOS.map((c, i) => [i, c, js[i]]).filter(([, c, e]) => e.tipo !== c[1] || e.url !== c[2])
+    .map(([i, c, e]) => `#${i} ${JSON.stringify(c[0])}: ${e.tipo} ${e.url}`);
+  afirmar(`los ${CASOS.length} casos dan el enlace esperado`, errados.length === 0, errados.slice(0, 2).join(' · '));
+  afirmar('sin marca o sin modelo NO hay enlace y se dice lo que pide la guía',
+          js[17].url === null && js[18].url === null && /Anota marca y modelo de la placa/.test(js[17].aviso));
+  afirmar('lo que se copia: el número si lo hay, si no «marca modelo»',
+          js[10].copiar === '8100705' && js[15].copiar === 'Dukers D28R' && js[5].copiar === 'Fm8100705');
+  const copiaDe = (marca, modelo, numero_parte) => PT.enlace({ marca, modelo, numero_parte }, tabla).copiar;
+  afirmar('un número de parte con espacio adentro se copia entero («HP FR21800», «Hen 22455»), no su primera palabra',
+          copiaDe('Pitco', 'SG14R', 'HP FR21800') === 'HP FR21800' && copiaDe('HENNY PENNY', 'PFG-690', 'Hen 22455') === 'Hen 22455'
+          && copiaDe('Pitco', 'SG14R', 'Fm8100705 / FM8100703') === 'Fm8100705',
+          [copiaDe('Pitco', 'SG14R', 'HP FR21800'), copiaDe('HENNY PENNY', 'PFG-690', 'Hen 22455')].join(' | '));
+  const bus = PT.enlace({ marca: 'Dukers', modelo: 'D28R' }, tabla);
+  afirmar('el aviso de BUSCAR no le atribuye nada a Parts Town (también sale con una caché sin la tabla)',
+          /No tenemos el enlace directo de esta marca/.test(PT.aviso(bus)) && !/Parts Town no tiene/.test(PT.aviso(bus)), PT.aviso(bus));
+
+  /* LA RUTA REAL del botón: app.js arma CAT con normalizar(), y hasta el
+     2026-10-01 esa función dejaba fuera `partstown`: los dos botones del
+     formulario recibían null y caían en BUSCAR con marcas que sí tienen
+     despiece. Esta prueba daba 64·0 con el botón roto porque le pasaba la tabla
+     directamente. Aquí se saca el normalizar() de app.js tal cual y se le da un
+     catálogo como el que manda catalogos.php. */
+  {
+    const src = leer('app.js');
+    const i = src.indexOf('function normalizar(cat)');
+    let fn = null;
+    if (i >= 0) {
+      let prof = 0;
+      for (let j = src.indexOf('{', i); j < src.length; j++) {
+        if (src[j] === '{') prof++;
+        else if (src[j] === '}' && --prof === 0) { fn = src.slice(i, j + 1); break; }
+      }
+    }
+    afirmar('se pudo sacar normalizar() de app.js para probarlo', fn !== null);
+    if (fn !== null) {
+      const normalizar = new Function('return (' + fn + ')')();
+      const CATn = normalizar({ locales: [], tecnicos: [], tipos: [], equipos: {}, partstown: tabla });
+      const real = PT.enlace({ marca: 'HENNY PENNY', modelo: 'PFG-690' }, (CATn && CATn.partstown) || null);
+      afirmar('por la ruta real (CAT.partstown tras normalizar) el modelo abre su despiece, no la portada',
+              real.tipo === 'MODELO' && real.url === B + 'henny-penny/pfg-690/parts', JSON.stringify(real));
+      const realFicha = PT.enlace({ marca: 'HENNY PENNY', modelo: 'PFG-690', numero_parte: 'Hen22455' }, (CATn && CATn.partstown) || null);
+      afirmar('y el número de parte abre su ficha', realFicha.tipo === 'FICHA', JSON.stringify(realFicha));
+      const viejo = normalizar({ locales: [], tecnicos: [], tipos: [], equipos: {} });
+      afirmar('un catálogo en caché SIN la tabla no rompe: partstown es null y el enlace cae en BUSCAR',
+              viejo.partstown === null && PT.enlace({ marca: 'HENNY PENNY', modelo: 'PFG-690' }, viejo.partstown).tipo === 'BUSCAR');
+    }
+  }
+  afirmar('index.html carga partstown.js antes que app.js',
+          /partstown\.js[\s\S]*app\.js/.test(leer('index.html')));
+  afirmar('pendientes.php carga partstown.js', /partstown\.js/.test(leer('pendientes.php')));
+}
+
+console.log('\n=== Español de Ecuador: ningún texto de la interfaz usa voseo ===\n');
+{
+  /* «decí por qué no tiene aviso SAP» estuvo en la validación del formulario desde
+     el 26-sep y se vio en la revisión del 2026-10-01: el trato es de «tú»
+     (CLAUDE.md global: elegí, decime, mirá, andá están prohibidos). Se revisa
+     todo lo que se sirve, comentarios incluidos, con la lista de verbos del
+     voseo; «venía» o «decía» no cuentan porque la palabra tiene que ser entera. */
+  const VOSEO = ['decí', 'mirá', 'elegí', 'andá', 'poné', 'tené', 'vení', 'hacé', 'escribí', 'pegá', 'marcá', 'tocá', 'sacá',
+                 'avisá', 'volvé', 'probá', 'revisá', 'anotá', 'contá', 'dejá', 'usá', 'buscá', 'llená', 'completá', 'agregá',
+                 'seleccioná', 'subí', 'bajá', 'esperá', 'cerrá', 'abrí', 'confirmá', 'corregí', 'verificá', 'ingresá', 'cargá',
+                 'guardá', 'enviá', 'intentá', 'fijate', 'sabés', 'querés', 'podés', 'tenés', 'vos', 'decime', 'dame', 'pasame',
+                 'mandame', 'avisame', 'cambiá', 'chequeá', 'aclará', 'aprobá', 'rechazá', 'firmá', 'activá', 'descargá', 'limpiá',
+                 'borrá', 'mostrame', 'dejame', 'ayudame'];
+  const re = new RegExp('(?<![A-Za-zÁÉÍÓÚáéíóúñÑüÜ])(' + VOSEO.join('|') + ')(?![A-Za-zÁÉÍÓÚáéíóúñÑüÜ])');
+  const hallazgos = [];
+  const recorrer = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const ruta = join(dir, e.name);
+      if (e.isDirectory()) { if (e.name !== 'node_modules') recorrer(ruta); continue; }
+      if (!/\.(js|php|html)$/.test(e.name)) continue;
+      readFileSync(ruta, 'utf8').split('\n').forEach((l, k) => {
+        const m = re.exec(l);
+        if (m) hallazgos.push(`${ruta.slice(PUB.length + 1)}:${k + 1} «${m[1]}»`);
+      });
+    }
+  };
+  recorrer(PUB);
+  afirmar('ningún archivo de publico/ tiene voseo (decí, mirá, elegí…)', hallazgos.length === 0, hallazgos.slice(0, 3).join(' · '));
 }
 
 console.log('\n=== El service worker conoce los archivos nuevos ===\n');

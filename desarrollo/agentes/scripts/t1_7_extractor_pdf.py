@@ -23,7 +23,18 @@ import pdfplumber
 # una lista por tipo de documento, nunca una unica lista para ambos.
 ENCABEZADOS_SECCION_CORRECTIVO = [
     "DATOS GENERALES", "DETALLE DEL EQUIPO", "DETALLE DE LA INTERVENCION",
-    "REPUESTOS", "OBSERVACIONES", "ESTADO DE LA OT", "EVIDENCIA FOTOGRAFICA",
+    "REPUESTOS",
+    # 2026-10-01: secciones que el PDF de la APP agrega y que, sin ser corte, se
+    # tragaban en la seccion anterior: «TRABAJO NO CONCLUIDO» (el pedido de
+    # repuesto del tecnico) entraba en `repuestos`, y «TRABAJO CON OTRO
+    # PROVEEDOR» (ya existia desde la 008) tambien. Con el corte propio, cada
+    # una queda en su sitio y `repuestos` solo trae los repuestos USADOS.
+    "TRABAJO NO CONCLUIDO", "TRABAJO CON OTRO PROVEEDOR",
+    "OBSERVACIONES", "ESTADO DE LA OT",
+    # El PDF de la app (T2.28.7) la titula «... POR EQUIPO»; sin este corte, el
+    # texto de las fotos se sumaba a «ESTADO DE LA OT» y el estado se decidia
+    # mirando tambien los nombres de los equipos.
+    "EVIDENCIA FOTOGRAFICA POR EQUIPO", "EVIDENCIA FOTOGRAFICA",
     "SATISFACCION DEL CLIENTE", "FIRMA DEL ADMINISTRADOR",
 ]
 ENCABEZADOS_SECCION_PREVENTIVO = [
@@ -85,7 +96,10 @@ def extraer_etiquetas(texto_seccion, etiquetas):
         resto_misma_linea = m.group(2).strip()
         campo = None
         for nombre, patron in etiquetas:
-            if re.match(patron, etiqueta_cruda, re.IGNORECASE):
+            # fullmatch, no match: con «Equipo SAP» y «Equipo» en la lista,
+            # match daba «equipo» para las dos (el prefijo) y la primera de la
+            # lista ganaba. La etiqueta cruda ya es lo que casó entero.
+            if re.fullmatch(patron, etiqueta_cruda, re.IGNORECASE):
                 campo = nombre
                 break
         inicio_bloque = m.end()
@@ -110,11 +124,27 @@ ETIQUETAS_GENERALES = [
     ("correo_local", r"Correo del Local"),
     ("correo_jefe_op", r"Correo de Jefe de Operaciones Local"),
     ("correo_jefe_op", r"Correo Jefe de Operaciones"),
+    # El PDF de la app los imprime y el viejo no: sin etiqueta propia, su texto
+    # se pegaba al valor de la etiqueta anterior (el aviso salia como
+    # «10354880\nTipo de Trabajo: Correctivo»).
+    ("tipo_trabajo", r"Tipo de Trabajo"),
+    ("motivo_sin_aviso", r"Motivo de no tener aviso SAP"),
 ]
 ETIQUETAS_EQUIPO_CORRECTIVO = [
     ("equipo", r"Equipo"), ("marca", r"Marca"), ("modelo", r"Modelo"),
     ("serie", r"Serie"), ("codigo_activo_fijo", r"C[oó]digo Activo Fijo"),
     ("estado_equipo", r"Estado del Equipo"),
+    # Lineas que solo imprime el PDF de la app (2026-10-01): sin etiqueta propia
+    # se pegaban al valor de la anterior (el estado salia como
+    # «Operativo\nObservación: ...» y el código de activo con la ubicación).
+    ("equipo_sap", r"Equipo SAP"), ("sin_placa", r"Marca/Modelo/Serie"),
+    ("ubicacion_tecnica", r"Ubicaci[oó]n t[eé]cnica"),
+    ("observacion_equipo", r"Observaci[oó]n"), ("area", r"[ÁA]rea"),
+]
+# Lo que dice la seccion «TRABAJO NO CONCLUIDO» del PDF de la app.
+ETIQUETAS_NO_CONCLUIDO = [
+    ("equipo", r"Equipo"), ("falla", r"Falla encontrada"), ("diagnostico", r"Diagn[oó]stico"),
+    ("deshabilitado", r"Equipo deshabilitado"), ("repuestos_que_hacen_falta", r"Repuestos que hacen falta"),
 ]
 ETIQUETAS_INTERVENCION = [
     ("hora_inicio", r"Hora Inicio"), ("hora_fin", r"Hora Fin"),
@@ -134,14 +164,38 @@ RE_CALIFICACION = re.compile(r"Calificaci[oó]n\s*:?\s*(\d{1,2})\s*/\s*10")
 RE_ADMIN_FIRMA = re.compile(r"Administrador\s*:\s*(.+)")
 
 
-def calcular_tiempo_atencion_min(hora_inicio, hora_fin):
-    try:
-        h1, m1 = map(int, hora_inicio.split(":"))
-        h2, m2 = map(int, hora_fin.split(":"))
-        minutos = (h2 * 60 + m2) - (h1 * 60 + m1)
-        return minutos if minutos > 0 else None
-    except Exception:
+_RE_FECHA_HORA = re.compile(r"(?:(\d{4}-\d{2}-\d{2})[ T])?(\d{1,2}):(\d{2})")
+
+
+def _fecha_y_minutos(s):
+    m = _RE_FECHA_HORA.search(s or "")
+    if not m:
         return None
+    fecha, h, mi = m.groups()
+    return fecha, int(h) * 60 + int(mi)
+
+
+def calcular_tiempo_atencion_min(hora_inicio, hora_fin):
+    """Minutos entre dos horas. Acepta «15:30» (el PDF del formulario viejo) y
+    «2026-09-30 08:00» (el de la app): con el segundo formato fallaba y
+    `tiempo_atencion_min` quedaba en NULL (visto en la OT-1952-M063EC, aunque
+    el PDF decia «Tiempo de Atención: 1h 0m»). Con fecha en las dos, cruza la
+    medianoche si hace falta."""
+    a, b = _fecha_y_minutos(hora_inicio), _fecha_y_minutos(hora_fin)
+    if not a or not b:
+        return None
+    try:
+        if a[0] and b[0] and a[0] != b[0]:
+            from datetime import date
+            dias = (date.fromisoformat(b[0]) - date.fromisoformat(a[0])).days
+            minutos = dias * 1440 + b[1] - a[1]
+        else:
+            # Sin fecha, o la MISMA en las dos (aunque sea una fecha rara): solo
+            # cuentan las horas.
+            minutos = b[1] - a[1]
+    except ValueError:
+        return None
+    return minutos if minutos > 0 else None
 
 
 def extraer_pdf(path):
@@ -155,7 +209,12 @@ def extraer_pdf(path):
     texto = "\n".join(paginas)
     if not texto.strip():
         return {"error": "SIN_TEXTO_EXTRAIBLE"}
+    return extraer_texto(texto, n_fotos)
 
+
+def extraer_texto(texto, n_fotos=0):
+    """Los campos de una OT a partir del TEXTO de su PDF. Separada de
+    `extraer_pdf` para probarla sin un PDF (t1_7_extractor_pruebas.py)."""
     es_preventivo = "MANTENIMIENTO PREVENTIVO" in _sin_tildes(texto).upper()
     resultado = {"error": None, "modulo": "PREVENTIVO" if es_preventivo else "CORRECTIVO"}
 
@@ -194,9 +253,16 @@ def extraer_pdf(path):
         resultado["actividades"] = None
         resultado["observaciones"] = secciones.get("OBSERVACIONES GENERALES", "").strip() or None
     else:
-        eq = extraer_etiquetas(secciones.get("DETALLE DEL EQUIPO", ""), ETIQUETAS_EQUIPO_CORRECTIVO)
+        # El PDF de la app pone marca, modelo y serie en UNA linea
+        # («Marca: X · Modelo: Y · Serie: Z», T2.28.6): se parte en tres, como las
+        # imprimia el viejo. Sin esto, `marca` recibia las tres.
+        det_equipo = re.sub(r"\s·\s(Modelo|Serie):", r"\n\1:", secciones.get("DETALLE DEL EQUIPO", ""))
+        eq = extraer_etiquetas(det_equipo, ETIQUETAS_EQUIPO_CORRECTIVO)
         eq["orden"] = 0
         resultado["equipos"] = [eq]
+        # El pedido de repuesto del tecnico (solo el PDF de la app lo trae).
+        no_concl = secciones.get("TRABAJO NO CONCLUIDO", "")
+        resultado["no_concluido"] = extraer_etiquetas(no_concl, ETIQUETAS_NO_CONCLUIDO) if no_concl.strip() else None
         interv = extraer_etiquetas(secciones.get("DETALLE DE LA INTERVENCION", ""), ETIQUETAS_INTERVENCION)
         resultado["hora_inicio"] = interv.get("hora_inicio") or None
         resultado["hora_fin"] = interv.get("hora_fin") or None

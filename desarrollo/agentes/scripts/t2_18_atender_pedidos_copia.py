@@ -161,7 +161,11 @@ def atender(limite: int, ejecutar: bool, log=print) -> dict:
             return resumen
 
         ids = ",".join(str(int(sid)) for sid, _ in subidas)
-        sql_remoto(f"UPDATE ot_archivo_solicitudes SET atendido_en = NOW() "
+        # En hora de Ecuador, como `solicitado_en` que pone la web (Db.php fija
+        # '-05:00'): la sesion de mysql por SSH queda en UTC y la misma fila
+        # tenia cada fecha en una zona (hallado en la revision de T2.28.8).
+        sql_remoto("SET time_zone = '-05:00';\n"
+                   f"UPDATE ot_archivo_solicitudes SET atendido_en = NOW() "
                    f"WHERE solicitud_id IN ({ids}) AND atendido_en IS NULL")
         log(f"{len(subidas)} solicitud(es) marcada(s) atendida(s)")
 

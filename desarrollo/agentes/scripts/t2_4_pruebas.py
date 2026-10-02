@@ -66,6 +66,21 @@ def prueba_inventario_remoto():
           sin_hash == ["OT-SIN-HASH.pdf"], str(sin_hash))
     check("una linea de error de sha256sum no se cuela como archivo",
           not any("Permission" in k or "sha256sum" in k for k in arch))
+
+    # Los tiempos de la llamada SSH (2026-10-01): el inventario COMPLETO conserva
+    # sus 900 s y NO pide reintento (hashea miles de PDF); el de la ventana del
+    # vigilante pide 120 s con reintento (lee 3-4 archivos: lo que tarda mas esta
+    # colgado). Se mira que argumentos recibe ssh_ejecutar.
+    recibido = []
+    S.ssh_ejecutar = lambda env, cmd, **kw: (recibido.append(kw), salida)[1]
+    try:
+        S.inventario_remoto({"HOSTINGER_DOCROOT": "/x"}, "uio")
+        S.inventario_remoto({"HOSTINGER_DOCROOT": "/x"}, "uio", recientes_min=60)
+    finally:
+        S.ssh_ejecutar = original
+    check("el inventario completo sigue con 900 s y sin reintento", recibido[0] == {"timeout": 900}, str(recibido[0]))
+    check("el de la ventana del vigilante: 120 s y con reintento (lectura pura)",
+          recibido[1] == {"timeout": 120, "idempotente": True}, str(recibido[1]))
     check("todo hash aceptado mide 64 caracteres",
           all(len(m["sha256"]) == 64 for m in arch.values()))
 

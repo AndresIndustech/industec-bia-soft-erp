@@ -116,6 +116,12 @@ $fDesde     = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['desde'] ?? ''
 $fHasta     = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($_GET['hasta'] ?? '')) ? (string) $_GET['hasta'] : '';
 $fExito     = in_array($_GET['exito'] ?? '', ['1', '0'], true) ? (string) $_GET['exito'] : '';
 $fTexto     = trim((string) ($_GET['q'] ?? ''));
+/* T2.28.9 (obs. 6): las filas de las cuentas de prueba del arnés se esconden
+   por omisión. Cada batería de servidor deja decenas (entrar, emitir, pedir
+   pantallas) y tapaban lo que hicieron las personas: el 28-sep se habían
+   acumulado 2.642. No se borran —la 009 lo impide, y es a propósito—: se ven
+   marcando la casilla, y el CSV sigue la misma elección. */
+$fPruebas   = ($_GET['pruebas'] ?? '') === '1';
 $formato    = (string) ($_GET['formato'] ?? '');
 $pagina     = max(1, (int) ($_GET['p'] ?? 1));
 $POR_PAGINA = 100;
@@ -135,9 +141,26 @@ if ($fDesde !== '')   { $donde[] = 'b.cuando >= ?';      $par[] = $fDesde . ' 00
 if ($fHasta !== '')   { $donde[] = 'b.cuando <= ?';      $par[] = $fHasta . ' 23:59:59'; }
 if ($fExito !== '')   { $donde[] = 'b.exito = ?';        $par[] = (int) $fExito; }
 if ($fTexto !== '')   { $donde[] = '(b.detalle LIKE ? OR b.datos LIKE ?)'; $par[] = '%' . $fTexto . '%'; $par[] = '%' . $fTexto . '%'; }
+// Qué es «de prueba»: lo que hizo una cuenta del arnés (su usuario lleva
+// «_prueba») y las filas que deja el propio arnés al prepararse, al limpiarse
+// y al deshacerse (deshacer_prueba.php, sin usuario). El «\_» es a propósito:
+// en LIKE el guion bajo suelto calza cualquier letra.
+$DE_PRUEBA = "(IFNULL(b.usuario, '') LIKE ? OR b.accion IN ('LIMPIEZA_PRUEBAS', 'PRUEBA_PREPARAR', 'PRUEBA_DESHACER'))";
+$PATRON_PRUEBA = '%\_prueba%';
+// Cuántas filas de prueba hay CON LOS DEMÁS FILTROS: la cifra junto a la
+// casilla tiene que decir cuántas se suman al marcarla en esta vista, no el
+// total histórico (que hacía creer que había 2.642 escondidas en cualquier vista).
+$nPruebas = (int) (Db::uno('SELECT COUNT(*) n FROM bitacora b WHERE ' . implode(' AND ', $donde) . " AND $DE_PRUEBA",
+                           array_merge($par, [$PATRON_PRUEBA]))['n'] ?? 0);
+if (!$fPruebas) { $donde[] = "NOT $DE_PRUEBA"; $par[] = $PATRON_PRUEBA; }
 $where = implode(' AND ', $donde);
 $filtros = ['usuario' => $fUsuario, 'accion' => $fAccion, 'entidad' => $fEntidad, 'referencia' => $fRef,
-            'desde' => $fDesde, 'hasta' => $fHasta, 'exito' => $fExito, 'q' => $fTexto];
+            'desde' => $fDesde, 'hasta' => $fHasta, 'exito' => $fExito, 'q' => $fTexto,
+            'pruebas' => $fPruebas ? '1' : ''];
+// El enlace a la actividad de una cuenta: si es de prueba (o ya se están
+// viendo), con la casilla marcada; si no, llevaba a una página vacía.
+$conPruebas = static fn(string $usuario): string =>
+    ($fPruebas || stripos($usuario, '_prueba') !== false) ? '&pruebas=1' : '';
 
 $total = (int) (Db::uno("SELECT COUNT(*) n FROM bitacora b WHERE $where", $par)['n'] ?? 0);
 
@@ -187,12 +210,12 @@ $enlace = static function (array $cambios = []) use ($filtros): string {
 };
 
 /** A dónde lleva una referencia, según su entidad. */
-$destino = static function (?string $entidad, ?string $ref): ?string {
+$destino = static function (?string $entidad, ?string $ref) use ($conPruebas): ?string {
     if ($ref === null || $ref === '') { return null; }
     return match ((string) $entidad) {
         'ot'       => 'ordenes.php?q=' . rawurlencode($ref),
         'caso'     => 'casos.php?ver=' . rawurlencode($ref),
-        'usuario'  => 'bitacora.php?usuario=' . rawurlencode($ref),
+        'usuario'  => 'bitacora.php?usuario=' . rawurlencode($ref) . $conPruebas($ref),
         'pendiente' => 'pendientes.php?g=abiertos#p' . rawurlencode($ref),
         default    => null,
     };
@@ -266,6 +289,14 @@ Ui::cabecera($u, 'bitacora.php', [], ['titulo' => 'Bitácora']);
     </div>
     <div class="campo">
       <label>&nbsp;</label>
+      <label style="display:flex;gap:6px;align-items:center;height:38px;font-weight:400"
+             title="Lo que hicieron las cuentas de prueba del arnés. No se borra: solo se esconde">
+        <input type="checkbox" name="pruebas" value="1" <?= $fPruebas ? 'checked' : '' ?>>
+        Mostrar las filas de prueba (<?= $nPruebas ?>)
+      </label>
+    </div>
+    <div class="campo">
+      <label>&nbsp;</label>
       <button class="btn primary" type="submit" style="height:38px">Filtrar</button>
     </div>
     <div class="campo"><label>&nbsp;</label>
@@ -300,7 +331,7 @@ Ui::cabecera($u, 'bitacora.php', [], ['titulo' => 'Bitácora']);
           <td data-th="Quién">
             <b><?= $e((string) ($f['usuario'] ?: '—')) ?></b>
             <?php if ($f['usuario_id']): ?>
-              <a class="desc" href="bitacora.php?usuario=<?= rawurlencode((string) $f['usuario']) ?>">ver su actividad</a>
+              <a class="desc" href="<?= $e('bitacora.php?usuario=' . rawurlencode((string) $f['usuario']) . $conPruebas((string) $f['usuario'])) ?>">ver su actividad</a>
             <?php endif; ?>
           </td>
           <td data-th="Qué">

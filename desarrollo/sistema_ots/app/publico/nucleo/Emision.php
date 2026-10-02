@@ -895,8 +895,13 @@ final class Emision
                 'tipo'          => (string) ($eq['tipo'] ?? '') ?: (string) ($cat['tipo'] ?? ''),
                 'clase'         => $cat['clase'] ?? null,
                 'equipo_sap'    => $eq['equipo_sap'] ?? null,
-                'codigo_activo' => $cat['codigo_activo'] ?? null,
+                // El del maestro manda; si el equipo es nuevo y no está ahí, el
+                // que escribió el técnico. Hasta el 2026-10-01 el PDF ignoraba lo
+                // que el técnico tecleaba y decía «sin dato en el maestro».
+                'codigo_activo' => ($cat['codigo_activo'] ?? null) ?: (trim((string) ($eq['codigo_activo'] ?? '')) ?: null),
                 'ubicacion'     => $cat['ubicacion_tecnica'] ?? null,
+                // El área que el técnico escribe al crear un equipo nuevo.
+                'area'          => trim((string) ($eq['area'] ?? '')) ?: null,
                 // El maestro no los trae: salen solo si el técnico los escribió.
                 'marca'         => $eq['marca'] ?? null,
                 'modelo'        => $eq['modelo'] ?? null,
@@ -958,7 +963,18 @@ final class Emision
             'inicio'          => $orden['inicio'] ?? null,
             'fin'             => $orden['fin'] ?? null,
             'actividades'     => (string) ($orden['actividades'] ?? ''),
-            'repuestos'       => !empty($orden['uso_repuesto']) ? (string) ($orden['repuestos'] ?? '') : 'No se usaron repuestos.',
+            'repuestos'       => !empty($orden['uso_repuesto'])
+                                   ? implode("\n", self::lineasDeRepuestos((string) ($orden['repuestos'] ?? '')))
+                                   : 'No se usaron repuestos.',
+            // 2026-10-01: lo que el técnico escribió en «¿Quedó concluido el
+            // trabajo?» -> «No»: el diagnóstico y los repuestos que HACEN FALTA.
+            // El PDF nunca lo imprimió: la OT-1964 (primera con repuesto pedido)
+            // salió a Grupo KFC diciendo «No se usaron repuestos» sin una palabra
+            // del repuesto que el técnico había solicitado.
+            'pendiente'       => self::pendienteParaPdf($orden),
+            // El porqué de una OT sin aviso de SAP, que el formulario exige y el
+            // PDF no mostraba.
+            'motivo_sin_aviso' => !empty($orden['sin_aviso']) ? trim((string) ($orden['motivo_sin_aviso'] ?? '')) : '',
             // D10: cuando el trabajo lo hizo otro proveedor, la orden lo dice
             // con nombre; INDUSTEC registra y acompaña, no lo firma como suyo.
             'con_proveedor'   => trim((string) ($c['con_proveedor'] ?? ($orden['con_proveedor'] ?? ''))),
@@ -976,6 +992,80 @@ final class Emision
         ob_start();
         include __DIR__ . '/plantilla_ot.php';
         return (string) ob_get_clean();
+    }
+
+    /**
+     * Los repuestos USADOS, uno por línea. El formulario los compone en un solo
+     * texto («Termopila (Fm8101873); Tornillo x3 (T-10)») y así, pegados en una
+     * línea, el PDF se leía como un párrafo. Se separan por el «; » con que los
+     * une `compilarPartesTexto()` de app.js; una descripción que lleve «; »
+     * adentro queda en dos líneas, que se lee igual. Un solo repuesto sale como
+     * siempre.
+     *
+     * @return string[]
+     */
+    public static function lineasDeRepuestos(string $texto): array
+    {
+        $partes = preg_split('/;\s+|\r?\n/', trim($texto)) ?: [];
+        return array_values(array_filter(array_map('trim', $partes), static fn($p) => $p !== ''));
+    }
+
+    /**
+     * La solicitud de repuesto, tal como la escribió el técnico: lo que contesta
+     * en «¿Quedó concluido el trabajo?» -> «No, el equipo no quedó operativo» (el
+     * equipo, la falla, qué encontró, los repuestos que hacen falta y si el
+     * equipo quedó deshabilitado). null si el trabajo quedó concluido.
+     *
+     * Si el técnico dijo que NO concluyó pero no escribió nada más, devuelve la
+     * marca `sin_detalle`: el PDF lo dice en vez de callarlo (I-7).
+     *
+     * @return array{equipo:string,falla:string,diagnostico:string,deshabilitado:bool,
+     *               partes:array<int,array{cantidad:int,descripcion:string,numero_parte:string,codigo:string}>,
+     *               texto:string,sin_detalle:bool}|null
+     */
+    public static function pendienteParaPdf(array $orden): ?array
+    {
+        $p = is_array($orden['pendiente'] ?? null) ? $orden['pendiente'] : [];
+        $noConcluida = array_key_exists('concluida', $orden) && $orden['concluida'] === false;
+        $partes = [];
+        foreach ((array) ($p['partes'] ?? []) as $pt) {
+            if (!is_array($pt)) { continue; }
+            $desc = trim((string) ($pt['descripcion'] ?? ''));
+            if ($desc === '') { continue; }
+            $partes[] = [
+                'cantidad'     => max(1, (int) ($pt['cantidad'] ?? 1)),
+                'descripcion'  => $desc,
+                'numero_parte' => trim((string) ($pt['numero_parte'] ?? '')),
+                'codigo'       => trim((string) ($pt['codigo'] ?? '')),
+            ];
+        }
+        // Una app vieja en caché manda solo el texto ya compuesto (`parte`).
+        $texto = $partes === [] ? trim((string) ($p['parte'] ?? '')) : '';
+        $r = [
+            'equipo'        => trim((string) ($p['equipo_desc'] ?? '')),
+            'falla'         => self::tituloDeFalla($p['diagnostico_codigo'] ?? null),
+            'diagnostico'   => trim((string) ($p['diagnostico'] ?? '')),
+            'deshabilitado' => !empty($p['deshabilitado']),
+            'partes'        => $partes,
+            'texto'         => $texto,
+        ];
+        $hayAlgo = $r['equipo'] !== '' || $r['diagnostico'] !== '' || $partes !== [] || $texto !== '' || $r['deshabilitado'];
+        if (!$hayAlgo && !$noConcluida) { return null; }
+        $r['sin_detalle'] = !$hayAlgo;
+        return $r;
+    }
+
+    /** El título de una falla conocida (`diagnosticos`, 009), o '' si no hay o la tabla no está. */
+    private static function tituloDeFalla($codigo): string
+    {
+        $codigo = trim((string) $codigo);
+        if ($codigo === '') { return ''; }
+        try {
+            $f = Db::uno('SELECT titulo FROM diagnosticos WHERE codigo = ?', [$codigo]);
+        } catch (Throwable $e) {
+            return '';
+        }
+        return trim((string) ($f['titulo'] ?? ''));
     }
 
     /** La clave de la carga donde la administración deja una corrección. */

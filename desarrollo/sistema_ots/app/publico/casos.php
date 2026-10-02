@@ -121,6 +121,84 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    /* T2.28.8 (obs. 6; D-A): la orden que SAP manda con un local que el
+     * maestro no conoce («V090 SUPER AKI LA JOYA GYE»). La administración dice
+     * a qué local corresponde, o que no es de nuestras zonas; eso queda como
+     * PROPUESTA en `locales_alias_propuestos` y lo aplica el robot de la
+     * estación en su próxima corrida, comprobándolo contra el maestro
+     * (`t2_6_imap_avisos.py::recoger_alias()`). Como «cerrar sin atención», es
+     * una acción sobre el buzón y no sobre un caso: vive fuera del bloque que
+     * exige un aviso alcanzable (estas órdenes no tienen zona). */
+    if ($accion === 'identificar_local') {
+        $volverSinLocal = 'casos.php#sin-local';
+        if (!Ui::puedeModulo('locales.identificar', ['SUPERADMIN', 'ADMIN'], $u)) {
+            Auth::bitacora('DENEGADO', 'local_alias', '', 'sin permiso locales.identificar', null, null, [], false);
+            http_response_code(403);
+            exit('Identificar el local de una orden lo hace la administración.');
+        }
+        $texto    = trim((string) ($_POST['texto_sap'] ?? ''));
+        $decision = strtoupper(trim((string) ($_POST['decision'] ?? '')));
+        $localId  = strtoupper(trim((string) ($_POST['local'] ?? '')));
+        $nota     = trim((string) ($_POST['nota'] ?? ''));
+        $clave    = Casos::claveLocalSap($texto);
+        // Solo se decide sobre lo que el buzón de verdad trae sin local: un POST
+        // fabricado no puede crear alias para cualquier texto.
+        $sinLocal = [];
+        foreach ((Casos::catalogo()['revisar']['sin_local'] ?? []) as $s) {
+            if (Casos::claveLocalSap((string) ($s['restaurante_sap'] ?? '')) === $clave && $clave !== '') {
+                $sinLocal[] = (string) ($s['aviso'] ?? '');
+            }
+        }
+        $locales = [];
+        foreach ((Catalogo::cargar()['locales'] ?? []) as $l) { $locales[(string) ($l['codigo'] ?? '')] = $l; }
+        if ($clave === '') {
+            $error = 'El texto de SAP no empieza con un código de local (como V090): no se puede identificar desde aquí.';
+        } elseif ($sinLocal === []) {
+            $error = 'Esa orden ya no está entre las que no tienen local: recarga la página.';
+        } elseif (!in_array($decision, ['LOCAL', 'FUERA_ALCANCE'], true)) {
+            $error = 'Elige un local o «fuera de alcance».';
+        } elseif ($decision === 'LOCAL' && !isset($locales[$localId])) {
+            $error = 'Ese local no está en el maestro: elígelo de la lista.';
+        } elseif ($decision === 'FUERA_ALCANCE' && mb_strlen($nota) < 5) {
+            $error = 'Escribe por qué no es de nuestras zonas (al menos cinco caracteres): queda en la bitácora.';
+        } else {
+            $ya = Db::uno('SELECT estado FROM locales_alias_propuestos WHERE clave = ?', [$clave]);
+            if (($ya['estado'] ?? '') === 'APLICADO') {
+                $error = 'Esa decisión ya la aplicó el robot. Si está mal, se corrige en la estación: avisa a Andrés.';
+            } else {
+                Db::ejecutar(
+                    "INSERT INTO locales_alias_propuestos (clave, texto_sap, decision, local_codigo, avisos, nota, propuesto_por)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE texto_sap = VALUES(texto_sap), decision = VALUES(decision),
+                                             local_codigo = VALUES(local_codigo), avisos = VALUES(avisos),
+                                             nota = VALUES(nota), propuesto_por = VALUES(propuesto_por),
+                                             propuesto_en = NOW(), estado = 'PROPUESTO', nota_robot = NULL",
+                    [$clave, mb_substr($texto, 0, 160), $decision, $decision === 'LOCAL' ? $localId : null,
+                     mb_substr(implode(',', $sinLocal), 0, 400), $nota !== '' ? mb_substr($nota, 0, 300) : null,
+                     (int) $u['usuario_id']]
+                );
+                Auth::bitacora('LOCAL_IDENTIFICADO', 'local_alias', $clave,
+                               $decision === 'LOCAL' ? "$clave es el local $localId" : "$clave no es de nuestras zonas: $nota",
+                               $ya['estado'] ?? null, 'PROPUESTO', ['avisos' => $sinLocal, 'texto_sap' => $texto]);
+                $aviso_ok = $decision === 'LOCAL'
+                    ? "Anotado: $clave es el local $localId. El robot lo aplica en su próxima corrida (cada 3 horas) y esas órdenes toman el local y la zona del maestro. Una que ya se estaba gestionando en otra zona sigue ahí hasta que la derives."
+                    : "Anotado: $clave no es de nuestras zonas. En la próxima corrida del robot esas órdenes salen del buzón a «Fuera de alcance».";
+            }
+        }
+        // El error va con su propia clave y se pinta bajo «Órdenes sin local»,
+        // no arriba: la página salta a #sin-local, al final de ~900 filas, y el
+        // aviso de arriba quedaba fuera de la vista (revisión del 2026-09-30).
+        // Lo que escribió vuelve a su fila para no tener que escribirlo otra vez.
+        $_SESSION['flash'] = array_filter([
+            'ok' => $aviso_ok,
+            'error_sin_local' => $error,
+            'sin_local_previo' => $error === null ? null
+                : ['texto' => $texto, 'decision' => $decision, 'local' => $localId, 'nota' => $nota],
+        ]);
+        header('Location: ' . $volverSinLocal);
+        exit;
+    }
+
     $aviso  = trim((string) ($_POST['aviso'] ?? ''));
     $gest0  = Casos::gestion();
     $caso   = $aviso === '' ? null : Casos::alcanzaAviso($aviso, $gest0);
@@ -453,6 +531,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
    si solo hay que enterarse de que salio bien, aviso que se va solo. */
 $error = $_SESSION['flash']['error'] ?? null;
 unset($_SESSION['flash']['error']);
+// T2.28.8: el error de «identificar el local» se pinta junto a esa sección.
+$errorSinLocal = $_SESSION['flash']['error_sin_local'] ?? null;
+$previoSinLocal = $_SESSION['flash']['sin_local_previo'] ?? null;
+unset($_SESSION['flash']['error_sin_local'], $_SESSION['flash']['sin_local_previo']);
 
 function e(?string $s): string { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
 
@@ -1388,27 +1470,119 @@ Ui::cabecera($u, 'casos.php', $cuentas, ['titulo' => 'Buzón de órdenes']);
 
       <?php endif; ?>
 
-      <?php if (!empty($fuente['revisar']['sin_local']) && $zonaAlc === null): ?>
-        <h2 style="margin-top:26px">Órdenes sin local identificado</h2>
+      <?php if (!empty($fuente['revisar']['sin_local']) && $zonaAlc === null):
+          /* T2.28.8: agrupadas por la palabra con la que el robot resuelve el
+             local (Casos::claveLocalSap): una decisión vale para todas las
+             órdenes de ese texto. La decisión que ya se tomó se muestra con su
+             estado; el robot la aplica en su próxima corrida. */
+          $puedeIdentificar = Ui::puedeModulo('locales.identificar', ['SUPERADMIN', 'ADMIN'], $u);
+          $gruposSinLocal = [];
+          foreach ($fuente['revisar']['sin_local'] as $s) {
+              $k = Casos::claveLocalSap((string) ($s['restaurante_sap'] ?? ''));
+              $gk = $k !== '' ? $k : '·' . ($s['restaurante_sap'] ?? '');
+              $gruposSinLocal[$gk]['clave'] = $k;
+              $gruposSinLocal[$gk]['texto'] = (string) ($s['restaurante_sap'] ?? '');
+              $gruposSinLocal[$gk]['filas'][] = $s;
+          }
+          $propuestas = [];
+          try {
+              foreach (Db::todos("SELECT p.*, u.nombre AS por_nombre FROM locales_alias_propuestos p
+                                    LEFT JOIN usuarios u ON u.usuario_id = p.propuesto_por") as $p) {
+                  $propuestas[(string) $p['clave']] = $p;
+              }
+          } catch (Throwable $ex) {
+              $puedeIdentificar = false;   // sin la 016 no hay dónde anotar la decisión
+          }
+          $localesDl = Catalogo::cargar()['locales'] ?? [];
+      ?>
+        <h2 style="margin-top:26px" id="sin-local">Órdenes sin local identificado</h2>
         <p class="sub" style="margin:0 0 10px">
-          El nombre que manda SAP no calza con ningún local del maestro. No se
-          les adivina la zona, así que no aparecen en el buzón de ningún jefe:
-          quedan aquí para que la administración los identifique.
+          El nombre que manda SAP no calza con ningún local del maestro, y el local no se
+          adivina. Si SAP la copió al buzón de una zona, el jefe de esa zona ya la ve, pero sin local.
+          <?php if ($puedeIdentificar): ?>
+            Dinos a qué local corresponde, o que no es de nuestras zonas: el robot lo aplica
+            en su próxima corrida (cada 3 horas) y esas órdenes toman el local y la zona del
+            maestro, o salen a «Fuera de alcance». Una que ya se estaba gestionando en otra
+            zona sigue en esa zona hasta que la derives.
+          <?php endif; ?>
         </p>
+        <?php if ($errorSinLocal): ?><?= Ui::aviso('err', e($errorSinLocal), true) ?><?php endif; ?>
         <div class="tabla-wrap">
           <table>
-            <thead><tr><th><?= e(Vocabulario::titulo('AVISO_SAP')) ?></th><th><?= e(Vocabulario::titulo('NUM_ORDEN_SAP')) ?></th><th>Como lo escribe SAP</th></tr></thead>
+            <thead><tr><th>Como lo escribe SAP</th><th><?= e(Vocabulario::titulo('AVISO_SAP')) ?></th><th><?= e(Vocabulario::titulo('NUM_ORDEN_SAP')) ?></th><th>Qué es</th></tr></thead>
             <tbody>
-            <?php foreach ($fuente['revisar']['sin_local'] as $s): ?>
+            <?php foreach ($gruposSinLocal as $g):
+                $p = $g['clave'] !== '' ? ($propuestas[$g['clave']] ?? null) : null; ?>
               <tr>
-                <td class="mono"><?= e($s['aviso'] ?? '—') ?></td>
-                <td class="mono"><?= e($s['orden_trabajo'] ?? '—') ?></td>
-                <td><?= e($s['restaurante_sap'] ?? '—') ?></td>
+                <td><?= e($g['texto'] ?: '—') ?></td>
+                <td class="mono"><?= e(implode(', ', array_map(static fn($s) => (string) ($s['aviso'] ?? '—'), $g['filas']))) ?></td>
+                <td class="mono"><?= e(implode(', ', array_map(static fn($s) => (string) ($s['orden_trabajo'] ?? '—'), $g['filas']))) ?></td>
+                <td>
+                  <?php if ($p !== null): ?>
+                    <div class="sub" style="margin-bottom:6px">
+                      <?= $p['decision'] === 'LOCAL' ? 'Es el local <b class="mono">' . e((string) $p['local_codigo']) . '</b>'
+                                                       : '<b>No es de nuestras zonas</b>' . ($p['nota'] ? ': ' . e((string) $p['nota']) : '') ?>
+                      · <?= e((string) ($p['por_nombre'] ?? '')) ?>, <?= e(substr((string) $p['propuesto_en'], 0, 16)) ?> ·
+                      <?= match ((string) $p['estado']) {
+                          'PROPUESTO' => 'se aplica en la próxima corrida del robot',
+                          'APLICADO'  => 'aplicado por el robot el ' . e(substr((string) $p['aplicado_en'], 0, 16)),
+                          // RECHAZADO no siempre es «no se pudo»: también es «se aplicó y se
+                          // quitó en la estación» o «se deshizo a mano». La nota dice cuál.
+                          default     => '<b>el robot la devolvió</b>: ' . e((string) ($p['nota_robot'] ?? '')),
+                      } ?>
+                    </div>
+                  <?php endif; ?>
+                  <?php if ($puedeIdentificar && $g['clave'] !== '' && ($p['estado'] ?? '') !== 'APLICADO'):
+                      // Si el intento anterior sobre ESTA fila no pasó, vuelve lo que escribió.
+                      $pv = (is_array($previoSinLocal) && ($previoSinLocal['texto'] ?? null) === $g['texto']) ? $previoSinLocal : null;
+                      $vDecision = $pv['decision'] ?? ($p['decision'] ?? 'LOCAL');
+                      $vLocal = $pv !== null ? (string) ($pv['local'] ?? '') : (string) ($p['local_codigo'] ?? '');
+                      $vNota = $pv !== null ? (string) ($pv['nota'] ?? '') : (string) ($p['nota'] ?? ''); ?>
+                    <form method="post" action="casos.php" style="display:flex;gap:6px;flex-wrap:wrap;align-items:end">
+                      <input type="hidden" name="csrf" value="<?= e(Auth::csrfToken()) ?>">
+                      <input type="hidden" name="accion" value="identificar_local">
+                      <input type="hidden" name="texto_sap" value="<?= e($g['texto']) ?>">
+                      <label><input type="radio" name="decision" value="LOCAL" <?= $vDecision !== 'FUERA_ALCANCE' ? 'checked' : '' ?>> Es el local
+                        <input list="dl-locales-sin" name="local" value="<?= e($vLocal) ?>" placeholder="código: elígelo de la lista" style="width:190px"></label>
+                      <label><input type="radio" name="decision" value="FUERA_ALCANCE" <?= $vDecision === 'FUERA_ALCANCE' ? 'checked' : '' ?>> No es de nuestras zonas</label>
+                      <input type="text" name="nota" maxlength="300" value="<?= e($vNota) ?>" placeholder="Nota (obligatoria si no es de nuestras zonas)" style="width:230px">
+                      <button class="btn primary" type="submit"><?= $p === null ? 'Guardar' : 'Cambiar' ?></button>
+                    </form>
+                  <?php elseif ($g['clave'] === ''): ?>
+                    <span class="sub">No empieza con un código de local: se identifica en la estación.</span>
+                  <?php endif; ?>
+                </td>
               </tr>
             <?php endforeach; ?>
             </tbody>
           </table>
         </div>
+        <?php if ($puedeIdentificar): ?>
+          <datalist id="dl-locales-sin">
+            <?php foreach ($localesDl as $l): ?><option value="<?= e((string) ($l['codigo'] ?? '')) ?>"><?= e((string) ($l['nombre'] ?? '')) ?> · <?= e((string) ($l['zona'] ?? '')) ?></option><?php endforeach; ?>
+          </datalist>
+        <?php endif; ?>
+      <?php endif; ?>
+
+      <?php if (!empty($fuente['revisar']['fuera_alcance']) && $zonaAlc === null): ?>
+        <details style="margin-top:22px" id="fuera-alcance">
+          <summary><b>Fuera de alcance (<?= count($fuente['revisar']['fuera_alcance']) ?>)</b>
+            <span class="sub">— órdenes de locales que la administración marcó como no de nuestras zonas: no entran al buzón</span></summary>
+          <div class="tabla-wrap">
+            <table>
+              <thead><tr><th><?= e(Vocabulario::titulo('AVISO_SAP')) ?></th><th><?= e(Vocabulario::titulo('NUM_ORDEN_SAP')) ?></th><th>Como lo escribe SAP</th></tr></thead>
+              <tbody>
+              <?php foreach ($fuente['revisar']['fuera_alcance'] as $s): ?>
+                <tr>
+                  <td class="mono"><?= e($s['aviso'] ?? '—') ?></td>
+                  <td class="mono"><?= e($s['orden_trabajo'] ?? '—') ?></td>
+                  <td><?= e($s['restaurante_sap'] ?? '—') ?></td>
+                </tr>
+              <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        </details>
       <?php endif; ?>
 
     <?php endif; ?>

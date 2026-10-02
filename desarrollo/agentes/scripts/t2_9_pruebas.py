@@ -86,6 +86,27 @@ afirmar("hace el barrido de puesta al dia al conectar", n["barridos"] == 2, f"ba
 l, n = correr(0, 1, inicio_ok=True)
 afirmar("si el arranque salio bien, no repite el barrido", n["barridos"] == 1, f"barridos={n['barridos']}")
 
+print("\n== que lineas del lector (t2_6) llegan al registro (T2.28.8) ==")
+salida_lector = "\n".join([
+    "decisiones de la administracion: 3 · alias nuevos 1 · aplicadas ahora 2 · fuera de alcance 1 · rechazadas 1",
+    "decisiones aplicadas: Z9997 fuera de alcance, Z9998 -> K146EC",
+    "AVISO: decision RECHAZADA Z9996: el local X999EC no existe o no está activo en el maestro de la estación",
+    "AVISO: decisiones de la administracion: no se pudieron leer (ErrorSsh); se usa la ultima lista de fuera de alcance (1)",
+    "maestro: 100 locales, 249 claves de resolucion",
+    "ordenes en el buzon  : 909",
+    "ordenes eliminadas   : 8 (excluidas)",
+    "  UIO           : 297",
+    "SIN LOCAL RESUELTO   : 2 -> no se inventa la zona",
+])
+reg = V.lineas_del_lector(salida_lector)
+afirmar("las dos de resumen de siempre siguen llegando", "ordenes en el buzon  : 909" in reg and "ordenes eliminadas   : 8 (excluidas)" in reg)
+afirmar("llegan las decisiones aplicadas y los AVISO (2 de rechazo/falla)",
+        "decisiones aplicadas: Z9997 fuera de alcance, Z9998 -> K146EC" in reg and sum(x.startswith("AVISO") for x in reg) == 2, f"{len(reg)} lineas")
+afirmar("el resumen de decisiones de cada barrido NO llena el registro",
+        not any(x.startswith("decisiones de la administracion") for x in reg))
+afirmar("ni el maestro, ni los conteos por zona", not any(x.startswith(("maestro", "UIO")) for x in reg))
+afirmar("una salida vacia o None no revienta", (V.lineas_del_lector(""), V.lineas_del_lector(None)) == ([], []))
+
 print("\n== candado de instancia unica, con procesos de verdad ==")
 PRE = ("import sys; from pathlib import Path; sys.path.insert(0, r'%s'); import t2_9_buzon_vigilante as V;"
        "V.CANDADO = Path(r'%s'); V.RECHAZOS = Path(r'%s');" % (SCRIPTS, TMP / "v.lock", TMP / "candado_vigilante.log"))

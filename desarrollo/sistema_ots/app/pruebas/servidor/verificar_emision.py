@@ -202,6 +202,8 @@ def main():
            cola[0]["estado"] if cola else "sin fila")
     anotar("008", "y dice por qué no sale", bool(cola) and "cuenta de prueba" in (cola[0]["motivo"] or ""),
            (cola[0]["motivo"] or "")[:70] if cola else "")
+    # T2.29.10 (1-oct-2026): el Archivo ve la OT en el momento de emitirla. Hasta entonces `ot_archivo` lo
+    # llenaba solo el índice de las 03:50 y una OT recién emitida «no se veía en el archivo del sistema».
     arch = sql("SELECT origen, en_servidor, sha256, local_codigo, aviso FROM ot_archivo WHERE id_industec = ?", [ot])
     anotar("T2.29.10", "la OT ya está en el Archivo al emitirla: origen APP, en el servidor, con la huella de su PDF",
            len(arch) == 1 and arch[0]["origen"] == "APP" and int(arch[0]["en_servidor"]) == 1
@@ -398,8 +400,13 @@ def main():
         st, j = subir(sa, ENV_2EQ, str(uuid.uuid4()), n_eq * 2 + 1, png(80, 60, rgb),
                       extra={"equipo_n": str(n_eq), "momento": "DESPUES", "tomada_ms": str(ahora_ms)})
         anotar("T2.28.7", f"foto DESPUES del equipo {n_eq} -> 200", st == 200 and j.get("ok") is True, f"{st} · {j}")
+    # T2.28.11: la captura del repuesto elegido en Parts Town (paso 6 de la guía).
+    st, j = subir(sa, ENV_2EQ, str(uuid.uuid4()), 4, png(80, 60, (200, 120, 10)),
+                  extra={"equipo_n": "0", "momento": "REPUESTO", "tomada_ms": str(ahora_ms)})
+    anotar("T2.28.11", "captura REPUESTO del equipo 0 -> 200", st == 200 and j.get("ok") is True, f"{st} · {j}")
     n_fotos = sql("SELECT COUNT(*) n FROM ot_fotos WHERE envio_uuid = ? AND momento IS NOT NULL", [ENV_2EQ])[0]["n"]
-    anotar("T2.28.7", "las 4 fotos quedan con su equipo_n y momento", int(n_fotos) == 4, n_fotos)
+    anotar("T2.28.7", "las 5 fotos (4 del trabajo y la captura) quedan con su equipo_n y momento",
+           int(n_fotos) == 5, n_fotos)
 
     equipos_2 = [
         {"nuevo": True, "equipo_uuid": "99990000-0000-4000-8000-0000000000f2", "tipo": "FREIDORA",
@@ -425,6 +432,77 @@ def main():
            texto_pdf.count("Antes") >= 2, f'"Antes" x{texto_pdf.count("Antes")}')
     anotar("T2.28.7", "el texto del PDF (pypdf) dice «Después» dos veces, una por equipo",
            texto_pdf.count("Después") >= 2, f'"Después" x{texto_pdf.count("Después")}')
+    anotar("T2.28.11", "el PDF imprime la captura del repuesto («Repuesto — respaldo»)",
+           "respaldo" in texto_pdf, f'"respaldo" x{texto_pdf.count("respaldo")}')
+
+    print("\n== Todo lo que escribe el técnico sale en el PDF (1-oct-2026: la OT-1964 salió sin su repuesto) ==")
+    # La OT-1964-G021EC, la primera con un repuesto SOLICITADO, salió a Grupo KFC
+    # con «REPUESTOS: No se usaron repuestos.» y nada del pedido: el PDF nunca
+    # imprimió el bloque `pendiente`. Esta sección emite órdenes de verdad (con
+    # el dompdf del servidor) y lee el TEXTO del PDF con pypdf: lo que mira es lo
+    # que el técnico escribió, no que el PDF exista. Cuentas de prueba: ENSAYO,
+    # correo retenido. formulario_v 1: sin la exigencia de fotos por equipo.
+    from pypdf import PdfReader
+    import io
+
+    def emitir_y_leer(cambios, equipo):
+        envio = str(uuid.uuid4())
+        o = dict(orden)
+        o.pop("aviso", None)
+        o.update({"sin_aviso": True, "formulario_v": 1, "fotos": [], "fotos_cantidad": 1, "equipos": [equipo]})
+        o.update(cambios)
+        cuerpo_p = {"envio_uuid": envio, "usuario_captura": a,
+                    "capturada_en": datetime.datetime.now(datetime.timezone.utc).isoformat(), "orden": o}
+        st_p, _, c_p = sa.pedir("envio.php", cuerpo_json=cuerpo_p)
+        try:
+            rec_p = (json.loads(c_p) if st_p == 200 else {}).get("recibo", {})
+        except ValueError:
+            rec_p = {}
+        ot_p = rec_p.get("id_industec") or ""
+        if not ot_p:
+            return "", "", f"{st_p} · {c_p[:150]}"
+        st_d, _, pdf_p = binario(sa, f"pdf.php?ot={ot_p}")
+        if st_d != 200 or pdf_p[:5] != b"%PDF-":
+            return ot_p, "", f"el PDF no se pudo bajar ({st_d})"
+        return ot_p, "\n".join((p.extract_text() or "") for p in PdfReader(io.BytesIO(pdf_p)).pages), ""
+
+    EQ_PRUEBA = {"nuevo": True, "equipo_uuid": "99990000-0000-4000-8000-0000000000a1", "tipo": "FREIDORA DE PRUEBA",
+                 "area": "Cocina caliente de prueba", "estado": "Deshabilitado", "sin_placa": True,
+                 "codigo_activo": "021165", "obs": "PRUEBA: observación del equipo"}
+    pedido = {"concluida": False, "estado_ot": "Abierta", "uso_repuesto": False, "repuestos": None,
+              "motivo_sin_aviso": "PRUEBA: pidieron la visita por teléfono",
+              "pendiente": {"activo_fijo": "021165", "diagnostico": "Resistencia abierta\nNo pasa continuidad",
+                            "diagnostico_codigo": None, "equipo_desc": "Freidora 2 de prueba",
+                            "parte": "Resistencia 6 kW x2 (HEN12345); Termostato de prueba",
+                            "partes": [{"descripcion": "Resistencia 6 kW de prueba", "cantidad": 2, "numero_parte": "HEN12345", "codigo": None},
+                                       {"descripcion": "Termostato de prueba", "cantidad": 1, "numero_parte": None, "codigo": "17000121"}],
+                            "deshabilitado": True}}
+    ot_pen, t_pen, err = emitir_y_leer(pedido, EQ_PRUEBA)
+    anotar("T2.29/PDF", "la orden con repuesto solicitado se emite y su PDF se lee", bool(t_pen), err or ot_pen)
+    linea = lambda s: any(s in l for l in t_pen.splitlines())
+    anotar("T2.29/PDF", "el PDF trae la sección «TRABAJO NO CONCLUIDO»", linea("TRABAJO NO CONCLUIDO"), "")
+    anotar("T2.29/PDF", "los dos repuestos que HACEN FALTA, con cantidad, número de parte y código",
+           linea("Resistencia 6 kW de prueba") and linea("HEN12345") and linea("Termostato de prueba") and linea("17000121"),
+           [l for l in t_pen.splitlines() if "Resistencia" in l or "Termostato" in l])
+    anotar("T2.29/PDF", "el diagnóstico en sus dos líneas", linea("Resistencia abierta") and linea("No pasa continuidad"), "")
+    anotar("T2.29/PDF", "«Equipo deshabilitado: SI» y el equipo que describió", linea("Equipo deshabilitado: SI") and linea("Freidora 2 de prueba"), "")
+    anotar("T2.29/PDF", "REPUESTOS dice que no se USARON (son dos cosas distintas)", linea("No se usaron repuestos."), "")
+    anotar("T2.29/PDF", "el área y el código de activo que tecleó el técnico", linea("Cocina caliente de prueba") and linea("021165"), "")
+    anotar("T2.29/PDF", "el motivo de no tener aviso de SAP", linea("PRUEBA: pidieron la visita por teléfono"), "")
+    anotar("T2.29/PDF", "las secciones de siempre siguen (Grupo KFC las lee)",
+           all(linea(x) for x in ("DATOS GENERALES", "DETALLE DEL EQUIPO", "OBSERVACIONES", "ESTADO DE LA OT", "SATISFACCIÓN DEL CLIENTE")), "")
+
+    usados = {"concluida": True, "estado_ot": "Cerrada", "pendiente": None, "uso_repuesto": True,
+              "repuestos": "Termopila de prueba (Fm8101873); Tornillo de prueba x3 (T-10); Cable de prueba"}
+    ot_us, t_us, err = emitir_y_leer(usados, {**EQ_PRUEBA, "estado": "Operativo",
+                                               "equipo_uuid": "99990000-0000-4000-8000-0000000000a2"})
+    lineas_us = t_us.splitlines()
+    anotar("T2.29/PDF", "la orden con repuestos USADOS se emite y su PDF se lee", bool(t_us), err or ot_us)
+    anotar("T2.29/PDF", "los tres repuestos usados salen, cada uno en su línea",
+           all(any(x in l for l in lineas_us) for x in ("Termopila de prueba (Fm8101873)", "Tornillo de prueba x3 (T-10)", "Cable de prueba"))
+           and not any("Termopila" in l and "Tornillo" in l for l in lineas_us),
+           [l for l in lineas_us if "Termopila" in l or "Tornillo" in l or "Cable" in l])
+    anotar("T2.29/PDF", "una OT concluida NO lleva «TRABAJO NO CONCLUIDO»", "TRABAJO NO CONCLUIDO" not in t_us, "")
 
     print("-- el tope de 5 fotos por equipo --")
     ENV_TOPE = str(uuid.uuid4())
@@ -435,6 +513,17 @@ def main():
     st, j = subir(sa, ENV_TOPE, str(uuid.uuid4()), 5, png(40, 30, (5, 5, 5)),
                   extra={"equipo_n": "2", "momento": "ANTES", "tomada_ms": str(ahora_ms)})
     anotar("T2.28.7", "la 6.a foto del mismo equipo -> 400 con 'máximo'",
+           st == 400 and "máximo" in (j.get("motivo") or "").lower(), f"{st} · {j.get('motivo')}")
+    # T2.28.11: con las 5 del trabajo ya puestas, la captura del repuesto entra
+    # igual (cupo propio de 3); la 4.a captura sí se rechaza.
+    for k in range(3):
+        st, j = subir(sa, ENV_TOPE, str(uuid.uuid4()), 6 + k, png(40, 30, (9, 9, 9)),
+                      extra={"equipo_n": "2", "momento": "REPUESTO", "tomada_ms": str(ahora_ms)})
+        anotar("T2.28.11", f"con 5 fotos del trabajo, la captura {k + 1}/3 del repuesto -> 200",
+               st == 200 and j.get("ok") is True, f"{st} · {j}")
+    st, j = subir(sa, ENV_TOPE, str(uuid.uuid4()), 9, png(40, 30, (9, 9, 9)),
+                  extra={"equipo_n": "2", "momento": "REPUESTO", "tomada_ms": str(ahora_ms)})
+    anotar("T2.28.11", "la 4.a captura del repuesto -> 400 con 'máximo'",
            st == 400 and "máximo" in (j.get("motivo") or "").lower(), f"{st} · {j.get('motivo')}")
 
     print("-- 7 equipos x 5 fotos, emitida en menos de 30 s y sin error nuevo en el log de la web --")
@@ -459,6 +548,15 @@ def main():
     anotar("T2.28.7", "las 35 fotos (7 equipos x 5) se subieron", ok_subida, ok_subida)
     n_carga = sql("SELECT COUNT(*) n FROM ot_fotos WHERE envio_uuid = ?", [ENV_CARGA])[0]["n"]
     anotar("T2.28.7", "y quedaron las 35 filas en ot_fotos", int(n_carga) == 35, n_carga)
+    # T2.28.11 (revisión 2026-10-01): las capturas del repuesto tienen su propio tope por orden
+    # (7 x 3) y no compiten con las 40 fotos del trabajo. 35 + 6 = 41 daba 400 en la ultima.
+    ok_cap = True
+    for n_eq in (0, 1):
+        for k in range(3):
+            st, j = subir(sa, ENV_CARGA, str(uuid.uuid4()), 100 + n_eq * 3 + k, png(40, 30, (9, 9, 9)),
+                          extra={"equipo_n": str(n_eq), "momento": "REPUESTO", "tomada_ms": str(ahora_ms)})
+            ok_cap = ok_cap and st == 200 and j.get("ok") is True
+    anotar("T2.28.11", "con 35 fotos del trabajo entran 6 capturas del repuesto (2 equipos x 3): tope propio, no las 40 de la orden", ok_cap, ok_cap)
 
     t0 = time.time()
     st, j = emitir_fotos(ENV_CARGA, equipos_carga)

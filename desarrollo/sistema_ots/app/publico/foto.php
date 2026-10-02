@@ -36,9 +36,18 @@ const MAX_PIXELES = 24_000_000;
 // E-23, y T2.28.7 (obs. 1): tope de fotos por orden y, dentro de ella, tope
 // por equipo (antes + después, entre los dos). app.js ya para en 5 por
 // equipo en el picker; esto es lo mismo del lado del servidor, que es el que
-// de verdad decide. 40 = 7 equipos x 5 fotos + 5 de repuesto (T2.28.11).
+// de verdad decide. 40 = 7 equipos x 5 fotos del trabajo, con holgura.
 const MAX_FOTOS_POR_ENVIO = 40;
 const MAX_FOTOS_POR_EQUIPO = 5;
+// T2.28.11: las capturas del repuesto (Parts Town), aparte de las del trabajo y
+// con sus propios topes: 3 por equipo y 7 x 3 por orden. Contadas junto con las
+// del trabajo (revisión del 2026-10-01), una orden de 7 equipos con 5 fotos cada
+// uno y 2 equipos «Deshabilitado» con sus 3 capturas llegaba a 41: las capturas
+// de los primeros equipos suben antes que el «Después» del último, y esa foto
+// recibía 400 y cola.js la descartaba; el PDF decía «sin foto del después» de un
+// equipo que sí la tenía.
+const MAX_CAPTURAS_REPUESTO = 3;
+const MAX_CAPTURAS_POR_ENVIO = 21;
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -95,20 +104,34 @@ try {
         responder(409, ['ok' => false, 'ajena' => true, 'motivo' => 'esa orden la llenó otro usuario']);
     }
     // E-23: tope de fotos por orden. Se cuenta ANTES de aceptar el archivo:
-    // no tiene sentido decodificar una foto de más para rechazarla después.
-    $yaSubidas = (int) (Db::uno('SELECT COUNT(*) AS n FROM ot_fotos WHERE envio_uuid = ?', [$envio])['n'] ?? 0);
-    if ($yaSubidas >= MAX_FOTOS_POR_ENVIO) {
-        responder(400, ['ok' => false,
-                        'motivo' => 'esta orden ya tiene ' . MAX_FOTOS_POR_ENVIO . ' fotos, el máximo por orden']);
+    // no tiene sentido decodificar una foto de más para rechazarla después. Las
+    // capturas del repuesto se cuentan aparte de las del trabajo (T2.28.11).
+    $esCaptura = $momento === 'REPUESTO';
+    $yaSubidas = (int) (Db::uno(
+        'SELECT COUNT(*) AS n FROM ot_fotos WHERE envio_uuid = ? AND '
+        . ($esCaptura ? "momento = 'REPUESTO'" : "(momento IS NULL OR momento <> 'REPUESTO')"),
+        [$envio])['n'] ?? 0);
+    if ($yaSubidas >= ($esCaptura ? MAX_CAPTURAS_POR_ENVIO : MAX_FOTOS_POR_ENVIO)) {
+        responder(400, ['ok' => false, 'motivo' => $esCaptura
+            ? 'esta orden ya tiene ' . MAX_CAPTURAS_POR_ENVIO . ' capturas del repuesto, el máximo por orden'
+            : 'esta orden ya tiene ' . MAX_FOTOS_POR_ENVIO . ' fotos, el máximo por orden']);
     }
     // T2.28.7: el mismo tope, por equipo. Solo se cuenta cuando la foto trae
     // `equipo_n` -- una foto sin clasificar (app vieja) no compite por ese cupo.
+    // T2.28.11: la captura del repuesto (REPUESTO, paso 6 de la guía de Parts
+    // Town) tiene su propio cupo y no compite con las fotos del trabajo. Si
+    // compitiera, con las 5 del antes y el después ya puestas la captura
+    // recibía 400 y cola.js la descartaba sin que nadie se enterara.
     if ($equipoN !== null) {
-        $yaDelEquipo = (int) (Db::uno('SELECT COUNT(*) AS n FROM ot_fotos WHERE envio_uuid = ? AND equipo_n = ?',
-                                      [$envio, $equipoN])['n'] ?? 0);
-        if ($yaDelEquipo >= MAX_FOTOS_POR_EQUIPO) {
-            responder(400, ['ok' => false,
-                            'motivo' => 'este equipo ya tiene ' . MAX_FOTOS_POR_EQUIPO . ' fotos, el máximo por equipo']);
+        $yaDelEquipo = (int) (Db::uno(
+            'SELECT COUNT(*) AS n FROM ot_fotos WHERE envio_uuid = ? AND equipo_n = ? AND '
+            . ($esCaptura ? "momento = 'REPUESTO'" : "(momento IS NULL OR momento <> 'REPUESTO')"),
+            [$envio, $equipoN])['n'] ?? 0);
+        $tope = $esCaptura ? MAX_CAPTURAS_REPUESTO : MAX_FOTOS_POR_EQUIPO;
+        if ($yaDelEquipo >= $tope) {
+            responder(400, ['ok' => false, 'motivo' => $esCaptura
+                ? 'este equipo ya tiene ' . MAX_CAPTURAS_REPUESTO . ' capturas del repuesto, el máximo'
+                : 'este equipo ya tiene ' . MAX_FOTOS_POR_EQUIPO . ' fotos, el máximo por equipo']);
         }
     }
 } catch (Throwable $ex) {

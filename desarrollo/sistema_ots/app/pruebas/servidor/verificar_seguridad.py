@@ -193,6 +193,45 @@ def main():
     else:
         vh.anotar("T2.28.2", "hay una cuenta admin_prueba para firmar la fila de prueba", False, "no está preparar_prueba.php")
 
+    print("\n== 10. identificar el local de una orden (T2.28.8) y el envío real (T2.29): solo quien debe ==")
+    # Texto SINTÉTICO para TECNICO/JEFE_ZONA y la foto COMPLETA de la tabla, no
+    # el COUNT (revisión del 2026-09-30): con el texto real de V090, si el
+    # permiso se rompiera, el upsert pisaba la decisión real de la
+    # administradora sin cambiar el COUNT -- la prueba daba PASA y el robot
+    # aplicaba la decisión falsa. El permiso se revisa ANTES que el filtro de
+    # «sin local», así que el 403 se prueba igual con un texto inventado.
+    FOTO = ("SELECT clave, texto_sap, decision, local_codigo, avisos, nota, propuesto_por, propuesto_en, "
+            "estado, aplicado_en, nota_robot FROM locales_alias_propuestos ORDER BY clave")
+    ident = {"accion": "identificar_local", "texto_sap": "Z9998 PRUEBA PERMISOS", "decision": "FUERA_ALCANCE",
+             "nota": "PRUEBA de permisos: no debe anotarse"}
+    antes_prop = vh.sql(FOTO)
+    st, _, _ = tec.pedir("casos.php", form=ident)
+    vh.anotar("T2.28.8", "TECNICO → 403 al identificar el local de una orden", st == 403, st)
+    st, _, _ = jefe.pedir("casos.php", form=ident)
+    vh.anotar("T2.28.8", "JEFE_ZONA → 403 al identificar el local de una orden", st == 403, st)
+    # Un POST fabricado de ADMIN con un texto que el buzón NO trae sin local:
+    # pasa el permiso y lo frena el filtro (302 de vuelta a la sección, con el
+    # error), sin crear un alias para cualquier texto.
+    st, cab, _ = adm.pedir("casos.php", form={"accion": "identificar_local", "texto_sap": "Z9999 NO ESTA EN EL BUZON",
+                                              "decision": "FUERA_ALCANCE", "nota": "PRUEBA: texto fabricado"})
+    loc = str(cab.get("Location") or cab.get("location") or "") if isinstance(cab, dict) else str(cab)
+    vh.anotar("T2.28.8", "el POST fabricado de ADMIN pasa el permiso y lo frena el filtro (302 a #sin-local)",
+              st == 302 and loc.endswith("casos.php#sin-local"), f"{st} → {loc}")
+    despues_prop = vh.sql(FOTO)
+    vh.anotar("T2.28.8", "la tabla quedó idéntica, fila por fila (ninguno de los tres POST anotó nada)",
+              despues_prop == antes_prop, f"{len(antes_prop)} → {len(despues_prop)} filas")
+    zonas_antes = vh.sql("SELECT zona, modo FROM emision_zonas ORDER BY zona")
+    st, _, _ = adm.pedir("correos.php", form={"accion": "zona_piloto", "zona": "UIO", "motivo": "PRUEBA de permisos"})
+    vh.anotar("T2.29", "ADMIN → 403 al volver una zona al piloto (solo SUPERADMIN)", st == 403, st)
+    st, _, _ = adm.pedir("correos.php", form={"accion": "zona_activar", "zona": "OTRA"})
+    vh.anotar("T2.29", "ADMIN → 403 al activar una zona", st == 403, st)
+    st, _, _ = adm.pedir("correos.php", form={"accion": "cuenta_prueba", "id": "1", "destino": "servicioalcliente@industec.me"})
+    vh.anotar("T2.29", "ADMIN → 403 al mandar un correo de prueba con la cuenta de envío", st == 403, st)
+    st, _, _ = tec.pedir("correos.php", form={"accion": "despachar"})
+    vh.anotar("T2.29", "TECNICO → 403 al pedir «Enviar ahora»", st == 403, st)
+    vh.anotar("T2.29", "las zonas siguen exactamente como estaban",
+              vh.sql("SELECT zona, modo FROM emision_zonas ORDER BY zona") == zonas_antes, zonas_antes)
+
     for se in (adm, tec, jefe, s5):
         se.pedir("salir.php", form={})
     fallas = [r for r in vh.resultados if not r["ok"]]

@@ -53,12 +53,14 @@ def anotar(clave, que, ok, obtenido, esperado=""):
     print(f"  {'PASA ' if ok else 'FALLA'} {clave:<9} {que:<66} {str(obtenido)[:70]}")
 
 
-def ssh(cmd, entrada=None):
+def ssh(cmd, entrada=None, timeout=120):
     # Con tres baterías a la vez, Hostinger corta alguna conexión SSH sin
     # decir nada (código 255, stderr vacío). Es un tropiezo de red, no un
     # fallo del sistema: se reintenta una vez antes de abandonar la prueba.
+    # `timeout`: el reindexado completo del Archivo ya pasa de 120 s (8.038
+    # órdenes el 2026-10-01); quien lo llama pide más tiempo.
     for intento in (1, 2):
-        r = subprocess.run(SSH + [cmd], input=entrada, capture_output=True, text=True, timeout=120)
+        r = subprocess.run(SSH + [cmd], input=entrada, capture_output=True, text=True, timeout=timeout)
         if r.returncode == 0:
             return r.stdout
         transitorio = r.returncode == 255 or not r.stderr.strip()

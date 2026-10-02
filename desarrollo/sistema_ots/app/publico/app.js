@@ -833,6 +833,21 @@
       '    </div>' +
       '  </div>' +
       '</div>' +
+      // T2.28.11 (obs. 9): la «Guía de uso Parts Town» de INDUSTEC, para el
+      // equipo deshabilitado -- buscar la pieza con la marca y el modelo de la
+      // placa, y dejar la captura del repuesto elegido (paso 6 de la guía).
+      // Oculto mientras el equipo no esté «Deshabilitado» (refrescarPartsTown).
+      '<div data-eq-pt-wrap="' + i + '" hidden style="margin-top:10px">' +
+      '  <button type="button" class="btn ghost" data-eq-pt="' + i + '">Buscar en Parts Town</button>' +
+      '  <div class="derivado" data-eq-pt-nota="' + i + '" hidden style="margin-top:6px"></div>' +
+      '  <label style="margin-top:8px">Captura del repuesto (Parts Town)</label><div class="picker">' +
+      '    <div class="row">' +
+      '      <label class="btn ghost">Tomar foto<input type="file" data-eq-foto-repuesto-camera="' + i + '" accept="image/*" capture="environment" multiple hidden></label>' +
+      '      <label class="btn ghost">Galería<input type="file" data-eq-foto-repuesto-gallery="' + i + '" accept="image/*" multiple hidden></label>' +
+      '    </div>' +
+      '    <div class="slot-list" data-eq-foto-repuesto-lista="' + i + '"><div class="small">Sin capturas</div></div>' +
+      '  </div>' +
+      '</div>' +
       '<div data-eq-area-wrap="' + i + '" hidden style="margin-top:8px">' +
       '  <label>Área (opcional)</label><input type="text" data-eq-area="' + i + '" placeholder="cocina caliente, bodega…">' +
       '</div>' +
@@ -864,13 +879,16 @@
     // igual que hacía el picker único de antes -- prepararFotosEquipos()).
     // Van colgadas del propio elemento, como ya hace `selEq._combo`: cuando
     // el bloque se quita, sus fotos se van con él sin que nadie más lo pida.
-    wrap._fotos = { ANTES: [], DESPUES: [] };
+    wrap._fotos = { ANTES: [], DESPUES: [], REPUESTO: [] };
     function inicializarFotosEq(momento) {
       var pref = momento.toLowerCase();
       var listaEl = wrap.querySelector('[data-eq-foto-' + pref + '-lista="' + i + '"]');
       function render() {
         var arr = wrap._fotos[momento];
-        if (!arr.length) { listaEl.innerHTML = '<div class="small">Sin fotos</div>'; return; }
+        if (!arr.length) {
+          listaEl.innerHTML = '<div class="small">' + (momento === 'REPUESTO' ? 'Sin capturas' : 'Sin fotos') + '</div>';
+          return;
+        }
         listaEl.innerHTML = '';
         arr.forEach(function (f, idx) {
           var row = document.createElement('div');
@@ -883,8 +901,14 @@
       }
       function agregar(files) {
         Array.prototype.forEach.call(files, function (f) {
-          var total = wrap._fotos.ANTES.length + wrap._fotos.DESPUES.length;
-          if (total >= 5) { alert('Máximo 5 fotos por equipo, entre antes y después.'); return; }
+          if (momento === 'REPUESTO') {
+            // T2.28.11: la captura del repuesto va aparte de las fotos del
+            // trabajo y no cuenta para su máximo de 5.
+            if (wrap._fotos.REPUESTO.length >= 3) { alert('Máximo 3 capturas del repuesto por equipo.'); return; }
+          } else {
+            var total = wrap._fotos.ANTES.length + wrap._fotos.DESPUES.length;
+            if (total >= 5) { alert('Máximo 5 fotos por equipo, entre antes y después.'); return; }
+          }
           wrap._fotos[momento].push(f);
         });
         render();
@@ -896,6 +920,7 @@
     }
     inicializarFotosEq('ANTES');
     inicializarFotosEq('DESPUES');
+    inicializarFotosEq('REPUESTO');
 
     /* T2.28.6: la casilla «sin placa o ilegible» apaga y vacía marca, modelo
        y serie -- son mutuamente excluyentes, y así el técnico no deja una
@@ -937,6 +962,22 @@
           mostrarNotaFicha('Eso no parece un dato de la placa. Si el equipo no tiene placa o está ilegible, marca la casilla de arriba.');
         }
       });
+    });
+
+    /* T2.28.11 (obs. 9): Parts Town con la marca y el modelo de ESTA placa.
+       Si falta alguno no abre: la guía de INDUSTEC los pide antes de buscar.
+       Abre en pestaña nueva y copia lo que conviene pegar en su buscador si la
+       página del modelo no aparece (el nombre del modelo en Parts Town no
+       siempre es el de la placa: HC-903 allá es HHC-903). */
+    var notaPT = wrap.querySelector('[data-eq-pt-nota="' + i + '"]');
+    wrap.querySelector('[data-eq-pt="' + i + '"]').addEventListener('click', function () {
+      notaPT.hidden = false;
+      if (!window.PartsTown) {
+        notaPT.textContent = 'No se pudo cargar Parts Town en este teléfono: abre la app una vez con señal.';
+        return;
+      }
+      notaPT.textContent = PartsTown.abrir({ marca: campoMarca.value, modelo: campoModelo.value },
+                                          (CAT && CAT.partstown) || null).texto;
     });
 
     wrap.querySelector('[data-quitar-eq]').addEventListener('click', function () {
@@ -1205,7 +1246,7 @@
      trabado-- porque son el mismo dato en dos momentos distintos: uno ya
      usado, el otro por solicitar.
      ======================================================================= */
-  function crearListaPartes(contId) {
+  function crearListaPartes(contId, conPartsTown) {
     var cont = $(contId);
     function fila(valores) {
       valores = valores || {};
@@ -1219,8 +1260,38 @@
           '<input type="text" class="parte-desc" autocomplete="off" placeholder="Escribe el repuesto o elige uno">' +
           '<ul class="combo-lista" role="listbox" hidden></ul></div></div>' +
         '<div><label>Cantidad</label><input type="number" class="parte-cant" min="1" value="1"></div>' +
-        '<div><label>N.° de parte</label><input type="text" class="parte-num" placeholder="opcional"></div>';
+        '<div><label>N.° de parte</label><input type="text" class="parte-num" placeholder="opcional"></div>' +
+        // T2.28.11: en «Qué repuesto haría falta», Parts Town con la placa del
+        // equipo deshabilitado y, si ya se anotó, el número de esta fila.
+        (conPartsTown
+          ? '<div style="grid-column:1/-1"><button type="button" class="btn ghost parte-pt">Buscar en Parts Town</button>' +
+            '<div class="derivado parte-pt-nota" hidden style="margin-top:6px"></div></div>'
+          : '');
       cont.appendChild(row);
+      if (conPartsTown) {
+        var notaPT = row.querySelector('.parte-pt-nota');
+        row.querySelector('.parte-pt').addEventListener('click', function () {
+          notaPT.hidden = false;
+          if (!window.PartsTown) {
+            notaPT.textContent = 'No se pudo cargar Parts Town en este teléfono: abre la app una vez con señal.';
+            return;
+          }
+          var b = bloqueDelTrabado();
+          if (!b) {
+            // Dos casos con la misma respuesta: a quien ya marcó dos equipos se le
+            // pedía marcar «Deshabilitado», que ya había hecho (revisión del 2026-10-01).
+            notaPT.textContent = $$('#equipos .bloque').filter(equipoDeshabilitado).length > 1
+              ? 'Hay más de un equipo «Deshabilitado»: usa el botón «Buscar en Parts Town» de cada equipo.'
+              : 'Marca como «Deshabilitado» el equipo trabado: de su placa salen la marca y el modelo para buscar.';
+            return;
+          }
+          notaPT.textContent = PartsTown.abrir({
+            marca: b.querySelector('[data-eq-marca]').value,
+            modelo: b.querySelector('[data-eq-modelo]').value,
+            numero_parte: row.querySelector('.parte-num').value
+          }, (CAT && CAT.partstown) || null).texto;
+        });
+      }
       row.querySelector('.parte-desc').value = valores.descripcion || '';
       row.querySelector('.parte-cant').value = valores.cantidad || 1;
       row.querySelector('.parte-num').value = valores.numero_parte || '';
@@ -1291,7 +1362,24 @@
     return opt ? (opt.dataset.tipo || null) : null;
   }
 
+  /* T2.28.11: Parts Town y la captura del repuesto, solo en el equipo marcado
+     «Deshabilitado» -- es la pieza que hay que pedir; en los demás equipos
+     serían dos controles más sin uso. Se llama desde sincronizarFallas(), que
+     ya corre cada vez que cambia el estado de un equipo (también al rehacer
+     el formulario desde el borrador o desde «Corregir y reenviar»). */
+  function refrescarPartsTown() {
+    $$('#equipos .bloque').forEach(function (b) {
+      var w = b.querySelector('[data-eq-pt-wrap]');
+      if (w) { w.hidden = !equipoDeshabilitado(b); }
+    });
+  }
+  function equipoDeshabilitado(b) {
+    var on = b.querySelector('[data-eq-estado-seg] button.on');
+    return !!(on && on.dataset.v === 'Deshabilitado');
+  }
+
   function sincronizarFallas() {
+    refrescarPartsTown();
     var sel = $('#pen_falla');
     if (!sel || !CAT) return;
     var familia = familiaDe(tipoDelTrabado());
@@ -1590,7 +1678,11 @@
   function prepararFotosEquipos() {
     var trabajos = [];
     $$('#equipos .bloque').forEach(function (b, n) {
-      ['ANTES', 'DESPUES'].forEach(function (momento) {
+      // T2.28.11: la captura del repuesto solo viaja si el equipo sigue
+      // «Deshabilitado» -- si el técnico lo pasó a Operativo, el selector ya no
+      // se ve y no se manda lo que no está a la vista.
+      var momentos = equipoDeshabilitado(b) ? ['ANTES', 'DESPUES', 'REPUESTO'] : ['ANTES', 'DESPUES'];
+      momentos.forEach(function (momento) {
         ((b._fotos && b._fotos[momento]) || []).forEach(function (f) {
           trabajos.push({
             file: f, equipo_n: n, momento: momento,
@@ -1793,6 +1885,14 @@
   /* El código de activo del equipo trabado: el único bloque marcado
      «Deshabilitado», o el único equipo de la orden. Si es ambiguo va vacío y el
      servidor usa el equipo del caso, en vez de adivinar. */
+  /* El bloque del equipo trabado, con la misma regla que activoDelTrabado():
+     el único «Deshabilitado», o el único equipo; null si es ambiguo (T2.28.11). */
+  function bloqueDelTrabado() {
+    var bloques = $$('#equipos .bloque');
+    var parados = bloques.filter(equipoDeshabilitado);
+    return parados.length === 1 ? parados[0] : (bloques.length === 1 ? bloques[0] : null);
+  }
+
   function activoDelTrabado() {
     var bloques = $$('#equipos .bloque');
     var parados = bloques.filter(function (b) {
@@ -1862,7 +1962,7 @@
     }
     if (o.origen === 'SIN_ASIGNAR' && !o.motivo_sin_aviso) {
       extra.push({ campo: 'aviso', severidad: 'BLOQUEA',
-        mensaje: 'decí por qué no tiene aviso SAP; la administración lo necesita para pedírselo a KFC' });
+        mensaje: 'di por qué no tiene aviso SAP; la administración lo necesita para pedírselo a KFC' });
     }
     if (o.origen === 'SIN_ASIGNAR' && o.uso_repuesto) {
       // Regla del cliente: sin aviso no se piden repuestos hasta tener el aviso.
@@ -2130,7 +2230,12 @@
       // {} / [] si el servidor todavía no las manda (caché vieja).
       fichas: cat.fichas || {},
       marcas: arr(cat.marcas),
-      modelos: cat.modelos || {}
+      modelos: cat.modelos || {},
+      // T2.28.11: la tabla de marcas y prefijos de Parts Town. Sin copiarla aquí,
+      // `CAT.partstown` era siempre null y los dos botones del formulario caían
+      // en BUSCAR (la portada) con marcas que sí tienen despiece (revisión del
+      // 2026-10-01). null si el servidor todavía no la manda (caché vieja).
+      partstown: cat.partstown || null
     };
   }
 
@@ -2180,7 +2285,7 @@
     firma = initFirma();
     initRating();
     listaRepuestosOrden = crearListaPartes('#repuestosLista');
-    listaPartesTrabado = crearListaPartes('#penPartes');
+    listaPartesTrabado = crearListaPartes('#penPartes', true);
     $('#addRepuesto').addEventListener('click', function () { listaRepuestosOrden.agregar(); });
     $('#addParte').addEventListener('click', function () { listaPartesTrabado.agregar(); });
 

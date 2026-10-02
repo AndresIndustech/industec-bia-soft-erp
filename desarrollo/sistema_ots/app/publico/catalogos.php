@@ -36,6 +36,7 @@ require_once __DIR__ . '/nucleo/Casos.php';
 require_once __DIR__ . '/nucleo/Catalogo.php';
 require_once __DIR__ . '/nucleo/Vocabulario.php';
 require_once __DIR__ . '/nucleo/Destinatarios.php';
+require_once __DIR__ . '/nucleo/PartsTown.php';
 $u = Auth::exigir('ots.crear', true);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -196,4 +197,10 @@ echo json_encode([
     'fichas'              => (object) $fichas,
     'marcas'              => array_values($marcasCat),
     'modelos'             => (object) $modelosCat,
+    // T2.28.11: la tabla con que partstown.js arma el enlace a Parts Town.
+    // Viaja con el catálogo para que el botón también sirva sin señal.
+    'partstown'           => [
+        'prefijos' => (object) (PartsTown::tabla()['prefijos'] ?? []),
+        'marcas'   => (object) (PartsTown::tabla()['marcas'] ?? []),
+    ],
 ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);

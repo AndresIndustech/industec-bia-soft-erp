@@ -2,6 +2,8 @@
 declare(strict_types=1);
 require_once __DIR__ . '/nucleo/Pendientes.php';
 require_once __DIR__ . '/nucleo/Ui.php';
+require_once __DIR__ . '/nucleo/Catalogo.php';     // T2.28.11: la placa del equipo para Parts Town
+require_once __DIR__ . '/nucleo/PartsTown.php';
 require_once __DIR__ . '/nucleo/Vocabulario.php';   // los rótulos de filtros, tarjetas y estados, y la zona de ?zona=
 
 /**
@@ -204,6 +206,25 @@ $claseEstado = static function (array $p): string {
 $partesDe = static function (array $p): array {
     $j = json_decode((string) ($p['partes'] ?? ''), true);
     return is_array($j) ? $j : [];
+};
+
+/* T2.28.11 (obs. 9): el enlace a Parts Town de cada solicitud, para el paso 4
+   de la guía de INDUSTEC (el jefe valida el número de parte en el despiece).
+   La placa sale de la ficha del equipo; el catálogo y las fichas se leen una
+   sola vez y solo si hay solicitudes en pantalla. */
+$placas = null;
+$partsTownDe = static function (array $p, array $partes) use (&$placas): array {
+    if ($placas === null) {
+        $placas = ['equipos' => (Catalogo::cargar() ?? [])['equipos'] ?? [], 'fichas' => Catalogo::fichas()];
+    }
+    $placa = PartsTown::placaDe((string) ($p['local_codigo'] ?? ''), (string) ($p['activo_fijo'] ?? ''),
+                                $placas['equipos'], $placas['fichas']);
+    $numero = '';
+    foreach ($partes as $pt) {
+        if (trim((string) ($pt['numero_parte'] ?? '')) !== '') { $numero = (string) $pt['numero_parte']; break; }
+    }
+    return $placa === null ? ['tipo' => null]
+                           : PartsTown::enlace(['marca' => $placa['marca'], 'modelo' => $placa['modelo'], 'numero_parte' => $numero]);
 };
 
 $errFlash = Ui::errorFlash();
@@ -541,6 +562,18 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
             <p class="sub" style="margin-top:8px">Pieza: <?= $e($p['parte']) ?><?= (int) $p['cantidad'] > 1 ? ' × ' . (int) $p['cantidad'] : '' ?></p>
           <?php endif; ?>
 
+          <?php $pt = $partsTownDe($p, $partes); ?>
+          <p class="sub" style="margin-top:8px">
+            <?php if (($pt['tipo'] ?? null) === null): ?>
+              Parts Town: todavía no se conoce la marca y el modelo de este equipo. Quedan en su ficha cuando
+              el técnico los anota en una <?= $e(Vocabulario::t('OT_INDUSTEC')) ?>.
+            <?php else: ?>
+              <a href="<?= $e((string) $pt['url']) ?>" target="_blank" rel="noopener"
+                 data-pt-copiar="<?= $e((string) $pt['copiar']) ?>">Buscar en Parts Town</a>
+              · <?= $e(PartsTown::aviso($pt)) ?>
+            <?php endif; ?>
+          </p>
+
           <?php if (!$sinValidar): ?>
             <div class="seguimiento">
               <p>
@@ -843,6 +876,9 @@ $enlaceG = fn(string $g): string => '?g=' . $g . ($q !== '' ? '&q=' . rawurlenco
   </form>
 </dialog>
 
+<?php /* T2.28.11: copia al portapapeles lo que conviene pegar en el buscador de
+         Parts Town al tocar «Buscar en Parts Town» (el enlace se abre solo). */ ?>
+<script src="partstown.js"></script>
 <script>
 /* Las etiquetas de los estados salen de aquí y no del HTML de cada fila para
    que la lista esté en un solo sitio; el servidor vuelve a comprobar cada

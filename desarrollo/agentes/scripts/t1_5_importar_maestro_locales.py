@@ -267,8 +267,22 @@ def main():
     # y totalmente reconstruible desde el Excel en cada corrida. Un upsert por
     # clave dejaria filas huerfanas si la clave canonica de un codigo cambia
     # entre corridas (como paso con BS17EC->BR17EC al corregir este script).
-    # locales_alias se reconstruye entero (no lo referencia nadie).
-    cur.execute("DELETE FROM locales_alias")
+    #
+    # PERO SOLO LOS ALIAS QUE PRODUCE ESTE SCRIPT (T2.28.8, 2026-09-30). Hasta
+    # esa fecha aqui habia un `DELETE FROM locales_alias` entero, escrito cuando
+    # la tabla solo tenia lo del maestro. Hoy tiene 149 alias y solo 2 salen de
+    # aqui (NORMALIZADO_CEROS y POR_UBICACION); los otros 147 los pusieron T1.6,
+    # T1.6e, las confirmaciones de Andres del 21-sep y, desde T2.28.8, las
+    # decisiones de la administracion en el buzon (ADMIN_BUZON). Reimportar el
+    # maestro los habria borrado todos sin decir nada, y el robot del correo
+    # habria dejado de resolver esos locales (el mismo patron que el error n.18:
+    # un reemplazo total sobre una tabla que ya tenia otros duenos).
+    cur.execute("SELECT regla_aplicada, COUNT(*) FROM locales_alias GROUP BY 1")
+    ajenos = sum(n for regla, n in cur.fetchall() if not es_regla_del_maestro(regla))
+    cur.execute("DELETE FROM locales_alias WHERE regla_aplicada = 'NORMALIZADO_CEROS' "
+                "OR regla_aplicada LIKE 'POR_UBICACION (%'")
+    print(f"locales_alias: {cur.rowcount} alias del propio maestro se reconstruyen; "
+          f"{ajenos} de otras fuentes (T1.6, confirmaciones, buzon) se conservan")
     # locales NO se borra: desde T1.7 la tabla ots lo referencia por clave foranea.
     # La carga es upsert sobre local_codigo (ON DUPLICATE KEY UPDATE mas abajo), y al
     # final se reporta cualquier local que exista en la base y ya no este en el maestro,
@@ -296,18 +310,32 @@ def main():
     # de cadena, resueltas por Nivel 2). Se cargan ya en esta fase porque
     # surgen aqui; T1.6 los complementara con las variantes observadas en los
     # nombres reales de los 7333 archivos historicos.
-    alias_insertados = 0
-    for a in alias_detectados:
-        cur.execute(
-            """
-            INSERT INTO locales_alias (alias_texto, local_codigo, regla_aplicada, nivel_confianza)
-            VALUES (%s, %s, %s, 2)
-            ON DUPLICATE KEY UPDATE local_codigo=VALUES(local_codigo), regla_aplicada=VALUES(regla_aplicada)
-            """,
-            (a["alias"], a["canonico"], a["regla"]),
-        )
-        alias_insertados += 1
+    #
+    # Sin ON DUPLICATE KEY UPDATE (revision del 2026-09-30): sobre uq_alias
+    # (alias_texto), el upsert repuntaba en silencio un alias que ya existia de
+    # OTRA fuente y le ponia la regla del maestro, con lo que la siguiente
+    # reimportacion que ya no lo generara lo borraba con el DELETE de arriba.
+    # Caso real posible: un typo en la hoja (como BS17EC/CN42EC) que genere
+    # `A018EC -> X` y pise el `A018EC -> A014EC` de T1.6e, confirmado por el
+    # correo del PDF. Ahora: si ya existe apuntando al MISMO local, no se toca;
+    # si apunta a OTRO, se aborta y se deshace todo (I-10/I-11): el DELETE y
+    # los locales van en esta misma transaccion.
+    alias_insertados, alias_ya_estaban, choques = cargar_alias_maestro(cur, alias_detectados)
+    if choques:
+        cnx.rollback()
+        cur.close()
+        cnx.close()
+        print("\nABORTADO: el maestro genera alias que ya apuntan a OTRO local (I-11). "
+              "No se escribio nada en la BD:", file=sys.stderr)
+        for c in choques:
+            print(f"   {c}", file=sys.stderr)
+        print("   Lo decide una persona: o el Excel tiene un error, o el alias viejo esta mal.",
+              file=sys.stderr)
+        sys.exit(1)
     cnx.commit()
+    if alias_ya_estaban:
+        print(f"locales_alias: {alias_ya_estaban} alias del maestro ya estaban, de otra fuente y al "
+              "mismo local: se dejan como estaban")
 
     sobrantes = sorted(locales_previos - set(maestro))
     if sobrantes:
@@ -328,6 +356,35 @@ def main():
     print(f"Alias del propio maestro cargados en 'locales_alias': {alias_insertados}")
     for a in alias_detectados:
         print(f"  {a['alias']} -> {a['canonico']}  ({a['regla']})")
+
+
+def cargar_alias_maestro(cur, alias_detectados):
+    """Inserta los alias que genera el maestro sin pisar los de otra fuente.
+    Devuelve (insertados, ya_estaban, choques); con choques, quien llama
+    deshace la transaccion y aborta (I-10/I-11). Separada para probarla con
+    un cursor simulado (t2_28_8_pruebas.py)."""
+    insertados, ya_estaban, choques = 0, 0, []
+    for a in alias_detectados:
+        cur.execute("SELECT local_codigo, regla_aplicada FROM locales_alias WHERE alias_texto = %s",
+                    (a["alias"],))
+        previo = cur.fetchone()
+        if previo is not None:
+            if previo[0] == a["canonico"]:
+                ya_estaban += 1
+            else:
+                choques.append(f"{a['alias']}: el maestro dice {a['canonico']} ({a['regla']}) y "
+                               f"locales_alias ya dice {previo[0]} ({previo[1]})")
+            continue
+        cur.execute("INSERT INTO locales_alias (alias_texto, local_codigo, regla_aplicada, nivel_confianza) "
+                    "VALUES (%s, %s, %s, 2)", (a["alias"], a["canonico"], a["regla"]))
+        insertados += 1
+    return insertados, ya_estaban, choques
+
+
+def es_regla_del_maestro(regla):
+    """Las dos reglas con que ESTE script escribe en locales_alias (ver los
+    `origen_match` de arriba). Todo lo demas es de otra fuente y no se toca."""
+    return regla == "NORMALIZADO_CEROS" or str(regla or "").startswith("POR_UBICACION (")
 
 
 if __name__ == "__main__":

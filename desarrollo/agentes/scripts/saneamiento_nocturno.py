@@ -6,10 +6,13 @@ Encadena, en este orden y abortando al primer fallo:
   1. sync        t2_4_sync_hostinger.py         espejo del sistema viejo y de la app (verificado por hash)
   2. volcado     t2_4_volcado_bd.py             volcado de la base de la app, verificado por hash
   3. normalizar  t2_4_normalizar_nuevas.py --ejecutar   del espejo crudo al arbol canonico
-  4. ingesta     t1_7_ingesta.py                el arbol canonico a la base de la estacion
-  5. informes    t2_11_informes_ot.py --empujar los informes de OT del buzon, al sitio
-  6. archivo     t2_15_exportar_archivo.py --empujar  el catalogo historico al indice del archivo (Hostinger)
-  7. pdfs        t2_19_subir_pdfs.py --ejecutar  los PDF que faltan en el servidor, verificados por hash
+  4. buzon       t2_18_rescatar_buzon.py --ejecutar     informes del correo al arbol canonico
+  5. ingesta     t1_7_ingesta.py                el arbol canonico a la base de la estacion
+  6. informes    t2_11_informes_ot.py --empujar los informes de OT del buzon, al sitio
+  7. archivo     t2_15_exportar_archivo.py --empujar  el catalogo historico al indice del archivo (Hostinger)
+  8. equipos     t2_28_exportar_equipos.py      el maestro de equipos del servidor a un Excel
+  9. pdfs        t2_19_subir_pdfs.py --ejecutar  los PDF que faltan en el servidor, verificados por hash
+ 10. archivo_verificar  t2_28_archivo_verificar.py  la integridad de esos PDF en el servidor (solo lectura)
 
 POR QUE UN SOLO ORQUESTADOR: hasta hoy cada paso era una Tarea programada
 distinta o se corria a mano, y un paso que fallaba en silencio dejaba a los de
@@ -68,6 +71,11 @@ PASOS = [
     # por hash. Va ULTIMO a proposito: un lote que falle no debe frenar el catalogo,
     # y el propio t2_19 reindexa al terminar (archivo_indexar_cli.php --solo-pdf).
     ("pdfs",       ["t2_19_subir_pdfs.py", "--ejecutar"],          "PDF de orden que faltan en el servidor"),
+    # T2.28.17f (2026-09-30): despues de subir, medir. La integridad de cada PDF
+    # del Archivo en el servidor (solo lectura) y cuantas filas no tienen PDF;
+    # InspectorBot avisa si algo sube. Sale con 0 aunque haya problemas: es una
+    # medicion, no una compuerta (un PDF roto no debe poner en FALLO el nocturno).
+    ("archivo_verificar", ["t2_28_archivo_verificar.py"],          "integridad de los PDF del Archivo en el servidor"),
 ]
 
 

@@ -108,6 +108,10 @@ ARCHIVOS = [
     # requieren Emision.php, envio.php y correos.php: sin ellos, ninguna OT se
     # puede emitir.
     "nucleo/EnvioZonas.php", "nucleo/Correo.php",
+    # T2.28.11 (30-sep-2026): el enlace a Parts Town. Lo requieren catalogos.php
+    # y pendientes.php, y partstown.js lo carga el formulario antes que app.js.
+    # partstown_marcas.json no se sirve por web (nucleo/.htaccess).
+    "nucleo/PartsTown.php", "nucleo/partstown_marcas.json", "partstown.js",
     # El diccionario único (vocabulario SAP, ola 1, 2026-09-24): lo leen
     # nucleo/Vocabulario.php y termino() de la estación. Sin él, Vocabulario::t()
     # lanza y la pantalla no se dibuja (I-7): van siempre juntos con Ui.php y

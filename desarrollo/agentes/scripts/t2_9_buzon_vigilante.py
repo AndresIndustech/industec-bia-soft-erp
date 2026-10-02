@@ -293,6 +293,20 @@ def espejar_produccion() -> bool:
     return True
 
 
+# Las lineas de la salida de t2_6 que van al registro del vigilante, por su
+# comienzo. Las dos de resumen (antes «casos vigentes», vocabulario unico del
+# 24-sep-2026): si cambian en t2_6, se cambian aqui. T2.28.8 (30-sep): tambien lo
+# que paso con las decisiones de la administracion en el buzon -- las aplicadas
+# («decisiones aplicadas: ...») y los «AVISO:» (no se pudieron leer o anotar,
+# rechazadas); sin esto un SSH caido o una decision imposible pasaban en silencio.
+PREFIJOS_DEL_LECTOR = ("ordenes en el buzon", "ordenes eliminadas", "decisiones aplicadas", "AVISO")
+
+
+def lineas_del_lector(salida: str) -> list[str]:
+    """De la salida de t2_6, solo lo que se registra (pura: la prueba la llama)."""
+    return [l.strip() for l in (salida or "").splitlines() if l.startswith(PREFIJOS_DEL_LECTOR)]
+
+
 def barrer_y_empujar(env: dict, dias: int) -> bool:
     """Corre el lector verificado y, si el resultado cambió, lo manda."""
     antes = hashlib.sha256(SALIDA.read_bytes()).hexdigest() if SALIDA.is_file() else ""
@@ -305,11 +319,8 @@ def barrer_y_empujar(env: dict, dias: int) -> bool:
             log(f"   {linea}")
         return False
 
-    for linea in (r.stdout or "").splitlines():
-        # Las dos lineas de resumen de t2_6 (antes «casos vigentes», vocabulario unico del
-        # 24-sep-2026): si cambian alla, se cambian aqui.
-        if linea.startswith(("ordenes en el buzon", "ordenes eliminadas")):
-            log(f"   {linea.strip()}")
+    for linea in lineas_del_lector(r.stdout):
+        log(f"   {linea}")
 
     if not SALIDA.is_file():
         log("ERROR: el lector no dejó el archivo de casos")

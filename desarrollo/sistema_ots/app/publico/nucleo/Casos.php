@@ -86,6 +86,25 @@ final class Casos
     }
 
     /**
+     * La clave con la que el robot resuelve el local de una orden: la PRIMERA
+     * palabra del texto de SAP («V090 SUPER AKI LA JOYA GYE» → «V090»), en
+     * mayúsculas y sin nada que no sea letra o número. Es la misma cuenta que
+     * `t2_6_imap_avisos.py` (`clave(restaurante.split()[0])`): si divergen, un
+     * alias que la administración aprueba aquí nunca calzaría allá (T2.28.8).
+     *
+     * Solo vale si tiene forma de código de local (1-3 letras, 2-4 cifras, EC
+     * opcional): una primera palabra como «KFC» mandaría a un solo local todas
+     * las órdenes que empiecen así. En ese caso devuelve '' y no se identifica
+     * desde el buzón.
+     */
+    public static function claveLocalSap(string $texto): string
+    {
+        $primera = preg_split('/\s+/', trim($texto))[0] ?? '';
+        $clave = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $primera));
+        return preg_match('/^[A-Z]{1,3}[0-9]{2,4}(EC)?$/', $clave) ? $clave : '';
+    }
+
+    /**
      * ¿Se fusiona el catálogo de prueba? Solo en el sitio de pruebas
      * (`Emision::sitioDePruebas()`: que una zona tenga el envío real activo
      * desde el 29-sep no lo cambia, las cuentas de prueba siguen emitiendo

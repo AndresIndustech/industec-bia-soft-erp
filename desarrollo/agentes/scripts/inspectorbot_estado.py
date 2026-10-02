@@ -49,6 +49,7 @@ CASOS = CATALOGOS / "casos_sap.json"
 CASOS_TMP = CATALOGOS / "casos_sap.json.tmp"
 ATENCIONES = CATALOGOS / "atenciones.json"
 NOCTURNO = SALIDAS / "estado_nocturno.json"
+ARCHIVO = SALIDAS / "estado_archivo.json"      # T2.28.17f: t2_28_archivo_verificar.py
 ESTADO_VIGILANTE = CONFIG / "vigilante_estado.json"
 ESPEJO = RESPALDOS / "_ORIGEN_SISTEMA"
 MANIFIESTOS = ESPEJO / "_manifiestos"
@@ -389,7 +390,10 @@ def _leer_cola(ruta: Path, bytes_max: int = 262144) -> list[str]:
 def bloque_registro(ruta: Path | None) -> dict:
     vacio = {"lineas": [], "conexiones_perdidas": 0, "novedades": 0, "arranques": 0,
              "errores": 0, "ultimo_empuje": None, "ultimo_empuje_hora": None,
-             "ultima_novedad": None, "ruta": ruta}
+             "ultima_novedad": None, "ruta": ruta,
+             "rechazos_decision": 0, "ultimo_rechazo": None, "ultimo_rechazo_hora": None,
+             "racha_lectura_decisiones": 0, "ultimo_fallo_decisiones": None,
+             "decisiones_sin_aplicar": None}
     if ruta is None:
         return vacio
 
@@ -407,6 +411,14 @@ def bloque_registro(ruta: Path | None) -> dict:
     corte = ahora() - timedelta(hours=24)
     lineas, cp, nov, arr, err = [], 0, 0, 0, 0
     ultimo_empuje = ultimo_empuje_hora = ultima_novedad = None
+    # Lo que t2_6 dice de las decisiones de la administradora (T2.28.8). Salen
+    # como «AVISO: decision…» / «AVISO: decisiones…» y t2_9 las registra; hasta el
+    # 2026-10-01 aquí solo se contaban los «ERROR», así que un SSH caído barrido
+    # tras barrido o una decisión rechazada que pide «avisa a Andrés» no
+    # levantaba nada, aunque el comentario de t2_6 decía que InspectorBot las contaba.
+    rechazos, ultimo_rechazo, ultimo_rechazo_hora = 0, None, None
+    racha, ultimo_fallo, falla_este_barrido = 0, None, False
+    sin_aplicar = linea_sin_marca = None
 
     for cruda in crudas:
         m = LINEA.match(cruda)
@@ -425,6 +437,24 @@ def bloque_registro(ruta: Path | None) -> dict:
             continue
         if tipo == "error":
             err += 1
+        # t2_9 sangra con tres espacios lo que viene del lector: se compara sin ellos.
+        limpio = texto.strip()
+        if limpio.startswith("AVISO: decision RECHAZADA"):
+            rechazos += 1
+            ultimo_rechazo, ultimo_rechazo_hora = limpio, cuando
+        elif limpio.startswith("AVISO: decisiones de la administracion: no se pud"):
+            # «no se pudieron leer» o «no se pudo anotar»: el servidor no contestó.
+            falla_este_barrido, ultimo_fallo = True, limpio
+        elif limpio.startswith("AVISO") and "SOLO LECTURA en este equipo" in limpio:
+            linea_sin_marca = limpio
+        elif limpio.startswith("ordenes en el buzon"):
+            # La última línea de cada barrido: con ella se cierra la cuenta de
+            # «barridos seguidos con el servidor sin contestar», y lo de «falta la
+            # marca» refleja el ÚLTIMO barrido (agregada la marca, la alerta se
+            # va en el barrido siguiente, no a las 24 h).
+            racha = racha + 1 if falla_este_barrido else 0
+            falla_este_barrido = False
+            sin_aplicar, linea_sin_marca = linea_sin_marca, None
         if "conexión perdida" in texto or "conexion perdida" in texto:
             cp += 1
         if " EXISTS" in texto or " EXPUNGE" in texto:
@@ -441,7 +471,11 @@ def bloque_registro(ruta: Path | None) -> dict:
     datos = {"lineas": lineas, "conexiones_perdidas": cp, "novedades": nov,
              "arranques": arr, "errores": err, "ultimo_empuje": ultimo_empuje,
              "ultimo_empuje_hora": ultimo_empuje_hora,
-             "ultima_novedad": ultima_novedad, "ruta": ruta}
+             "ultima_novedad": ultima_novedad, "ruta": ruta,
+             "rechazos_decision": rechazos, "ultimo_rechazo": ultimo_rechazo,
+             "ultimo_rechazo_hora": ultimo_rechazo_hora,
+             "racha_lectura_decisiones": racha, "ultimo_fallo_decisiones": ultimo_fallo,
+             "decisiones_sin_aplicar": sin_aplicar}
     _cache_log.update(ruta=ruta, sello=sello, datos=datos)
     return datos
 
@@ -675,9 +709,42 @@ def bloque_nocturno(win: dict) -> dict:
     return base
 
 
+def bloque_archivo() -> dict:
+    """La integridad de los PDF del Archivo en el servidor (T2.28.17f), que el
+    último paso del nocturno mide cada noche. Lo que importa es la tendencia:
+    un PDF con problema o una fila más sin PDF que la noche anterior."""
+    datos, err = leer_json(ARCHIVO)
+    base = {"error": None if err == "no existe todavía" else err, "fecha": None,
+            "total": None, "integros": None, "con_problema": 0, "sin_pdf": None,
+            "sin_pdf_antes": None, "sin_pdf_app": 0, "problemas": [], "problemas_truncados": False,
+            "error_medicion": None, "error_medicion_cuando": None}
+    if datos is None:
+        return base
+    # Una medición que no se pudo hacer (SSH colgado) no borra la última cifra
+    # buena: queda en `ultimo_error`. Cuenta solo si es POSTERIOR a esa cifra.
+    ue = datos.get("ultimo_error") or {}
+    ue_cuando = utc_a_local(ue.get("fecha_utc"))
+    medida = utc_a_local(datos.get("fecha_utc"))
+    if ue_cuando is not None and (medida is None or ue_cuando > medida):
+        base.update({"error_medicion": str(ue.get("error") or "sin detalle"), "error_medicion_cuando": ue_cuando})
+    antes = (datos.get("anterior") or {}).get("sin_pdf")
+    base.update({"fecha": utc_a_local(datos.get("fecha_utc")), "total": datos.get("total"),
+                 "integros": datos.get("integros"), "con_problema": datos.get("con_problema") or 0,
+                 "sin_pdf": datos.get("sin_pdf"), "sin_pdf_antes": antes,
+                 "sin_pdf_app": int((datos.get("sin_pdf_por_origen") or {}).get("APP") or 0),
+                 "problemas": datos.get("problemas") or [],
+                 "problemas_truncados": bool(datos.get("problemas_truncados"))})
+    return base
+
+
 # ==============================================================================
 # 6. Las alertas: qué está mal, ordenado por gravedad
 # ==============================================================================
+# Barridos seguidos en que el servidor no contesta antes de alertar: uno suelto es
+# el SSH intermitente de Hostinger (T2.28.18); tres seguidos ya es un problema.
+RACHA_LECTURA_DECISIONES = 3
+
+
 def calcular_alertas(e: dict) -> list[dict]:
     """La lista de lo que hay que mirar. Es el corazón de la pantalla: sin esto
     serían cifras bonitas que nadie sabe interpretar."""
@@ -754,6 +821,74 @@ def calcular_alertas(e: dict) -> list[dict]:
             f"logs\\saneamiento.lock es de {hace_cuanto(noc['candado_huerfano'])}. "
             "Una corrida murió sin soltarlo.",
             "Se toma por abandonado a las 6 h y la siguiente corrida lo pisa.")
+
+    # T2.28.17f: el 23-sep el Archivo ofrecía «Ver» sobre PDF que no estaban o no
+    # se abrían, y nadie se enteró hasta abrirlos. Estas dos alertas son para que
+    # la próxima vez se sepa a la mañana siguiente.
+    arc = e["archivo"]
+    if arc["error_medicion"]:
+        add(MEDIO, "No se pudo medir el Archivo en la última corrida",
+            f"{hace_cuanto(arc['error_medicion_cuando'])}: {arc['error_medicion'][:160]}. "
+            + (f"La última cifra buena es de {hace_cuanto(arc['fecha'])}." if arc["fecha"] else "No hay ninguna cifra todavía."),
+            "Es una medición de solo lectura y no frena el nocturno. Si se repite varias noches, "
+            "mira el SSH en logs\\ssh_llamadas.csv.")
+    if arc["error"]:
+        add(MEDIO, "No se puede leer la verificación del Archivo",
+            f"estado_archivo.json {arc['error']}", "")
+    elif arc["fecha"] is not None:
+        if arc["con_problema"]:
+            cuales = ", ".join(f"{p.get('ot')} ({p.get('motivo')})" for p in arc["problemas"][:3])
+            add(MEDIO, f"{fmt(arc['con_problema'])} PDF del Archivo con problema en el servidor",
+                f"Medido {hace_cuanto(arc['fecha'])}: {cuales}. La gente ve «Ver» y el "
+                "PDF no abre o no es el del índice.",
+                ("Las primeras " + fmt(len(arc["problemas"])) + " están" if arc["problemas_truncados"]
+                 else "La lista completa está") + " en SALIDAS IA\\OTS\\estado_archivo.json. Si el "
+                "archivo falta, el paso «pdfs» lo vuelve a subir desde la estación; si "
+                "está pero no cuadra, no se pisa solo (I-11): hay que mirarlo a mano.")
+        # El total sin PDF NO alerta: son OT del formulario viejo cuyo PDF el
+        # robot no baja (no son de un caso pendiente) y crece 5 a 30 por día; una
+        # alerta por cada subida avisaba todas las mañanas (visto el 2026-10-01:
+        # «de 173 a 200»). Lo que sí es falla: una OT que emitió ESTA app y no
+        # tiene su PDF en el servidor.
+        if arc["sin_pdf_app"]:
+            add(MEDIO, f"{fmt(arc['sin_pdf_app'])} OT emitidas por la app no tienen su PDF en el servidor",
+                "El técnico las ve en el Archivo con «Ver» y no abren. La app guarda el PDF al emitir.",
+                "Mira el registro de errores del sitio y corre archivo_indexar_cli.php para confirmar.")
+        # Solo si el nocturno dice que anduvo: si falló o no corrió, ya hay una
+        # alerta más grave arriba y esta repetiría lo mismo. Tampoco si la
+        # medición de la última corrida FALLÓ (`error_medicion`): el paso sí corrió
+        # y la alerta de arriba ya lo dice; esta culpaba a un `--solo` que no
+        # existió y mandaba a buscar una causa falsa (revisión del 2026-10-01).
+        if antiguedad_h(arc["fecha"]) > NOCTURNO_VIEJO_HORAS and noc["ok"] is True \
+                and antiguedad_h(noc["fin"]) <= NOCTURNO_VIEJO_HORAS and not arc["error_medicion"]:
+            add(MEDIO, "El Archivo lleva más de un día sin verificarse",
+                f"Última medición {hace_cuanto(arc['fecha'])}, aunque el nocturno sí corrió.",
+                "La última corrida se lanzó sin el paso «archivo_verificar» (--solo).")
+
+    # T2.28.8: lo que el lector del buzón (t2_6) no pudo hacer con las decisiones
+    # de la administradora sobre las órdenes sin local. Revisión del 2026-10-01:
+    # t2_6 las imprime y t2_9 las registra, pero aquí solo se contaban los «ERROR»,
+    # así que ninguna de las tres cosas levantaba nada.
+    if reg.get("decisiones_sin_aplicar"):
+        add(MEDIO, "El robot no aplica las decisiones de la administración",
+            "El último barrido corrió el lector sin la marca de la estación: lo que la "
+            "administradora decide en el buzón sobre las órdenes sin local no se aplica.",
+            "Agrega ROBOT_APLICA_DECISIONES=1 a config\\.env. No hace falta reiniciar: el lector "
+            "se vuelve a lanzar en cada barrido.")
+    if reg.get("racha_lectura_decisiones", 0) >= RACHA_LECTURA_DECISIONES:
+        add(MEDIO, f"El lector no pudo leer las decisiones de la administración en {fmt(reg['racha_lectura_decisiones'])} barridos seguidos",
+            f"{(reg['ultimo_fallo_decisiones'] or '')[len('AVISO: '):][:220]}",
+            "Casi siempre es el SSH a Hostinger (mira logs\\ssh_llamadas.csv). Mientras tanto se usa la "
+            "última lista de «fuera de alcance» y las decisiones nuevas esperan.")
+    if reg.get("rechazos_decision"):
+        n_rech = reg["rechazos_decision"]
+        add(MEDIO, f"{fmt(n_rech)} "
+                   + ("decisión de la administración rechazada" if n_rech == 1 else "decisiones de la administración rechazadas")
+                   + " por el robot (24 h)",
+            f"La última, {hace_cuanto(reg['ultimo_rechazo_hora'])}: "
+            f"{(reg['ultimo_rechazo'] or '')[len('AVISO: '):][:220]}",
+            "La administradora ve el motivo en el buzón y puede volver a decidir. Si el motivo dice "
+            "«avisa a Andrés», es un choque con un alias que ya existe (I-11): hay que mirarlo.")
 
     if esp["ultimo_espejo"] is None:
         add(GRAVE, "El espejo de producción no ha corrido nunca",
@@ -859,6 +994,7 @@ def instantanea(forzar: bool = False) -> dict:
         "atenciones": bloque_atenciones(),
         "espejo": bloque_espejo(),
         "nocturno": bloque_nocturno(win),
+        "archivo": bloque_archivo(),
         "tareas": win.get("tareas") or [],
         "disco": {"libre_gb": libre / 2**30 if libre else None,
                   "usado_gb": (disco.get("usado") or 0) / 2**30},
@@ -879,6 +1015,13 @@ def _json_seguro(o):
 
 
 def main() -> int:
+    # Por tubería o redirigida, la consola de Windows escribe en cp1252: un
+    # carácter que no exista ahí (una flecha, un «≤») tumbaba la salida entera,
+    # alertas y --json incluidos. Se reemplaza en vez de reventar.
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except (AttributeError, ValueError):
+        pass
     e = instantanea(forzar=True)
     if "--json" in sys.argv:
         print(json.dumps(e, default=_json_seguro, ensure_ascii=False, indent=2))
@@ -897,6 +1040,11 @@ def main() -> int:
           f"  ·  con {termino('OT_INDUSTEC')} {fmt(e['atenciones'].get('con_atencion'))}"
           f"  ·  {termino('ESPERA_INFORME', 2)} {fmt(e['atenciones'].get('sin_atencion'))}")
     print(f"  Espejo    {fmt(esp['total'])} PDF  ·  último {hace_cuanto(esp['ultimo_espejo'])}")
+    arc = e["archivo"]
+    if arc["fecha"] is not None:
+        print(f"  Archivo   {fmt(arc['integros'])}/{fmt(arc['total'])} PDF íntegros  ·  "
+              f"{fmt(arc['con_problema'])} con problema  ·  {fmt(arc['sin_pdf'])} sin PDF"
+              f"  ·  medido {hace_cuanto(arc['fecha'])}")
     print(f"\n  {len(e['alertas'])} alertas:")
     for x in e["alertas"]:
         print(f"    [{x['gravedad']:>5}] {x['titulo']}")

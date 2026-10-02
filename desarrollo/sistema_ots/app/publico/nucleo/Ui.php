@@ -555,13 +555,56 @@ final class Ui
             'ȏ' => 'o', 'ȑ' => 'r', 'ȓ' => 'r', 'ȕ' => 'u', 'ȗ' => 'u', 'ș' => 's',
             'ț' => 't', 'ȟ' => 'h', 'ȧ' => 'a', 'ȩ' => 'e', 'ȫ' => 'o', 'ȭ' => 'o',
             'ȯ' => 'o', 'ȱ' => 'o', 'ȳ' => 'y',
+            // Latin Extended Additional (U+1E00–U+1EFF: ẽ, ạ, ế…), generada desde la
+            // descomposición NFD como todo lo demás. Faltaba: `Ẽxtra-ạ1` daba
+            // `xtra-1` aquí y `extra-a1` en el navegador (revisión del 2026-10-01).
+            'ḁ' => 'a', 'ḃ' => 'b', 'ḅ' => 'b', 'ḇ' => 'b', 'ḉ' => 'c', 'ḋ' => 'd',
+            'ḍ' => 'd', 'ḏ' => 'd', 'ḑ' => 'd', 'ḓ' => 'd', 'ḕ' => 'e', 'ḗ' => 'e',
+            'ḙ' => 'e', 'ḛ' => 'e', 'ḝ' => 'e', 'ḟ' => 'f', 'ḡ' => 'g', 'ḣ' => 'h',
+            'ḥ' => 'h', 'ḧ' => 'h', 'ḩ' => 'h', 'ḫ' => 'h', 'ḭ' => 'i', 'ḯ' => 'i',
+            'ḱ' => 'k', 'ḳ' => 'k', 'ḵ' => 'k', 'ḷ' => 'l', 'ḹ' => 'l', 'ḻ' => 'l',
+            'ḽ' => 'l', 'ḿ' => 'm', 'ṁ' => 'm', 'ṃ' => 'm', 'ṅ' => 'n', 'ṇ' => 'n',
+            'ṉ' => 'n', 'ṋ' => 'n', 'ṍ' => 'o', 'ṏ' => 'o', 'ṑ' => 'o', 'ṓ' => 'o',
+            'ṕ' => 'p', 'ṗ' => 'p', 'ṙ' => 'r', 'ṛ' => 'r', 'ṝ' => 'r', 'ṟ' => 'r',
+            'ṡ' => 's', 'ṣ' => 's', 'ṥ' => 's', 'ṧ' => 's', 'ṩ' => 's', 'ṫ' => 't',
+            'ṭ' => 't', 'ṯ' => 't', 'ṱ' => 't', 'ṳ' => 'u', 'ṵ' => 'u', 'ṷ' => 'u',
+            'ṹ' => 'u', 'ṻ' => 'u', 'ṽ' => 'v', 'ṿ' => 'v', 'ẁ' => 'w', 'ẃ' => 'w',
+            'ẅ' => 'w', 'ẇ' => 'w', 'ẉ' => 'w', 'ẋ' => 'x', 'ẍ' => 'x', 'ẏ' => 'y',
+            'ẑ' => 'z', 'ẓ' => 'z', 'ẕ' => 'z', 'ẖ' => 'h', 'ẗ' => 't', 'ẘ' => 'w',
+            'ẙ' => 'y', 'ẛ' => 'ſ', 'ạ' => 'a', 'ả' => 'a', 'ấ' => 'a', 'ầ' => 'a',
+            'ẩ' => 'a', 'ẫ' => 'a', 'ậ' => 'a', 'ắ' => 'a', 'ằ' => 'a', 'ẳ' => 'a',
+            'ẵ' => 'a', 'ặ' => 'a', 'ẹ' => 'e', 'ẻ' => 'e', 'ẽ' => 'e', 'ế' => 'e',
+            'ề' => 'e', 'ể' => 'e', 'ễ' => 'e', 'ệ' => 'e', 'ỉ' => 'i', 'ị' => 'i',
+            'ọ' => 'o', 'ỏ' => 'o', 'ố' => 'o', 'ồ' => 'o', 'ổ' => 'o', 'ỗ' => 'o',
+            'ộ' => 'o', 'ớ' => 'o', 'ờ' => 'o', 'ở' => 'o', 'ỡ' => 'o', 'ợ' => 'o',
+            'ụ' => 'u', 'ủ' => 'u', 'ứ' => 'u', 'ừ' => 'u', 'ử' => 'u', 'ữ' => 'u',
+            'ự' => 'u', 'ỳ' => 'y', 'ỵ' => 'y', 'ỷ' => 'y', 'ỹ' => 'y',
     ];
+
+    /** La tabla, y además las marcas combinantes sueltas (U+0300–U+036F): el
+        texto pegado desde un PDF suele venir en NFD, `México` como `Me` +
+        `´` + `xico`, y la tabla solo conoce las letras ya compuestas. El
+        navegador las quita con `normalize('NFD')`; sin esto `México` daba
+        `me-xico` aquí y `mexico` allá (revisión del 2026-10-01). `/u` devuelve
+        null con un UTF-8 inválido: entonces se deja el texto como estaba. */
+    private static function quitarMarcas(string $s): string
+    {
+        $s = strtr($s, self::SIN_TILDE);
+        return preg_replace('/[\x{0300}-\x{036F}]/u', '', $s) ?? $s;
+    }
 
     public static function normalizarBusqueda(?string $s): string
     {
-        $s = mb_strtolower((string) $s, 'UTF-8');
-        $s = strtr($s, self::SIN_TILDE);
+        $s = self::quitarMarcas(mb_strtolower((string) $s, 'UTF-8'));
         return preg_replace('/[^a-z0-9]+/', '', $s) ?? '';
+    }
+
+    /** Minúsculas y sin tildes con la MISMA tabla, pero sin borrar lo demás:
+        para quien necesita los separadores (el slug de Parts Town, T2.28.11,
+        que en JavaScript hace `normalize('NFD')` igual que `Busqueda`). */
+    public static function sinTildes(?string $s): string
+    {
+        return self::quitarMarcas(mb_strtolower((string) $s, 'UTF-8'));
     }
 
     /** '000010352936' y '10352936' son el mismo aviso: se quita el cero inicial

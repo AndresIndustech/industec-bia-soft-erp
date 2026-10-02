@@ -124,7 +124,11 @@ def cargar_catalogo_buzon() -> tuple:
     d = json.loads(ruta.read_text(encoding="utf-8"))
     # El catalogo se regenera cada 3 horas: todo cotejo declara la hora que uso,
     # porque con la foto de las 13:30 el conteo daba 33 y con la de las 16:44, 31.
-    return {c["aviso"]: c for c in d["datos"]}, d["generado"]
+    # T2.28.8: las ordenes de un local que la administracion marco fuera de
+    # alcance ya no estan en `datos`; sin esta lista el cotejo las pintaba en
+    # rojo como «nadie la esta viendo», lo contrario de lo que ella decidio.
+    fuera = {str(c.get("aviso")) for c in (d.get("revisar") or {}).get("fuera_alcance") or [] if c.get("aviso")}
+    return {c["aviso"]: c for c in d["datos"]}, d["generado"], fuera
 
 
 def cargar_base(env: dict) -> tuple:
@@ -254,7 +258,7 @@ def main():
         sys.exit(f"ABORTADO: no existe {ruta}")
     env = cargar_env()
     sap = leer_export(ruta)
-    buzon, generado = cargar_catalogo_buzon()
+    buzon, generado, fuera_alcance = cargar_catalogo_buzon()
     db_avisos, cobertura, ots, locales = cargar_base(env)
     hoy = datetime.date.today()
 
@@ -286,6 +290,7 @@ def main():
             "zona": lm.get("zona") or (b or {}).get("zona") or "",
             "cadena": lm.get("cadena") or (b or {}).get("cadena") or "",
             "en_buzon": "SI" if b else "NO",
+            "fuera_alcance": not b and av in fuera_alcance,
             "historico": ", ".join(vistas),
             "estatus_export_anterior": db_avisos.get(av) or "",
             "estado_gestion": (gestion.get(av) or {}).get("estado") or "",
@@ -308,6 +313,9 @@ def main():
     print(f"\nordenes abiertas en SAP : {len(filas)}")
     print(f"  capturadas por el buzon : {en_buzon}")
     print(f"  NO capturadas ......... : {fuera}")
+    n_fuera_alcance = sum(1 for f in filas if f["fuera_alcance"])
+    if n_fuera_alcance:
+        print(f"    de esas, fuera de alcance por decision de la administracion: {n_fuera_alcance}")
 
     # I-12: lo que cae fuera de la cobertura del catalogo no es un error
     if cobertura["fmax"]:
@@ -379,6 +387,25 @@ def main():
     print(f"\n{len(filas)} filas procesadas.")
 
 
+def accion_de(f: dict) -> tuple:
+    """(que hay que hacer, color) de una orden abierta en SAP. El orden importa:
+    lo que ya se atendio no se manda a asignar, y lo que nadie esta viendo va
+    primero que cualquier tramite."""
+    if f["ot_cierre"]:
+        return f"Cerrar en SAP: ya tiene {termino('OT_CIERRE')} ({termino('ATENDIDA')})", "verde"
+    if f["historico"]:
+        return (f"Verificar: hay {termino('OT_INDUSTEC')} emitida y la orden sigue abierta en SAP",
+                "amarillo" if f["en_buzon"] == "NO" else "verde")
+    if f["estado_gestion"] == "ASIGNADO":
+        return f"{termino('ASIGNADA').capitalize()}: ya tiene tecnico", "verde"
+    if f.get("fuera_alcance"):
+        return ("Fuera de alcance: la administración decidió que el local no es de nuestras "
+                "zonas. Cerrarla en SAP indicándolo", "amarillo")
+    if f["en_buzon"] == "NO":
+        return "REVISAR: no entro por el buzon, nadie la esta viendo", "rojo"
+    return "Asignar tecnico", "verde"
+
+
 def escribir_excel(filas: list, origen: Path, generado: str):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -397,24 +424,10 @@ def escribir_excel(filas: list, origen: Path, generado: str):
     rojo = PatternFill("solid", fgColor="FCE4E4")
     amarillo = PatternFill("solid", fgColor="FFF2CC")
     verde = PatternFill("solid", fgColor="E2EFDA")
+    colores = {"rojo": rojo, "amarillo": amarillo, "verde": verde}
     for f in sorted(filas, key=lambda x: (-(x["dias"] or 0), x["aviso"])):
-        # El orden importa: lo que ya se atendio no se manda a asignar, y lo que
-        # nadie esta viendo va primero que cualquier tramite.
-        if f["ot_cierre"]:
-            accion = f"Cerrar en SAP: ya tiene {termino('OT_CIERRE')} ({termino('ATENDIDA')})"
-            relleno = verde
-        elif f["historico"]:
-            accion = f"Verificar: hay {termino('OT_INDUSTEC')} emitida y la orden sigue abierta en SAP"
-            relleno = amarillo if f["en_buzon"] == "NO" else verde
-        elif f["estado_gestion"] == "ASIGNADO":
-            accion = f"{termino('ASIGNADA').capitalize()}: ya tiene tecnico"
-            relleno = verde
-        elif f["en_buzon"] == "NO":
-            accion = "REVISAR: no entro por el buzon, nadie la esta viendo"
-            relleno = rojo
-        else:
-            accion = "Asignar tecnico"
-            relleno = verde
+        accion, color = accion_de(f)
+        relleno = colores[color]
         ws.append([f["aviso"], str(f["fecha"] or ""), f["dias"], f["local"], f["local_nombre"],
                    f["zona"], f["cadena"], f["equipo"], f["orden_sap"], f["en_buzon"],
                    # El estado de la base (ASIGNADO...) se muestra con su termino del diccionario;

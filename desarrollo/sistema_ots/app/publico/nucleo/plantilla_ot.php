@@ -72,6 +72,9 @@ $atiempo = strtoupper(str_replace('Í', 'I', mb_strtoupper(trim($d['atiempo'])))
 <div class="box">
   <b>ID-ORDEN-INDUSTEC:</b> <?= $e($d['id']) ?><br>
   <b>ID-ORDEN-GRUPOKFC:</b> <?= $e($d['aviso'] !== '' ? $d['aviso'] : 'Sin aviso de SAP') ?><br>
+  <?php if (($d['motivo_sin_aviso'] ?? '') !== ''): ?>
+    <b>Motivo de no tener aviso SAP:</b> <?= $e($d['motivo_sin_aviso']) ?><br>
+  <?php endif; ?>
   <b>Tipo de Trabajo:</b> <?= $e(ucfirst(strtolower($d['modulo']))) ?><?= $d['dia'] ? ' · día ' . $e($d['dia']) : '' ?><br>
   <b>Fecha de Atención:</b> <?= $e($d['fecha']) ?><br>
   <b>Cliente:</b> <?= $e($d['cliente']) ?><br>
@@ -97,6 +100,7 @@ $atiempo = strtoupper(str_replace('Í', 'I', mb_strtoupper(trim($d['atiempo'])))
       <?php endif; ?>
       <b>Código Activo Fijo:</b> <?= $e($q['codigo_activo'] ?: 'sin dato en el maestro') ?><br>
       <?php if ($q['ubicacion']): ?><b>Ubicación técnica:</b> <?= $e($q['ubicacion']) ?><br><?php endif; ?>
+      <?php if (!empty($q['area'])): ?><b>Área:</b> <?= $e($q['area']) ?><br><?php endif; ?>
       <b>Estado del Equipo:</b> <?= $e($q['estado'] ?: 'sin dato') ?>
       <?php if ($q['obs']): ?><br><b>Observación:</b> <?= $e($q['obs']) ?><?php endif; ?>
     </div>
@@ -114,6 +118,43 @@ $atiempo = strtoupper(str_replace('Í', 'I', mb_strtoupper(trim($d['atiempo'])))
 
 <div class="h2">REPUESTOS</div>
 <div class="box"><div class="text"><?= nl2br($e($d['repuestos'])) ?></div></div>
+
+<?php /* El trabajo que NO quedó concluido y lo que hace falta para terminarlo
+        (2026-10-01). El técnico lo escribe en el formulario («¿Quedó concluido
+        el trabajo?» -> «No»): qué encontró, qué repuesto hace falta y si el
+        equipo quedó deshabilitado. Va aparte de REPUESTOS, que son los USADOS:
+        juntarlos haría que «No se usaron repuestos» pareciera decir lo mismo que
+        «hace falta uno». t1_7_extractor_pdf.py lo reconoce como sección propia,
+        así no se mezcla con `repuestos` en la base de la estación. */ ?>
+<?php if (!empty($d['pendiente'])): $pn = $d['pendiente']; ?>
+<div class="h2">TRABAJO NO CONCLUIDO</div>
+<div class="box">
+  <?php if ($pn['sin_detalle']): ?>
+    El técnico indicó que el trabajo no quedó concluido y no escribió más detalle.
+  <?php else: ?>
+    <?php if ($pn['equipo'] !== ''): ?><b>Equipo:</b> <?= $e($pn['equipo']) ?><br><?php endif; ?>
+    <?php if ($pn['falla'] !== ''): ?><b>Falla encontrada:</b> <?= $e($pn['falla']) ?><br><?php endif; ?>
+    <?php if ($pn['diagnostico'] !== ''): ?>
+      <b>Diagnóstico:</b><br>
+      <div class="text"><?= nl2br($e($pn['diagnostico'])) ?></div>
+    <?php endif; ?>
+    <b>Equipo deshabilitado:</b> <?= $pn['deshabilitado'] ? 'SI' : 'NO' ?><br>
+    <b>Repuestos que hacen falta:</b>
+    <?php if ($pn['partes']): ?>
+      <?php /* Un repuesto por línea, con nl2br como el resto de los textos
+               libres: es lo que dompdf ya dibuja bien en producción. */
+      $lineasPartes = array_map(static fn(array $pt): string => '- ' . $pt['cantidad'] . ' × ' . $pt['descripcion']
+          . ($pt['numero_parte'] !== '' ? ' · n.º de parte: ' . $pt['numero_parte'] : '')
+          . ($pt['codigo'] !== '' ? ' · código: ' . $pt['codigo'] : ''), $pn['partes']); ?>
+      <div class="text"><?= nl2br($e(implode("\n", $lineasPartes))) ?></div>
+    <?php elseif ($pn['texto'] !== ''): ?>
+      <div class="text"><?= nl2br($e($pn['texto'])) ?></div>
+    <?php else: ?>
+      sin repuestos indicados
+    <?php endif; ?>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <?php if (($d['con_proveedor'] ?? '') !== ''): ?>
 <div class="h2">TRABAJO CON OTRO PROVEEDOR</div>

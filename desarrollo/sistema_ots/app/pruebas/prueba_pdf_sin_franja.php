@@ -40,7 +40,14 @@ require_once __DIR__ . '/../publico/nucleo/Emision.php';
 
 $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                                                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
-$pdo->exec('CREATE TABLE ot_fotos (foto_id INTEGER PRIMARY KEY, envio_uuid TEXT, ruta TEXT, orden_n INTEGER)');
+// equipo_n y momento: Emision::html() los lee desde T2.28.7 (las fotos por equipo);
+// la tabla de esta prueba no los tenía y fallaba antes de comprobar nada.
+$pdo->exec('CREATE TABLE ot_fotos (foto_id INTEGER PRIMARY KEY, envio_uuid TEXT, ruta TEXT, orden_n INTEGER, equipo_n INTEGER, momento TEXT)');
+// MariaDB tiene FIELD(); SQLite no. html() ordena las fotos con ella.
+$pdo->sqliteCreateFunction('FIELD', static function ($valor, ...$lista) {
+    $i = array_search($valor, $lista, true);
+    return $i === false ? 0 : $i + 1;
+});
 (new ReflectionProperty(Db::class, 'pdo'))->setValue(null, $pdo);
 
 $fallos = 0;

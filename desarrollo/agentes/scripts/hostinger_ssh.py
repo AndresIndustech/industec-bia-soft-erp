@@ -201,12 +201,18 @@ def _semaforo_sesion(espera_maxima: float = 600.0):
                 pass
 
 
-def _correr(cmd: list[str], timeout: int, env: dict | None, resumen: str) -> subprocess.CompletedProcess:
+def _correr(cmd: list[str], timeout: int, env: dict | None, resumen: str,
+            espera_semaforo: float = 600.0) -> subprocess.CompletedProcess:
     """El unico lugar que de verdad llama a subprocess.run() contra Hostinger:
     cede su turno al semaforo entre procesos, mide cuanto tarda y deja el
     rastro en `ssh_llamadas.csv`, tanto si sale bien como si se cuelga hasta
-    su tiempo limite (T2.28.18a/18b)."""
-    with _semaforo_sesion():
+    su tiempo limite (T2.28.18a/18b).
+
+    `espera_semaforo` (T2.28.8): cuanto esperar un cupo antes de seguir sin el.
+    El lector del buzon (t2_6) consulta el servidor en cada barrido y el
+    vigilante lo mata a los 600 s: con la espera por defecto, una noche con los
+    dos cupos ocupados por el nocturno lo dejaba sin barrer."""
+    with _semaforo_sesion(espera_semaforo):
         t0 = time.monotonic()
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
@@ -356,7 +362,8 @@ def afirmar_solo_lectura(comando: str, escritura_produccion: bool = False) -> No
 
 # --- Transporte -------------------------------------------------------------------
 def ssh_crudo(comando: str, timeout: int = 300, escritura_produccion: bool = False,
-              env: dict | None = None, idempotente: bool = False) -> subprocess.CompletedProcess:
+              env: dict | None = None, idempotente: bool = False,
+              espera_semaforo: float = 600.0) -> subprocess.CompletedProcess:
     """`idempotente=True` (T2.28.18b): SOLO para comandos que repetirlos no
     cambia nada (`mkdir -p`, `ls`, `find`) -- nunca un `UPDATE`. Si el comando
     se cuelga hasta `timeout` o sale con codigo distinto de 0, se reintenta
@@ -372,7 +379,7 @@ def ssh_crudo(comando: str, timeout: int = 300, escritura_produccion: bool = Fal
             time.sleep(esperas[intento - 1])
         ultimo_intento = intento == len(esperas)
         try:
-            r = _correr(cmd, timeout, env, resumen)
+            r = _correr(cmd, timeout, env, resumen, espera_semaforo)
         except subprocess.TimeoutExpired:
             if ultimo_intento:
                 raise
@@ -383,7 +390,8 @@ def ssh_crudo(comando: str, timeout: int = 300, escritura_produccion: bool = Fal
 
 
 def ssh(comando: str, timeout: int = 300, escritura_produccion: bool = False,
-        env: dict | None = None, idempotente: bool = False) -> str:
+        env: dict | None = None, idempotente: bool = False,
+        espera_semaforo: float = 600.0) -> str:
     """Corre un comando en el servidor y devuelve stdout. Levanta ErrorSsh si falla.
 
     `idempotente` se reenvia tal cual a `ssh_crudo()` (T2.28.18b): quien
@@ -392,7 +400,7 @@ def ssh(comando: str, timeout: int = 300, escritura_produccion: bool = False,
     a `ssh_crudo()` directo. Sin este parametro aqui, `t2_19_subir_pdfs.py`
     no podia pasarlo y `ssh()` lo rechazaba con TypeError (detectado corriendo
     la simulacion real el 2026-09-24)."""
-    r = ssh_crudo(comando, timeout, escritura_produccion, env, idempotente)
+    r = ssh_crudo(comando, timeout, escritura_produccion, env, idempotente, espera_semaforo)
     if r.returncode != 0:
         raise ErrorSsh(
             f"ssh fallo (codigo {r.returncode})\n"
@@ -507,7 +515,7 @@ def guion_con_credenciales(cuerpo: str, config_php: str | None = None,
 
 
 def sql_remoto(sql: str, config_php: str | None = None, timeout: int = 300,
-               env: dict | None = None) -> list[list[str]]:
+               env: dict | None = None, espera_semaforo: float = 600.0) -> list[list[str]]:
     """Corre SQL en la base de la app nueva desde el servidor y devuelve las
     filas como listas de texto (TSV, sin cabecera; NULL llega como 'NULL').
 
@@ -519,7 +527,8 @@ def sql_remoto(sql: str, config_php: str | None = None, timeout: int = 300,
         raise ValueError("el SQL no puede contener una linea 'SQLFIN'")
     cuerpo = ("mysql --defaults-extra-file=\"$CNF\" --batch --raw --skip-column-names "
               "\"$BD\" <<'SQLFIN'\n" + sql.rstrip("\n") + "\nSQLFIN\n")
-    salida = ssh(guion_con_credenciales(cuerpo, config_php, env), timeout=timeout, env=env)
+    salida = ssh(guion_con_credenciales(cuerpo, config_php, env), timeout=timeout, env=env,
+                 espera_semaforo=espera_semaforo)
     return [linea.split("\t") for linea in salida.splitlines() if linea != ""]
 
 

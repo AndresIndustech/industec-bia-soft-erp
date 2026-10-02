@@ -249,7 +249,9 @@ $yo = $src('yo.php');
 afirmar('yo.php: la franja depende de la zona de quien entra', str_contains($yo, "Emision::modo(\$u['zona'] ?? null)"), true);
 afirmar('app.js: la OT lleva el modo que la app mostraba al llenarla', str_contains($src('app.js'), 'modo_visto: (YO && YO.emision_modo) || null,'), true);
 afirmar('Emision::modoCaptura lee modo_visto de la carga', str_contains($emi, "['modo_visto'] ?? null"), true);
-afirmar('sw.js subió a v27 por el cambio de app.js', (bool) preg_match("/const VERSION = 'ot-industec-v27'/", $src('sw.js')), true);
+// v27 o más: una subida posterior (v28, T2.28.11) no invalida que esta llegó.
+afirmar('sw.js subió a v27 (o más) por el cambio de app.js',
+        preg_match("/const VERSION = 'ot-industec-v(\d+)'/", $src('sw.js'), $mv) === 1 && (int) $mv[1] >= 27, true);
 $sql = str_replace("\r\n", "\n", (string) file_get_contents(__DIR__ . '/../sql/023_envio_real.sql'));
 afirmar('la 023 nace con las cuatro zonas en PRUEBA (no activa nada)',
         str_contains($sql, "('UIO', 'PRUEBA'), ('LARB', 'PRUEBA'), ('CNLJ', 'PRUEBA'), ('OTRA', 'PRUEBA')"), true);

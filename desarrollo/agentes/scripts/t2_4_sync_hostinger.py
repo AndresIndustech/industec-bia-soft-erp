@@ -206,12 +206,21 @@ def inventario_remoto(env: dict, modulo: str, recientes_min: int = 0):
     remoto = ruta_remota(env, modulo)
     patron, prof = patron_de(modulo)
     ventana = f"-mmin -{int(recientes_min)} " if recientes_min else ""
+    # Con ventana (el disparo del vigilante) el `find` mira tres o cuatro
+    # archivos: uno que tarda 2 minutos esta colgado, no trabajando. Con los 900 s
+    # de siempre, la noche del 2026-10-01 el vigilante se quedo parado 15 minutos
+    # dos veces (00:09 y 00:46) esperando una sesion SSH muerta, sin barrer el
+    # buzon. Tiempo corto y reintento: el comando es de SOLO LECTURA, repetirlo no
+    # cambia nada. El inventario COMPLETO (nocturno) si necesita sus 900 s: hashea
+    # miles de PDF. Los argumentos extra solo se pasan en el caso corto para no
+    # romper a quien sustituya ssh_ejecutar (t2_4_pruebas).
+    tiempos = {"timeout": 120, "idempotente": True} if recientes_min else {"timeout": 900}
     salida = ssh_ejecutar(env, (
         f"cd {shlex.quote(remoto)} 2>/dev/null || exit 7; "
         f"find . -maxdepth {prof} -type f {ventana}-name {shlex.quote(patron)} -printf '%s\\t%P\\n'; "
         f"echo '---SEPARADOR---'; "
         f"find . -maxdepth {prof} -type f {ventana}-name {shlex.quote(patron)} -print0 | xargs -0 -r sha256sum 2>/dev/null || true"),
-        timeout=900)
+        **tiempos)
 
     if "---SEPARADOR---" not in salida:
         raise RuntimeError(f"respuesta inesperada del servidor para {modulo}")

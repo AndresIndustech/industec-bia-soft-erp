@@ -391,7 +391,7 @@ Ui::cabecera($u, 'usuarios.php', [], ['titulo' => 'Usuarios y permisos']);
                 <td data-th="Acciones">
                   <?php if ((int) $x['usuario_id'] === (int) $u['usuario_id']): ?>
                     <span class="sub">eres tú</span>
-                    <?php if ($puedeBitacora): ?> · <a href="bitacora.php?usuario=<?= rawurlencode($x['usuario']) ?>">tu actividad</a><?php endif; ?>
+                    <?php if ($puedeBitacora): ?> · <a href="bitacora.php?usuario=<?= rawurlencode($x['usuario']) . (stripos((string) $x['usuario'], '_prueba') !== false ? '&amp;pruebas=1' : '') ?>">tu actividad</a><?php endif; ?>
                   <?php elseif (!$gestionable): ?>
                     <span class="sub">—</span>
                   <?php else: ?>
@@ -416,7 +416,8 @@ Ui::cabecera($u, 'usuarios.php', [], ['titulo' => 'Usuarios y permisos']);
                         </form>
                       <?php endif; ?>
                       <?php if ($puedeBitacora): ?>
-                        <a class="btn" href="bitacora.php?usuario=<?= rawurlencode($x['usuario']) ?>">Ver actividad</a>
+                        <?php // T2.28.9: la bitácora esconde las cuentas de prueba salvo con la casilla. ?>
+                        <a class="btn" href="bitacora.php?usuario=<?= rawurlencode($x['usuario']) . (stripos((string) $x['usuario'], '_prueba') !== false ? '&amp;pruebas=1' : '') ?>">Ver actividad</a>
                       <?php endif; ?>
                       <form method="post" data-confirma="<?= e($x['activo'] ? '¿Dar de baja a ' . $x['nombre'] . '? No podrá entrar, pero su historial queda intacto.' : '¿Reactivar a ' . $x['nombre'] . '?') ?>" onsubmit="return confirm(this.dataset.confirma)">
                         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">

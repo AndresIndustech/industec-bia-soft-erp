@@ -54,6 +54,7 @@ Uso:
 import argparse
 import collections
 import email
+import email.utils
 import imaplib
 import json
 import re
@@ -66,7 +67,7 @@ import unicodedata
 import urllib.error
 import urllib.request
 from difflib import SequenceMatcher
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import pathlib
 from pathlib import Path
 
@@ -295,15 +296,31 @@ def seleccionar(M, carpeta: str) -> bool:
     return True
 
 
+def es_correo_de_prueba_del_sistema(cuerpo: str) -> bool:
+    """Los correos de PRUEBA que manda la app con la cuenta de envio (T2.29,
+    2026-09-29): la prueba de la cuenta en Correos y la del despacho en lote.
+    Salen desde reclutamiento@ -la misma cuenta que las OT- hacia
+    servicioalcliente@, asi que caen en esta busqueda sin ser un informe de OT.
+    Hasta el 2026-10-01 contaban como «no se pudieron parsear» en cada barrido y
+    InspectorBot decia «4 OT INDUSTEC no se pudieron leer: alguien tiene que
+    abrirlos a mano», que era falso. Se reconocen por lo que dicen ellos mismos
+    en su primera linea («...de B.IA Soft ERP...» y «prueba»): ni un correo de
+    KFC ni uno de un tecnico lo dice. NO se adivina otra cosa: cualquier otro
+    cuerpo sin «nueva OT:» sigue contando como no parseable (I-7)."""
+    inicio = (cuerpo or "").strip()[:200]
+    return "B.IA Soft ERP" in inicio and re.search(r"prueba", inicio, re.I) is not None
+
+
 def leer_informes(M, dias, carpetas=None):
     """Cuerpos de todos los informes de la ventana, en TODAS las carpetas.
 
-    Devuelve (informes, sin_parsear, por_carpeta). Cada informe se lleva su
-    `carpeta`: el numero de mensaje IMAP es relativo a la carpeta abierta, asi
-    que un id sin su carpeta apunta a otro correo -- y bajaria el PDF de otra
-    orden.
+    Devuelve (informes, sin_parsear, por_carpeta, pruebas_sistema). Cada informe
+    se lleva su `carpeta`: el numero de mensaje IMAP es relativo a la carpeta
+    abierta, asi que un id sin su carpeta apunta a otro correo -- y bajaria el
+    PDF de otra orden. `pruebas_sistema` son los correos de prueba de la app
+    (no son OT: ver es_correo_de_prueba_del_sistema).
     """
-    informes, sin_parsear, por_carpeta = [], [], {}
+    informes, sin_parsear, por_carpeta, pruebas_sistema = [], [], {}, []
     for carpeta in (carpetas or CARPETAS):
         if not seleccionar(M, carpeta):
             # Que una carpeta no exista en la cuenta no es un fallo de la
@@ -311,12 +328,77 @@ def leer_informes(M, dias, carpetas=None):
             por_carpeta[carpeta] = None
             continue
         antes = len(informes)
-        leer_carpeta(M, dias, carpeta, informes, sin_parsear)
+        leer_carpeta(M, dias, carpeta, informes, sin_parsear, pruebas_sistema)
         por_carpeta[carpeta] = len(informes) - antes
-    return informes, sin_parsear, por_carpeta
+    return informes, sin_parsear, por_carpeta, pruebas_sistema
 
 
-def leer_carpeta(M, dias, carpeta, informes, sin_parsear):
+def fecha_del_encabezado(date_header):
+    """El encabezado `Date:` de un correo, como el «Fecha:» del cuerpo del
+    sistema viejo (`2026-10-01 11:33:54`) y en hora de Ecuador (UTC-5, sin
+    horario de verano). None si no se puede leer: no se inventa una fecha."""
+    try:
+        dt = email.utils.parsedate_to_datetime(str(date_header))
+    except (TypeError, ValueError):
+        return None
+    if dt is None or dt.tzinfo is None:
+        return None
+    return dt.astimezone(timezone(timedelta(hours=-5))).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def completar_fechas(M, informes):
+    """A los informes cuyo cuerpo NO trae «Fecha:» -los que emite la app desde
+    T2.29, cuyo cuerpo lleva «Tecnico:» pero no la fecha- les anota la del
+    encabezado Date del correo en `fecha_correo`.
+
+    POR QUE NO EN `fecha`. `Reconciliar::atenciones()` (el servidor) toma como OT
+    de cierre la ULTIMA cerrada de la lista y guarda su `fecha` como
+    `casos_gestion.atendido_en`. Con `fecha` vacia, la app conserva su propio
+    `atendido_en` (el momento en que emitio); con la del correo lo pisaria con
+    la hora del DESPACHO (la OT-1952 salio 15 minutos despues de emitirse) y,
+    pasada la medianoche, hasta con otro dia. `fecha_correo` solo sirve para lo
+    que faltaba: ORDENAR. Sin ninguna fecha, la OT de la app quedaba PRIMERA de
+    la lista y, si el aviso tenia tambien una OT cerrada del formulario viejo,
+    esa vieja ganaba como «OT de cierre» aunque la de la app fuera la mas nueva.
+
+    Solo se piden los encabezados de esos pocos (un FETCH por lote, por
+    carpeta). Devuelve cuantos se completaron."""
+    sin_fecha = collections.defaultdict(list)
+    for i in informes:
+        if not i.get("fecha"):
+            sin_fecha[i.get("carpeta") or "INBOX"].append(i)
+    n = 0
+    for carpeta, lista in sin_fecha.items():
+        if not seleccionar(M, carpeta):
+            continue
+        for k in range(0, len(lista), 60):
+            lote = lista[k:k + 60]
+            ok, dd = M.fetch(",".join(i["id_imap"] for i in lote).encode(), "(BODY.PEEK[HEADER.FIELDS (DATE)])")
+            if ok != "OK":
+                continue
+            por_id = {}
+            for it in dd:
+                if isinstance(it, tuple):
+                    m_id = re.match(rb"\s*(\d+)\s+\(", it[0] or b"")
+                    if m_id:
+                        por_id[m_id.group(1).decode()] = it[1]
+            for i in lote:
+                cab = email.message_from_bytes(por_id.get(i["id_imap"], b""))
+                f = fecha_del_encabezado(cab.get("Date"))
+                if f:
+                    i["fecha_correo"] = f
+                    n += 1
+    return n
+
+
+def fecha_para_ordenar(x):
+    """La fecha con que se ordenan las OT de un aviso: la del cuerpo si la trae
+    y, si no, la del encabezado del correo. Mismo formato en las dos, asi que
+    comparan como texto; sin ninguna, queda vacia y va primero."""
+    return x.get("fecha") or x.get("fecha_correo") or ""
+
+
+def leer_carpeta(M, dias, carpeta, informes, sin_parsear, pruebas_sistema=None):
     """Cuerpos de todos los informes de la ventana en la carpeta ya abierta.
     Un FETCH por lote."""
     criterio = ["FROM", EMISOR]
@@ -349,6 +431,10 @@ def leer_carpeta(M, dias, carpeta, informes, sin_parsear):
             t = (cuerpo or b"").decode("utf-8", "replace")
             m = re.search(r"nueva OT:\s*(\S+)", t)
             if not m:
+                if pruebas_sistema is not None and es_correo_de_prueba_del_sistema(t):
+                    pruebas_sistema.append({"id_imap": n.decode(), "carpeta": carpeta,
+                                            "inicio": t.strip()[:90]})
+                    continue
                 sin_parsear.append({"id_imap": n.decode(), "carpeta": carpeta,
                                      "inicio": t.strip()[:90]})
                 continue
@@ -471,7 +557,7 @@ def main():
     try:
         # readonly=True -> EXAMINE en cada carpeta. El servidor no puede cambiar
         # banderas, ni siquiera la de leido.
-        informes, sin_parsear, por_carpeta = leer_informes(M, args.dias, args.carpetas)
+        informes, sin_parsear, por_carpeta, pruebas_sistema = leer_informes(M, args.dias, args.carpetas)
         for carpeta, n in por_carpeta.items():
             if n is None:
                 print(f"  carpeta {carpeta:<14}: NO EXISTE en la cuenta, se omite")
@@ -480,6 +566,11 @@ def main():
         if all(n is None for n in por_carpeta.values()):
             sys.exit("no se pudo abrir ninguna carpeta del buzon en solo lectura")
         print(f"informes de OT leidos          : {len(informes)}")
+        if pruebas_sistema:
+            print(f"  correos de prueba de la app (no son OT, se ignoran): {len(pruebas_sistema)}")
+        n_fechas = completar_fechas(M, informes)
+        if n_fechas:
+            print(f"  {n_fechas} informes sin «Fecha:» en el cuerpo (los de la app) se ordenan por la del encabezado del correo")
         if sin_parsear:
             print(f"  AVISO: {len(sin_parsear)} correos no se pudieron parsear:")
             for s in sin_parsear[:5]:
@@ -554,7 +645,7 @@ def main():
 
     atenciones = {}
     for aviso, lista in por_aviso.items():
-        lista.sort(key=lambda x: x["fecha"] or "")
+        lista.sort(key=fecha_para_ordenar)
         estados = [x["estado_ot"] for x in lista]
         # Basta UNA orden cerrada para que el trabajo este terminado: es la
         # orden de cierre. Mientras no exista, sigue en curso.
@@ -577,12 +668,15 @@ def main():
                     sin_resolver.add(parte)
             ots.append({"ot": x["ot"], "fecha": x["fecha"], "estado_ot": x["estado_ot"],
                         "tecnico_texto": x.get("tecnico"), "personas": personas,
-                        "equipo": x["equipo"], "estado_equipo": x["estado_equipo"]})
+                        "equipo": x["equipo"], "estado_equipo": x["estado_equipo"],
+                        # Solo las OT de la app (sin «Fecha:» en el cuerpo). El
+                        # servidor no la usa como fecha: ver completar_fechas().
+                        **({"fecha_correo": x["fecha_correo"]} if x.get("fecha_correo") else {})})
 
         atenciones[aviso] = {
             "estado_industec": estado,
             "ots": ots,
-            "ultima_fecha": lista[-1]["fecha"],
+            "ultima_fecha": lista[-1]["fecha"] or lista[-1].get("fecha_correo"),
             "tecnicos": sorted(quienes),
             "usuarios": sorted({v["usuario"] for v in quienes.values() if v["usuario"]}),
             "sin_identificar": sorted(sin_resolver),
@@ -607,6 +701,7 @@ def main():
             "en_curso": len(atenciones) - cerradas,
             "informes_leidos": len(informes),
             "informes_no_parseados": len(sin_parsear),
+            "correos_de_prueba_de_la_app": len(pruebas_sistema),
             "tecnico_identificado": tecnicos_ok,
             "tecnico_no_identificado": fallos,
             "firmas_sin_identificar": len(firmas_raras),

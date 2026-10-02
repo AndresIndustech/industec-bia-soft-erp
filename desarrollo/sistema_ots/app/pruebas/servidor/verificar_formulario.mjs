@@ -339,6 +339,51 @@ try {
   afirmar('I el jefe de zona va primero', !acomp.hayJefe || acomp.primeroEsJefe, acomp.primero);
   await nav.send('Emulation.setTouchEmulationEnabled', { enabled: false });
 
+  /* P · Parts Town (T2.28.11, obs. 9): el botón del equipo deshabilitado, con
+     y sin placa, y el de una fila de «Qué repuesto haría falta». No se abre
+     ninguna pestaña ni se visita Parts Town: window.open se reemplaza para
+     leer la URL que se habría abierto. No envía nada. */
+  console.log('\n== P · Parts Town en el equipo deshabilitado ==');
+  await nav.ir('index.html', 10000);
+  const pt = await nav.ev(`(() => {
+    window.__abiertos = [];
+    window.open = function (u) { window.__abiertos.push(String(u)); return null; };
+    const b = document.querySelector('#equipos .bloque');
+    const wrap = b.querySelector('[data-eq-pt-wrap]');
+    if (!wrap) { return { sinBloque: true }; }
+    const ocultoAlInicio = wrap.hidden;
+    b.querySelector('[data-eq-estado-seg] button[data-v="Deshabilitado"]').click();
+    const visibleDeshabilitado = !wrap.hidden;
+    const marca = b.querySelector('[data-eq-marca]'), modelo = b.querySelector('[data-eq-modelo]');
+    marca.value = ''; modelo.value = '';
+    b.querySelector('[data-eq-pt]').click();
+    const sinPlaca = { nota: b.querySelector('[data-eq-pt-nota]').textContent, abiertas: window.__abiertos.length };
+    marca.value = 'Henny Penny'; modelo.value = 'PFG-690';
+    b.querySelector('[data-eq-pt]').click();
+    const conPlaca = { url: window.__abiertos[0] || null, nota: b.querySelector('[data-eq-pt-nota]').textContent };
+    const captura = !!b.querySelector('[data-eq-foto-repuesto-camera]');
+    document.querySelector('#addParte').click();
+    const fila = document.querySelector('#penPartes .parte-row:last-child');
+    fila.querySelector('.parte-num').value = 'Hen22455';
+    fila.querySelector('.parte-pt').click();
+    const deFila = window.__abiertos[1] || null;
+    b.querySelector('[data-eq-estado-seg] button[data-v="Operativo"]').click();
+    return { ocultoAlInicio, visibleDeshabilitado, sinPlaca, conPlaca, captura, deFila, ocultoOperativo: wrap.hidden };
+  })()`);
+  if (pt.sinBloque) {
+    afirmar('P el bloque del equipo trae Parts Town (¿está desplegado el formulario v28?)', false, 'sin [data-eq-pt-wrap]');
+  } else {
+    afirmar('P1 Parts Town y la captura se ven solo con el equipo «Deshabilitado»',
+            pt.ocultoAlInicio && pt.visibleDeshabilitado && pt.ocultoOperativo && pt.captura, JSON.stringify(pt));
+    afirmar('P2 sin marca ni modelo NO abre y dice lo que pide la guía',
+            pt.sinPlaca.abiertas === 0 && /Anota marca y modelo de la placa/.test(pt.sinPlaca.nota), pt.sinPlaca.nota);
+    afirmar('P3 con la placa abre el despiece del modelo',
+            pt.conPlaca.url === 'https://www.partstown.com/es/henny-penny/pfg-690/parts', pt.conPlaca.url || '(no abrió)');
+    afirmar('P4 la fila con el número de Parts Town abre la ficha del repuesto',
+            pt.deFila === 'https://www.partstown.com/es/henny-penny/hen22455', pt.deFila || '(no abrió)');
+  }
+  await nav.captura(join(SALIDA, 'verP_parts_town.png'));
+
   console.log('\n== A · el equipo del caso se preselecciona ==');
   await nav.ir(`index.html?aviso=${caso.aviso}`, 11000);
   const eq = await nav.ev(`(() => {

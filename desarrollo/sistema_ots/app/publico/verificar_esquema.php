@@ -104,8 +104,10 @@ $mas022 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE ar
 // La 023 (T2.29) suma 2 solo a SUPERADMIN: `emision.activar` y
 // `correos.cuenta`. Se reconoce por el libro, como la 021 y la 022.
 $mas023 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE archivo LIKE '%023_envio_real.sql'")->fetchColumn() > 0 ? 2 : 0;
+// La 016 (T2.28.8) suma 1 a SUPERADMIN y ADMIN: `locales.identificar`. Por el libro.
+$mas016 = $hay009 && (int) $db->query("SELECT COUNT(*) FROM migraciones WHERE archivo LIKE '%016_alias_locales.sql'")->fetchColumn() > 0 ? 1 : 0;
 $esperado = $hay009
-    ? ['SUPERADMIN' => 39 + $mas012 + $mas020 + $mas013 + $mas022 + $mas023, 'ADMIN' => 38 + $mas012 + $mas020 + $mas013 + $mas022,
+    ? ['SUPERADMIN' => 39 + $mas012 + $mas020 + $mas013 + $mas022 + $mas023 + $mas016, 'ADMIN' => 38 + $mas012 + $mas020 + $mas013 + $mas022 + $mas016,
        'JEFE_ZONA' => 26 + $mas012 + $mas021 + $mas022, 'TECNICO' => 13 + $mas012]
     : ($hay007
         ? ['SUPERADMIN' => 26, 'ADMIN' => 25, 'JEFE_ZONA' => 17, 'TECNICO' => 9]
@@ -358,6 +360,20 @@ if ($hay015) {
     echo '  (fotos con equipo_n/momento clasificado: '
        . (int) $db->query('SELECT COUNT(*) FROM ot_fotos WHERE momento IS NOT NULL')->fetchColumn()
        . ")\n";
+}
+
+// La 016 son las órdenes sin local identificadas desde el buzón (T2.28.8).
+if ($mas016) {
+    echo "\nmigracion 016\n";
+    comprobar('tabla locales_alias_propuestos', $hayTabla('locales_alias_propuestos') ? 'si' : 'no', 'si');
+    $pk016 = array_column($db->query("SHOW KEYS FROM locales_alias_propuestos WHERE Key_name = 'PRIMARY'")->fetchAll(), 'Column_name');
+    comprobar('locales_alias_propuestos: PK clave (I-9)', implode(',', $pk016), 'clave');
+    comprobar('locales.identificar, a SUPERADMIN y ADMIN',
+              (int) $db->query("SELECT COUNT(*) FROM rol_permisos WHERE permiso = 'locales.identificar' AND rol IN ('SUPERADMIN','ADMIN')")->fetchColumn()
+              . '/' . (int) $db->query("SELECT COUNT(*) FROM rol_permisos WHERE permiso = 'locales.identificar'")->fetchColumn(), '2/2');
+    // Solo se informa: aplicar la migración no decide nada; después sí se decide.
+    echo '  (decisiones: ' . json_encode(array_column($db->query(
+        'SELECT CONCAT(decision, ":", estado) k, COUNT(*) n FROM locales_alias_propuestos GROUP BY k')->fetchAll(), 'n', 'k')) . ")\n";
 }
 
 // La 023 es el envío real por zona y la cuenta de envío (T2.29, pedido de
