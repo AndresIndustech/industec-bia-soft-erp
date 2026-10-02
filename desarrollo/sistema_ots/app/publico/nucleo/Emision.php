@@ -100,6 +100,8 @@ final class Emision
     private const ZONAS = ['UIO', 'LARB', 'CNLJ', 'OTRA'];
 
     private static ?array $cat = null;
+    /** @var array<string,true>|null OT con número del piloto liberadas a Grupo KFC (migración 024), por id en mayúsculas */
+    private static ?array $liberadas = null;
 
     /**
      * El modo que rige para una zona (o, sin zona, para el sitio: PRODUCCION
@@ -197,10 +199,57 @@ final class Emision
         // espacio al inicio se clasificaba distinto en el Archivo que en el
         // buzón. El largo va primero para que un número de 19+ cifras no
         // desborde el (int).
-        if (!preg_match('/^OT-0*(\d+)-/', strtoupper(trim((string) $id, ' ')), $m)) {
+        $limpio = strtoupper(trim((string) $id, ' '));
+        if (!preg_match('/^OT-0*(\d+)-/', $limpio, $m)) {
             return false;
         }
-        return strlen($m[1]) > 18 || (int) $m[1] >= self::SERIE_PRUEBA;
+        $deLaSerie = strlen($m[1]) > 18 || (int) $m[1] >= self::SERIE_PRUEBA;
+        // Una del piloto que se LIBERÓ a Grupo KFC por decisión expresa dejó de
+        // serlo (migración 024). Solo se consulta si el número es de la serie.
+        return $deLaSerie && !isset(self::liberadas()[$limpio]);
+    }
+
+    /**
+     * Las OT con número del piloto que se liberaron a Grupo KFC (T2.29.8,
+     * migración 024): id_industec en mayúsculas → true.
+     *
+     * La excepción existe porque el criterio «es del piloto» es el NÚMERO y se
+     * repite en la web y en el robot sin consultar nada; pero el 2026-10-01
+     * Andrés pidió enviar diez OT de la serie 9000 que nunca salieron (trabajos
+     * reales, sin informe del formulario viejo). Una OT-9125 que SÍ llegó a KFC
+     * no puede seguir figurando «no enviada»: no atendería el caso, no contaría
+     * en los reportes y el despachador la devolvería a RETENIDO.
+     *
+     * Una sola consulta por proceso, y solo si hay una base a la que llegar
+     * (`nucleo/config.php` o INDUSTEC_CONFIG): las pruebas locales llaman a
+     * `esDePrueba()` sin base y tienen que seguir viendo el criterio puro. Sin
+     * la 024, sin base o con la base caída no hay ninguna liberada: manda el
+     * número, que es lo de antes.
+     *
+     * @return array<string,true>
+     */
+    public static function liberadas(): array
+    {
+        if (self::$liberadas !== null) { return self::$liberadas; }
+        self::$liberadas = [];
+        if (!is_file(Db::rutaConfig())) { return self::$liberadas; }
+        try {
+            foreach (Db::todos('SELECT id_industec FROM ot_capturadas
+                                 WHERE liberada_en IS NOT NULL AND id_industec IS NOT NULL') as $f) {
+                $id = strtoupper(trim((string) $f['id_industec'], ' '));
+                // Solo nombres canónicos: este texto termina dentro de un SQL (sqlEsDePrueba).
+                if (preg_match('/^OT-[0-9A-Z-]{3,80}$/', $id)) { self::$liberadas[$id] = true; }
+            }
+        } catch (Throwable $e) {
+            self::$liberadas = [];            // sin la 024: ninguna liberada
+        }
+        return self::$liberadas;
+    }
+
+    /** Para quien libera una OT y necesita que el resto de su proceso ya la vea liberada. */
+    public static function olvidarLiberadas(): void
+    {
+        self::$liberadas = null;
     }
 
     /**
@@ -217,7 +266,14 @@ final class Emision
      */
     public static function sqlEsDePrueba(string $columna): string
     {
-        return "(UPPER(TRIM($columna)) REGEXP '^OT-0*(9[0-9]{3}|[1-9][0-9]{4,})-')";
+        $criterio = "(UPPER(TRIM($columna)) REGEXP '^OT-0*(9[0-9]{3}|[1-9][0-9]{4,})-')";
+        // Las liberadas (migración 024) dejaron de ser del piloto: mismo criterio
+        // que `esDePrueba()`. Los nombres ya vienen validados por `liberadas()`.
+        $liberadas = array_keys(self::liberadas());
+        if ($liberadas === []) {
+            return $criterio;
+        }
+        return "($criterio AND UPPER(TRIM($columna)) NOT IN ('" . implode("','", $liberadas) . "'))";
     }
 
     /** Donde quedan los PDF. Los sirve pdf.php, con sesión y alcance. */

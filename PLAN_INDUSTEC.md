@@ -1566,12 +1566,14 @@ está (PRUEBA = freno de emergencia). **D-5** solo SUPERADMIN activa zonas y cam
 cuenta (`emision.activar`, `correos.cuenta`). **D-6** las cuentas `_prueba` emiten en
 modo ENSAYO: serie propia 8000-8999, comportamiento de producción y correo RETENIDO
 (así las baterías prueban el camino real sin escribirle a KFC; cierra el error nº 53).
-**D-7** una OT con número del piloto no sale nunca, ni reemitida. **D-8** si el
+**D-7** una OT con número del piloto no sale nunca, ni reemitida, **salvo las que Andrés libere de forma expresa (D-12)**. **D-8** si el
 formulario viejo se vuelve a usar, la app numera por encima de su contador, salta los
 números que ya existen en el Archivo y lo avisa en Correos. **D-9** el correo sale en
 el acto (después de responderle al técnico) y el cron de hPanel cada 5 min reintenta
 lo que quede (lo programa Andrés). **D-10** una OT que el técnico llenó antes de
 activar su zona se emite como del piloto aunque llegue después.
+
+**Decisiones de Andrés (1-oct):** **D-11** cuando una OT de la app y una del formulario viejo comparten número, **gana el viejo** y se retira la de la app (sin aplicar: ver T2.29.9, porque las dos que chocaron son la única OT de su trabajo). **D-12** una OT del piloto cuyo aviso no reportó el formulario viejo **se envía** y su caso queda pendiente de SAP —un caso que la administradora había cerrado con el número del piloto vuelve a ATENDIDO para que ella decida—: hecho el 1-oct para 10 OT (T2.29.8). Si el viejo ya reportó el trabajo, el caso se resuelve con ese informe y la OT del piloto no se envía.
 
 | # | Subtarea | Criterio de aceptación | Verificación |
 |---|---|---|---|
@@ -1581,7 +1583,10 @@ activar su zona se emite como del piloto aunque llegue después.
 | ✅ **T2.29.4** | Correos: pestañas «Envío de las OT» (interruptor por zona, cola, últimos correos) y «Cuenta de envío» (probar, correo de prueba, agregar, usar, deshabilitar) | Un correo de prueba sale desde reclutamiento y llega a `servicioalcliente@` con su PDF | IMAP de solo lectura desde la estación, por la referencia `P-…` del asunto |
 | ✅ **T2.29.5** | Activar UIO, LARB y CNLJ | Las tres en PRODUCCION; series sembradas = contador del viejo + 5; la franja del piloto ya no sale | `SELECT * FROM emision_zonas`; `correlativos`; `yo.php` de un técnico real → PRODUCCION |
 | ✅ **T2.29.6** | El proceso completo con las cuentas de prueba (ENSAYO) | `verificar_emision.py`, `verificar_ciclo.py`, `verificar_continuidad.py`, `verificar_bandeja.py` en verde, cada una con su limpiar+preparar | salida literal de cada batería |
-| ⏳ **T2.29.7** | La primera OT real enviada — **SIGUIENTE ACCIÓN**, espera a que un técnico emita | `email_queue` ENVIADO desde reclutamiento y el correo en `servicioalcliente@` con el PDF | `php envio_real_cli.php estado` (la cola) + IMAP de solo lectura por el asunto `ORDEN DE TRABAJO INDUSTEC - OT-1952` (o la primera que salga) |
+| ✅ **T2.29.7** | La primera OT real enviada | `email_queue` ENVIADO desde reclutamiento y el correo en `servicioalcliente@` con el PDF | **Hecha el 2026-09-30 13:11** con `OT-1952-M063EC-10354880-UIO` (correo 287, ENVIADO 13:11:08 desde reclutamiento@; IMAP: llegó a servicioalcliente@). Costó 16 min en llegar y no se vio en el Archivo hasta el índice nocturno: ver T2.29.10. Detalle en `ESTADO.md` **§1z-bis** |
+| ✅ **T2.29.8** | Enviar a Grupo KFC las OT del piloto (serie 9000) cuyo aviso **no** reportó el formulario viejo, y dejar su caso pendiente de SAP (D-12). Migración `024_ot_liberadas.sql`: `ot_capturadas.liberada_en/por/nota`; `Emision::esDePrueba()` y `sqlEsDePrueba()` no marcan lo liberado; consola `pruebas/servidor/liberar_ot_piloto_cli.php` (simulacro por omisión, `--probar-sql` con ROLLBACK, `--ejecutar`) y orquestador `scripts/t2_29_8_conciliar_ot_piloto.py` | Las 10 salen desde reclutamiento@ y llegan a servicioalcliente@ con su PDF; solo salen si las tres fuentes independientes (buzón por IMAP, `ots` de la estación, PDF del viejo) dan cero OT del viejo para su aviso; ninguna otra fila RETENIDO se toca | **Hecha el 2026-10-01 19:03**: `Despacho: enviados 10 · fallidos 0`; IMAP **10 de 10** con huella igual a la del servidor; `prueba_ot_liberadas.php` 24·0; `verificar_emision.py` 69·0 y `verificar_http.py` 89·0 contra el código desplegado. Evidencia completa en `ESTADO.md` **§1z-bis** |
+| ⏳ **T2.29.9** | **El choque de numeración con el formulario viejo.** Mientras los dos formularios convivan, cada OT real que emita la app choca con el viejo: en UIO ya chocaron las dos que salieron (1952 y 1964). Andrés ordenó (D-11) conservar la del viejo y eliminar la de la app, **pero esas dos son la única OT de su trabajo y ya están en KFC** (el 10354880 lo cerró Isabel en SAP citándola; el 10358019 tiene un repuesto pedido vivo). Decisión pendiente, con las opciones: **(a)** aplicar la regla a las dos; **(b)** aplicarla solo a la 1952 y dejar la 1964 hasta que se resuelva el repuesto; **(c)** dejarlas y anotar el choque; y, aparte, **(d)** devolver UIO, LARB y CNLJ al piloto (`php envio_real_cli.php piloto ZONA --a-nombre-de abasantes --motivo "…"`) hasta retirar el formulario viejo, o **(e)** darle a la app una serie propia (7001 en adelante) | Ninguna OT de la app comparte número con una del viejo; lo retirado no vuelve (el robot relee el buzón cada 3 h) | `php envio_real_cli.php estado` sin «NÚMEROS REPETIDOS»; tras una corrida del buzón y el índice nocturno, la OT retirada no está en `ot_archivo`, en `ots` ni en el árbol canónico |
+| ⏳ **T2.29.10** | **Lo que dejó la primera OT real.** (1) `cola.js` no pone tiempo límite a sus `fetch`: un envío colgado deja `enviando` en true y bloquea todos los reintentos (causa probable, sin comprobar, de los 16 min); propuesta: `AbortController` de ~60 s por foto y ~90 s por orden, y decir en pantalla que en iPhone la app tiene que seguir abierta. Es cambio del formulario del técnico: va a UIO y 48 h antes que al resto (I-8), y exige subir `sw.js`, que otra conversación tiene modificado. (2) Indexar la OT en el Archivo al emitirla, no solo de noche. (3) Bloque de la 024 en `verificar_esquema.php`. (4) El correo de la app no lleva al **jefe de operaciones de cadena de KFC** que sí recibía el del viejo (pendiente 3 de T2.29, la propuesta de 96 locales). (5) Arreglar el esquema de `prueba_pdf_sin_franja.php` (le faltan las columnas de T2.28.7) | Una OT que se emite aparece en el Archivo en el momento; un envío colgado se reintenta a los 2 minutos | `verificar_formulario.mjs`; consultar `ot_archivo` justo después de emitir con una cuenta de prueba |
 
 **Estado al cierre del 2026-09-29 (21:50):** T2.29.1 a T2.29.6 hechas, desplegadas y
 verificadas en darkviolet (`45142ae` y el commit siguiente; cifras y salidas en
@@ -1600,6 +1605,8 @@ leída en solo lectura de 619 correos del viejo de los últimos 90 días, está 
 —96 locales, 122 direcciones, 24 locales con más de una; columna «DECISION ANDRES»—;
 cargarla es agregar destinatarios de KFC, así que requiere su aprobación; (4) decidir
 OTRA.
+
+**Estado al cierre del 2026-10-01 (19:30):** T2.29.7 y T2.29.8 hechas (ver `ESTADO.md` §1z-bis). **Lo que cambia para la operación:** (a) el formulario viejo SIGUE en uso en las tres zonas (UIO 1965, LARB 2335, CNLJ 2664 al 1-oct) y la app numera en su mismo rango: **cada OT real que emite la app choca** (T2.29.9); (b) 10 OT del piloto salieron a Grupo KFC con su número 9xxx y 8 casos que Isabel había cerrado con ese número volvieron a «por cerrar en SAP»; (c) quedan RETENIDAS 8 OT del piloto: 9131 y 9154 (las cubre el viejo) y 9142 a 9145, 9001 y 9002 (re-registros; **Andrés decide si se envían**). **Pendiente de Andrés, además de lo de arriba:** T2.29.9 (qué hacer con OT-1952 y OT-1964 y con el modo de las zonas) y las seis retenidas. Requieren su aprobación (y se hicieron por su pedido expreso): enviar a Grupo KFC una OT del piloto, reabrir un caso RESUELTO, retirar una OT que ya llegó a KFC y devolver una zona al piloto.
 
 | Autónomo | Requiere aprobación | Prohibido |
 |---|---|---|
@@ -1762,7 +1769,7 @@ Las tareas T1.9 a T1.11 avanzan en paralelo conforme se desbloqueen sus dependen
 
 ---
 
-## 11b. Arranque para una conversación nueva — al 2026-09-29 (el envío real de las OT está ACTIVO desde las 21:45: ver el último punto de «Sumado el 2026-09-24 a 2026-09-29»)
+## 11b. Arranque para una conversación nueva — al 2026-10-01 noche (el envío real está ACTIVO; **lo primero es T2.29.9, el choque de numeración con el formulario viejo**: ver el último punto de «Sumado el 2026-09-24 a 2026-10-01»)
 
 > Esta sección existe para que quien abra una conversación nueva pueda **empezar
 > a ejecutar sin preguntar nada**. Se actualiza cada vez que cambia lo que sigue.
@@ -1884,7 +1891,7 @@ bitácora conserva sus 1.219 filas de prueba, que hoy es inalterable. **Para
 volver a correr las baterías de servidor** hay que ejecutar antes
 `preparar_prueba.php` y, al terminar, `limpiar_pruebas.php` (error nº 37).
 
-**Sumado el 2026-09-24 a 2026-09-29 — T2.28 (las observaciones de la revisión
+**Sumado el 2026-09-24 a 2026-10-01 — T2.28 (las observaciones de la revisión
 con INDUSTEC) y, en paralelo, el piloto real en UIO.** Dos frentes que
 corrieron a la vez, en dos copias del repositorio (estación y PC de Andrés),
 y que recién se unieron hoy:
@@ -1903,7 +1910,7 @@ y que recién se unieron hoy:
   DESPLEGADA en darkviolet el 2026-09-29**, verificada con las tres
   baterías que la ejercitan (68·0, 37·0, 39·0 — detalle en `ESTADO.md`
   §1s-quindecies). **Siguiente en el carril: T2.28.8** (casos sin local,
-  sin empezar — punto 11 de la lista Q más abajo), **después de T2.29.7**.
+  sin empezar — punto 11 de la lista Q más abajo; **en curso desde el 30-sep en otra conversación**, ver `ESTADO.md` §5.1), después de T2.29.7 (hecha el 30-sep).
 - **En paralelo, desde el PC de Andrés y fuera del plan original:** la OT del
   piloto que no cierra ni sale a KFC (§1w), el PDF sin la franja «DOCUMENTO DE
   PRUEBA» con los 14 PDF del piloto regenerados (§1x/§1y), el panel «En qué
@@ -1940,6 +1947,7 @@ y que recién se unieron hoy:
   lo que no se comprobó en `ESTADO.md` **§1z**; decisiones D-1 a D-10 y
   pendientes de Andrés en **T2.29**. **Siguiente acción: T2.29.7** —ver salir la
   primera OT real (cola ENVIADO + IMAP)—, después T2.28.8.
+- **2026-09-30 y 10-01 — T2.29.7 y T2.29.8 (`ESTADO.md` §1z-bis).** La primera OT real salió el 30-sep a las 13:11 (`OT-1952-M063EC-10354880-UIO`). El «OT-NNNN» que Andrés vio en el celular **no era un defecto**: es el recibo provisional; la OT tardó 16 min porque la segunda foto y la orden llegaron a las 13:11 y no antes (causa probable: `cola.js` sin tiempo límite), y no se vio en el Archivo porque `ot_archivo` se llena de noche. **El formulario viejo siguió en uso y la app chocó con él: OT-1952 y OT-1964 de UIO están repetidas** y son la única OT de su trabajo (T2.29.9, **espera a Andrés**). El 1-oct se enviaron 10 OT del piloto que el viejo no había reportado, con una nueva marca `liberada_en` (migración 024); 10 de 10 llegaron con su PDF intacto y 8 casos que Isabel había cerrado con el número del piloto volvieron a «por cerrar en SAP». Quedan 8 OT del piloto retenidas (T2.29.9 y la lista de arriba).
 
 ### Antes de dar nada por verificado
 
@@ -1968,6 +1976,8 @@ python verificar_seguridad.py   # 28 · 0
 
 ### La siguiente acción, concreta
 
+> **Lo primero (1-oct-2026, noche): T2.29.9 — el choque de numeración.** Andrés ordenó que cuando una OT de la app y una del formulario viejo compartan número se conserve la del viejo y se elimine la de la app. **No se aplicó** porque las dos que chocaron (OT-1952-M063EC-10354880-UIO, captura 293, y OT-1964-G021EC-10358019-UIO, captura 297) son la única OT de su trabajo y ya están en Grupo KFC. Antes de tocar nada, léelo con los hechos en `ESTADO.md` §1z-bis y pregúntale a Andrés (opciones a–e en la fila T2.29.9). **Si dice que se retiren:** (1) respaldo completo por hash (filas de `ot_capturadas`, `ot_fotos`, `email_queue`, `ot_archivo`, `casos_gestion` y `pendientes`, el PDF y `ordenes_fotos/<envio_uuid>/`; en la estación el PDF del árbol canónico, `_ORIGEN_BUZON` y `_ORIGEN_APP`, y la fila de `ots`); (2) **no borres** lo que no depende de la OT: el equipo nuevo que Isabel aprobó (`equipos_propuestos`/`equipos_ficha` del 10354880), la solicitud de repuesto 116 del 10358019 y la bitácora (es inalterable); (3) el robot relee el buzón cada 3 h, así que hace falta una **lista de OT retiradas** que respeten `t2_11_informes_ot.py` (atenciones y descarga de PDF) y `t2_18_rescatar_buzon.py` (promoción al árbol), **archivos que otra conversación tiene modificados sin commitear**: coordina con ella antes de editarlos; (4) el caso 10354880 está RESUELTO por Isabel citando la OT: su `ot_cierre` apuntaría a algo que ya no existe. Mientras tanto, cada OT nueva de la app en UIO volverá a chocar: `php envio_real_cli.php estado` lo dice.
+>
 > **Primero, el piloto de UIO tras el 28-sep-2026** (la OT del piloto: construida,
 > revisada y **desplegada** en darkviolet, `4240a67`; cifras en `ESTADO.md` **§1w**).
 > Las 14 OT que la app emitió del 24 al 27-sep (OT-9125…OT-9152) **nunca llegaron a
@@ -3266,6 +3276,11 @@ Cada uno costó horas o datos. Están aquí porque son fáciles de repetir.
     punto: el 29-sep había una, la 53 (aviso 10356500). Falló sin que nada
     estuviera roto. **Regla:** para probar el alcance se pide la cola
     explícita (`?g=abiertos`), no la de aterrizaje.
+58. **Un margen de 5 sobre el contador del formulario viejo no protege mientras el viejo siga en uso.** T2.29 sembró la serie de la app en «viejo + 5» (D-2) y D-8 hace que la app salte por encima del viejo al emitir. El viejo gastó más de 16 OT por día en UIO: la primera OT real de la app (OT-1952, 30-sep 13:11) la alcanzó el viejo esa misma noche (23:56) y la segunda (OT-1964, 1-oct 09:49) también (11:33). Dos de dos chocaron. **Regla:** dos sistemas que numeran en el mismo rango chocan siempre; o el viejo se retira **antes** de activar, o la app numera en un rango propio, o la zona vuelve al piloto. Un margen solo retrasa el choque. Y el «gana el viejo» de D-11 borra trabajo real cuando la OT de la app es la única de su caso: antes de aplicarlo se comprueba si el viejo cubre ese aviso.
+59. **Una función pura que pasa a consultar la base necesita tres guardas.** `Emision::esDePrueba()` decide por el número, sin consultar nada, y se llama en ~50 sitios; para poder liberar una OT del piloto (migración 024) ahora lee un conjunto de `ot_capturadas`. (1) Solo consulta si el número es de la serie 9000: las OT reales nunca tocan la base ahí. (2) Solo si hay `config.php`: `Db::config()` hace `require` y un archivo ausente es un fatal que ningún `try/catch` atrapa, y las pruebas locales corren sin base. (3) Una sola lectura por proceso, con `olvidarLiberadas()` para quien escribe. Y la prueba **inyecta** el conjunto por reflexión: la estación SÍ tiene un `nucleo/config.php` local (`industec_app` en 127.0.0.1) y una prueba que depende de que no haya base cambia según el equipo.
+60. **Verificar la llegada de un correo segundos después de mandarlo da un falso «no llegó».** La primera lectura IMAP, hecha ~30 s después del despacho, dio 0 de 10; una lectura más tarde, 10 de 10 (ids 9475 a 9484, ya entregados). **Regla:** esperar un minuto y mirar todas las carpetas antes de afirmar que falló.
+61. **`hostinger_ssh.afirmar_solo_lectura` rechaza un comando que nombra el sitio de producción y trae un `>`**, aunque sea texto dentro de un `echo` («números >= 1950»): lo toma por una redirección. Es la compuerta funcionando; no se manda un `>` al servidor del formulario viejo ni como texto.
+62. **Cuatro agentes en paralelo con ~280 consultas se quedaron sin cuota a los 13 minutos y entregaron nada.** El límite de sesión (cinco horas) se agotó en el medio de la corrida y el workflow devolvió `[null, null, null, null]`. Lo salvable fue lo que dejaron en el scratchpad (consultas y salidas), no su razonamiento. **Regla:** un agente de investigación escribe su hallazgo parcial a un archivo **a medida que avanza** (no solo en su respuesta final), y antes de lanzar un workflow grande se mira cuánta cuota queda.
 
 ### Lo que no se toca, nunca
 
